@@ -14,6 +14,7 @@ import { LogoMark } from '@/components/layout/Logo';
 import { ResetDemoDialog } from '@/components/layout/ResetDemoDialog';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { tokens } from '@/theme/tokens';
+import { LANDSCAPE_PHONE } from '@/theme/media';
 import type { DesignId } from '@/types';
 
 const c = tokens.color;
@@ -261,7 +262,7 @@ function ImproveSlide() {
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '280px 1fr' }, gap: 3, alignItems: 'center' }}>
         <Stack alignItems="center" spacing={1.5} sx={{ p: 3, borderRadius: 4, bgcolor: '#fff', border: `1px solid ${c.border}` }}>
           <ProgressRing value={latest?.score ?? 0} size={160} stroke={12} color={c.accent} label="AI診断スコア">
-            <Box sx={{ textAlign: 'center' }}><Box sx={{ fontSize: 40, fontWeight: 750 }}>{latest?.score ?? '—'}</Box><Box sx={{ fontSize: 11, color: c.muted }}>/ 100</Box></Box>
+            <Box sx={{ textAlign: 'center' }}><Box sx={{ fontSize: 40, fontWeight: 750 }}>{latest?.score ?? '—'}</Box><Box sx={{ fontSize: 12, color: c.muted }}>/ 100</Box></Box>
           </ProgressRing>
           <AiBadge label="診断結果はデモデータ" />
         </Stack>
@@ -370,7 +371,7 @@ export default function PresentPage() {
 
   return (
     <Box sx={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', bgcolor: c.bg, backgroundImage: `radial-gradient(60% 50% at 100% 0%, ${c.accentSoft} 0%, transparent 70%), radial-gradient(50% 50% at 0% 100%, ${c.primarySoft} 0%, transparent 70%)` }}>
-      <Stack component="header" direction="row" alignItems="center" spacing={1.5} sx={{ px: { xs: 2, md: 4 }, height: 64, flexShrink: 0 }}>
+      <Stack component="header" direction="row" alignItems="center" spacing={1.5} sx={{ px: { xs: 2, md: 4 }, height: 64, flexShrink: 0, [LANDSCAPE_PHONE]: { height: 52 } }}>
         <LogoMark size={28} />
         <Typography sx={{ fontWeight: 700, fontSize: 14 }} noWrap>アフロCMS</Typography>
         <Typography variant="caption" sx={{ display: { xs: 'none', sm: 'block' } }} noWrap>{index + 1} / {total}・{TITLES[index]}</Typography>
@@ -399,18 +400,26 @@ export default function PresentPage() {
         </AnimatePresence>
       </Box>
 
-      <Stack component="footer" direction="row" alignItems="center" justifyContent="space-between" sx={{ px: { xs: 2, md: 4 }, height: 72, flexShrink: 0, pb: 'env(safe-area-inset-bottom)' }}>
+      <Stack
+        component="footer" direction="row" alignItems="center" justifyContent="space-between"
+        sx={{ px: { xs: 2, md: 4 }, height: 'calc(72px + env(safe-area-inset-bottom))', flexShrink: 0, pb: 'env(safe-area-inset-bottom)', [LANDSCAPE_PHONE]: { height: 'calc(56px + env(safe-area-inset-bottom))' } }}
+      >
         <Button variant="outlined" startIcon={<ChevronLeft size={18} />} onClick={() => go(index - 1)} disabled={index === 0} aria-label="前のスライド">
           <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>前へ</Box>
         </Button>
-        <Stack direction="row" spacing={0.75} component="nav" aria-label="スライド一覧">
+        {/* スマホは点が指で押せる大きさにならないので、位置を文字で示す（移動は前へ・次へ） */}
+        <Typography variant="body2" aria-hidden sx={{ display: { xs: 'block', sm: 'none' }, fontWeight: 600, color: c.muted, fontVariantNumeric: 'tabular-nums', textAlign: 'center', px: 1, minWidth: 0 }} noWrap>
+          {index + 1} / {total}・{TITLES[index]}
+        </Typography>
+        <Stack direction="row" component="nav" aria-label="スライド一覧" sx={{ display: { xs: 'none', sm: 'flex' } }}>
           {TITLES.map((t, i) => (
             <ButtonBase
               key={t}
               onClick={() => go(i)}
               aria-label={`${i + 1}. ${t}`}
               aria-current={i === index ? 'step' : undefined}
-              sx={{ width: i === index ? 28 : 10, height: 10, borderRadius: 99, bgcolor: i === index ? c.primary : c.borderStrong, transition: `all .24s ${tokens.motion.easeCss}` }}
+              // 見た目の点は小さいまま、押せる範囲は高さ 44px・幅 24px 以上にする
+              sx={{ height: 44, minWidth: 24, px: 0.75, borderRadius: 99, '&::before': { content: '""', display: 'block', width: i === index ? 28 : 10, height: 10, borderRadius: 99, bgcolor: i === index ? c.primary : c.borderStrong, transition: `all .24s ${tokens.motion.easeCss}` } }}
             />
           ))}
         </Stack>

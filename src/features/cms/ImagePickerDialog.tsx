@@ -2,6 +2,7 @@ import { Box, ButtonBase, Dialog, DialogContent, DialogTitle, IconButton, Stack,
 import { Check, X } from 'lucide-react';
 import { DEMO_IMAGES } from '@/data/cms';
 import { tokens } from '@/theme/tokens';
+import { useFullScreenDialog } from '@/hooks/useMediaQueries';
 
 interface Props {
   open: boolean;
@@ -13,8 +14,9 @@ interface Props {
 
 /** 素材ライブラリ（デモ画像）から選ぶ */
 export function ImagePickerDialog({ open, title = '画像を挿入', selected, onClose, onPick }: Props) {
+  const fullScreen = useFullScreenDialog();
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth aria-labelledby="img-picker-title">
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth fullScreen={fullScreen} aria-labelledby="img-picker-title">
       <DialogTitle id="img-picker-title" sx={{ pr: 6 }}>
         {title}
         <Typography variant="caption" sx={{ display: 'block' }}>素材ライブラリ（デモ画像）から選択します</Typography>

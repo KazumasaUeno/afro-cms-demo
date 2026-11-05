@@ -67,14 +67,14 @@ export function ProposalView() {
                 <ProgressRing value={proposal.currentScore} size={84} stroke={7} color="#94A3B8" track="rgba(255,255,255,.12)" label="現状スコア">
                   <Box sx={{ textAlign: 'center' }}>
                     <Box sx={{ fontSize: 22, fontWeight: 700 }}><CountUp value={proposal.currentScore} /></Box>
-                    <Box sx={{ fontSize: 10, opacity: 0.6, fontWeight: 600 }}>現状</Box>
+                    <Box sx={{ fontSize: 12, opacity: 0.6, fontWeight: 600 }}>現状</Box>
                   </Box>
                 </ProgressRing>
                 <ArrowRight size={20} color="rgba(255,255,255,.4)" />
                 <ProgressRing value={proposal.projectedScore} size={84} stroke={7} color="#8B9DFF" track="rgba(255,255,255,.12)" label="改善後の見込みスコア">
                   <Box sx={{ textAlign: 'center' }}>
                     <Box sx={{ fontSize: 22, fontWeight: 700 }}><CountUp value={proposal.projectedScore} duration={1400} /></Box>
-                    <Box sx={{ fontSize: 10, opacity: 0.6, fontWeight: 600 }}>改善後</Box>
+                    <Box sx={{ fontSize: 12, opacity: 0.6, fontWeight: 600 }}>改善後</Box>
                   </Box>
                 </ProgressRing>
               </Stack>

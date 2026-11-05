@@ -20,7 +20,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={show}>
       {children}
-      <Snackbar key={item?.id} open={open} autoHideDuration={3200} onClose={(_, r) => r !== 'clickaway' && setOpen(false)}>
+      <Snackbar key={item?.id} open={open} sx={{ bottom: { xs: 'calc(74px + env(safe-area-inset-bottom))', md: 24 } }} autoHideDuration={3200} onClose={(_, r) => r !== 'clickaway' && setOpen(false)}>
         <Box
           role="status"
           sx={{

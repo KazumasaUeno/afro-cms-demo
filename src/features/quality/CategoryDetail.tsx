@@ -7,6 +7,7 @@ import { useDemo } from '@/store/DemoStore';
 import { useBreakpoints } from '@/hooks/useMediaQueries';
 import { useToast } from '@/hooks/useToast';
 import { tokens } from '@/theme/tokens';
+import { LANDSCAPE_PHONE } from '@/theme/media';
 import { CheckToggle } from './CheckToggle';
 import { computeStats, isComplete } from './qualityStats';
 
@@ -20,7 +21,7 @@ export function PriorityChip({ priority }: { priority: 'A' | 'B' }) {
         aria-label={isA ? 'A区分（機械的に確認）' : 'B区分（判断が必要）'}
         sx={{
           width: 24, height: 24, borderRadius: '7px', display: 'inline-grid', placeItems: 'center', flexShrink: 0,
-          fontSize: 11.5, fontWeight: 750,
+          fontSize: 12, fontWeight: 750,
           bgcolor: isA ? tokens.color.infoSoft : tokens.color.accentSoft, color: isA ? '#0B6699' : '#5B3FD6',
         }}
       >
@@ -84,7 +85,8 @@ function DetailBody({ category, onClose }: { category: QualityCategory; onClose:
   };
 
   return (
-    <Stack sx={{ height: '100%', minHeight: 0 }}>
+    // 横向きのスマホは見出し部が高さを取りすぎるので、見出しごと全体をスクロールさせる
+    <Stack sx={{ height: '100%', minHeight: 0, [LANDSCAPE_PHONE]: { overflowY: 'auto' } }}>
       <Box sx={{ p: { xs: 2, sm: 3 }, pb: 2, borderBottom: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface }}>
         <Stack direction="row" alignItems="flex-start" spacing={1}>
           <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -100,7 +102,7 @@ function DetailBody({ category, onClose }: { category: QualityCategory; onClose:
           <SideBar label="アフロ確認" value={stats.afroRate} color={tokens.color.primary} />
           <SideBar label="顧客承認" value={stats.clientRate} color={tokens.color.success} />
         </Stack>
-        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mt: 2 }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1, mt: 2 }}>
           {(['afro', 'client'] as const).map((side) => (
             <Stack key={side} direction="row" spacing={0.75} sx={{ p: 0.75, borderRadius: '12px', bgcolor: tokens.color.bgSubtle }}>
               {(['A', 'B'] as const).map((p) => (
@@ -127,7 +129,7 @@ function DetailBody({ category, onClose }: { category: QualityCategory; onClose:
         />
       </Stack>
 
-      <Box sx={{ flex: 1, overflowY: 'auto', px: { xs: 2, sm: 3 }, pb: 3 }}>
+      <Box sx={{ flex: 1, overflowY: 'auto', px: { xs: 2, sm: 3 }, pb: 'calc(24px + env(safe-area-inset-bottom))', [LANDSCAPE_PHONE]: { flex: 'none', overflowY: 'visible' } }}>
         <Stack spacing={1}>
           {shown.length === 0 && (
             <Box sx={{ py: 6, textAlign: 'center' }}>
@@ -151,7 +153,8 @@ function DetailBody({ category, onClose }: { category: QualityCategory; onClose:
                   <PriorityChip priority={item.priority} />
                   <Typography variant="body2" sx={{ fontWeight: 550, pt: 0.25, flex: 1, color: tokens.color.ink }}>{item.text}</Typography>
                 </Stack>
-                <Stack direction="row" spacing={1}>
+                {/* スマホは2者のチェックを縦に並べ、日時と担当者を省略させない */}
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
                   <CheckToggle side="afro" check={check} itemText={item.text} onToggle={() => dispatch({ type: 'toggleQuality', itemId: item.id, side: 'afro' })} />
                   <CheckToggle side="client" check={check} itemText={item.text} onToggle={() => dispatch({ type: 'toggleQuality', itemId: item.id, side: 'client' })} />
                 </Stack>

@@ -16,6 +16,9 @@ import { PreviewDialog } from './PreviewDialog';
 import { CompareDialog } from './CompareDialog';
 import { samePage, STATUS_META, toLocalInput, TYPE_LABEL, validateSlug, validateTitle, TITLE_MAX } from './cmsUtils';
 
+/** 上部バーの下に追従する列の最大高さ（上下の余白 16px ずつ） */
+const STICKY_MAX_HEIGHT = `calc(100dvh - ${tokens.layout.topbar + 32}px)`;
+
 function PageList({ pages, selectedId, onSelect, onNew }: { pages: CmsPage[]; selectedId?: string; onSelect: (id: string) => void; onNew: (t: PageType) => void }) {
   const [tab, setTab] = useState<PageType>('page');
   const [q, setQ] = useState('');
@@ -46,7 +49,7 @@ function PageList({ pages, selectedId, onSelect, onNew }: { pages: CmsPage[]; se
                 }}
               >
                 <Typography variant="body2" sx={{ fontWeight: 650, color: tokens.color.ink }} noWrap>{p.title}</Typography>
-                <Typography sx={{ fontFamily: tokens.font.mono, fontSize: 11.5, color: tokens.color.muted }} noWrap>{p.slug}</Typography>
+                <Typography sx={{ fontFamily: tokens.font.mono, fontSize: 12, color: tokens.color.muted }} noWrap>{p.slug}</Typography>
                 <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 1 }}>
                   <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
                   <Typography variant="caption">{relativeTime(p.updatedAt)}</Typography>
@@ -155,7 +158,8 @@ export default function CmsEditorPage() {
       />
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '240px minmax(0,1fr)', lg: '260px minmax(0,1fr) 320px' }, gap: { xs: 2, md: 3 }, alignItems: 'start' }}>
         {showList && (
-          <Box sx={{ position: { sm: 'sticky' }, top: { sm: tokens.layout.topbar + 16 } }}>
+          // 追従する一覧・設定は画面より高くなると下端に届かないので、画面の高さで区切って中をスクロールさせる
+          <Box sx={{ position: { sm: 'sticky' }, top: { sm: tokens.layout.topbar + 16 }, maxHeight: { sm: STICKY_MAX_HEIGHT }, overflowY: { sm: 'auto' }, p: { sm: 0.5 }, m: { sm: -0.5 } }}>
             <PageList pages={pages} selectedId={isMobile ? undefined : draft.id} onSelect={requestOpen} onNew={(t) => setNewType(t)} />
           </Box>
         )}
@@ -171,7 +175,12 @@ export default function CmsEditorPage() {
                   {dirty ? '● 未保存の変更があります' : `保存済み・${memberById(draft.authorId).name}`}
                 </Typography>
               </Stack>
-              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, '& > *': { m: '0 !important' } }}>
+              {/* スマホは「プレビュー・比較・保存・承認依頼」を1行、主操作の「公開」を幅いっぱいの2行目に置く */}
+              <Box sx={{
+                display: { xs: 'grid', sm: 'flex' }, gridTemplateColumns: 'auto auto minmax(0,1fr) minmax(0,1fr)', flexWrap: 'wrap', gap: 1,
+                '& > .MuiButton-root': { whiteSpace: 'nowrap', px: { xs: 1.25, sm: 2 } },
+                '& > .MuiButton-containedPrimary': { gridColumn: { xs: '1 / -1' } },
+              }}>
                 <IconButton onClick={() => setPreview(true)} aria-label="公開プレビュー" sx={{ border: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface }}><Eye size={17} /></IconButton>
                 <IconButton onClick={() => setCompare(true)} aria-label="変更前後の比較" sx={{ border: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface }}><GitCompare size={17} /></IconButton>
                 <Button variant="outlined" startIcon={<Save size={16} />} onClick={() => save()} disabled={!dirty}>下書き保存</Button>
@@ -187,7 +196,7 @@ export default function CmsEditorPage() {
                     <ListItemText primary="予約公開…" secondary="日時を指定して公開" primaryTypographyProps={{ fontWeight: 600, fontSize: 14 }} secondaryTypographyProps={{ fontSize: 12 }} />
                   </MenuItem>
                 </Menu>
-              </Stack>
+              </Box>
             </Stack>
 
             <TextField
@@ -214,7 +223,7 @@ export default function CmsEditorPage() {
         )}
 
         {isDesktop && (
-          <Box sx={{ position: 'sticky', top: tokens.layout.topbar + 16 }}>
+          <Box sx={{ position: 'sticky', top: tokens.layout.topbar + 16, maxHeight: STICKY_MAX_HEIGHT, overflowY: 'auto', p: 0.5, m: -0.5 }}>
             <Inspector key={draft.id} draft={draft} onChange={patch} slugError={slugErr} />
           </Box>
         )}

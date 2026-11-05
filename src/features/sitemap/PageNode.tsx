@@ -41,8 +41,8 @@ export const PageNode = memo(function PageNode({ data, selected }: NodeProps<Pag
           <Icon size={16} />
         </Box>
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography sx={{ fontSize: 13, fontWeight: 650, lineHeight: 1.3, color: tokens.color.ink }} noWrap>{data.label}</Typography>
-          <Typography sx={{ fontSize: 11, fontFamily: tokens.font.mono, color: tokens.color.muted, lineHeight: 1.4 }} noWrap>{data.path}</Typography>
+          <Typography sx={{ fontSize: 13, fontWeight: 650, lineHeight: 1.3, color: tokens.color.ink, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', wordBreak: 'break-all' }}>{data.label}</Typography>
+          <Typography sx={{ fontSize: 12, fontFamily: tokens.font.mono, color: tokens.color.muted, lineHeight: 1.4 }} noWrap>{data.path}</Typography>
         </Box>
         {data.reason && (
           <Box title="改善理由あり" sx={{ width: 22, height: 22, borderRadius: '7px', bgcolor: tokens.color.warningSoft, color: tokens.color.warning, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
@@ -53,7 +53,7 @@ export const PageNode = memo(function PageNode({ data, selected }: NodeProps<Pag
       {(data.kind === 'new' || data.kind === 'cta') && (
         <Box
           sx={{
-            position: 'absolute', top: -10, right: 10, px: 0.75, height: 18, borderRadius: '6px', fontSize: 10, fontWeight: 750, letterSpacing: '.04em',
+            position: 'absolute', top: -10, right: 10, px: 0.75, height: 18, borderRadius: '6px', fontSize: 12, fontWeight: 750, letterSpacing: '.04em',
             display: 'flex', alignItems: 'center', bgcolor: data.kind === 'new' ? tokens.color.accent : tokens.color.primary, color: '#fff',
           }}
         >

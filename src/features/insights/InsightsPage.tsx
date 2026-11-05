@@ -87,11 +87,11 @@ export default function InsightsPage() {
                   <linearGradient id="gInq" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={tokens.color.accent} stopOpacity={0.18} /><stop offset="1" stopColor={tokens.color.accent} stopOpacity={0} /></linearGradient>
                 </defs>
                 <CartesianGrid stroke={tokens.color.border} strokeDasharray="0" vertical={false} />
-                <XAxis dataKey="month" tickFormatter={(m: string) => m.slice(5) + '月'} tick={{ fontSize: 11, fill: tokens.color.muted }} axisLine={false} tickLine={false} />
-                <YAxis yAxisId="l" tick={{ fontSize: 11, fill: tokens.color.muted }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v / 1000}k`} />
-                <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 11, fill: tokens.color.muted }} axisLine={false} tickLine={false} width={30} />
+                <XAxis dataKey="month" tickFormatter={(m: string) => m.slice(5) + '月'} tick={{ fontSize: 12, fill: tokens.color.muted }} axisLine={false} tickLine={false} />
+                <YAxis yAxisId="l" tick={{ fontSize: 12, fill: tokens.color.muted }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v / 1000}k`} />
+                <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 12, fill: tokens.color.muted }} axisLine={false} tickLine={false} width={30} />
                 <Tooltip contentStyle={{ borderRadius: 12, border: `1px solid ${tokens.color.border}`, boxShadow: tokens.shadow.md, fontSize: 12 }} formatter={(v, n) => [Number(v).toLocaleString('ja-JP'), n === 'sessions' ? 'アクセス' : '問い合わせ']} />
-                <ReferenceLine yAxisId="l" x={RENEWAL_MONTH} stroke={tokens.color.ink} strokeDasharray="4 4" label={{ value: 'リニューアル', position: 'top', fontSize: 11, fill: tokens.color.ink }} />
+                <ReferenceLine yAxisId="l" x={RENEWAL_MONTH} stroke={tokens.color.ink} strokeDasharray="4 4" label={{ value: 'リニューアル', position: 'top', fontSize: 12, fill: tokens.color.ink }} />
                 <Area yAxisId="l" type="monotone" dataKey="sessions" stroke={tokens.color.primary} strokeWidth={2} fill="url(#gSessions)" isAnimationActive={anim} />
                 <Area yAxisId="r" type="monotone" dataKey="inquiries" stroke={tokens.color.accent} strokeWidth={2} fill="url(#gInq)" isAnimationActive={anim} />
               </AreaChart>
@@ -135,7 +135,7 @@ export default function InsightsPage() {
                 <Box key={p.path}>
                   <Stack direction="row" alignItems="baseline" spacing={1} sx={{ mb: 0.5 }}>
                     <Typography variant="body2" sx={{ fontWeight: 650 }}>{p.page}</Typography>
-                    <Typography sx={{ fontFamily: tokens.font.mono, fontSize: 11, color: tokens.color.muted, flex: 1 }} noWrap>{p.path}</Typography>
+                    <Typography sx={{ fontFamily: tokens.font.mono, fontSize: 12, color: tokens.color.muted, flex: 1 }} noWrap>{p.path}</Typography>
                     <Typography variant="caption" sx={{ color: p.trend >= 0 ? '#08765A' : '#B4232F', fontWeight: 650 }}>{p.trend >= 0 ? '▲' : '▼'} {Math.abs(p.trend)}%</Typography>
                   </Stack>
                   <Stack direction="row" alignItems="center" spacing={1.5}>
@@ -181,8 +181,8 @@ export default function InsightsPage() {
                     <Box sx={{ width: 14, height: 14, borderRadius: '50%', flexShrink: 0, bgcolor: done ? tokens.color.primary : tokens.color.surface, border: `2px solid ${done ? tokens.color.primary : tokens.color.borderStrong}` }} />
                     {i < cycles.length - 1 && <Box sx={{ flex: 1, height: 2, bgcolor: i < doneCycles ? tokens.color.primary : tokens.color.border }} />}
                   </Stack>
-                  <Typography variant="body2" sx={{ fontWeight: 650, mt: 1 }} noWrap>{c.label}</Typography>
-                  <Typography variant="caption" noWrap sx={{ display: 'block' }}>{c.sub}</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 650, mt: 1, pr: 1, lineHeight: 1.4 }}>{c.label}</Typography>
+                  <Typography variant="caption" sx={{ display: 'block', pr: 1 }}>{c.sub}</Typography>
                 </Box>
               );
             })}

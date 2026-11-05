@@ -13,6 +13,7 @@ import { useDemo } from '@/store/DemoStore';
 import { useToast } from '@/hooks/useToast';
 import { formatDateTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
+import { LANDSCAPE_PHONE, TOUCH } from '@/theme/media';
 import type { SitemapEdge, SitemapNode, SitemapVariant } from '@/types';
 import { PageNode, KIND_META, type PageFlowNode } from './PageNode';
 import { AddPageDialog, type NewPageInput } from './AddPageDialog';
@@ -123,7 +124,13 @@ function Editor({ variant, onVariant }: { variant: SitemapVariant; onVariant: (v
       </Stack>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0,1fr) 320px' }, gap: 2.5, alignItems: 'start' }}>
-        <Surface padding={0} sx={{ overflow: 'hidden', height: { xs: '60vh', lg: 'calc(100dvh - 320px)' }, minHeight: 420,
+        <Surface padding={0} sx={{ overflow: 'hidden',
+          // タッチではキャンバス上のドラッグが画面のスクロールにならないので、上下に指を置ける余白を必ず残す
+          height: { xs: 'clamp(300px, 58dvh, 560px)', lg: 'calc(100dvh - 320px)' }, minHeight: { lg: 420 },
+          [LANDSCAPE_PHONE]: { height: 'calc(100dvh - 140px)', minHeight: 220 },
+          '& .react-flow__controls-button': { [TOUCH]: { width: 44, height: 44 } },
+          // 接続の点は指で掴める大きさにする（インライン style より優先させる）
+          '& .react-flow__handle': { [TOUCH]: { width: '16px !important', height: '16px !important' } },
           '& .react-flow__controls': { boxShadow: tokens.shadow.sm, borderRadius: '10px', overflow: 'hidden', border: `1px solid ${tokens.color.border}` },
           '& .react-flow__minimap': { borderRadius: '12px', overflow: 'hidden', border: `1px solid ${tokens.color.border}` } }}>
           <ReactFlow

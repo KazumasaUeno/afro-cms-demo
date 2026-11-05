@@ -18,7 +18,7 @@ export function PreviewDialog({ page, open, onClose }: { page: CmsPage; open: bo
       <Stack direction="row" alignItems="center" spacing={2} sx={{ px: { xs: 2, md: 3 }, height: 64, bgcolor: tokens.color.surface, borderBottom: `1px solid ${tokens.color.border}`, flexShrink: 0 }}>
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography id="preview-title" variant="h5" noWrap>公開プレビュー</Typography>
-          <Typography variant="caption" noWrap sx={{ display: 'block' }}>実際には公開されません（デモ）</Typography>
+          <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.4 }}>実際には公開されません（デモ）</Typography>
         </Box>
         <ToggleButtonGroup exclusive size="small" value={device} onChange={(_, v: Device | null) => v && setDevice(v)} aria-label="表示デバイス">
           <ToggleButton value="pc" aria-label="PC"><Monitor size={16} /><Box component="span" sx={{ ml: 0.75, display: { xs: 'none', sm: 'inline' } }}>PC</Box></ToggleButton>

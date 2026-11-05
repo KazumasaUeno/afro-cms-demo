@@ -3,6 +3,7 @@ import { FileText, Megaphone } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { CmsPage, PageType } from '@/types';
 import { tokens } from '@/theme/tokens';
+import { useFullScreenDialog } from '@/hooks/useMediaQueries';
 import { nowIso } from '@/services/time';
 import { suggestSlug, TITLE_MAX, validateSlug, validateTitle } from './cmsUtils';
 
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export function NewPageDialog({ open, initialType, pages, parentOptions, onClose, onCreate }: Props) {
+  const fullScreen = useFullScreenDialog();
   const [type, setType] = useState<PageType>(initialType);
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
@@ -53,7 +55,7 @@ export function NewPageDialog({ open, initialType, pages, parentOptions, onClose
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth aria-labelledby="new-page-title">
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth fullScreen={fullScreen} aria-labelledby="new-page-title">
       <DialogTitle id="new-page-title">新しく作成する</DialogTitle>
       <DialogContent>
         <Box

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { SitemapNode, SitemapNodeData, SitemapVariant } from '@/types';
 import { validateLabel, validatePath } from './metrics';
 import { KIND_META } from './PageNode';
+import { useFullScreenDialog } from '@/hooks/useMediaQueries';
 
 export interface NewPageInput {
   label: string;
@@ -24,6 +25,7 @@ interface Props {
 const KINDS: SitemapNodeData['kind'][] = ['page', 'section', 'new', 'cta'];
 
 export function AddPageDialog({ open, variant, nodes, defaultParentId, onClose, onAdd }: Props) {
+  const fullScreen = useFullScreenDialog();
   const home = nodes.find((n) => n.data.kind === 'home');
   const [form, setForm] = useState<NewPageInput>({ label: '', path: '/', kind: 'new', parentId: '', reason: '' });
   const [touched, setTouched] = useState(false);
@@ -44,7 +46,7 @@ export function AddPageDialog({ open, variant, nodes, defaultParentId, onClose, 
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth aria-labelledby="add-page-title">
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth fullScreen={fullScreen} aria-labelledby="add-page-title">
       <DialogTitle id="add-page-title">ページを追加</DialogTitle>
       <DialogContent>
         <Stack

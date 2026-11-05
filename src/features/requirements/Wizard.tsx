@@ -7,6 +7,7 @@ import { useDemo } from '@/store/DemoStore';
 import { AiMark, Surface } from '@/components/ui';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { tokens } from '@/theme/tokens';
+import { TOUCH } from '@/theme/media';
 import type { AnswerValue } from '@/types';
 import { AnswerInput } from './AnswerInput';
 import { hostnameOf } from './buildProposal';
@@ -139,6 +140,8 @@ export function Wizard({ onAnalyze }: { onAnalyze: () => void }) {
                 sx={{
                   maxWidth: '85%', gap: 1, px: 1.5, py: 0.75, borderRadius: '14px 14px 4px 14px', bgcolor: tokens.color.bgSubtle,
                   color: tokens.color.inkSoft, fontSize: 13, textAlign: 'left', '&:hover': { bgcolor: tokens.color.primarySoft }, '&:hover svg': { opacity: 1 },
+                  // タッチでは hover が無いので、修正できることを常に見せる
+                  [TOUCH]: { minHeight: 44, '& svg': { opacity: '0.8 !important' } },
                 }}
               >
                 <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -185,7 +188,7 @@ export function Wizard({ onAnalyze }: { onAnalyze: () => void }) {
                       const cur = typeof answers['q-issue'] === 'string' ? answers['q-issue'] : '';
                       setValue(cur.includes(s) ? cur : cur ? `${cur}、${s}` : s);
                     }}
-                    sx={{ px: 1.25, height: 30, borderRadius: '9px', fontSize: 12.5, fontWeight: 600, color: tokens.color.muted, border: `1px dashed ${tokens.color.borderStrong}`, '&:hover': { color: tokens.color.primary, borderColor: tokens.color.primary } }}
+                    sx={{ px: 1.25, height: 30, [TOUCH]: { height: 44 }, borderRadius: '9px', fontSize: 12.5, fontWeight: 600, color: tokens.color.muted, border: `1px dashed ${tokens.color.borderStrong}`, '&:hover': { color: tokens.color.primary, borderColor: tokens.color.primary } }}
                   >
                     + {s}
                   </ButtonBase>

@@ -61,7 +61,8 @@ function Toolbar({ editor, onImage }: { editor: Editor; onImage: () => void }) {
       role="toolbar"
       aria-label="書式"
       sx={{
-        position: 'sticky', top: 0, zIndex: 2, alignItems: 'center', gap: 0.25, p: 0.75, flexWrap: 'wrap',
+        // 外枠は overflow: clip（hidden だとスクロールコンテナになり sticky が効かない）。上部バーの下に貼り付く
+        position: 'sticky', top: tokens.layout.topbar, zIndex: 2, alignItems: 'center', gap: 0.25, p: 0.75, flexWrap: 'wrap',
         bgcolor: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(8px)', borderBottom: `1px solid ${tokens.color.border}`,
       }}
     >
@@ -106,7 +107,7 @@ export function RichEditor({ content, onChange, placeholder = '本文を入力�
   return (
     <Box
       sx={{
-        borderRadius: '16px', border: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface, overflow: 'hidden',
+        borderRadius: '16px', border: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface, overflow: 'clip',
         '&:focus-within': { borderColor: tokens.color.primary, boxShadow: tokens.shadow.focus },
         transition: 'border-color .16s, box-shadow .16s',
       }}
@@ -114,8 +115,8 @@ export function RichEditor({ content, onChange, placeholder = '本文を入力�
       <Toolbar editor={editor} onImage={() => setPicker(true)} />
       <Box
         sx={{
-          px: { xs: 2, md: 3.5 }, py: { xs: 2, md: 3 }, minHeight: 320,
-          '& .ProseMirror': { outline: 'none', minHeight: 280, fontSize: 16, lineHeight: 1.85, color: tokens.color.ink },
+          px: { xs: 2, md: 3.5 }, py: { xs: 2, md: 3 }, minHeight: { xs: 240, md: 320 },
+          '& .ProseMirror': { outline: 'none', minHeight: { xs: 200, md: 280 }, fontSize: 16, lineHeight: 1.85, color: tokens.color.ink },
           '& .ProseMirror:focus-visible': { boxShadow: 'none' },
           '& .ProseMirror > * + *': { mt: 1.5 },
           '& .ProseMirror h2': { fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.35, mt: 3 },

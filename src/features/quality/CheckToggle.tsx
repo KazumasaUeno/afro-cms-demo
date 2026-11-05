@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Check, Circle } from 'lucide-react';
 import type { QualityCheck } from '@/types';
 import { tokens } from '@/theme/tokens';
+import { TOUCH } from '@/theme/media';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { formatDateTime } from '@/services/time';
 import { shortStamp, surname } from './qualityStats';
@@ -40,7 +41,7 @@ export function CheckToggle({ side, check, itemText, onToggle }: Props) {
       }
       title={checked ? `${formatDateTime(at)} ${by ?? ''}（クリックで取り消し）` : undefined}
       sx={{
-        position: 'relative', overflow: 'hidden', height: 34, minWidth: { xs: 0, sm: 132 }, flex: { xs: 1, sm: '0 0 auto' },
+        position: 'relative', overflow: 'hidden', height: 34, [TOUCH]: { height: 44 }, minWidth: { xs: 0, sm: 132 }, flex: '0 0 auto',
         px: 1.25, borderRadius: '10px', justifyContent: 'flex-start', gap: 0.75, fontSize: 12.5, fontWeight: 600,
         border: `1px solid ${checked ? 'transparent' : tokens.color.border}`,
         bgcolor: checked ? s.soft : tokens.color.surface,

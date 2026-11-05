@@ -14,6 +14,7 @@ import { AiBadge, AiMark, CountUp, MemberAvatar, Reveal, SectionTitle, StageTrac
 import { daysFromNow, formatDate, nowIso, relativeTime } from '@/services/time';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { tokens } from '@/theme/tokens';
+import { TOUCH } from '@/theme/media';
 import { nextBestAction, stageLabel, stagePrimaryRoute } from '@/features/projects/projectHelpers';
 
 const InquirySpark = lazy(() => import('./InquirySpark'));
@@ -220,7 +221,7 @@ export default function HomePage() {
                     <LinearProgress variant="determinate" value={p.progress} aria-label={`${p.siteName}の進捗`} sx={{ '& .MuiLinearProgress-bar': { bgcolor: p.accent } }} />
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 2, color: tokens.color.inkSoft }}>
                       <ArrowUpRight size={15} style={{ flexShrink: 0 }} />
-                      <Typography variant="body2" noWrap sx={{ flex: 1, minWidth: 0 }}>{p.nextAction}</Typography>
+                      <Typography variant="body2" sx={{ flex: 1, minWidth: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.nextAction}</Typography>
                       <Typography variant="caption" sx={{ flexShrink: 0 }}>{relativeTime(p.updatedAt)}</Typography>
                     </Stack>
                   </Surface>
@@ -240,15 +241,18 @@ export default function HomePage() {
                     onClick={() => open(p.id, `/projects/${p.id}`)}
                     aria-label={`${p.siteName}：${stageLabel(p.stage)}、進捗${p.progress}%`}
                     sx={{
-                      display: 'grid', gridTemplateColumns: { xs: '96px minmax(0,1fr) 40px', sm: '160px minmax(0,1fr) 48px' }, alignItems: 'center', gap: 1.5,
+                      // スマホは「名前・%」の行の下にバーを置き、名前を省略させない
+                      display: 'grid', alignItems: 'center', columnGap: 1.5, rowGap: { xs: 0.75, sm: 1.5 },
+                      gridTemplateColumns: { xs: 'minmax(0,1fr) 48px', sm: '160px minmax(0,1fr) 48px' },
+                      gridTemplateAreas: { xs: '"name pct" "bar bar"', sm: '"name bar pct"' },
                       borderRadius: 2, p: 0.75, textAlign: 'left', '&:hover': { bgcolor: tokens.color.surfaceMuted },
                     }}
                   >
-                    <Box sx={{ minWidth: 0 }}>
+                    <Box sx={{ minWidth: 0, gridArea: 'name' }}>
                       <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>{p.siteName}</Typography>
                       <Typography variant="caption" noWrap sx={{ display: 'block' }}>{stageLabel(p.stage)}</Typography>
                     </Box>
-                    <Box sx={{ position: 'relative', height: 10, borderRadius: 99, bgcolor: tokens.color.bgSubtle, overflow: 'hidden' }}>
+                    <Box sx={{ gridArea: 'bar', position: 'relative', height: 10, borderRadius: 99, bgcolor: tokens.color.bgSubtle, overflow: 'hidden' }}>
                       {STAGES.slice(1).map((s, si) => (
                         <Box key={s.id} sx={{ position: 'absolute', top: 0, bottom: 0, left: `${(si + 1) * 20}%`, width: 2, bgcolor: '#fff', zIndex: 1 }} />
                       ))}
@@ -259,7 +263,7 @@ export default function HomePage() {
                         style={{ height: '100%', borderRadius: 99, background: `linear-gradient(90deg, ${p.accent}B3, ${p.accent})` }}
                       />
                     </Box>
-                    <Typography variant="body2" sx={{ fontWeight: 700, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{p.progress}%</Typography>
+                    <Typography variant="body2" sx={{ gridArea: 'pct', fontWeight: 700, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{p.progress}%</Typography>
                   </ButtonBase>
                 ))}
               </Stack>
@@ -267,7 +271,7 @@ export default function HomePage() {
                 <span />
                 <Stack direction="row">
                   {STAGES.map((s) => (
-                    <Typography key={s.id} variant="caption" sx={{ flex: 1, textAlign: 'center', color: tokens.color.muted, fontSize: 11 }}>{s.label}</Typography>
+                    <Typography key={s.id} variant="caption" sx={{ flex: 1, textAlign: 'center', color: tokens.color.muted, fontSize: 12 }}>{s.label}</Typography>
                   ))}
                 </Stack>
                 <span />
@@ -300,10 +304,10 @@ export default function HomePage() {
                     >
                       <Box sx={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, bgcolor: a.color }} />
                       <Box sx={{ minWidth: 0, flex: 1 }}>
-                        <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>{a.title}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 600, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.title}</Typography>
                         <Typography variant="caption" noWrap sx={{ display: 'block' }}>{a.sub}</Typography>
                       </Box>
-                      <Box className="go" sx={{ display: 'flex', opacity: 0.4, transform: 'translateX(-4px)', transition: 'all .16s', flexShrink: 0, color: tokens.color.muted }}>
+                      <Box className="go" sx={{ display: 'flex', opacity: 0.4, transform: 'translateX(-4px)', transition: 'all .16s', flexShrink: 0, color: tokens.color.muted, [TOUCH]: { opacity: 0.8, transform: 'none' } }}>
                         <ArrowRight size={16} />
                       </Box>
                     </ButtonBase>
@@ -330,11 +334,11 @@ export default function HomePage() {
                     return (
                       <ButtonBase key={p.id} onClick={() => navigate('/cms')} sx={{ justifyContent: 'flex-start', gap: 1.5, textAlign: 'left', borderRadius: 2.5, p: 1, mx: -1, '&:hover': { bgcolor: tokens.color.surfaceMuted } }}>
                         <Box sx={{ width: 48, flexShrink: 0, borderRadius: '12px', border: `1px solid ${tokens.color.border}`, overflow: 'hidden', textAlign: 'center', bgcolor: '#fff' }}>
-                          <Box sx={{ bgcolor: tokens.color.accent, color: '#fff', fontSize: 10, fontWeight: 700, py: 0.25 }}>{d ? `${d.getMonth() + 1}月` : '—'}</Box>
+                          <Box sx={{ bgcolor: tokens.color.accent, color: '#fff', fontSize: 12, fontWeight: 700, py: 0.25 }}>{d ? `${d.getMonth() + 1}月` : '—'}</Box>
                           <Box sx={{ fontSize: 18, fontWeight: 700, py: 0.25 }}>{d ? d.getDate() : '—'}</Box>
                         </Box>
                         <Box sx={{ minWidth: 0 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{p.title}</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.title}</Typography>
                           <Typography variant="caption" sx={{ display: 'block' }}>{p.type === 'news' ? 'お知らせ' : 'ページ'}・{relativeTime(p.scheduledAt)}に公開</Typography>
                         </Box>
                       </ButtonBase>

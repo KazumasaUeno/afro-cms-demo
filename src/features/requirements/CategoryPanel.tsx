@@ -5,15 +5,18 @@ import { REQUIREMENT_CATEGORIES, REQUIREMENT_QUESTIONS, TOTAL_REQUIREMENT_QUESTI
 import { useDemo } from '@/store/DemoStore';
 import { StatusPill, Surface } from '@/components/ui';
 import { tokens } from '@/theme/tokens';
+import { useFullScreenDialog } from '@/hooks/useMediaQueries';
+import { TOUCH } from '@/theme/media';
 import type { RequirementCategory } from '@/types';
 import { AnswerInput } from './AnswerInput';
 import { isAnswered, validateAnswer } from './validation';
 
 function CategoryDialog({ category, onClose }: { category: RequirementCategory | null; onClose: () => void }) {
+  const fullScreen = useFullScreenDialog();
   const { state, dispatch } = useDemo();
   const questions = category ? REQUIREMENT_QUESTIONS.filter((q) => q.categoryId === category.id) : [];
   return (
-    <Dialog open={!!category} onClose={onClose} fullWidth maxWidth="sm" aria-labelledby="cat-title">
+    <Dialog open={!!category} onClose={onClose} fullWidth maxWidth="sm" fullScreen={fullScreen} aria-labelledby="cat-title">
       {category && (
         <>
           <DialogTitle id="cat-title" sx={{ pr: 7 }}>
@@ -73,7 +76,7 @@ export function CategoryPanel() {
               key={c.id}
               onClick={() => setOpen(c)}
               aria-label={`${c.no}. ${c.title}（${done}/${qs.length}問 回答済み）を開く`}
-              sx={{ justifyContent: 'flex-start', gap: 1.25, px: 1, py: 0.9, borderRadius: '10px', textAlign: 'left', '&:hover': { bgcolor: tokens.color.bgSubtle }, '&:hover .chev': { opacity: 1, transform: 'translateX(0)' } }}
+              sx={{ justifyContent: 'flex-start', gap: 1.25, px: 1, py: 0.9, borderRadius: '10px', textAlign: 'left', '&:hover': { bgcolor: tokens.color.bgSubtle }, '&:hover .chev': { opacity: 1, transform: 'translateX(0)' }, [TOUCH]: { minHeight: 44, '& .chev': { opacity: '0.8 !important' } } }}
             >
               <Box sx={{ position: 'relative', width: 22, height: 22, flexShrink: 0 }}>
                 <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden>
@@ -82,7 +85,7 @@ export function CategoryPanel() {
                     strokeDasharray={2 * Math.PI * 9} strokeDashoffset={2 * Math.PI * 9 * (1 - pct)} transform="rotate(-90 11 11)" style={{ transition: 'stroke-dashoffset .5s' }} />
                 </svg>
               </Box>
-              <Typography sx={{ fontSize: 13, fontWeight: 600, flex: 1, minWidth: 0 }} noWrap>
+              <Typography sx={{ fontSize: 13, fontWeight: 600, flex: 1, minWidth: 0, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                 <Box component="span" sx={{ color: tokens.color.faint, mr: 0.75, fontVariantNumeric: 'tabular-nums' }}>{String(c.no).padStart(2, '0')}</Box>
                 {c.title}
               </Typography>

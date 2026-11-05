@@ -24,7 +24,7 @@ export function ChipSelect({ options, value, multiple, onChange, label }: ChipSe
             aria-pressed={on}
             onClick={() => onChange(multiple ? (on ? value.filter((x) => x !== o) : [...value, o]) : [o])}
             sx={{
-              gap: 0.75, px: 1.75, minHeight: 42, borderRadius: '12px', fontSize: 14, fontWeight: 600,
+              gap: 0.75, px: 1.75, minHeight: 44, borderRadius: '12px', fontSize: 14, fontWeight: 600,
               border: `1px solid ${on ? tokens.color.primary : tokens.color.border}`,
               bgcolor: on ? tokens.color.primarySoft : tokens.color.surface,
               color: on ? tokens.color.primary : tokens.color.inkSoft,

@@ -61,7 +61,7 @@ export function DeviceFrame({ design, device, thumbnail, viewportHeight, label }
         {chrome && (
           <Box sx={{ height: barH, display: 'flex', alignItems: 'center', gap: 0.75, px: 1.5, bgcolor: tokens.color.bgSubtle, borderBottom: `1px solid ${tokens.color.border}` }}>
             {['#F87171', '#FBBF24', '#34D399'].map((c) => <Box key={c} sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: c, opacity: 0.8 }} />)}
-            <Box sx={{ flex: 1, mx: 1, height: 20, borderRadius: '6px', bgcolor: '#fff', fontSize: 11, color: tokens.color.muted, display: 'flex', alignItems: 'center', px: 1, overflow: 'hidden', whiteSpace: 'nowrap' }}>
+            <Box sx={{ flex: 1, mx: 1, height: 20, borderRadius: '6px', bgcolor: '#fff', fontSize: 12, color: tokens.color.muted, display: 'flex', alignItems: 'center', px: 1, overflow: 'hidden', whiteSpace: 'nowrap' }}>
               minamo-coffee.example.jp
             </Box>
           </Box>

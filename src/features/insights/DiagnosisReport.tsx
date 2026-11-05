@@ -50,7 +50,7 @@ export function DiagnosisReportView({ report, siteName }: { report: DiagnosisRep
         <ProgressRing value={report.score} size={120} stroke={10} color={tokens.color.primary} label="総合スコア">
           <Box sx={{ textAlign: 'center' }}>
             <Typography sx={{ fontSize: 32, fontWeight: 750, lineHeight: 1 }}>{report.score}</Typography>
-            <Typography sx={{ fontSize: 10.5, color: tokens.color.muted }}>/ 100</Typography>
+            <Typography sx={{ fontSize: 12, color: tokens.color.muted }}>/ 100</Typography>
           </Box>
         </ProgressRing>
         <Box sx={{ flex: 1, minWidth: 0 }}>

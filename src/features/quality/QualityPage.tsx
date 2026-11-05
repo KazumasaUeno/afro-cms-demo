@@ -14,14 +14,14 @@ import { computeStats, isComplete } from './qualityStats';
 function MiniBar({ value, color, label }: { value: number; color: string; label: string }) {
   return (
     <Stack direction="row" alignItems="center" spacing={1}>
-      <Typography sx={{ fontSize: 11, fontWeight: 600, color: tokens.color.muted, width: 34, flexShrink: 0 }}>{label}</Typography>
+      <Typography sx={{ fontSize: 12, fontWeight: 600, color: tokens.color.muted, width: 40, flexShrink: 0 }}>{label}</Typography>
       <Box
         sx={{ flex: 1, height: 6, borderRadius: 99, bgcolor: tokens.color.bgSubtle, overflow: 'hidden' }}
         role="progressbar" aria-label={`${label} ${Math.round(value)}%`} aria-valuenow={Math.round(value)} aria-valuemin={0} aria-valuemax={100}
       >
         <Box sx={{ width: `${value}%`, height: '100%', bgcolor: color, borderRadius: 99, transition: `width .5s ${tokens.motion.easeCss}` }} />
       </Box>
-      <Typography sx={{ fontSize: 11, fontWeight: 700, width: 32, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{Math.round(value)}%</Typography>
+      <Typography sx={{ fontSize: 12, fontWeight: 700, width: 38, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{Math.round(value)}%</Typography>
     </Stack>
   );
 }
@@ -111,7 +111,7 @@ export default function QualityPage() {
                   <Typography sx={{ fontSize: 26, fontWeight: 750, lineHeight: 1, letterSpacing: '-0.02em' }}>
                     <CountUp value={Math.round(overall.completeRate)} suffix="%" />
                   </Typography>
-                  <Typography sx={{ fontSize: 10.5, color: tokens.color.muted, mt: 0.5 }}>完了</Typography>
+                  <Typography sx={{ fontSize: 12, color: tokens.color.muted, mt: 0.5 }}>完了</Typography>
                 </Box>
               </ProgressRing>
               <Box>
@@ -203,9 +203,9 @@ export default function QualityPage() {
                       {open.slice(0, 3).map((i) => {
                         const c = state.qualityChecks[i.id];
                         return (
-                          <Stack key={i.id} direction="row" spacing={1} alignItems="center">
+                          <Stack key={i.id} direction="row" spacing={1} alignItems={{ xs: 'flex-start', sm: 'center' }}>
                             <PriorityChip priority={i.priority} />
-                            <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }} noWrap>{i.text}</Typography>
+                            <Typography variant="body2" sx={{ flex: 1, minWidth: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{i.text}</Typography>
                             <Typography variant="caption" sx={{ flexShrink: 0 }}>{!c?.afroAt ? 'アフロ未確認' : '顧客未承認'}</Typography>
                           </Stack>
                         );
@@ -238,7 +238,7 @@ export default function QualityPage() {
                       <StatusPill tone={afro ? 'primary' : 'success'} dot={false}>{afro ? 'アフロ' : '顧客'}</StatusPill>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>{l.action}</Typography>
                     </Stack>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }} noWrap>{l.target}</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{l.target}</Typography>
                     <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums' }}>
                       {formatDateTime(l.at)}・{l.actor}・{relativeTime(l.at)}
                     </Typography>

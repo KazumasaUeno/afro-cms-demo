@@ -35,11 +35,11 @@ function DeviceToggle({ value, onChange }: { value: Device; onChange: (d: Device
 function ScoreBar({ label, value }: { label: string; value: number }) {
   return (
     <Stack direction="row" alignItems="center" spacing={1}>
-      <Typography sx={{ fontSize: 11.5, color: tokens.color.muted, width: 64, flexShrink: 0 }}>{label}</Typography>
+      <Typography sx={{ fontSize: 12, color: tokens.color.muted, width: 64, flexShrink: 0 }}>{label}</Typography>
       <Box sx={{ flex: 1, height: 4, borderRadius: 2, bgcolor: tokens.color.bgSubtle }}>
         <Box sx={{ width: `${value}%`, height: '100%', borderRadius: 2, bgcolor: tokens.color.primary, transition: 'width .6s' }} />
       </Box>
-      <Typography sx={{ fontSize: 11.5, fontWeight: 700, width: 22, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{value}</Typography>
+      <Typography sx={{ fontSize: 12, fontWeight: 700, width: 22, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{value}</Typography>
     </Stack>
   );
 }
@@ -79,7 +79,7 @@ function VariantCard({ v, selected, adopted, locked, onSelect }: { v: DesignVari
           <Stack direction="row" sx={{ '& > *:not(:first-of-type)': { ml: -0.5 } }}>
             {v.palette.map((c) => <Box key={c} sx={{ width: 18, height: 18, borderRadius: '50%', bgcolor: c, border: '2px solid #fff', boxShadow: `0 0 0 1px ${tokens.color.border}` }} />)}
           </Stack>
-          <Typography sx={{ fontSize: 11.5, color: tokens.color.muted }} noWrap>{v.fonts}</Typography>
+          <Typography sx={{ fontSize: 12, color: tokens.color.muted }} noWrap>{v.fonts}</Typography>
         </Stack>
         <Stack spacing={0.6}>
           <ScoreBar label="ブランド" value={v.score.brand} />
@@ -233,7 +233,7 @@ export default function DesignStudioPage() {
 
       <Dialog open={expanded} onClose={() => setExpanded(false)} fullScreen PaperProps={{ sx: { bgcolor: tokens.color.bgSubtle, borderRadius: 0, border: 'none' } }} aria-label="大きくプレビュー">
         <Stack direction="row" alignItems="center" spacing={1.5} sx={{ px: { xs: 2, md: 3 }, py: 1.5, bgcolor: tokens.color.surface, borderBottom: `1px solid ${tokens.color.border}` }}>
-          <Typography variant="h5" sx={{ flex: 1 }} noWrap>{current.label}：{current.name}</Typography>
+          <Typography variant="h5" sx={{ flex: 1, minWidth: 0, lineHeight: 1.3 }}>{current.label}<Box component="br" sx={{ display: { sm: 'none' } }} /><Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>：</Box>{current.name}</Typography>
           <DeviceToggle value={device} onChange={setDevice} />
           <IconButton aria-label="閉じる" onClick={() => setExpanded(false)}><X size={20} /></IconButton>
         </Stack>

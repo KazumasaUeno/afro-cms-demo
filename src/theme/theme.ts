@@ -1,5 +1,6 @@
 import { alpha, createTheme } from '@mui/material/styles';
 import { tokens as t } from './tokens';
+import { TOUCH as touch } from './media';
 
 const c = t.color;
 
@@ -31,7 +32,7 @@ export const theme = createTheme({
     body1: { fontSize: '0.9375rem', lineHeight: 1.7 },
     body2: { fontSize: '0.875rem', lineHeight: 1.6 },
     caption: { fontSize: '0.75rem', color: c.muted, lineHeight: 1.5 },
-    overline: { fontSize: '0.6875rem', fontWeight: 650, letterSpacing: '0.08em', lineHeight: 1.6, color: c.muted },
+    overline: { fontSize: '0.75rem', fontWeight: 650, letterSpacing: '0.08em', lineHeight: 1.6, color: c.muted },
     button: { textTransform: 'none', fontWeight: 600, letterSpacing: 0 },
   },
   components: {
@@ -57,8 +58,9 @@ export const theme = createTheme({
           borderRadius: 12, minHeight: 40, paddingInline: 16,
           transition: `background-color .16s ${t.motion.easeCss}, box-shadow .16s ${t.motion.easeCss}, transform .16s ${t.motion.easeCss}, border-color .16s`,
           '&:active': { transform: 'scale(0.98)' },
+          [touch]: { minHeight: 44 },
         },
-        sizeSmall: { minHeight: 32, paddingInline: 12, borderRadius: 10, fontSize: '0.8125rem' },
+        sizeSmall: { minHeight: 32, paddingInline: 12, borderRadius: 10, fontSize: '0.8125rem', [touch]: { minHeight: 44 } },
         sizeLarge: { minHeight: 48, paddingInline: 22, borderRadius: 14, fontSize: '0.9375rem' },
         containedPrimary: {
           boxShadow: `0 1px 0 rgba(255,255,255,.18) inset, 0 1px 2px ${alpha(c.primary, 0.4)}`,
@@ -73,7 +75,7 @@ export const theme = createTheme({
     },
     MuiIconButton: {
       styleOverrides: {
-        root: { borderRadius: 12, color: c.inkSoft, transition: 'background-color .16s', '&:hover': { backgroundColor: c.bgSubtle } },
+        root: { borderRadius: 12, color: c.inkSoft, transition: 'background-color .16s', '&:hover': { backgroundColor: c.bgSubtle }, [touch]: { minWidth: 44, minHeight: 44 } },
       },
     },
     MuiPaper: {
@@ -87,7 +89,7 @@ export const theme = createTheme({
     MuiChip: {
       styleOverrides: {
         root: { borderRadius: 8, fontWeight: 600, fontSize: '0.75rem', height: 26 },
-        sizeSmall: { height: 22, fontSize: '0.6875rem' },
+        sizeSmall: { height: 22, fontSize: '0.75rem' },
       },
     },
     MuiTooltip: {
@@ -112,6 +114,12 @@ export const theme = createTheme({
     MuiDialog: {
       styleOverrides: {
         paper: { borderRadius: t.radius.xl, boxShadow: t.shadow.lg, border: `1px solid ${c.border}` },
+        // 全画面のときは角丸・枠を外し、操作ボタンをホームインジケーター（safe-area）の上に出す
+        paperFullScreen: {
+          borderRadius: 0, border: 'none',
+          '& .MuiDialogActions-root': { paddingBottom: 'max(16px, env(safe-area-inset-bottom))' },
+          '& .MuiDialogContent-root:last-child': { paddingBottom: 'max(20px, calc(env(safe-area-inset-bottom) + 12px))' },
+        },
       },
     },
     MuiBackdrop: { styleOverrides: { root: { backgroundColor: alpha(c.ink, 0.32), backdropFilter: 'blur(2px)' } } },
@@ -122,13 +130,14 @@ export const theme = createTheme({
       },
     },
     MuiTab: {
-      styleOverrides: { root: { textTransform: 'none', fontWeight: 600, minHeight: 40, fontSize: '0.875rem' } },
+      styleOverrides: { root: { textTransform: 'none', fontWeight: 600, minHeight: 40, fontSize: '0.875rem', [touch]: { minHeight: 44 } } },
     },
-    MuiTabs: { styleOverrides: { root: { minHeight: 40 }, indicator: { height: 2, borderRadius: 2 } } },
+    MuiTabs: { styleOverrides: { root: { minHeight: 40, [touch]: { minHeight: 44 } }, indicator: { height: 2, borderRadius: 2 } } },
     MuiToggleButton: {
       styleOverrides: {
         root: {
           textTransform: 'none', border: 'none', borderRadius: '10px !important', fontWeight: 600, color: c.muted, paddingInline: 12,
+          [touch]: { minHeight: 44, minWidth: 44 },
           '&.Mui-selected': { backgroundColor: c.surface, color: c.ink, boxShadow: t.shadow.sm, '&:hover': { backgroundColor: c.surface } },
         },
       },
@@ -147,7 +156,10 @@ export const theme = createTheme({
     MuiMenu: {
       styleOverrides: { paper: { borderRadius: 14, border: `1px solid ${c.border}`, boxShadow: t.shadow.md, marginTop: 6 } },
     },
-    MuiMenuItem: { styleOverrides: { root: { borderRadius: 8, marginInline: 6, fontSize: '0.875rem', minHeight: 38 } } },
+    MuiMenuItem: { styleOverrides: { root: { borderRadius: 8, marginInline: 6, fontSize: '0.875rem', minHeight: 38, [touch]: { minHeight: 44 } } } },
+    MuiCheckbox: { styleOverrides: { root: { [touch]: { padding: 11 } } } },
+    // スイッチ・チェックは文言ごと押せる（FormControlLabel）。その行を 44px 以上にする
+    MuiFormControlLabel: { styleOverrides: { root: { [touch]: { minHeight: 44 } } } },
     MuiAvatar: { styleOverrides: { root: { fontSize: '0.75rem', fontWeight: 650 } } },
   },
 });

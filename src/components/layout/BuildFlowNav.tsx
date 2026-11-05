@@ -33,12 +33,12 @@ export function BuildFlowNav() {
             end
             aria-current={active ? 'page' : undefined}
             sx={{
-              gap: 1, px: 1.5, height: 36, borderRadius: '10px', whiteSpace: 'nowrap', flexShrink: 0,
+              gap: 1, px: 1.5, height: { xs: 44, md: 36 }, borderRadius: '10px', whiteSpace: 'nowrap', flexShrink: 0,
               bgcolor: active ? tokens.color.surface : 'transparent', boxShadow: active ? tokens.shadow.sm : 'none',
               color: active ? tokens.color.ink : tokens.color.muted, '&:hover': { color: tokens.color.ink },
             }}
           >
-            <Typography component="span" sx={{ fontSize: 11, fontWeight: 700, color: tokens.color.faint }}>{i + 1}</Typography>
+            <Typography component="span" sx={{ fontSize: 12, fontWeight: 700, color: tokens.color.faint }}>{i + 1}</Typography>
             <Icon size={16} />
             <Typography component="span" sx={{ fontSize: 13, fontWeight: 600 }}>{s.label}</Typography>
             <Stack component="span" sx={{ color: s.done ? tokens.color.success : tokens.color.borderStrong }} aria-label={s.done ? '承認済み' : '未承認'}>

@@ -16,9 +16,9 @@ export function StageTrack({ stage, compact, onSelect }: { stage: Stage; compact
         const dot = (
           <Box
             sx={{
-              width: compact ? 18 : 26, height: compact ? 18 : 26, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center',
+              width: compact ? 20 : 26, height: compact ? 20 : 26, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center',
               bgcolor: done ? color : active ? tokens.color.primarySoft : tokens.color.surface,
-              border: `2px solid ${color}`, color: done ? '#fff' : color, fontSize: compact ? 9 : 11, fontWeight: 700,
+              border: `2px solid ${color}`, color: done ? '#fff' : color, fontSize: 12, fontWeight: 700,
               boxShadow: active ? `0 0 0 4px ${tokens.color.primarySoft}` : 'none',
             }}
           >

@@ -4,6 +4,7 @@ import { Check, ChevronDown, Menu as MenuIcon, Presentation, RotateCcw, Bell } f
 import { Suspense, useState } from 'react';
 import { NavLink, useLocation, useNavigate, useOutlet } from 'react-router-dom';
 import { tokens } from '@/theme/tokens';
+import { LANDSCAPE_PHONE } from '@/theme/media';
 import { useDemo, currentProject } from '@/store/DemoStore';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { Sidebar, SidebarContent } from './Sidebar';
@@ -23,8 +24,8 @@ function ProjectSwitcher() {
         aria-haspopup="menu"
         aria-label={`プロジェクトを切り替える（現在: ${project.siteName}）`}
         sx={{
-          gap: 1, px: 1.25, height: 36, borderRadius: '10px', border: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface,
-          maxWidth: { xs: 180, sm: 260 }, '&:hover': { borderColor: tokens.color.borderStrong },
+          gap: 1, px: 1.25, height: { xs: 44, md: 36 }, minWidth: 0, borderRadius: '10px', border: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface,
+          maxWidth: { xs: 200, sm: 260 }, '&:hover': { borderColor: tokens.color.borderStrong },
         }}
       >
         <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: project.accent, flexShrink: 0 }} />
@@ -63,7 +64,7 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
     <Box
       component="header"
       sx={{
-        position: 'sticky', top: 0, zIndex: 15, height: tokens.layout.topbar, display: 'flex', alignItems: 'center', gap: 1.5,
+        position: 'sticky', top: 0, zIndex: 15, height: tokens.layout.topbar, display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 1.5 },
         px: { xs: 2, md: 4 }, bgcolor: 'rgba(250,250,251,0.82)', backdropFilter: 'saturate(1.4) blur(10px)',
         borderBottom: `1px solid ${tokens.color.border}`,
       }}
@@ -78,7 +79,7 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
         デモ環境 — データはこのブラウザだけに保存
       </Typography>
       <Tooltip title={`承認待ち ${pending}件`}>
-        <IconButton aria-label={`承認待ち ${pending}件を見る`} onClick={() => navigate('/projects')} sx={{ position: 'relative' }}>
+        <IconButton aria-label={`承認待ち ${pending}件を見る`} onClick={() => navigate('/projects')} sx={{ position: 'relative', display: { xs: 'none', sm: 'inline-flex' } }}>
           <Bell size={19} />
           {pending > 0 && <Box sx={{ position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: '50%', bgcolor: tokens.color.danger, border: '2px solid #fff' }} />}
         </IconButton>
@@ -108,6 +109,8 @@ function BottomTabs({ onMenu }: { onMenu: () => void }) {
         display: { xs: 'flex', md: 'none' }, position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 25,
         bgcolor: 'rgba(255,255,255,0.94)', backdropFilter: 'blur(12px)', borderTop: `1px solid ${tokens.color.border}`,
         pb: 'env(safe-area-inset-bottom)',
+        // 横向きのスマホは高さが足りないので下部タブを隠す（メニューは上部バーから開ける）
+        [LANDSCAPE_PHONE]: { display: 'none' },
       }}
     >
       {items.map((item) => {
@@ -116,14 +119,14 @@ function BottomTabs({ onMenu }: { onMenu: () => void }) {
         return (
           <ButtonBase
             key={item.to} component={NavLink} to={item.to} aria-current={active ? 'page' : undefined}
-            sx={{ flex: 1, flexDirection: 'column', gap: 0.25, height: 58, fontSize: 10.5, fontWeight: 600, color: active ? tokens.color.primary : tokens.color.muted }}
+            sx={{ flex: 1, flexDirection: 'column', gap: 0.25, height: 58, fontSize: 12, lineHeight: 1.2, whiteSpace: 'nowrap', fontWeight: 600, color: active ? tokens.color.primary : tokens.color.muted }}
           >
             <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
             {item.label}
           </ButtonBase>
         );
       })}
-      <ButtonBase onClick={onMenu} aria-label="すべてのメニュー" sx={{ flex: 1, flexDirection: 'column', gap: 0.25, height: 58, fontSize: 10.5, fontWeight: 600, color: tokens.color.muted }}>
+      <ButtonBase onClick={onMenu} aria-label="すべてのメニュー" sx={{ flex: 1, flexDirection: 'column', gap: 0.25, height: 58, fontSize: 12, lineHeight: 1.2, whiteSpace: 'nowrap', fontWeight: 600, color: tokens.color.muted }}>
         <MenuIcon size={20} />
         メニュー
       </ButtonBase>
@@ -174,7 +177,9 @@ export function AppShell() {
           id="main"
           tabIndex={-1}
           sx={{
-            px: { xs: 2, sm: 3, md: 4, xl: 5 }, pt: { xs: 3, md: 4 }, pb: { xs: 12, md: 6 },
+            px: { xs: 2, sm: 3, md: 4, xl: 5 }, pt: { xs: 3, md: 4 }, pb: { xs: 'calc(96px + env(safe-area-inset-bottom))', md: 6 },
+            // 横向きのスマホ（高さが低い）は下部タブを出さないので余白も戻す
+            [LANDSCAPE_PHONE]: { pb: 4 },
             maxWidth: tokens.layout.contentMax + 80, mx: 'auto', outline: 'none', minWidth: 0,
           }}
         >

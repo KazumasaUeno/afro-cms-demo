@@ -22,7 +22,7 @@ export function Logo({ collapsed }: { collapsed?: boolean }) {
           <Typography sx={{ fontWeight: 750, fontSize: 15, letterSpacing: '-0.02em', lineHeight: 1.1 }}>
             アフロ<Box component="span" sx={{ color: tokens.color.primary }}>CMS</Box>
           </Typography>
-          <Typography sx={{ fontSize: 10.5, color: tokens.color.muted, letterSpacing: '0.04em', lineHeight: 1.3 }}>AI Web Production</Typography>
+          <Typography sx={{ fontSize: 12, color: tokens.color.muted, letterSpacing: '0.04em', lineHeight: 1.3 }}>AI Web Production</Typography>
         </Box>
       )}
     </Stack>

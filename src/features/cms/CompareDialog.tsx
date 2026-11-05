@@ -3,7 +3,7 @@ import { Minus, Plus, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { CmsPage } from '@/types';
 import { tokens } from '@/theme/tokens';
-import { useBreakpoints } from '@/hooks/useMediaQueries';
+import { useFullScreenDialog } from '@/hooks/useMediaQueries';
 import { formatDateTime } from '@/services/time';
 import { StatusPill } from '@/components/ui';
 import { diffBlocks } from './cmsUtils';
@@ -25,7 +25,7 @@ function Pane({ label, sub, html, tone }: { label: string; sub: string; html: st
 }
 
 export function CompareDialog({ page, open, onClose }: { page: CmsPage; open: boolean; onClose: () => void }) {
-  const { isMobile } = useBreakpoints();
+  const fullScreen = useFullScreenDialog();
   const [tab, setTab] = useState<'side' | 'diff'>('side');
   const before = useMemo(() => sanitizeHtml(page.publishedContent), [page.publishedContent]);
   const after = useMemo(() => sanitizeHtml(page.content), [page.content]);
@@ -34,7 +34,7 @@ export function CompareDialog({ page, open, onClose }: { page: CmsPage; open: bo
   const removed = diff.filter((d) => d.kind === 'removed').length;
 
   return (
-    <Dialog open={open} onClose={onClose} fullScreen={isMobile} maxWidth="lg" fullWidth aria-labelledby="compare-title">
+    <Dialog open={open} onClose={onClose} fullScreen={fullScreen} maxWidth="lg" fullWidth aria-labelledby="compare-title">
       <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 3, pt: 2.5, pb: 1 }}>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography id="compare-title" variant="h3">変更前後の比較</Typography>

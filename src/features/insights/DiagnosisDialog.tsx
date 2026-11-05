@@ -6,7 +6,7 @@ import type { DiagnosisReport } from '@/types';
 import { DIAGNOSIS_CATEGORIES, NEXT_DIAGNOSIS_TEMPLATE, TOTAL_DIAGNOSIS_QUESTIONS } from '@/data/insights';
 import { useDemo, currentProject } from '@/store/DemoStore';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { useBreakpoints } from '@/hooks/useMediaQueries';
+import { useFullScreenDialog } from '@/hooks/useMediaQueries';
 import { tokens } from '@/theme/tokens';
 import { AiBadge } from '@/components/ui';
 import { DiagnosisReportView } from './DiagnosisReport';
@@ -84,8 +84,8 @@ interface Props {
 }
 
 export function DiagnosisDialog({ open, onClose, report }: Props) {
+  const fullScreen = useFullScreenDialog();
   const { state, dispatch } = useDemo();
-  const { isMobile } = useBreakpoints();
   const [phase, setPhase] = useState<'scan' | 'report'>('scan');
   useEffect(() => {
     if (open) setPhase(report ? 'report' : 'scan');
@@ -94,14 +94,15 @@ export function DiagnosisDialog({ open, onClose, report }: Props) {
   const siteName = currentProject(state).siteName;
 
   return (
-    <Dialog open={open} onClose={onClose} fullScreen={isMobile} maxWidth="md" fullWidth aria-labelledby="diag-title">
-      <Stack direction="row" alignItems="center" spacing={1.5} sx={{ px: 3, pt: 2.5 }}>
-        <Box sx={{ width: 36, height: 36, borderRadius: '11px', background: tokens.aiGradient, color: '#fff', display: 'grid', placeItems: 'center' }}><ScanSearch size={18} /></Box>
+    <Dialog open={open} onClose={onClose} fullScreen={fullScreen} maxWidth="md" fullWidth aria-labelledby="diag-title">
+      <Stack direction="row" alignItems="center" spacing={1.5} sx={{ px: { xs: 2, sm: 3 }, pt: 2.5 }}>
+        <Box sx={{ width: 36, height: 36, flexShrink: 0, borderRadius: '11px', background: tokens.aiGradient, color: '#fff', display: 'grid', placeItems: 'center' }}><ScanSearch size={18} /></Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography id="diag-title" variant="h4">{phase === 'scan' ? 'AIサイト診断を実行中' : '改善レポート'}</Typography>
-          <Typography variant="caption">{siteName}</Typography>
+          <Typography variant="caption" noWrap sx={{ display: 'block' }}>{siteName}</Typography>
         </Box>
-        <AiBadge />
+        {/* スマホは見出しの幅を優先する（本文側にも AI シミュレーションの印がある） */}
+        <Box sx={{ display: { xs: 'none', sm: 'block' } }}><AiBadge /></Box>
         <IconButton onClick={onClose} aria-label="閉じる"><X size={20} /></IconButton>
       </Stack>
       <DialogContent sx={{ pt: 3 }}>

@@ -146,12 +146,12 @@ export function Inspector({ draft, onChange, slugError }: Props) {
           </Button>
 
           <Box aria-label="検索結果のプレビュー" sx={{ p: 1.75, borderRadius: '12px', bgcolor: tokens.color.surfaceMuted, border: `1px dashed ${tokens.color.borderStrong}` }}>
-            <Typography sx={{ fontSize: 10.5, fontWeight: 650, color: tokens.color.muted, letterSpacing: '0.06em', mb: 1 }}>検索結果のプレビュー</Typography>
+            <Typography sx={{ fontSize: 12, fontWeight: 650, color: tokens.color.muted, letterSpacing: '0.06em', mb: 1 }}>検索結果のプレビュー</Typography>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
               <Box sx={{ width: 18, height: 18, borderRadius: '50%', bgcolor: project.accent, flexShrink: 0 }} />
               <Typography sx={{ fontSize: 12, color: '#202124', lineHeight: 1.3, minWidth: 0 }} noWrap>
                 {project.siteName}
-                <Box component="span" sx={{ display: 'block', color: '#4d5156', fontSize: 11.5 }}>{host}{draft.slug === '/' ? '' : draft.slug}</Box>
+                <Box component="span" sx={{ display: 'block', color: '#4d5156', fontSize: 12 }}>{host}{draft.slug === '/' ? '' : draft.slug}</Box>
               </Typography>
             </Stack>
             <Typography sx={{ fontSize: 17, color: '#1a0dab', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
