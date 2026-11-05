@@ -40,7 +40,7 @@ const afterNodes: SitemapNode[] = [
 ];
 const afterEdges = [
   e('a-home', 'a-story'), e('a-home', 'a-shop'), e('a-shop', 'a-beans'), e('a-shop', 'a-gift'),
-  e('a-home', 'a-cafe'), e('a-home', 'a-journal'), e('a-home', 'a-faq'), e('a-cafe', 'a-contact'),
+  e('a-home', 'a-cafe'), e('a-home', 'a-journal'), e('a-home', 'a-faq'), e('a-home', 'a-contact'),
 ];
 
 export const seedSitemap = (): SitemapState => ({

@@ -42,6 +42,8 @@ export const theme = createTheme({
         body: { backgroundColor: c.bg, fontFeatureSettings: '"cv11", "ss01"' },
         '::selection': { background: alpha(c.primary, 0.18) },
         '*:focus-visible': { outline: 'none', boxShadow: t.shadow.focus, borderRadius: 8 },
+        // 入力欄は外枠（MuiOutlinedInput の Mui-focused）でフォーカスを示すので、内側の二重リングを消す
+        'input:focus-visible, textarea:focus-visible': { boxShadow: 'none' },
         '@media (prefers-reduced-motion: reduce)': {
           '*, *::before, *::after': { animationDuration: '0.01ms !important', transitionDuration: '0.01ms !important', scrollBehavior: 'auto !important' },
         },

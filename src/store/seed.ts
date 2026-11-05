@@ -54,7 +54,7 @@ export function isDemoState(v: unknown): v is DemoState {
   const s = v as Partial<DemoState>;
   return (
     s.version === STATE_VERSION &&
-    Array.isArray(s.projects) &&
+    Array.isArray(s.projects) && s.projects.length > 0 &&
     Array.isArray(s.pages) &&
     Array.isArray(s.activities) &&
     Array.isArray(s.diagnoses) &&

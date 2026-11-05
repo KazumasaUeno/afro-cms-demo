@@ -166,7 +166,7 @@ export function reducer(state: DemoState, action: Action): DemoState {
         status: action.status,
         updatedAt: at,
         ...(action.status === 'published' ? { publishedAt: at, publishedContent: page.content, scheduledAt: undefined } : {}),
-        ...(action.status === 'scheduled' ? { scheduledAt: action.scheduledAt } : {}),
+        ...(action.status === 'scheduled' ? { scheduledAt: action.scheduledAt } : { ...(action.status !== 'published' ? { scheduledAt: undefined } : {}) }),
       };
       const s = { ...state, pages: state.pages.map((p) => (p.id === page.id ? updated : p)) };
       const kind: Activity['kind'] = action.status === 'published' || action.status === 'scheduled' ? 'publish' : 'edit';

@@ -1,5 +1,256 @@
-import { PageHeader } from '@/components/ui';
+import { Box, Button, Menu, MenuItem, Stack, Typography, ListItemText } from '@mui/material';
+import { ArrowUpRight, CheckCheck, ShieldCheck, Building2, UserRound, History } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import type { QualityCategory } from '@/types';
+import { QUALITY_CATEGORIES, QUALITY_ITEMS, TOTAL_QUALITY_QUESTIONS } from '@/data/quality';
+import { useDemo } from '@/store/DemoStore';
+import { useToast } from '@/hooks/useToast';
+import { tokens } from '@/theme/tokens';
+import { formatDateTime, relativeTime } from '@/services/time';
+import { CountUp, PageHeader, ProgressRing, Reveal, SectionTitle, StatusPill, Surface } from '@/components/ui';
+import { CategoryDetail, PriorityChip } from './CategoryDetail';
+import { computeStats, isComplete } from './qualityStats';
+
+function MiniBar({ value, color, label }: { value: number; color: string; label: string }) {
+  return (
+    <Stack direction="row" alignItems="center" spacing={1}>
+      <Typography sx={{ fontSize: 11, fontWeight: 600, color: tokens.color.muted, width: 34, flexShrink: 0 }}>{label}</Typography>
+      <Box
+        sx={{ flex: 1, height: 6, borderRadius: 99, bgcolor: tokens.color.bgSubtle, overflow: 'hidden' }}
+        role="progressbar" aria-label={`${label} ${Math.round(value)}%`} aria-valuenow={Math.round(value)} aria-valuemin={0} aria-valuemax={100}
+      >
+        <Box sx={{ width: `${value}%`, height: '100%', bgcolor: color, borderRadius: 99, transition: `width .5s ${tokens.motion.easeCss}` }} />
+      </Box>
+      <Typography sx={{ fontSize: 11, fontWeight: 700, width: 32, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{Math.round(value)}%</Typography>
+    </Stack>
+  );
+}
+
+function BulkMenu({ side }: { side: 'afro' | 'client' }) {
+  const { state, dispatch } = useDemo();
+  const toast = useToast();
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const label = side === 'afro' ? 'アフロ側' : '顧客側';
+  const run = (priority: 'A' | 'B') => {
+    setAnchor(null);
+    const key = side === 'afro' ? 'afroAt' : 'clientAt';
+    const n = QUALITY_ITEMS.filter((i) => i.priority === priority && !state.qualityChecks[i.id]?.[key]).length;
+    if (n === 0) {
+      toast(`${label}の${priority}区分はすべてチェック済みです`, 'info');
+      return;
+    }
+    dispatch({ type: 'bulkQuality', side, priority });
+    toast(`${label}で${priority}区分 ${n}件を一括チェックしました`);
+  };
+  return (
+    <>
+      <Button
+        variant={side === 'afro' ? 'contained' : 'outlined'}
+        startIcon={side === 'afro' ? <Building2 size={16} /> : <UserRound size={16} />}
+        onClick={(e) => setAnchor(e.currentTarget)}
+        aria-haspopup="menu"
+      >
+        {label}で一括チェック
+      </Button>
+      <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)}>
+        {(['A', 'B'] as const).map((p) => (
+          <MenuItem key={p} onClick={() => run(p)}>
+            <Box sx={{ mr: 1.5 }}><PriorityChip priority={p} /></Box>
+            <ListItemText
+              primary={`${p}区分を一括チェック`}
+              secondary={p === 'A' ? '機械的に確認できる項目' : '目視・判断が必要な項目'}
+              primaryTypographyProps={{ fontSize: 14, fontWeight: 600 }}
+              secondaryTypographyProps={{ fontSize: 12 }}
+            />
+          </MenuItem>
+        ))}
+      </Menu>
+    </>
+  );
+}
 
 export default function QualityPage() {
-  return <PageHeader title="QualityPage" description="準備中" />;
+  const { state } = useDemo();
+  const [selected, setSelected] = useState<QualityCategory | null>(null);
+  const overall = computeStats(QUALITY_ITEMS, state.qualityChecks);
+
+  const perCategory = useMemo(
+    () =>
+      QUALITY_CATEGORIES.map((c) => {
+        const items = QUALITY_ITEMS.filter((i) => i.categoryId === c.id);
+        return { category: c, items, stats: computeStats(items, state.qualityChecks) };
+      }),
+    [state.qualityChecks],
+  );
+
+  const openItems = QUALITY_ITEMS.filter((i) => !isComplete(state.qualityChecks[i.id]));
+  const openByCategory = perCategory.filter((c) => c.stats.open > 0).slice(0, 5);
+
+  const kpis = [
+    { label: 'アフロ確認', value: overall.afroRate as number | null, n: overall.afro, color: tokens.color.primary, soft: tokens.color.primarySoft, icon: <Building2 size={16} /> },
+    { label: '顧客承認', value: overall.clientRate as number | null, n: overall.client, color: tokens.color.success, soft: tokens.color.successSoft, icon: <UserRound size={16} /> },
+    { label: '未完了', value: null, n: overall.open, color: tokens.color.warning, soft: tokens.color.warningSoft, icon: <CheckCheck size={16} /> },
+  ];
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="③ 品質管理"
+        icon={<ShieldCheck size={15} />}
+        title="品質チェック"
+        description={`12項目${TOTAL_QUALITY_QUESTIONS}問の品質基準を、アフロと顧客の双方で確認します（デモでは代表${QUALITY_ITEMS.length}問を収録）。`}
+        actions={<><BulkMenu side="afro" /><BulkMenu side="client" /></>}
+      />
+
+      <Reveal>
+        <Surface padding={{ xs: 2.5, md: 3 }} sx={{ mb: 3 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'auto 1fr' }, gap: { xs: 3, md: 5 }, alignItems: 'center' }}>
+            <Stack direction="row" spacing={2.5} alignItems="center">
+              <ProgressRing value={overall.completeRate} size={112} stroke={10} color={tokens.color.success} label="品質チェック完了率">
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography sx={{ fontSize: 26, fontWeight: 750, lineHeight: 1, letterSpacing: '-0.02em' }}>
+                    <CountUp value={Math.round(overall.completeRate)} suffix="%" />
+                  </Typography>
+                  <Typography sx={{ fontSize: 10.5, color: tokens.color.muted, mt: 0.5 }}>完了</Typography>
+                </Box>
+              </ProgressRing>
+              <Box>
+                <Typography variant="h3">{overall.complete} / {overall.total} 項目が完了</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  アフロの確認と顧客の承認が両方揃った項目を「完了」とします
+                </Typography>
+              </Box>
+            </Stack>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(3, 1fr)' }, gap: 1.5 }}>
+              {kpis.map((k) => (
+                <Box
+                  key={k.label}
+                  sx={{ p: 2, borderRadius: '14px', bgcolor: tokens.color.surfaceMuted, border: `1px solid ${tokens.color.border}`, gridColumn: { xs: k.value === null ? 'span 2' : 'auto', sm: 'auto' } }}
+                >
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ color: k.color, mb: 1 }}>
+                    <Box sx={{ width: 28, height: 28, borderRadius: '9px', bgcolor: k.soft, display: 'grid', placeItems: 'center' }}>{k.icon}</Box>
+                    <Typography variant="subtitle2" sx={{ color: tokens.color.inkSoft }}>{k.label}</Typography>
+                  </Stack>
+                  <Typography sx={{ fontSize: 26, fontWeight: 720, letterSpacing: '-0.02em', lineHeight: 1.1 }}>
+                    {k.value === null ? <CountUp value={k.n} suffix="件" /> : <CountUp value={Math.round(k.value)} suffix="%" />}
+                  </Typography>
+                  <Typography variant="caption">{k.value === null ? 'どちらかが未確認' : `${k.n} / ${overall.total} 項目`}</Typography>
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        </Surface>
+      </Reveal>
+
+      <SectionTitle title="カテゴリ別の進捗" sub={<Typography variant="caption" sx={{ ml: 1, display: { xs: 'none', sm: 'block' } }}>カードを開いて項目を確認</Typography>} />
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)', xl: 'repeat(4, 1fr)' }, gap: 2, mb: 4 }}>
+        {perCategory.map(({ category, items, stats }, i) => {
+          const done = stats.open === 0;
+          return (
+            <Reveal key={category.id} delay={Math.min(i * 0.03, 0.3)}>
+              <Surface
+                interactive
+                role="button"
+                tabIndex={0}
+                aria-label={`${category.no}. ${category.title}　完了 ${stats.complete}/${stats.total}。詳細を開く`}
+                onClick={() => setSelected(category)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelected(category);
+                  }
+                }}
+                sx={{ height: '100%' }}
+              >
+                <Stack direction="row" alignItems="flex-start" spacing={1.5} sx={{ mb: 2 }}>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontSize: 12, fontWeight: 700, color: tokens.color.faint, fontVariantNumeric: 'tabular-nums' }}>{String(category.no).padStart(2, '0')}</Typography>
+                    <Typography variant="h5" noWrap>{category.title}</Typography>
+                    <Typography variant="caption">{category.questionCount}問中 {items.length}問を収録</Typography>
+                  </Box>
+                  <ProgressRing value={stats.completeRate} size={44} stroke={5} color={done ? tokens.color.success : tokens.color.primary} label={`${category.title} 完了率`} />
+                </Stack>
+                <Stack spacing={0.75}>
+                  <MiniBar label="アフロ" value={stats.afroRate} color={tokens.color.primary} />
+                  <MiniBar label="顧客" value={stats.clientRate} color={tokens.color.success} />
+                </Stack>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 2 }}>
+                  {done ? <StatusPill tone="success">完了</StatusPill> : <StatusPill tone="warning">未完了 {stats.open}件</StatusPill>}
+                  <ArrowUpRight size={16} color={tokens.color.faint} />
+                </Stack>
+              </Surface>
+            </Reveal>
+          );
+        })}
+      </Box>
+
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 3 }}>
+        <Surface>
+          <SectionTitle title="未完了の項目" sub={<StatusPill tone="warning" dot={false}>{openItems.length}件</StatusPill>} />
+          {openByCategory.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">すべての項目が完了しました。公開準備に進めます。</Typography>
+          ) : (
+            <Stack spacing={1.5}>
+              {openByCategory.map(({ category, items }) => {
+                const open = items.filter((i) => !isComplete(state.qualityChecks[i.id]));
+                return (
+                  <Box key={category.id} sx={{ p: 1.5, borderRadius: '14px', bgcolor: tokens.color.surfaceMuted }}>
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                      <Typography variant="h6">{category.no}. {category.title}</Typography>
+                      <Button size="small" onClick={() => setSelected(category)} endIcon={<ArrowUpRight size={14} />} aria-label={`${category.title}を開く`}>開く</Button>
+                    </Stack>
+                    <Stack spacing={0.75}>
+                      {open.slice(0, 3).map((i) => {
+                        const c = state.qualityChecks[i.id];
+                        return (
+                          <Stack key={i.id} direction="row" spacing={1} alignItems="center">
+                            <PriorityChip priority={i.priority} />
+                            <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }} noWrap>{i.text}</Typography>
+                            <Typography variant="caption" sx={{ flexShrink: 0 }}>{!c?.afroAt ? 'アフロ未確認' : '顧客未承認'}</Typography>
+                          </Stack>
+                        );
+                      })}
+                      {open.length > 3 && <Typography variant="caption">ほか {open.length - 3}件</Typography>}
+                    </Stack>
+                  </Box>
+                );
+              })}
+              {perCategory.filter((c) => c.stats.open > 0).length > openByCategory.length && (
+                <Typography variant="caption">ほか {perCategory.filter((c) => c.stats.open > 0).length - openByCategory.length}カテゴリに未完了があります</Typography>
+              )}
+            </Stack>
+          )}
+        </Surface>
+
+        <Surface>
+          <SectionTitle title="承認履歴" icon={<History size={18} color={tokens.color.muted} />} sub={<Typography variant="caption" sx={{ ml: 1 }}>タイムスタンプ付き</Typography>} />
+          <Box component="ol" sx={{ listStyle: 'none', m: 0, p: 0, maxHeight: 440, overflowY: 'auto', pr: 1 }} aria-label="承認履歴">
+            {state.approvalLogs.slice(0, 30).map((l, i, arr) => {
+              const afro = l.side === 'afro';
+              return (
+                <Box component="li" key={l.id} sx={{ display: 'grid', gridTemplateColumns: '20px 1fr', gap: 1.5 }}>
+                  <Box sx={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
+                    <Box sx={{ width: 10, height: 10, mt: 0.75, borderRadius: '50%', bgcolor: afro ? tokens.color.primary : tokens.color.success, boxShadow: `0 0 0 4px ${afro ? tokens.color.primarySoft : tokens.color.successSoft}`, zIndex: 1 }} />
+                    {i < arr.length - 1 && <Box sx={{ position: 'absolute', top: 20, bottom: -4, width: 2, bgcolor: tokens.color.border }} />}
+                  </Box>
+                  <Box sx={{ pb: 2, minWidth: 0 }}>
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
+                      <StatusPill tone={afro ? 'primary' : 'success'} dot={false}>{afro ? 'アフロ' : '顧客'}</StatusPill>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{l.action}</Typography>
+                    </Stack>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }} noWrap>{l.target}</Typography>
+                    <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {formatDateTime(l.at)}・{l.actor}・{relativeTime(l.at)}
+                    </Typography>
+                  </Box>
+                </Box>
+              );
+            })}
+          </Box>
+        </Surface>
+      </Box>
+
+      <CategoryDetail category={selected} onClose={() => setSelected(null)} />
+    </>
+  );
 }

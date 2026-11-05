@@ -27,6 +27,15 @@ export function DemoStoreProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timer.current);
   }, [state]);
 
+  // 250ms 以内にタブを閉じた・再読み込みした場合も、最後の操作を失わない
+  const latest = useRef(state);
+  latest.current = state;
+  useEffect(() => {
+    const flush = () => saveJson(STORAGE_KEY, latest.current);
+    window.addEventListener('pagehide', flush);
+    return () => window.removeEventListener('pagehide', flush);
+  }, []);
+
   const value = useMemo<StoreValue>(
     () => ({
       state,
