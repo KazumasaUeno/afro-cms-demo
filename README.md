@@ -7,6 +7,12 @@ Web サイトの **営業・要件定義・制作・品質管理・運用・改�
 > - **AI 機能はすべてシミュレーション**です。事前に用意した結果を段階的に表示しているだけで、外部 AI・外部 API への送信は一切行いません（画面には「AIシミュレーション」と表示）
 > - 業務要件の一次資料: `アフロCMS草案.pptx`
 
+## 公開URL
+
+https://kazumasaueno.github.io/afro-cms-demo/
+
+GitHub Pages で公開しています。`main` へ push すると、GitHub Actions（`.github/workflows/pages.yml`）が型チェック・ビルド・公開を自動で行います。
+
 ## 起動手順
 
 必要なもの: Node.js 20 以上（動作確認: 22.14.0）
