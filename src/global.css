@@ -1,0 +1,30 @@
+/* MUI の CssBaseline で足りないものだけをここに置く */
+
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 2000;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transform: translateY(-160%);
+  transition: transform 0.16s;
+}
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+/* スクロールバーを控えめに */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d5d9e2 transparent;
+}
+
+img {
+  max-width: 100%;
+}
