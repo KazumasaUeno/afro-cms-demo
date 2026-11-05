@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
-import { PageFallback } from '@/components/layout/PageFallback';
+import { RouteLoader } from '@/components/layout/RouteLoader';
 import HomePage from '@/features/home/HomePage';
 
 // 重いライブラリ（React Flow / Tiptap / Recharts / GSAP）を使う画面は遅延読み込み
@@ -37,7 +37,7 @@ const router = createBrowserRouter([
   {
     path: '/present',
     element: (
-      <Suspense fallback={<PageFallback />}>
+      <Suspense fallback={<RouteLoader label="営業プレゼンモード" />}>
         <PresentPage />
       </Suspense>
     ),

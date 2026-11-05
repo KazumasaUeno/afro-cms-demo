@@ -1,7 +1,7 @@
 import { Box, ButtonBase, Drawer, IconButton, Menu, MenuItem, Tooltip, Typography, ListItemIcon } from '@mui/material';
 import { AnimatePresence, motion } from 'motion/react';
 import { Check, ChevronDown, Menu as MenuIcon, Presentation, RotateCcw, Bell } from 'lucide-react';
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate, useOutlet } from 'react-router-dom';
 import { tokens } from '@/theme/tokens';
 import { LANDSCAPE_PHONE } from '@/theme/media';
@@ -9,9 +9,9 @@ import { useDemo, currentProject } from '@/store/DemoStore';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { Sidebar, SidebarContent } from './Sidebar';
 import { LogoMark } from './Logo';
-import { isActive, NAV_ITEMS } from './nav';
+import { isActive, NAV_ITEMS, SETTINGS_ITEM } from './nav';
 import { ResetDemoDialog } from './ResetDemoDialog';
-import { PageFallback } from './PageFallback';
+import { RouteLoader } from './RouteLoader';
 
 function ProjectSwitcher() {
   const { state, dispatch } = useDemo();
@@ -134,23 +134,47 @@ function BottomTabs({ onMenu }: { onMenu: () => void }) {
   );
 }
 
-/** ページ切り替え（Motion。240ms） */
+/** ローディング画面に出す移動先の名前 */
+function routeLabel(pathname: string): string {
+  if (pathname === '/ai-studio/design') return 'AIデザインスタジオ';
+  if (pathname === '/ai-studio') return 'AI要件定義';
+  if (pathname === '/site') return 'サイトマップ';
+  if (/^\/projects\/[^/]+/.test(pathname)) return 'プロジェクト詳細';
+  const item = [...NAV_ITEMS, SETTINGS_ITEM].find((i) => isActive(i, pathname));
+  return item?.label ?? 'アフロCMS';
+}
+
+/** ページ切り替え: ローディング画面（約0.5秒）→ ページ（Motion。240ms） */
 function AnimatedOutlet() {
   const outlet = useOutlet();
   const { pathname } = useLocation();
   const reduced = useReducedMotion();
   const key = pathname.split('/').slice(0, 3).join('/');
+  const label = routeLabel(pathname);
+
+  // readyKey と key が違う間は読み込み中。effect で true にする方式だと、
+  // 新しいページが一瞬見えてからローダーに切り替わるため、差分で判定する。
+  const [readyKey, setReadyKey] = useState<string | null>(null);
+  const loading = readyKey !== key;
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    const t = window.setTimeout(() => setReadyKey(key), reduced ? 200 : 520);
+    return () => window.clearTimeout(t);
+  }, [key, reduced]);
+
+  const loader = <RouteLoader label={label} reduced={reduced} />;
   return (
     <AnimatePresence mode="wait" initial={false}>
       <motion.div
-        key={key}
-        initial={reduced ? false : { opacity: 0, y: 8 }}
+        key={loading ? `loading:${key}` : key}
+        initial={reduced ? false : { opacity: 0, y: loading ? 0 : 8 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={reduced ? { opacity: 1 } : { opacity: 0, y: -4 }}
-        transition={{ duration: reduced ? 0 : tokens.motion.base, ease: tokens.motion.ease }}
+        exit={reduced ? { opacity: 1 } : { opacity: 0, y: loading ? 0 : -4 }}
+        transition={{ duration: reduced ? 0 : loading ? tokens.motion.fast : tokens.motion.base, ease: tokens.motion.ease }}
         style={{ minWidth: 0 }}
       >
-        <Suspense fallback={<PageFallback />}>{outlet}</Suspense>
+        {/* 遅延読み込み（画面のコード取得）が長引いた場合も同じローディング画面を出す */}
+        {loading ? loader : <Suspense fallback={loader}>{outlet}</Suspense>}
       </motion.div>
     </AnimatePresence>
   );
