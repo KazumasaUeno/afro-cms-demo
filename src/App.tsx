@@ -42,7 +42,10 @@ const router = createBrowserRouter([
       </Suspense>
     ),
   },
-]);
+], {
+  // GitHub Pages ではサブパス（/afro-cms-demo/）配下で配信する。ローカルは '/'
+  basename: import.meta.env.BASE_URL.replace(/\/$/, '') || '/',
+});
 
 export default function App() {
   return <RouterProvider router={router} />;
