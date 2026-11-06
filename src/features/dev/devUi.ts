@@ -34,13 +34,22 @@ export function envSync(dev: DevState, env: DeployEnv): { tone: PillTone; label:
 
 export interface DevAction { title: string; cta?: string; to?: string }
 
-/** ダッシュボードの「次にやること」。上から最初に当てはまる 1 件 */
-export function nextDevAction(dev: DevState): DevAction {
+/**
+ * ダッシュボードの「次にやること」。上から最初に当てはまる 1 件。
+ * 本番への公開可否はお客様のデザイン承認に依存する（deployGate と同じ条件）
+ */
+export function nextDevAction(dev: DevState, designApproved: boolean): DevAction {
   const devLast = latestDeploy(dev.deploys, 'development');
   if (devLast?.status === 'failed') return { title: '開発環境のビルドが失敗しています', cta: 'デプロイ履歴を見る', to: '/dev/deploys' };
   const devOk = latestSuccess(dev.deploys, 'development');
   const stgOk = latestSuccess(dev.deploys, 'staging');
   if (devOk && devOk.version !== stgOk?.version) return { title: `v${devOk.version} を検証環境へ反映しましょう`, cta: '検証環境へ反映する', to: '/dev/deploys' };
+  const prodOk = latestSuccess(dev.deploys, 'production');
+  if (stgOk && stgOk.version !== prodOk?.version) {
+    return designApproved
+      ? { title: `v${stgOk.version} を本番環境へ公開できます`, cta: '本番へ公開する', to: '/dev/deploys' }
+      : { title: `v${stgOk.version} はお客様のデザイン承認待ちです（承認後に本番へ公開できます）`, cta: '環境・デプロイを見る', to: '/dev/deploys' };
+  }
   const review = dev.tasks.filter((t) => t.assigneeId === DEV_USER_ID && t.status === 'review').length;
   if (review > 0) return { title: `レビュー待ちが ${review} 件あります`, cta: 'タスクを見る', to: '/dev/tasks' };
   if (!dev.checksRunAt) return { title: '自動チェックがまだです', cta: '自動チェックを実行する', to: '/dev/checks' };

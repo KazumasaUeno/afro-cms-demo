@@ -70,7 +70,7 @@ export default function DevDeploysPage() {
                         <Typography id={`env-${e.id}`} variant="h6" component="h3">{i + 1}. {e.label}</Typography>
                         <StatusPill tone={sync.tone}>{sync.label}</StatusPill>
                       </Stack>
-                      <DevMono size="lg" sx={{ display: 'block', mt: 1 }}>{last ? `v${last.version}` : '—'}</DevMono>
+                      <DevMono size="lg" sx={{ display: 'block', mt: 1 }}>{(current ?? last) ? `v${(current ?? last)!.version}` : '—'}</DevMono>
                       <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.25, minWidth: 0, color: tokens.color.muted }}>
                         <DevMono size="sm" sx={{ wordBreak: 'break-all' }}>{e.url.replace('https://', '')}</DevMono>
                         <ExternalLink size={12} aria-hidden style={{ flexShrink: 0 }} />

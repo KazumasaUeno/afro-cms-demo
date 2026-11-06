@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { PageHeader, SectionTitle, StatusPill, Surface } from '@/components/ui';
 import { useDemo, devState } from '@/store/DemoStore';
 import { formatDateTime, relativeTime } from '@/services/time';
-import { DEV_ENVS, DEV_TASK_STATUSES, DEV_USER_ID, devRecentErrors, latestDeploy } from '@/data/dev';
+import { DEV_ENVS, DEV_TASK_STATUSES, DEV_USER_ID, devRecentErrors, latestDeploy, latestSuccess } from '@/data/dev';
 import { QUALITY_ITEMS } from '@/data/quality';
 import { tokens } from '@/theme/tokens';
 import type { DevTaskStatus } from '@/types';
@@ -24,7 +24,7 @@ export default function DevDashboardPage() {
   const mine = [...mineAll].sort((a, b) => MINE_ORDER[a.status] - MINE_ORDER[b.status]).slice(0, 5);
   const aItems = QUALITY_ITEMS.filter((i) => i.priority === 'A');
   const aChecked = aItems.filter((i) => state.qualityChecks[i.id]?.afroAt).length;
-  const next = nextDevAction(dev);
+  const next = nextDevAction(dev, !!state.design.approvedAt);
 
   return (
     <>
@@ -111,7 +111,8 @@ export default function DevDashboardPage() {
             <SectionTitle title="環境" sub={<StatusPill tone="neutral" dot={false}>シミュレーション</StatusPill>} />
             <Stack>
               {DEV_ENVS.map((e, i) => {
-                const d = latestDeploy(dev.deploys, e.id);
+                // 表示する版は「いま動いている版」＝最後に成功した版（失敗は状態の印で示す）
+                const d = latestSuccess(dev.deploys, e.id) ?? latestDeploy(dev.deploys, e.id);
                 const sync = envSync(dev, e.id);
                 return (
                   <Box key={e.id} data-env={e.id} sx={{ pt: i ? 1.5 : 0, pb: i < DEV_ENVS.length - 1 ? 1.5 : 0, borderTop: i ? `1px solid ${tokens.color.border}` : 'none' }}>
