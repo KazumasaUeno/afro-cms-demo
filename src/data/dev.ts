@@ -72,26 +72,32 @@ export function nextVersion(deploys: Deploy[]): string {
   return `${max[0]}.${max[1]}.${(max[2] ?? 0) + 1}`;
 }
 
+/** デプロイできない理由の種類（latest: 反映済み／blocked: 前段が未反映など／needsApproval: お客様のデザイン承認待ち） */
+export type DeployGateKind = 'latest' | 'blocked' | 'needsApproval';
+
+export interface DeployGate { ok: boolean; reason?: string; version?: string; kind?: DeployGateKind }
+
 /**
  * デプロイできるか（理由つき）。
  * - development: いつでも新しいバージョンを作る
  * - staging: 開発環境の最新成功版を昇格する
  * - production: 検証環境の最新成功版が開発環境の最新成功版と一致し、かつトップデザインが承認済み
+ * kind は ok=false のときだけ付く（表示の出し分け用。保存データには含めない）
  */
-export function deployGate(dev: DevState, env: DeployEnv, designApprovedAt: string | undefined): { ok: boolean; reason?: string; version?: string } {
+export function deployGate(dev: DevState, env: DeployEnv, designApprovedAt: string | undefined): DeployGate {
   const devLatest = latestSuccess(dev.deploys, 'development');
   const stgLatest = latestSuccess(dev.deploys, 'staging');
   if (env === 'development') return { ok: true, version: nextVersion(dev.deploys) };
   if (env === 'staging') {
-    if (!devLatest) return { ok: false, reason: '開発環境に成功したデプロイがありません' };
-    if (stgLatest?.version === devLatest.version) return { ok: false, reason: `検証環境は最新（v${devLatest.version}）です` };
+    if (!devLatest) return { ok: false, kind: 'blocked', reason: '開発環境に成功したデプロイがありません' };
+    if (stgLatest?.version === devLatest.version) return { ok: false, kind: 'latest', reason: `検証環境は最新（v${devLatest.version}）です` };
     return { ok: true, version: devLatest.version };
   }
   if (!devLatest || !stgLatest || stgLatest.version !== devLatest.version) {
-    return { ok: false, reason: `先に開発環境の最新版${devLatest ? `（v${devLatest.version}）` : ''}を検証環境へ反映してください` };
+    return { ok: false, kind: 'blocked', reason: `先に開発環境の最新版${devLatest ? `（v${devLatest.version}）` : ''}を検証環境へ反映してください` };
   }
-  if (!designApprovedAt) return { ok: false, reason: 'お客様のトップデザイン承認がまだです（お客様ポータルの「確認・承認」）' };
+  if (!designApprovedAt) return { ok: false, kind: 'needsApproval', reason: 'お客様のトップデザイン承認がまだです（お客様ポータルの「確認・承認」）' };
   const prodLatest = latestSuccess(dev.deploys, 'production');
-  if (prodLatest?.version === stgLatest.version) return { ok: false, reason: `本番環境は最新（v${stgLatest.version}）です` };
+  if (prodLatest?.version === stgLatest.version) return { ok: false, kind: 'latest', reason: `本番環境は最新（v${stgLatest.version}）です` };
   return { ok: true, version: stgLatest.version };
 }

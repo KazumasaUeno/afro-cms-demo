@@ -84,7 +84,7 @@ export const AREAS: Record<AreaId, AreaDef> = {
     items: PORTAL_ITEMS, bottom: [PORTAL_ITEMS[0], PORTAL_ITEMS[1], PORTAL_ITEMS[3], PORTAL_ITEMS[5]],
   },
   dev: {
-    id: 'dev', label: '開発者画面', short: '開発者', audience: 'アフロ制作エンジニア',
+    id: 'dev', label: '開発者画面', short: '開発者', audience: '制作エンジニア',
     description: '構築タスク・自動チェック・環境とデプロイ', home: '/dev', icon: Code2,
     color: '#7C5CFA', soft: '#F3F0FF',
     items: DEV_ITEMS, bottom: [{ ...DEV_ITEMS[0], label: 'ホーム' }, DEV_ITEMS[1], DEV_ITEMS[2], DEV_ITEMS[3]],
