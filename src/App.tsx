@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, Navigate, RouterProvider, useLocation } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { RouteLoader } from '@/components/layout/RouteLoader';
 import HomePage from '@/features/home/HomePage';
@@ -26,6 +26,12 @@ const PortalQualityPage = lazy(() => import('@/features/portal/PortalQualityPage
 const PortalReportsPage = lazy(() => import('@/features/portal/PortalReportsPage'));
 const PresentPage = lazy(() => import('@/features/present/PresentPage'));
 
+/** 旧 CMS画面の URL（0.4.0）はポータルのページ編集へ。?page= / ?new= はそのまま引き継ぐ */
+function LegacyCmsRedirect() {
+  const { search } = useLocation();
+  return <Navigate to={`/portal/pages${search}`} replace />;
+}
+
 const router = createBrowserRouter([
   {
     path: '/',
@@ -46,7 +52,7 @@ const router = createBrowserRouter([
       { path: 'dev/checks', element: <DevChecksPage /> },
       { path: 'dev/deploys', element: <DevDeploysPage /> },
       // 旧 CMS画面の URL（0.4.0）はポータルのページ編集へ
-      { path: 'cms/*', element: <Navigate to="/portal/pages" replace /> },
+      { path: 'cms/*', element: <LegacyCmsRedirect /> },
       { path: 'portal', element: <PortalHomePage /> },
       { path: 'portal/approvals', element: <PortalApprovalsPage /> },
       { path: 'portal/quality', element: <PortalQualityPage /> },

@@ -5,7 +5,8 @@ import type {
 import { QUALITY_CATEGORIES, QUALITY_ITEMS } from '@/data/quality';
 import { nowIso } from '@/services/time';
 import { createSeedState } from './seed';
-import { DEV_ENVS, DEV_TASK_STATUSES, deployGate, seedDev } from '@/data/dev';
+import { DEV_ENVS, DEV_TASK_STATUSES, DEV_USER_ID, deployGate, seedDev } from '@/data/dev';
+import { memberById } from '@/data/members';
 
 /** 操作した側。省略時はアフロ（管理者画面）。お客様の画面（CMS・ポータル）からは client を渡す */
 export type Side = 'afro' | 'client';
@@ -41,7 +42,8 @@ export type Action =
 /** 操作した人（デモでは固定） */
 const ACTOR = { afro: '上野 航', client: 'ミナモ珈琲 担当者' } as const;
 /** 開発者画面の操作者（アフロ側の制作エンジニア） */
-const DEV_ACTOR = '黒田 蓮';
+/** 開発者画面で操作する人（デモでは固定。名前の正は data/members） */
+const DEV_ACTOR = memberById(DEV_USER_ID).name;
 
 let seq = 0;
 const uid = (p: string) => `${p}-${Date.now().toString(36)}-${(seq++).toString(36)}`;
