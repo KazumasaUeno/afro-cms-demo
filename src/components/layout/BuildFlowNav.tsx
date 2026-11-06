@@ -12,9 +12,9 @@ export function BuildFlowNav() {
   const { state } = useDemo();
   const { pathname } = useLocation();
   const steps = [
-    { to: '/ai-studio', label: 'AI要件定義', icon: FileSearch, done: state.requirements.status === 'approved' },
-    { to: '/site', label: 'サイトマップ', icon: Network, done: !!state.sitemap.approvedAt },
-    { to: '/ai-studio/design', label: 'デザイン・構築', icon: LayoutTemplate, done: !!state.design.approvedAt },
+    { to: '/ai-studio', label: 'AI要件定義', short: '要件', icon: FileSearch, done: state.requirements.status === 'approved' },
+    { to: '/site', label: 'サイトマップ', short: 'サイトマップ', icon: Network, done: !!state.sitemap.approvedAt },
+    { to: '/ai-studio/design', label: 'デザイン・構築', short: 'デザイン', icon: LayoutTemplate, done: !!state.design.approvedAt },
   ];
   return (
     <Box
@@ -33,14 +33,15 @@ export function BuildFlowNav() {
             end
             aria-current={active ? 'page' : undefined}
             sx={{
-              gap: 1, px: 1.5, height: { xs: 44, md: 36 }, borderRadius: '10px', whiteSpace: 'nowrap', flexShrink: 0,
+              gap: { xs: 0.75, sm: 1 }, px: { xs: 1, sm: 1.5 }, height: { xs: 44, md: 36 }, borderRadius: '10px', whiteSpace: 'nowrap', flexShrink: 0,
               bgcolor: active ? tokens.color.surface : 'transparent', boxShadow: active ? tokens.shadow.sm : 'none',
               color: active ? tokens.color.ink : tokens.color.muted, '&:hover': { color: tokens.color.ink },
             }}
           >
-            <Typography component="span" sx={{ fontSize: 12, fontWeight: 700, color: tokens.color.faint }}>{i + 1}</Typography>
-            <Icon size={16} />
-            <Typography component="span" sx={{ fontSize: 13, fontWeight: 600 }}>{s.label}</Typography>
+            <Typography component="span" sx={{ fontSize: 12, fontWeight: 700, color: tokens.color.muted }}>{i + 1}</Typography>
+            <Box component="span" sx={{ display: { xs: 'none', sm: 'flex' } }}><Icon size={16} /></Box>
+            <Typography component="span" sx={{ fontSize: 13, fontWeight: 600, display: { xs: 'none', sm: 'inline' } }}>{s.label}</Typography>
+            <Typography component="span" sx={{ fontSize: 13, fontWeight: 600, display: { xs: 'inline', sm: 'none' } }}>{s.short}</Typography>
             <Stack component="span" sx={{ color: s.done ? tokens.color.success : tokens.color.borderStrong }} aria-label={s.done ? '承認済み' : '未承認'}>
               {s.done ? <CheckCircle2 size={15} /> : <Circle size={15} />}
             </Stack>

@@ -26,7 +26,7 @@ export default function RequirementsPage() {
     <Box>
       <BuildFlowNav />
       <PageHeader
-        eyebrow="AI Studio · 要件定義"
+        eyebrow="① 要件定義"
         icon={<Sparkles size={14} />}
         title={view === 'result' ? 'AIがまとめた改善提案' : 'AIと話しながら、要件を整理する'}
         description={

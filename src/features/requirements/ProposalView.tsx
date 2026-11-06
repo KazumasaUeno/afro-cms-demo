@@ -102,7 +102,7 @@ export function ProposalView() {
               <Reveal key={p.id} delay={0.05 + i * 0.06}>
                 <Surface sx={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 1.25, borderTop: `3px solid ${pr.color}` }}>
                   <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
-                    <Typography variant="overline" sx={{ color: tokens.color.faint }}>{String(i + 1).padStart(2, '0')} · {p.area}</Typography>
+                    <Typography variant="overline" sx={{ color: tokens.color.muted }}>{String(i + 1).padStart(2, '0')} · {p.area}</Typography>
                     <StatusPill tone={pr.tone}>{pr.label}</StatusPill>
                   </Stack>
                   <Typography variant="h4" component="h3">{p.title}</Typography>

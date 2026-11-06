@@ -1,23 +1,18 @@
-import { Box, Button, ButtonBase, LinearProgress, Skeleton, Stack, Typography } from '@mui/material';
-import { motion } from 'motion/react';
+import { Box, Button, ButtonBase, LinearProgress, Stack, Typography } from '@mui/material';
 import {
   ArrowRight, ArrowUpRight, CalendarClock, CheckCircle2, Clock, FolderKanban, ListChecks, MessageCircle,
-  MessageSquareText, PenLine, Rocket, Sparkles, type LucideIcon,
+  PenLine, Rocket, Sparkles, type LucideIcon,
 } from 'lucide-react';
-import { lazy, Suspense, useMemo, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Activity } from '@/types';
 import { useDemo, currentProject } from '@/store/DemoStore';
 import { MONTHLY_METRICS } from '@/data/insights';
-import { STAGES } from '@/data/projects';
 import { AiBadge, AiMark, CountUp, MemberAvatar, Reveal, SectionTitle, StageTrack, StatusPill, Surface } from '@/components/ui';
 import { daysFromNow, formatDate, nowIso, relativeTime } from '@/services/time';
-import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { tokens } from '@/theme/tokens';
 import { TOUCH } from '@/theme/media';
 import { nextBestAction, stageLabel, stagePrimaryRoute } from '@/features/projects/projectHelpers';
-
-const InquirySpark = lazy(() => import('./InquirySpark'));
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -36,26 +31,17 @@ const ACTIVITY_ICON: Record<Activity['kind'], { icon: LucideIcon; color: string;
   comment: { icon: MessageCircle, color: tokens.color.warning, bg: tokens.color.warningSoft },
 };
 
-function KpiTile({ icon: Icon, label, value, suffix, foot, tone, children, delay }: {
-  icon: LucideIcon; label: string; value: number; suffix?: string; foot: ReactNode; tone: string; children?: ReactNode; delay: number;
-}) {
+/** KPI 帯の 1 項目（ラベル／数値／補足） */
+function KpiItem({ label, value, suffix, foot }: { label: string; value: number; suffix?: string; foot: ReactNode }) {
   return (
-    <Reveal delay={delay} style={{ height: '100%' }}>
-      <Surface sx={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
-          <Typography variant="subtitle2" sx={{ lineHeight: 1.35 }}>{label}</Typography>
-          <Box sx={{ width: 32, height: 32, borderRadius: '10px', display: 'grid', placeItems: 'center', bgcolor: `${tone}14`, color: tone, flexShrink: 0 }}>
-            <Icon size={17} />
-          </Box>
-        </Stack>
-        <Typography component="p" sx={{ fontSize: { xs: 28, md: 34 }, fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1 }}>
-          <CountUp value={value} />
-          {suffix && <Box component="span" sx={{ fontSize: 15, fontWeight: 600, color: tokens.color.muted, ml: 0.5 }}>{suffix}</Box>}
-        </Typography>
-        {children}
-        <Typography variant="caption" sx={{ mt: 'auto' }}>{foot}</Typography>
-      </Surface>
-    </Reveal>
+    <Box>
+      <Typography component="dt" variant="caption" sx={{ display: 'block', color: tokens.color.inkSoft, fontWeight: 600 }}>{label}</Typography>
+      <Typography component="dd" sx={{ m: 0, mt: 0.5, fontSize: 22, fontWeight: 700, lineHeight: 1.2, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
+        <CountUp value={value} />
+        {suffix && <Box component="span" sx={{ fontSize: 13, fontWeight: 600, color: tokens.color.muted, ml: 0.5 }}>{suffix}</Box>}
+      </Typography>
+      <Typography component="dd" variant="caption" sx={{ m: 0, mt: 0.25, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{foot}</Typography>
+    </Box>
   );
 }
 
@@ -63,7 +49,6 @@ function KpiTile({ icon: Icon, label, value, suffix, foot, tone, children, delay
 export default function HomePage() {
   const { state, dispatch } = useDemo();
   const navigate = useNavigate();
-  const reduced = useReducedMotion();
   const project = currentProject(state);
 
   const active = state.projects.filter((p) => p.progress < 100);
@@ -78,14 +63,14 @@ export default function HomePage() {
   const approvals = useMemo(() => {
     const list: { id: string; title: string; sub: string; to: string; projectId: string; color: string }[] = [];
     if (!state.design.approvedAt) {
-      list.push({ id: 'design', title: 'トップデザイン案の採用', sub: `${project.siteName}・制作`, to: '/ai-studio/design', projectId: project.id, color: tokens.color.accent });
+      list.push({ id: 'design', title: 'トップデザイン案の採用', sub: `${project.siteName}・制作`, to: '/ai-studio/design', projectId: project.id, color: tokens.color.info });
     }
     if (!state.sitemap.approvedAt) {
       list.push({ id: 'sitemap', title: '改善後サイトマップの承認', sub: `${project.siteName}・制作`, to: '/site', projectId: project.id, color: tokens.color.primary });
     }
     state.pages
       .filter((p) => p.status === 'review')
-      .forEach((p) => list.push({ id: p.id, title: `「${p.title}」の公開承認`, sub: `${project.siteName}・CMS`, to: '/portal/publish', projectId: project.id, color: tokens.color.warning }));
+      .forEach((p) => list.push({ id: p.id, title: `「${p.title}」の公開承認`, sub: `${project.siteName}・ページ公開`, to: '/portal/publish', projectId: project.id, color: tokens.color.warning }));
     state.projects
       .filter((p) => p.id !== project.id && p.pendingApprovals > 0)
       .forEach((p) => list.push({ id: p.id, title: p.nextAction, sub: `${p.siteName}・${stageLabel(p.stage)}（${p.pendingApprovals}件）`, to: stagePrimaryRoute(p.stage), projectId: p.id, color: tokens.color.warning }));
@@ -117,7 +102,7 @@ export default function HomePage() {
     <Box>
       {/* 挨拶 */}
       <Reveal>
-        <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'flex-end' }} spacing={2} sx={{ mb: { xs: 3, md: 4 } }}>
+        <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'flex-end' }} spacing={2} sx={{ mb: { xs: 2, md: 3 } }}>
           <Box>
             <Typography variant="overline" sx={{ color: tokens.color.primary }}>{formatDate(nowIso())}</Typography>
             <Typography variant="h1" component="h1" sx={{ mt: 0.5 }}>
@@ -128,57 +113,62 @@ export default function HomePage() {
               {active.length}つのプロジェクトが進行中です。
             </Typography>
           </Box>
-          <Stack direction="row" spacing={1}>
-            <Button variant="outlined" startIcon={<FolderKanban size={17} />} onClick={() => navigate('/projects')}>プロジェクト</Button>
-            <Button variant="contained" startIcon={<Sparkles size={17} />} onClick={() => navigate('/ai-studio')}>AIで要件定義</Button>
-          </Stack>
         </Stack>
       </Reveal>
 
-      {/* KPI */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0,1fr))', lg: 'repeat(4, minmax(0,1fr))' }, gap: { xs: 1.5, md: 2 }, mb: { xs: 2, md: 3 } }}>
-        <KpiTile delay={0.02} icon={FolderKanban} label="進行中プロジェクト" value={active.length} suffix="件" tone={tokens.color.primary} foot={`全 ${state.projects.length} 件中`} />
-        <KpiTile delay={0.06} icon={Clock} label="承認待ち" value={pendingTotal} suffix="件" tone={tokens.color.warning} foot="顧客・社内の承認を含む" />
-        <KpiTile delay={0.1} icon={CalendarClock} label="公開予定ページ" value={scheduled.length} suffix="件" tone={tokens.color.accent} foot={scheduled[0] ? `次回 ${relativeTime(scheduled[0].scheduledAt)}` : '予約はありません'} />
-        <KpiTile
-          delay={0.14} icon={MessageSquareText} label="今月の問い合わせ" value={last.inquiries} suffix="件" tone={tokens.color.success}
-          foot={<><Box component="span" sx={{ color: tokens.color.success, fontWeight: 700 }}>{inquiryDelta >= 0 ? '+' : ''}{inquiryDelta}%</Box> 前月比（デモデータ）</>}
+      {/* 次の一手（AI） */}
+      <Reveal delay={0.03}>
+        <Surface
+          padding={{ xs: 2.5, md: 3.5 }}
+          sx={{
+            mb: { xs: 2, md: 3 }, overflow: 'hidden', borderColor: '#DCD6FF',
+            background: `radial-gradient(120% 140% at 100% 0%, ${tokens.color.accentSoft} 0%, rgba(243,240,255,0) 55%), radial-gradient(90% 120% at 0% 100%, ${tokens.color.primarySoft} 0%, rgba(238,242,255,0) 60%), #fff`,
+          }}
         >
-          <Box sx={{ mx: -0.5, display: { xs: 'none', sm: 'block' } }}>
-            <Suspense fallback={<Skeleton variant="rounded" height={44} />}><InquirySpark /></Suspense>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 2, sm: 3 }} alignItems={{ sm: 'center' }}>
+            <AiMark size={48} />
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1, flexWrap: 'wrap', rowGap: 1 }}>
+                <Typography variant="overline" sx={{ color: '#5B3FD6' }}>次の一手 — {project.siteName}</Typography>
+                <AiBadge label="AIの提案" />
+              </Stack>
+              <Typography variant="h2" component="h2" sx={{ fontSize: { xs: 20, md: 24 } }}>{action.title}</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1, maxWidth: 560 }}>{action.detail}</Typography>
+            </Box>
+            <Button variant="contained" size="large" endIcon={<ArrowRight size={18} />} onClick={() => navigate(action.to)} sx={{ flexShrink: 0, alignSelf: { xs: 'stretch', sm: 'center' } }}>
+              {action.cta}
+            </Button>
+          </Stack>
+        </Surface>
+      </Reveal>
+
+      {/* KPI（1 本の帯） */}
+      <Reveal delay={0.06}>
+        <Surface padding={0} sx={{ mb: { xs: 2, md: 3 } }}>
+          <Box
+            component="dl"
+            sx={{
+              m: 0, display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0,1fr))', md: 'repeat(4, minmax(0,1fr))' },
+              '& > div': { px: { xs: 2, md: 2.5 }, py: { xs: 1.5, md: 2 }, minWidth: 0 },
+              '& > div + div': { borderLeft: { md: `1px solid ${tokens.color.border}` } },
+              '& > div:nth-of-type(even)': { borderLeft: { xs: `1px solid ${tokens.color.border}` } },
+              '& > div:nth-of-type(n+3)': { borderTop: { xs: `1px solid ${tokens.color.border}`, md: 'none' } },
+            }}
+          >
+            <KpiItem label="進行中プロジェクト" value={active.length} suffix="件" foot={`全 ${state.projects.length} 件中`} />
+            <KpiItem label="承認待ち" value={pendingTotal} suffix="件" foot="顧客・社内の承認を含む" />
+            <KpiItem label="公開予定ページ" value={scheduled.length} suffix="件" foot={scheduled[0] ? `次回 ${relativeTime(scheduled[0].scheduledAt)}` : '予約はありません'} />
+            <KpiItem
+              label="今月の問い合わせ" value={last.inquiries} suffix="件"
+              foot={<><Box component="span" sx={{ color: tokens.color.success, fontWeight: 700 }}>{inquiryDelta >= 0 ? '+' : ''}{inquiryDelta}%</Box> 前月比（デモデータ）</>}
+            />
           </Box>
-        </KpiTile>
-      </Box>
+        </Surface>
+      </Reveal>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0,1fr)', lg: 'minmax(0,1fr) 360px' }, gap: { xs: 2, md: 3 }, alignItems: 'start' }}>
         {/* 左カラム */}
         <Stack spacing={{ xs: 2, md: 3 }} sx={{ minWidth: 0 }}>
-          {/* 次の一手（AI） */}
-          <Reveal delay={0.12}>
-            <Surface
-              padding={{ xs: 2.5, md: 3.5 }}
-              sx={{
-                overflow: 'hidden', borderColor: '#DCD6FF',
-                background: `radial-gradient(120% 140% at 100% 0%, ${tokens.color.accentSoft} 0%, rgba(243,240,255,0) 55%), radial-gradient(90% 120% at 0% 100%, ${tokens.color.primarySoft} 0%, rgba(238,242,255,0) 60%), #fff`,
-              }}
-            >
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 2, sm: 3 }} alignItems={{ sm: 'center' }}>
-                <AiMark size={48} />
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1, flexWrap: 'wrap', rowGap: 1 }}>
-                    <Typography variant="overline" sx={{ color: '#5B3FD6' }}>次の一手 — {project.siteName}</Typography>
-                    <AiBadge label="AIの提案" />
-                  </Stack>
-                  <Typography variant="h2" component="h2" sx={{ fontSize: { xs: 20, md: 24 } }}>{action.title}</Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1, maxWidth: 560 }}>{action.detail}</Typography>
-                </Box>
-                <Button variant="contained" size="large" endIcon={<ArrowRight size={18} />} onClick={() => navigate(action.to)} sx={{ flexShrink: 0, alignSelf: { xs: 'stretch', sm: 'center' } }}>
-                  {action.cta}
-                </Button>
-              </Stack>
-            </Surface>
-          </Reveal>
-
           {/* 進行中プロジェクト */}
           <Box>
             <SectionTitle
@@ -187,7 +177,7 @@ export default function HomePage() {
               action={<Button size="small" endIcon={<ArrowRight size={15} />} onClick={() => navigate('/projects')}>すべて見る</Button>}
             />
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0,1fr)', sm: 'repeat(2, minmax(0,1fr))' }, gap: 2 }}>
-              {active.slice(0, 4).map((p, i) => (
+              {active.map((p, i) => (
                 <Reveal key={p.id} delay={0.16 + i * 0.05} style={{ height: '100%' }}>
                   <Surface
                     interactive
@@ -230,54 +220,6 @@ export default function HomePage() {
             </Box>
           </Box>
 
-          {/* プロジェクト進捗 */}
-          <Reveal delay={0.24}>
-            <Surface padding={{ xs: 2, md: 3 }}>
-              <SectionTitle title="プロジェクト進捗" icon={<ListChecks size={18} color={tokens.color.muted} />} sub={<Typography variant="caption" sx={{ display: { xs: 'none', sm: 'block' } }}>5段階のどこまで進んだか</Typography>} />
-              <Stack spacing={1.25}>
-                {state.projects.map((p, i) => (
-                  <ButtonBase
-                    key={p.id}
-                    onClick={() => open(p.id, `/projects/${p.id}`)}
-                    aria-label={`${p.siteName}：${stageLabel(p.stage)}、進捗${p.progress}%`}
-                    sx={{
-                      // スマホは「名前・%」の行の下にバーを置き、名前を省略させない
-                      display: 'grid', alignItems: 'center', columnGap: 1.5, rowGap: { xs: 0.75, sm: 1.5 },
-                      gridTemplateColumns: { xs: 'minmax(0,1fr) 48px', sm: '160px minmax(0,1fr) 48px' },
-                      gridTemplateAreas: { xs: '"name pct" "bar bar"', sm: '"name bar pct"' },
-                      borderRadius: 2, p: 0.75, textAlign: 'left', '&:hover': { bgcolor: tokens.color.surfaceMuted },
-                    }}
-                  >
-                    <Box sx={{ minWidth: 0, gridArea: 'name' }}>
-                      <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>{p.siteName}</Typography>
-                      <Typography variant="caption" noWrap sx={{ display: 'block' }}>{stageLabel(p.stage)}</Typography>
-                    </Box>
-                    <Box sx={{ gridArea: 'bar', position: 'relative', height: 10, borderRadius: 99, bgcolor: tokens.color.bgSubtle, overflow: 'hidden' }}>
-                      {STAGES.slice(1).map((s, si) => (
-                        <Box key={s.id} sx={{ position: 'absolute', top: 0, bottom: 0, left: `${(si + 1) * 20}%`, width: 2, bgcolor: '#fff', zIndex: 1 }} />
-                      ))}
-                      <motion.div
-                        initial={reduced ? false : { width: 0 }}
-                        animate={{ width: `${p.progress}%` }}
-                        transition={{ duration: reduced ? 0 : 0.8, delay: reduced ? 0 : 0.3 + i * 0.06, ease: tokens.motion.ease }}
-                        style={{ height: '100%', borderRadius: 99, background: `linear-gradient(90deg, ${p.accent}B3, ${p.accent})` }}
-                      />
-                    </Box>
-                    <Typography variant="body2" sx={{ gridArea: 'pct', fontWeight: 700, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{p.progress}%</Typography>
-                  </ButtonBase>
-                ))}
-              </Stack>
-              <Box sx={{ display: { xs: 'none', sm: 'grid' }, gridTemplateColumns: '160px minmax(0,1fr) 48px', gap: 1.5, px: 0.75, mt: 1.5 }}>
-                <span />
-                <Stack direction="row">
-                  {STAGES.map((s) => (
-                    <Typography key={s.id} variant="caption" sx={{ flex: 1, textAlign: 'center', color: tokens.color.muted, fontSize: 12 }}>{s.label}</Typography>
-                  ))}
-                </Stack>
-                <span />
-              </Box>
-            </Surface>
-          </Reveal>
         </Stack>
 
         {/* 右カラム */}

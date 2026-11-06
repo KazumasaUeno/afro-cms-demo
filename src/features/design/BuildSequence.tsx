@@ -60,7 +60,7 @@ export function BuildSequence({ accent, onDone }: { accent: string; onDone: () =
         </Box>
         <Typography aria-live="polite" sx={{ fontSize: 28, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
           <span ref={countRef}>{reduced ? BUILD_PAGES.length : 0}</span>
-          <Box component="span" sx={{ color: tokens.color.faint, fontSize: 18 }}> / {BUILD_PAGES.length}</Box>
+          <Box component="span" sx={{ color: tokens.color.muted, fontSize: 18 }}> / {BUILD_PAGES.length}</Box>
         </Typography>
       </Stack>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)' }, gap: 1.5 }}>

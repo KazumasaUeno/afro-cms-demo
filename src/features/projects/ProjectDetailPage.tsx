@@ -1,5 +1,5 @@
 import { Box, Button, Stack, Typography } from '@mui/material';
-import { ArrowLeft, ArrowRight, CalendarDays, Check, Clock, FolderSearch, Globe, User } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Clock, FolderSearch, Globe, User } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import type { Stage } from '@/types';
@@ -11,7 +11,8 @@ import { TOTAL_QUALITY_QUESTIONS } from '@/data/quality';
 import { MemberAvatar, ProgressRing, Reveal, StatusPill, Surface } from '@/components/ui';
 import { formatDate, formatDateTime, relativeTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
-import { qualityCompletion, STAGE_LINKS } from './projectHelpers';
+import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
+import { nextBestAction, qualityCompletion, STAGE_LINKS, stagePrimaryRoute } from './projectHelpers';
 
 function Fact({ label, value, ok }: { label: string; value: ReactNode; ok?: boolean }) {
   return (
@@ -56,6 +57,10 @@ export default function ProjectDetailPage() {
   const scheduled = state.pages.filter((x) => x.status === 'scheduled').length;
   const latest = state.diagnoses[0];
   const reqStatus = { draft: '入力中', analyzed: 'AI分析済み', approved: '承認済み' }[state.requirements.status];
+  /** デモの数値（state）は MINAMO COFFEE の 1 案件分だけ。他の案件では出さない */
+  const isDemo = p.id === CLIENT_PROJECT_ID;
+  const demoAction = nextBestAction(state);
+  const next = isDemo ? { label: demoAction.cta, to: demoAction.to } : { label: p.nextAction, to: stagePrimaryRoute(p.stage) };
 
   const facts: Record<Stage, ReactNode> = {
     requirements: (
@@ -126,9 +131,16 @@ export default function ProjectDetailPage() {
             </Box>
             <Stack direction="row" spacing={2} alignItems="center">
               <ProgressRing value={p.progress} size={88} stroke={8} color={p.accent} label="全体の進捗" />
-              <Box>
-                <Typography variant="caption">次に必要な作業</Typography>
-                <Typography variant="h5" sx={{ maxWidth: 220 }}>{p.nextAction}</Typography>
+              <Box sx={{ minWidth: 0, flex: { xs: 1, md: 'none' } }}>
+                <Typography variant="caption" component="p" sx={{ mb: 0.75 }}>次に必要な作業</Typography>
+                <Button
+                  variant="contained"
+                  endIcon={<ArrowRight size={16} />}
+                  onClick={() => go(next.to)}
+                  sx={{ minHeight: 44, maxWidth: { md: 260 }, textAlign: 'left', justifyContent: 'space-between', lineHeight: 1.4, py: 1 }}
+                >
+                  {next.label}
+                </Button>
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
                   <MemberAvatar id={p.ownerId} size={24} />
                   {p.pendingApprovals > 0 && <StatusPill tone="warning">承認待ち {p.pendingApprovals}</StatusPill>}
@@ -149,7 +161,7 @@ export default function ProjectDetailPage() {
         {STAGES.map((s, i) => {
           const done = i < cur;
           const active = i === cur;
-          const color = done ? tokens.color.success : active ? tokens.color.primary : tokens.color.faint;
+          const color = done ? tokens.color.success : active ? tokens.color.primary : tokens.color.muted;
           return (
             <Box component="li" key={s.id} aria-current={active ? 'step' : undefined} sx={{ minWidth: 0 }}>
               <Reveal delay={0.06 + i * 0.06} style={{ height: '100%' }}>
@@ -168,17 +180,27 @@ export default function ProjectDetailPage() {
                     <StatusPill tone={done ? 'success' : active ? 'primary' : 'neutral'}>{done ? '完了' : active ? '進行中' : 'これから'}</StatusPill>
                   </Stack>
                   <Box>
-                    <Typography variant="overline" sx={{ color }}>{s.en}</Typography>
                     <Typography variant="h4" component="h3">{s.label}</Typography>
                     <Typography variant="caption" sx={{ display: 'block', mt: 0.5, minHeight: { lg: 54 } }}>{s.description}</Typography>
                   </Box>
-                  <Box>{facts[s.id]}</Box>
+                  {done ? (
+                    <Stack direction="row" spacing={0.75} alignItems="flex-start" sx={{ py: 0.75, borderTop: `1px solid ${tokens.color.border}` }}>
+                      <CheckCircle2 size={16} color={tokens.color.success} style={{ flexShrink: 0, marginTop: 2 }} />
+                      <Typography sx={{ fontSize: 13, lineHeight: 1.5, color: tokens.color.inkSoft }}>この段階は完了しています</Typography>
+                    </Stack>
+                  ) : isDemo ? (
+                    <Box>{facts[s.id]}</Box>
+                  ) : (
+                    <Typography variant="caption" sx={{ display: 'block', py: 0.75, borderTop: `1px solid ${tokens.color.border}` }}>
+                      詳しい数値は MINAMO COFFEE のデモでご覧いただけます
+                    </Typography>
+                  )}
                   <Stack spacing={0.75} sx={{ mt: 'auto' }}>
-                    {STAGE_LINKS[s.id].map((l, li) => (
+                    {STAGE_LINKS[s.id].map((l) => (
                       <Button
                         key={l.to}
                         size="small"
-                        variant={active && li === 0 ? 'contained' : 'outlined'}
+                        variant="outlined"
                         endIcon={<ArrowRight size={15} />}
                         onClick={() => go(l.to)}
                         sx={{ justifyContent: 'space-between' }}

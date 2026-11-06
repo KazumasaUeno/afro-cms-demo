@@ -33,6 +33,40 @@ function Kpi({ label, value, base, decimals = 0, suffix = '' }: { label: string;
   );
 }
 
+const CHART_Y_WIDTH = 40;
+
+/** 推移グラフ 1 段分（上下 2 段で同じ x 位置に揃える） */
+function TrendChart({ dataKey, name, color, gradientId, latest, unit, showXAxis, tickFormatter, anim, ariaLabel }: {
+  dataKey: 'sessions' | 'inquiries'; name: string; color: string; gradientId: string; latest: number; unit: string;
+  showXAxis?: boolean; tickFormatter?: (v: number) => string; anim: boolean; ariaLabel: string;
+}) {
+  return (
+    <Box sx={{ '& + &': { mt: 1.5 } }}>
+      <Stack direction="row" spacing={0.75} alignItems="baseline" sx={{ mb: 0.25 }}>
+        <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: color, alignSelf: 'center' }} />
+        <Typography variant="caption" sx={{ fontWeight: 600, color: tokens.color.inkSoft }}>{name}</Typography>
+        <Typography sx={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{latest.toLocaleString('ja-JP')}{unit}</Typography>
+        <Typography variant="caption">（{last.month}）</Typography>
+      </Stack>
+      <Box sx={{ height: 150 }} role="img" aria-label={ariaLabel}>
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={MONTHLY_METRICS} syncId="insightsTrend" margin={{ top: 18, right: 8, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={color} stopOpacity={0.2} /><stop offset="1" stopColor={color} stopOpacity={0} /></linearGradient>
+            </defs>
+            <CartesianGrid stroke={tokens.color.border} strokeDasharray="0" vertical={false} />
+            <XAxis dataKey="month" hide={!showXAxis} tickFormatter={(m: string) => m.slice(5) + '月'} tick={{ fontSize: 12, fill: tokens.color.muted }} axisLine={false} tickLine={false} />
+            <YAxis width={CHART_Y_WIDTH} tick={{ fontSize: 12, fill: tokens.color.muted }} axisLine={false} tickLine={false} tickFormatter={tickFormatter} />
+            <Tooltip contentStyle={{ borderRadius: 12, border: `1px solid ${tokens.color.border}`, boxShadow: tokens.shadow.md, fontSize: 12 }} formatter={(v) => [Number(v).toLocaleString('ja-JP'), name]} />
+            <ReferenceLine x={RENEWAL_MONTH} stroke={tokens.color.ink} strokeDasharray="4 4" label={{ value: 'リニューアル', position: 'top', fontSize: 12, fill: tokens.color.ink }} />
+            <Area type="monotone" dataKey={dataKey} stroke={color} strokeWidth={2} fill={`url(#${gradientId})`} isAnimationActive={anim} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </Box>
+    </Box>
+  );
+}
+
 export default function InsightsPage() {
   const { state } = useDemo();
   const reduced = useReducedMotion();
@@ -74,29 +108,17 @@ export default function InsightsPage() {
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: 3, mb: 3 }}>
         <Surface>
           <SectionTitle title="アクセスと問い合わせの推移" sub={<Typography variant="caption" sx={{ ml: 1, display: { xs: 'none', sm: 'block' } }}>月次</Typography>} />
-          <Stack direction="row" spacing={2} sx={{ mb: 1 }}>
-            {[{ c: tokens.color.primary, l: 'アクセス数（左軸）' }, { c: tokens.color.accent, l: '問い合わせ数（右軸）' }].map((x) => (
-              <Stack key={x.l} direction="row" spacing={0.75} alignItems="center"><Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: x.c }} /><Typography variant="caption">{x.l}</Typography></Stack>
-            ))}
-          </Stack>
-          <Box sx={{ height: 280 }} role="img" aria-label={`アクセス数は ${MONTHLY_METRICS[0].sessions} から ${last.sessions} へ、問い合わせは ${MONTHLY_METRICS[0].inquiries} 件から ${last.inquiries} 件へ推移`}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={MONTHLY_METRICS} margin={{ top: 16, right: 4, left: -12, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="gSessions" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={tokens.color.primary} stopOpacity={0.22} /><stop offset="1" stopColor={tokens.color.primary} stopOpacity={0} /></linearGradient>
-                  <linearGradient id="gInq" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={tokens.color.accent} stopOpacity={0.18} /><stop offset="1" stopColor={tokens.color.accent} stopOpacity={0} /></linearGradient>
-                </defs>
-                <CartesianGrid stroke={tokens.color.border} strokeDasharray="0" vertical={false} />
-                <XAxis dataKey="month" tickFormatter={(m: string) => m.slice(5) + '月'} tick={{ fontSize: 12, fill: tokens.color.muted }} axisLine={false} tickLine={false} />
-                <YAxis yAxisId="l" tick={{ fontSize: 12, fill: tokens.color.muted }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v / 1000}k`} />
-                <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 12, fill: tokens.color.muted }} axisLine={false} tickLine={false} width={30} />
-                <Tooltip contentStyle={{ borderRadius: 12, border: `1px solid ${tokens.color.border}`, boxShadow: tokens.shadow.md, fontSize: 12 }} formatter={(v, n) => [Number(v).toLocaleString('ja-JP'), n === 'sessions' ? 'アクセス' : '問い合わせ']} />
-                <ReferenceLine yAxisId="l" x={RENEWAL_MONTH} stroke={tokens.color.ink} strokeDasharray="4 4" label={{ value: 'リニューアル', position: 'top', fontSize: 12, fill: tokens.color.ink }} />
-                <Area yAxisId="l" type="monotone" dataKey="sessions" stroke={tokens.color.primary} strokeWidth={2} fill="url(#gSessions)" isAnimationActive={anim} />
-                <Area yAxisId="r" type="monotone" dataKey="inquiries" stroke={tokens.color.accent} strokeWidth={2} fill="url(#gInq)" isAnimationActive={anim} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </Box>
+          {/* 二軸をやめて上下 2 段。x 軸と参照線の位置を揃えるため、y 軸の幅と余白を両方で同じにする */}
+          <TrendChart
+            dataKey="sessions" name="アクセス数" color={tokens.color.primary} gradientId="gSessions" latest={last.sessions} unit=""
+            tickFormatter={(v) => `${v / 1000}k`} anim={anim}
+            ariaLabel={`アクセス数は ${MONTHLY_METRICS[0].sessions.toLocaleString('ja-JP')} から ${last.sessions.toLocaleString('ja-JP')} へ推移`}
+          />
+          <TrendChart
+            dataKey="inquiries" name="問い合わせ数" color={tokens.color.info} gradientId="gInq" latest={last.inquiries} unit="件"
+            showXAxis anim={anim}
+            ariaLabel={`問い合わせは ${MONTHLY_METRICS[0].inquiries} 件から ${last.inquiries} 件へ推移`}
+          />
         </Surface>
 
         <Surface>
@@ -142,7 +164,10 @@ export default function InsightsPage() {
                     <Box sx={{ flex: 1, height: 10, borderRadius: 99, bgcolor: tokens.color.bgSubtle }}>
                       <Box sx={{ width: `${(p.views / max) * 100}%`, height: '100%', borderRadius: 99, bgcolor: tokens.color.primary, opacity: 0.85 }} />
                     </Box>
-                    <Typography variant="caption" sx={{ width: 112, textAlign: 'right', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{p.views.toLocaleString('ja-JP')} PV ・ CVR {p.cvr}%</Typography>
+                    <Typography variant="caption" sx={{ minWidth: 132, textAlign: 'right', fontVariantNumeric: 'tabular-nums', flexShrink: 0, lineHeight: 1.35 }}>
+                      <Box component="span" sx={{ display: 'block', whiteSpace: 'nowrap' }}>{p.views.toLocaleString('ja-JP')} PV</Box>
+                      <Box component="span" sx={{ display: 'block', whiteSpace: 'nowrap' }}>CVR {p.cvr}%</Box>
+                    </Typography>
                   </Stack>
                 </Box>
               );

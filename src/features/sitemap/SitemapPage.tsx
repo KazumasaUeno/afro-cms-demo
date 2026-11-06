@@ -132,7 +132,7 @@ function Editor({ variant, onVariant }: { variant: SitemapVariant; onVariant: (v
           // 接続の点は指で掴める大きさにする（インライン style より優先させる）
           '& .react-flow__handle': { [TOUCH]: { width: '16px !important', height: '16px !important' } },
           '& .react-flow__controls': { boxShadow: tokens.shadow.sm, borderRadius: '10px', overflow: 'hidden', border: `1px solid ${tokens.color.border}` },
-          '& .react-flow__minimap': { borderRadius: '12px', overflow: 'hidden', border: `1px solid ${tokens.color.border}` } }}>
+          '& .react-flow__minimap': { borderRadius: '12px', overflow: 'hidden', border: `1px solid ${tokens.color.border}`, display: { xs: 'none', md: 'block' } } }}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -144,7 +144,8 @@ function Editor({ variant, onVariant }: { variant: SitemapVariant; onVariant: (v
             defaultEdgeOptions={defaultEdgeOptions}
             deleteKeyCode={['Delete', 'Backspace']}
             fitView
-            fitViewOptions={{ padding: 0.12, minZoom: 0.55 }}
+            // 初期表示はページ名が読める倍率を優先（はみ出す分はパン。全体は右上「全体を表示」で）
+            fitViewOptions={{ padding: 0.08, minZoom: 0.85 }}
             minZoom={0.3}
             maxZoom={2}
             aria-label={`${variant === 'after' ? '改善後' : '現在'}のサイトマップ`}
@@ -157,7 +158,7 @@ function Editor({ variant, onVariant }: { variant: SitemapVariant; onVariant: (v
             <Panel position="top-left">
               <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 1.25, py: 0.75, borderRadius: '10px', bgcolor: 'rgba(255,255,255,.9)', border: `1px solid ${tokens.color.border}`, fontSize: 12, color: tokens.color.muted }}>
                 <StatusPill tone={variant === 'after' ? 'accent' : 'neutral'}>{variant === 'after' ? '改善後' : '現在'}</StatusPill>
-                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>ドラッグで移動 · 下の点から引っぱって接続</Box>
+                <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>ドラッグで移動 · 下の点から引っぱって接続</Box>
               </Stack>
             </Panel>
           </ReactFlow>
@@ -237,7 +238,7 @@ export default function SitemapPage() {
     <Box>
       <BuildFlowNav />
       <PageHeader
-        eyebrow="サイト制作 · サイトマップ"
+        eyebrow="② 制作"
         icon={<Network size={14} />}
         title="サイトの構造を、見ながら組み替える"
         description="現在のサイトと、要件定義から導いた改善後の構造を切り替えて比較できます。ページの追加・移動・接続はそのまま保存されます。"

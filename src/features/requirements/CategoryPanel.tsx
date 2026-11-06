@@ -64,7 +64,7 @@ export function CategoryPanel() {
         <Typography variant="h4" component="h2">要件の全体像</Typography>
       </Stack>
       <Typography variant="caption" sx={{ display: 'block', mb: 2 }}>
-        12項目 {TOTAL_REQUIREMENT_QUESTIONS}問のうち <b style={{ color: tokens.color.ink }}>{answeredTotal}問</b> 回答済み。カテゴリから追加で入力できます。
+        12項目 {TOTAL_REQUIREMENT_QUESTIONS}問のうち <b style={{ color: tokens.color.ink }}>{answeredTotal}問</b> 回答済み。最初の 5 問で提案書のたたき台を作ります。残りは後から追加できます。
       </Typography>
       <Stack spacing={0.5}>
         {REQUIREMENT_CATEGORIES.map((c) => {
@@ -86,7 +86,7 @@ export function CategoryPanel() {
                 </svg>
               </Box>
               <Typography sx={{ fontSize: 13, fontWeight: 600, flex: 1, minWidth: 0, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                <Box component="span" sx={{ color: tokens.color.faint, mr: 0.75, fontVariantNumeric: 'tabular-nums' }}>{String(c.no).padStart(2, '0')}</Box>
+                <Box component="span" sx={{ color: tokens.color.muted, fontWeight: 700, mr: 0.75, fontVariantNumeric: 'tabular-nums' }}>{String(c.no).padStart(2, '0')}</Box>
                 {c.title}
               </Typography>
               <Typography sx={{ fontSize: 12, color: tokens.color.muted, fontVariantNumeric: 'tabular-nums' }}>{c.questionCount}問</Typography>

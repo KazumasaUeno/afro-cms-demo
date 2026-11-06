@@ -1,5 +1,5 @@
 import { Box, Button, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
-import { Building2, Database, Info, RotateCcw, Settings, ShieldCheck, Sparkles, Wind } from 'lucide-react';
+import { Building2, Database, Info, RotateCcw, ShieldCheck, Sparkles, Wind } from 'lucide-react';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import type { DemoState } from '@/types';
 import { useDemo } from '@/store/DemoStore';
@@ -54,7 +54,7 @@ export default function SettingsPage() {
 
   return (
     <Box sx={{ maxWidth: 960 }}>
-      <PageHeader eyebrow="Settings" icon={<Settings size={15} />} title="設定" description="デモ環境の表示と動作を設定します。変更はこのブラウザにだけ保存されます。" />
+      <PageHeader title="設定" description="デモ環境の表示と動作を設定します。変更はこのブラウザにだけ保存されます。" />
 
       <Reveal>
         <Surface padding={{ xs: 2.5, md: 3.5 }} sx={{ mb: 3 }}>

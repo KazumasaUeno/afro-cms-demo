@@ -1,5 +1,5 @@
 import { Box, InputAdornment, LinearProgress, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
-import { Clock, FolderKanban, Globe, Search, SearchX } from 'lucide-react';
+import { Clock, Globe, Search, SearchX } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Project, Stage } from '@/types';
@@ -122,8 +122,6 @@ export default function ProjectsPage() {
   return (
     <Box>
       <PageHeader
-        eyebrow="Projects"
-        icon={<FolderKanban size={15} />}
         title="プロジェクト"
         description="顧客ごとのWebサイト制作を、要件定義から改善まで5つの段階で管理します。カードを開くと各段階の作業に進めます。"
       />
@@ -137,11 +135,11 @@ export default function ProjectsPage() {
             aria-label="段階で絞り込む"
             size="small"
           >
-            <ToggleButton value="all">すべて <Box component="span" sx={{ ml: 0.75, color: tokens.color.faint }}>{counts.all}</Box></ToggleButton>
+            <ToggleButton value="all" sx={{ whiteSpace: 'nowrap' }}>すべて <Box component="span" sx={{ ml: 0.75, color: tokens.color.muted }}>{counts.all}</Box></ToggleButton>
             {STAGES.map((s) => (
               <ToggleButton key={s.id} value={s.id} sx={{ whiteSpace: 'nowrap' }}>
                 {s.label}
-                <Box component="span" sx={{ ml: 0.75, color: tokens.color.faint }}>{counts[s.id] ?? 0}</Box>
+                <Box component="span" sx={{ ml: 0.75, color: tokens.color.muted }}>{counts[s.id] ?? 0}</Box>
               </ToggleButton>
             ))}
           </ToggleButtonGroup>

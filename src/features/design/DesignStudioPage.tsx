@@ -9,6 +9,7 @@ import { useDemo } from '@/store/DemoStore';
 import { useToast } from '@/hooks/useToast';
 import { formatDateTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
+import { LANDSCAPE_PHONE, TOUCH } from '@/theme/media';
 import type { DesignId, DesignVariant } from '@/types';
 import { DeviceFrame } from './DeviceFrame';
 import { BuildSequence } from './BuildSequence';
@@ -62,7 +63,8 @@ function VariantCard({ v, selected, adopted, locked, onSelect }: { v: DesignVari
     >
       <Box sx={{ position: 'relative', borderRadius: '10px', overflow: 'hidden', bgcolor: tokens.color.bgSubtle }}>
         <DeviceFrame design={v.id} device="pc" thumbnail viewportHeight={760} />
-        {selected && (
+        {/* チェック印は採用済みの案だけ（表示中の案は青枠のみ） */}
+        {adopted && (
           <Box sx={{ position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: '50%', bgcolor: tokens.color.primary, color: '#fff', display: 'grid', placeItems: 'center', boxShadow: tokens.shadow.sm }}>
             <Check size={15} strokeWidth={3} />
           </Box>
@@ -105,6 +107,13 @@ export default function DesignStudioPage() {
   const current = DESIGN_VARIANTS.find((v) => v.id === focus) ?? DESIGN_VARIANTS[0];
   const selectedVariant = DESIGN_VARIANTS.find((v) => v.id === design.selected);
 
+  /** 表示中の案をそのまま採用する（既存 action のみ: 選択 → 承認） */
+  const adoptCurrent = () => {
+    dispatch({ type: 'selectDesign', id: current.id });
+    dispatch({ type: 'approveDesign' });
+    toast(`${current.name}デザインを採用・承認しました`);
+  };
+
   const choose = (id: DesignId) => {
     setFocus(id);
     if (!locked) dispatch({ type: 'selectDesign', id });
@@ -114,7 +123,7 @@ export default function DesignStudioPage() {
     <Box>
       <BuildFlowNav />
       <PageHeader
-        eyebrow="AI Studio · デザイン"
+        eyebrow="② 制作"
         icon={<Wand2 size={14} />}
         title="3つの方向性から、トップページを選ぶ"
         description="要件定義の回答と承認済みサイトマップから、レイアウト・タイポグラフィ・構成の異なる3案を生成しました。実際のHTML/CSSで描画しているので、端末ごとの見え方まで確認できます。"
@@ -171,8 +180,9 @@ export default function DesignStudioPage() {
               <Box key={v.id} sx={{ flex: { xs: '0 0 86%', sm: '0 0 60%' }, scrollSnapAlign: 'center', minWidth: 0 }}>
                 <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
                   <Typography variant="h6">{v.label} · {v.name}</Typography>
-                  <Button size="small" variant={design.selected === v.id ? 'contained' : 'outlined'} disabled={locked && design.selected !== v.id} onClick={() => choose(v.id)}>
-                    {design.selected === v.id ? '選択中' : 'この案を選ぶ'}
+                  {/* 採用後は「採用した案」を基準に表示する（見ている案と取り違えない） */}
+                  <Button size="small" variant={(locked ? design.selected : focus) === v.id ? 'contained' : 'outlined'} disabled={locked && design.selected !== v.id} onClick={() => choose(v.id)}>
+                    {locked ? (design.selected === v.id ? '採用済み' : '不採用') : focus === v.id ? '選択中' : 'この案を選ぶ'}
                   </Button>
                 </Stack>
                 <DeviceFrame design={v.id} device={device} viewportHeight={device === 'pc' ? 900 : undefined} label={`${v.name}のプレビュー`} />
@@ -183,53 +193,67 @@ export default function DesignStudioPage() {
       </Surface>
 
       {/* 採用・構築 */}
-      <Reveal>
-        <Surface>
-          {design.buildCompletedAt ? (
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
-              <Box sx={{ width: 48, height: 48, borderRadius: 3, bgcolor: tokens.color.successSoft, color: tokens.color.success, display: 'grid', placeItems: 'center', flexShrink: 0 }}><BadgeCheck size={24} /></Box>
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="h4" component="h2">全 {BUILD_PAGES.length} ページの構築が完了しました</Typography>
-                <Typography variant="body2" color="text.secondary">{selectedVariant?.name}デザインで構築 · {formatDateTime(design.buildCompletedAt)}（シミュレーション）。次は品質チェックとページ編集へ。</Typography>
-              </Box>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                <Button variant="outlined" startIcon={<PenLine size={16} />} onClick={() => navigate('/portal/pages')}>CMSで編集</Button>
-                <Button variant="contained" startIcon={<ShieldCheck size={16} />} onClick={() => navigate('/quality')}>品質チェックへ</Button>
-              </Stack>
-            </Stack>
-          ) : building ? (
-            <BuildSequence
-              accent={selectedVariant?.palette[2] ?? tokens.color.primary}
-              onDone={() => { dispatch({ type: 'completeBuild' }); setBuilding(false); toast('全ページを構築しました', 'ai'); }}
-            />
-          ) : locked ? (
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="h4" component="h2">{selectedVariant?.label}「{selectedVariant?.name}」を採用しました</Typography>
-                <Box role="status" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, mt: 1, px: 1.25, py: 0.5, borderRadius: 2, bgcolor: tokens.color.successSoft, color: '#08765A', fontSize: 13, fontWeight: 650 }}>
-                  <BadgeCheck size={15} /> 承認済み {formatDateTime(design.approvedAt)}
+      {locked ? (
+        <Reveal>
+          <Surface>
+            {design.buildCompletedAt ? (
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
+                <Box sx={{ width: 48, height: 48, borderRadius: 3, bgcolor: tokens.color.successSoft, color: tokens.color.success, display: 'grid', placeItems: 'center', flexShrink: 0 }}><BadgeCheck size={24} /></Box>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="h4" component="h2">全 {BUILD_PAGES.length} ページの構築が完了しました</Typography>
+                  <Typography variant="body2" color="text.secondary">{selectedVariant?.name}デザインで構築 · {formatDateTime(design.buildCompletedAt)}（シミュレーション）。次は品質チェックとページ編集へ。</Typography>
                 </Box>
-              </Box>
-              <Button size="large" variant="contained" endIcon={<ArrowRight size={18} />} onClick={() => { dispatch({ type: 'startBuild' }); setBuilding(true); }}
-                sx={{ background: tokens.aiGradient, '&:hover': { background: tokens.aiGradient, filter: 'brightness(1.06)' } }}>
-                全ページ構築へ進む
-              </Button>
-            </Stack>
-          ) : (
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
-              <Box sx={{ width: 48, height: 48, borderRadius: 3, bgcolor: tokens.color.primarySoft, color: tokens.color.primary, display: 'grid', placeItems: 'center', flexShrink: 0 }}><LayoutTemplate size={22} /></Box>
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="h4" component="h2">{selectedVariant ? `${selectedVariant.label}「${selectedVariant.name}」を採用しますか？` : 'デザイン案を選んでください'}</Typography>
-                <Typography variant="body2" color="text.secondary">採用すると承認の記録が残り、このデザインで全ページを構築できます。</Typography>
-              </Box>
-              <Button size="large" variant="contained" disabled={!selectedVariant} startIcon={<Check size={18} />}
-                onClick={() => { dispatch({ type: 'approveDesign' }); toast(`${selectedVariant?.name}デザインを採用・承認しました`); }}>
-                この案を採用して承認
-              </Button>
-            </Stack>
-          )}
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                  <Button variant="outlined" startIcon={<PenLine size={16} />} onClick={() => navigate('/portal/pages')}>CMSで編集</Button>
+                  <Button variant="contained" startIcon={<ShieldCheck size={16} />} onClick={() => navigate('/quality')}>品質チェックへ</Button>
+                </Stack>
+              </Stack>
+            ) : building ? (
+              <BuildSequence
+                accent={selectedVariant?.palette[2] ?? tokens.color.primary}
+                onDone={() => { dispatch({ type: 'completeBuild' }); setBuilding(false); toast('全ページを構築しました', 'ai'); }}
+              />
+            ) : (
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="h4" component="h2">{selectedVariant?.label}「{selectedVariant?.name}」を採用しました</Typography>
+                  <Box role="status" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, mt: 1, px: 1.25, py: 0.5, borderRadius: 2, bgcolor: tokens.color.successSoft, color: '#08765A', fontSize: 13, fontWeight: 650 }}>
+                    <BadgeCheck size={15} /> 承認済み {formatDateTime(design.approvedAt)}
+                  </Box>
+                </Box>
+                <Button size="large" variant="contained" endIcon={<ArrowRight size={18} />} onClick={() => { dispatch({ type: 'startBuild' }); setBuilding(true); }}
+                  sx={{ background: tokens.aiGradient, '&:hover': { background: tokens.aiGradient, filter: 'brightness(1.06)' } }}>
+                  全ページ構築へ進む
+                </Button>
+              </Stack>
+            )}
+          </Surface>
+        </Reveal>
+      ) : (
+        // 採用の帯は画面下に固定（出現アニメーションなし）。390 は下部タブの上
+        <Surface
+          role="region"
+          aria-label="デザイン案の採用"
+          padding={{ xs: 2, md: 2.5 }}
+          sx={{
+            position: 'sticky', zIndex: 10, bottom: { xs: 'calc(64px + env(safe-area-inset-bottom) + 8px)', md: 16 },
+            [LANDSCAPE_PHONE]: { bottom: 16 },
+            bgcolor: tokens.color.surface, boxShadow: tokens.shadow.md,
+          }}
+        >
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={{ xs: 1.5, md: 2 }} alignItems={{ md: 'center' }}>
+            <Box sx={{ width: 48, height: 48, borderRadius: 3, bgcolor: tokens.color.primarySoft, color: tokens.color.primary, display: { xs: 'none', md: 'grid' }, placeItems: 'center', flexShrink: 0 }}><LayoutTemplate size={22} /></Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="h4" component="h2" sx={{ fontSize: { xs: 16, md: undefined } }}>{current.label}「{current.name}」を採用しますか？</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>採用すると承認の記録が残り、このデザインで全ページを構築できます。</Typography>
+            </Box>
+            <Button size="large" variant="contained" startIcon={<Check size={18} />} onClick={adoptCurrent}
+              sx={{ flexShrink: 0, minHeight: 48, [TOUCH]: { minHeight: 48 }, width: { xs: '100%', md: 'auto' } }}>
+              この案を採用して承認
+            </Button>
+          </Stack>
         </Surface>
-      </Reveal>
+      )}
 
       <Dialog open={expanded} onClose={() => setExpanded(false)} fullScreen PaperProps={{ sx: { bgcolor: tokens.color.bgSubtle, borderRadius: 0, border: 'none' } }} aria-label="大きくプレビュー">
         <Stack direction="row" alignItems="center" spacing={1.5} sx={{ px: { xs: 2, md: 3 }, py: 1.5, bgcolor: tokens.color.surface, borderBottom: `1px solid ${tokens.color.border}` }}>

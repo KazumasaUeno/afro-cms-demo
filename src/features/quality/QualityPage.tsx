@@ -44,14 +44,16 @@ function BulkMenu({ side }: { side: 'afro' | 'client' }) {
   };
   return (
     <>
-      <Button
-        variant={side === 'afro' ? 'contained' : 'outlined'}
-        startIcon={side === 'afro' ? <Building2 size={16} /> : <UserRound size={16} />}
-        onClick={(e) => setAnchor(e.currentTarget)}
-        aria-haspopup="menu"
-      >
-        {label}で一括チェック
-      </Button>
+      {side === 'afro' ? (
+        <Button variant="contained" startIcon={<Building2 size={16} />} onClick={(e) => setAnchor(e.currentTarget)} aria-haspopup="menu">
+          {label}で一括チェック
+        </Button>
+      ) : (
+        // 顧客の承認は本来お客様ポータルで行う。ここは商談デモ用の再現操作
+        <Button size="small" variant="text" startIcon={<UserRound size={15} />} onClick={(e) => setAnchor(e.currentTarget)} aria-haspopup="menu" sx={{ minHeight: 44 }}>
+          デモ操作: 顧客の承認を再現
+        </Button>
+      )}
       <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)}>
         {(['A', 'B'] as const).map((p) => (
           <MenuItem key={p} onClick={() => run(p)}>
@@ -99,7 +101,7 @@ export default function QualityPage() {
         icon={<ShieldCheck size={15} />}
         title="品質チェック"
         description={`12項目${TOTAL_QUALITY_QUESTIONS}問の品質基準を、アフロと顧客の双方で確認します（デモでは代表${QUALITY_ITEMS.length}問を収録）。`}
-        actions={<><BulkMenu side="afro" /><BulkMenu side="client" /></>}
+        actions={<BulkMenu side="afro" />}
       />
 
       <Reveal>
@@ -139,11 +141,51 @@ export default function QualityPage() {
               ))}
             </Box>
           </Box>
+          <Stack direction="row" justifyContent="flex-end" sx={{ mt: 1.5, mr: -1, mb: -1 }}>
+            <BulkMenu side="client" />
+          </Stack>
         </Surface>
       </Reveal>
 
+      <Surface sx={{ mb: 4 }}>
+        <SectionTitle title="未完了の項目" sub={openItems.length > 0 ? <StatusPill tone="warning" dot={false}>{openItems.length}件</StatusPill> : undefined} />
+        {openByCategory.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">すべての項目が完了しました。公開準備に進めます。</Typography>
+        ) : (
+          <Stack spacing={1.5}>
+            {openByCategory.map(({ category, items }) => {
+              const open = items.filter((i) => !isComplete(state.qualityChecks[i.id]));
+              return (
+                <Box key={category.id} sx={{ p: 1.5, borderRadius: '14px', bgcolor: tokens.color.surfaceMuted }}>
+                  <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                    <Typography variant="h6">{category.no}. {category.title}</Typography>
+                    <Button size="small" onClick={() => setSelected(category)} endIcon={<ArrowUpRight size={14} />} aria-label={`${category.title}を開く`}>開く</Button>
+                  </Stack>
+                  <Stack spacing={0.75}>
+                    {open.slice(0, 3).map((i) => {
+                      const c = state.qualityChecks[i.id];
+                      return (
+                        <Stack key={i.id} direction="row" spacing={1} alignItems={{ xs: 'flex-start', sm: 'center' }}>
+                          <PriorityChip priority={i.priority} />
+                          <Typography variant="body2" sx={{ flex: 1, minWidth: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{i.text}</Typography>
+                          <Typography variant="caption" sx={{ flexShrink: 0 }}>{!c?.afroAt ? 'アフロ未確認' : '顧客未承認'}</Typography>
+                        </Stack>
+                      );
+                    })}
+                    {open.length > 3 && <Typography variant="caption">ほか {open.length - 3}件</Typography>}
+                  </Stack>
+                </Box>
+              );
+            })}
+            {perCategory.filter((c) => c.stats.open > 0).length > openByCategory.length && (
+              <Typography variant="caption">ほか {perCategory.filter((c) => c.stats.open > 0).length - openByCategory.length}カテゴリに未完了があります</Typography>
+            )}
+          </Stack>
+        )}
+      </Surface>
+
       <SectionTitle title="カテゴリ別の進捗" sub={<Typography variant="caption" sx={{ ml: 1, display: { xs: 'none', sm: 'block' } }}>カードを開いて項目を確認</Typography>} />
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)', xl: 'repeat(4, 1fr)' }, gap: 2, mb: 4 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0,1fr))', lg: 'repeat(3, minmax(0,1fr))', xl: 'repeat(4, minmax(0,1fr))' }, gap: { xs: 1.5, sm: 2 }, mb: 4 }}>
         {perCategory.map(({ category, items, stats }, i) => {
           const done = stats.open === 0;
           return (
@@ -160,22 +202,23 @@ export default function QualityPage() {
                     setSelected(category);
                   }
                 }}
+                padding={{ xs: 1.5, sm: 2, md: 2.5 }}
                 sx={{ height: '100%' }}
               >
-                <Stack direction="row" alignItems="flex-start" spacing={1.5} sx={{ mb: 2 }}>
+                <Stack direction="row" alignItems="flex-start" spacing={1.5} sx={{ mb: { xs: 0, sm: 2 } }}>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography sx={{ fontSize: 12, fontWeight: 700, color: tokens.color.faint, fontVariantNumeric: 'tabular-nums' }}>{String(category.no).padStart(2, '0')}</Typography>
-                    <Typography variant="h5" noWrap>{category.title}</Typography>
-                    <Typography variant="caption">{category.questionCount}問中 {items.length}問を収録</Typography>
+                    <Typography sx={{ fontSize: 12, fontWeight: 700, color: tokens.color.muted, fontVariantNumeric: 'tabular-nums' }}>{String(category.no).padStart(2, '0')}</Typography>
+                    <Typography variant="h5" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: { sm: 'nowrap' }, fontSize: { xs: 14, sm: undefined } }}>{category.title}</Typography>
+                    <Typography variant="caption" sx={{ display: { xs: 'none', sm: 'inline' } }}>{category.questionCount}問中 {items.length}問を収録</Typography>
                   </Box>
                   <ProgressRing value={stats.completeRate} size={44} stroke={5} color={done ? tokens.color.success : tokens.color.primary} label={`${category.title} 完了率`} />
                 </Stack>
-                <Stack spacing={0.75}>
+                <Stack spacing={0.75} sx={{ display: { xs: 'none', sm: 'flex' } }}>
                   <MiniBar label="アフロ" value={stats.afroRate} color={tokens.color.primary} />
                   <MiniBar label="顧客" value={stats.clientRate} color={tokens.color.success} />
                 </Stack>
-                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 2 }}>
-                  {done ? <StatusPill tone="success">完了</StatusPill> : <StatusPill tone="warning">未完了 {stats.open}件</StatusPill>}
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 2, display: { xs: 'none', sm: 'flex' } }}>
+                  {done ? <StatusPill tone="success">完了</StatusPill> : <Typography sx={{ fontSize: 12, color: tokens.color.inkSoft }}>残り {stats.open}件</Typography>}
                   <ArrowUpRight size={16} color={tokens.color.faint} />
                 </Stack>
               </Surface>
@@ -184,71 +227,32 @@ export default function QualityPage() {
         })}
       </Box>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 3 }}>
-        <Surface>
-          <SectionTitle title="未完了の項目" sub={<StatusPill tone="warning" dot={false}>{openItems.length}件</StatusPill>} />
-          {openByCategory.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">すべての項目が完了しました。公開準備に進めます。</Typography>
-          ) : (
-            <Stack spacing={1.5}>
-              {openByCategory.map(({ category, items }) => {
-                const open = items.filter((i) => !isComplete(state.qualityChecks[i.id]));
-                return (
-                  <Box key={category.id} sx={{ p: 1.5, borderRadius: '14px', bgcolor: tokens.color.surfaceMuted }}>
-                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                      <Typography variant="h6">{category.no}. {category.title}</Typography>
-                      <Button size="small" onClick={() => setSelected(category)} endIcon={<ArrowUpRight size={14} />} aria-label={`${category.title}を開く`}>開く</Button>
-                    </Stack>
-                    <Stack spacing={0.75}>
-                      {open.slice(0, 3).map((i) => {
-                        const c = state.qualityChecks[i.id];
-                        return (
-                          <Stack key={i.id} direction="row" spacing={1} alignItems={{ xs: 'flex-start', sm: 'center' }}>
-                            <PriorityChip priority={i.priority} />
-                            <Typography variant="body2" sx={{ flex: 1, minWidth: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{i.text}</Typography>
-                            <Typography variant="caption" sx={{ flexShrink: 0 }}>{!c?.afroAt ? 'アフロ未確認' : '顧客未承認'}</Typography>
-                          </Stack>
-                        );
-                      })}
-                      {open.length > 3 && <Typography variant="caption">ほか {open.length - 3}件</Typography>}
-                    </Stack>
-                  </Box>
-                );
-              })}
-              {perCategory.filter((c) => c.stats.open > 0).length > openByCategory.length && (
-                <Typography variant="caption">ほか {perCategory.filter((c) => c.stats.open > 0).length - openByCategory.length}カテゴリに未完了があります</Typography>
-              )}
-            </Stack>
-          )}
-        </Surface>
-
-        <Surface>
-          <SectionTitle title="承認履歴" icon={<History size={18} color={tokens.color.muted} />} sub={<Typography variant="caption" sx={{ ml: 1 }}>タイムスタンプ付き</Typography>} />
-          <Box component="ol" sx={{ listStyle: 'none', m: 0, p: 0, maxHeight: 440, overflowY: 'auto', pr: 1 }} aria-label="承認履歴">
-            {state.approvalLogs.slice(0, 30).map((l, i, arr) => {
-              const afro = l.side === 'afro';
-              return (
-                <Box component="li" key={l.id} sx={{ display: 'grid', gridTemplateColumns: '20px 1fr', gap: 1.5 }}>
-                  <Box sx={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
-                    <Box sx={{ width: 10, height: 10, mt: 0.75, borderRadius: '50%', bgcolor: afro ? tokens.color.primary : tokens.color.success, boxShadow: `0 0 0 4px ${afro ? tokens.color.primarySoft : tokens.color.successSoft}`, zIndex: 1 }} />
-                    {i < arr.length - 1 && <Box sx={{ position: 'absolute', top: 20, bottom: -4, width: 2, bgcolor: tokens.color.border }} />}
-                  </Box>
-                  <Box sx={{ pb: 2, minWidth: 0 }}>
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
-                      <StatusPill tone={afro ? 'primary' : 'success'} dot={false}>{afro ? 'アフロ' : '顧客'}</StatusPill>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{l.action}</Typography>
-                    </Stack>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{l.target}</Typography>
-                    <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums' }}>
-                      {formatDateTime(l.at)}・{l.actor}・{relativeTime(l.at)}
-                    </Typography>
-                  </Box>
+      <Surface>
+        <SectionTitle title="承認履歴" icon={<History size={18} color={tokens.color.muted} />} sub={<Typography variant="caption" sx={{ ml: 1 }}>タイムスタンプ付き</Typography>} />
+        <Box component="ol" sx={{ listStyle: 'none', m: 0, p: 0, maxHeight: 440, overflowY: 'auto', pr: 1 }} aria-label="承認履歴">
+          {state.approvalLogs.slice(0, 30).map((l, i, arr) => {
+            const afro = l.side === 'afro';
+            return (
+              <Box component="li" key={l.id} sx={{ display: 'grid', gridTemplateColumns: '20px 1fr', gap: 1.5 }}>
+                <Box sx={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
+                  <Box sx={{ width: 10, height: 10, mt: 0.75, borderRadius: '50%', bgcolor: afro ? tokens.color.primary : tokens.color.success, boxShadow: `0 0 0 4px ${afro ? tokens.color.primarySoft : tokens.color.successSoft}`, zIndex: 1 }} />
+                  {i < arr.length - 1 && <Box sx={{ position: 'absolute', top: 20, bottom: -4, width: 2, bgcolor: tokens.color.border }} />}
                 </Box>
-              );
-            })}
-          </Box>
-        </Surface>
-      </Box>
+                <Box sx={{ pb: 2, minWidth: 0 }}>
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
+                    <StatusPill tone={afro ? 'primary' : 'success'} dot={false}>{afro ? 'アフロ' : '顧客'}</StatusPill>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{l.action}</Typography>
+                  </Stack>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{l.target}</Typography>
+                  <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                    {formatDateTime(l.at)}・{l.actor}・{relativeTime(l.at)}
+                  </Typography>
+                </Box>
+              </Box>
+            );
+          })}
+        </Box>
+      </Surface>
 
       <CategoryDetail category={selected} onClose={() => setSelected(null)} />
     </>
