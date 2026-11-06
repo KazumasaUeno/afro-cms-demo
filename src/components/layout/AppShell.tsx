@@ -1,6 +1,6 @@
 import { Box, ButtonBase, Drawer, IconButton, Menu, MenuItem, Tooltip, Typography, ListItemIcon } from '@mui/material';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeftRight, Check, ChevronDown, Menu as MenuIcon, Presentation, RotateCcw, Bell } from 'lucide-react';
+import { ArrowLeftRight, Check, ChevronDown, LogOut, Menu as MenuIcon, Presentation, RotateCcw, Bell } from 'lucide-react';
 import { Suspense, useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate, useOutlet } from 'react-router-dom';
 import { tokens } from '@/theme/tokens';
@@ -12,6 +12,7 @@ import { LogoMark } from './Logo';
 import { AREA_ORDER, AREAS, areaOf, CLIENT_PROJECT_ID, isActive, SETTINGS_ITEM, type AreaDef } from './nav';
 import { ResetDemoDialog } from './ResetDemoDialog';
 import { RouteLoader } from './RouteLoader';
+import { LOGIN_PATH, logoutArea, useSessions } from '@/services/session';
 
 function ProjectSwitcher() {
   const { state, dispatch } = useDemo();
@@ -55,10 +56,11 @@ function ProjectSwitcher() {
   );
 }
 
-/** 立場（管理者 / CMS / お客様ポータル）の切替。ログインの代わりにデモで使う */
+/** 立場（管理者 / 開発者 / お客様ポータル）の切替。未ログインの画面はそのログイン画面へ */
 function AreaSwitcher({ area }: { area: AreaDef }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const navigate = useNavigate();
+  const sessions = useSessions();
   const Icon = area.icon;
   return (
     <>
@@ -79,7 +81,7 @@ function AreaSwitcher({ area }: { area: AreaDef }) {
         </ButtonBase>
       </Tooltip>
       <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)} slotProps={{ paper: { sx: { width: 320, maxWidth: 'calc(100vw - 32px)' } } }}>
-        <Typography variant="overline" component="div" sx={{ px: 2, pt: 0.5, pb: 1 }}>表示する画面（デモではログインの代わり）</Typography>
+        <Typography variant="overline" component="div" sx={{ px: 2, pt: 0.5, pb: 1 }}>表示する画面</Typography>
         {AREA_ORDER.map((id) => {
           const a = AREAS[id];
           const AIcon = a.icon;
@@ -89,7 +91,7 @@ function AreaSwitcher({ area }: { area: AreaDef }) {
               selected={id === area.id}
               onClick={() => {
                 setAnchor(null);
-                if (id !== area.id) navigate(a.home);
+                if (id !== area.id) navigate(sessions[id] ? a.home : LOGIN_PATH[id]);
               }}
               sx={{ py: 1.25, gap: 1.5, alignItems: 'flex-start', whiteSpace: 'normal' }}
             >
@@ -100,6 +102,7 @@ function AreaSwitcher({ area }: { area: AreaDef }) {
                   <Box component="span" sx={{ ml: 1, fontSize: 12, fontWeight: 500, color: tokens.color.muted }}>{a.audience}</Box>
                 </Typography>
                 <Typography variant="caption" sx={{ display: 'block' }}>{a.description}</Typography>
+                {!sessions[id] && <Typography variant="caption" sx={{ display: 'block', mt: 0.25, fontWeight: 600, color: tokens.color.inkSoft }}>未ログイン — ログイン画面へ移動します</Typography>}
               </Box>
               {id === area.id && <Check size={16} color={a.color} style={{ marginTop: 8, flexShrink: 0 }} />}
             </MenuItem>
@@ -160,6 +163,18 @@ function TopBar({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
           <Presentation size={19} />
         </IconButton>
       </Tooltip>}
+      <Tooltip title={`${area.label}からログアウト`}>
+        <IconButton
+          aria-label={`${area.label}からログアウト`}
+          onClick={() => {
+            logoutArea(area.id);
+            navigate(LOGIN_PATH[area.id], { replace: true });
+          }}
+          sx={{ minWidth: 44, minHeight: 44, mr: { xs: -1, md: 0 } }}
+        >
+          <LogOut size={18} />
+        </IconButton>
+      </Tooltip>
       <ResetDemoDialog open={resetOpen} onClose={() => setResetOpen(false)} />
     </Box>
   );

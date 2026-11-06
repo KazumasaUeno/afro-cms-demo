@@ -19,7 +19,7 @@ export interface NavItem {
  * - admin: アフロ社内の管理者画面（制作の全工程を進める）
  * - portal: お客様の画面（進み具合の確認・承認・ページ更新・レポート）
  * - dev: アフロの制作エンジニアの画面（構築タスク・自動チェック・環境とデプロイ）
- * ログイン・権限はデモの対象外のため、上部の切替で立場を選ぶ。
+ * エリアごとにログイン画面（/login・/dev/login・/portal/login）がある。デモのため実際の認証・権限制御は行わない。
  */
 export type AreaId = 'admin' | 'portal' | 'dev';
 

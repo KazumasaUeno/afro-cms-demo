@@ -2,7 +2,9 @@ import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate, RouterProvider, useLocation } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { RouteLoader } from '@/components/layout/RouteLoader';
+import { AreaGuard } from '@/components/layout/AreaGuard';
 import HomePage from '@/features/home/HomePage';
+import LoginPage from '@/features/auth/LoginPage';
 
 // 重いライブラリ（React Flow / Tiptap / Recharts / GSAP）を使う画面は遅延読み込み
 const ProjectsPage = lazy(() => import('@/features/projects/ProjectsPage'));
@@ -33,9 +35,16 @@ function LegacyCmsRedirect() {
 }
 
 const router = createBrowserRouter([
+  // エリアごとのログイン画面（AppShell の外。デモのため実際の認証は行わない）
+  { path: '/login', element: <LoginPage area="admin" /> },
+  { path: '/dev/login', element: <LoginPage area="dev" /> },
+  { path: '/portal/login', element: <LoginPage area="portal" /> },
+  // 旧 CMS画面の URL（0.4.0）はポータルのページ編集へ（転送先でポータルのログインを確認する）
+  { path: '/cms/*', element: <LegacyCmsRedirect /> },
   {
     path: '/',
-    element: <AppShell />,
+    // 未ログインのエリアはそのエリアのログイン画面へ（?next= で戻り先を渡す）
+    element: <AreaGuard><AppShell /></AreaGuard>,
     children: [
       { index: true, element: <HomePage /> },
       { path: 'projects', element: <ProjectsPage /> },
@@ -51,8 +60,6 @@ const router = createBrowserRouter([
       { path: 'dev/tasks', element: <DevTasksPage /> },
       { path: 'dev/checks', element: <DevChecksPage /> },
       { path: 'dev/deploys', element: <DevDeploysPage /> },
-      // 旧 CMS画面の URL（0.4.0）はポータルのページ編集へ
-      { path: 'cms/*', element: <LegacyCmsRedirect /> },
       { path: 'portal', element: <PortalHomePage /> },
       { path: 'portal/approvals', element: <PortalApprovalsPage /> },
       { path: 'portal/quality', element: <PortalQualityPage /> },

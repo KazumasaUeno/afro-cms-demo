@@ -18,7 +18,7 @@ export function ResetDemoDialog({ open, onClose, onDone }: { open: boolean; onCl
           <Typography id="reset-title" variant="h3">デモを初期状態に戻しますか？</Typography>
           <Typography variant="body2" color="text.secondary">
             入力した回答・サイトマップの編集・品質チェック・CMS のページ・診断履歴がすべて最初の状態に戻ります。
-            このブラウザに保存されたデモデータだけが対象です。
+            このブラウザに保存されたデモデータだけが対象です（ログイン状態はそのまま残ります）。
           </Typography>
         </Stack>
       </DialogContent>
