@@ -15,8 +15,9 @@ export const stageIndex = (s: Stage) => STAGES.findIndex((x) => x.id === s);
 export const seedProjects = (): Project[] => [
   {
     id: 'p1', clientName: '株式会社ミナモ珈琲', siteName: 'MINAMO COFFEE', siteUrl: 'https://minamo-coffee.example.jp',
-    industry: '飲食・EC', stage: 'build', progress: 46, ownerId: 'm1', updatedAt: hoursAgo(1.5),
-    nextAction: 'デザイン案の採用を決める', accent: '#B45309', launchDate: daysFromNow(38), pendingApprovals: 2,
+    industry: '飲食・EC', stage: 'requirements', progress: 12, ownerId: 'm1', updatedAt: hoursAgo(1.5),
+    // デモは要件定義（AI ウィザード）から始めるので、初期の要件データ（draft）と段階をそろえる
+    nextAction: 'AI要件定義を始める', accent: '#B45309', launchDate: daysFromNow(38), pendingApprovals: 2,
   },
   {
     id: 'p2', clientName: '北条建設株式会社', siteName: 'HOJO Construction', siteUrl: 'https://hojo-kensetsu.example.jp',

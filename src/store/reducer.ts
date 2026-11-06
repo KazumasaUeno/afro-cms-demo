@@ -48,8 +48,8 @@ const DEV_ACTOR = memberById(DEV_USER_ID).name;
 let seq = 0;
 const uid = (p: string) => `${p}-${Date.now().toString(36)}-${(seq++).toString(36)}`;
 
-function log(state: DemoState, text: string, kind: Activity['kind'], actor: string = ACTOR.afro): DemoState {
-  const a: Activity = { id: uid('act'), at: nowIso(), actor, text, kind, projectId: state.currentProjectId };
+function log(state: DemoState, text: string, kind: Activity['kind'], actor: string = ACTOR.afro, projectId: string = state.currentProjectId): DemoState {
+  const a: Activity = { id: uid('act'), at: nowIso(), actor, text, kind, projectId };
   return { ...state, activities: [a, ...state.activities].slice(0, 60) };
 }
 
@@ -58,12 +58,19 @@ function approval(state: DemoState, side: 'afro' | 'client', action: string, tar
   return { ...state, approvalLogs: [l, ...state.approvalLogs].slice(0, 100) };
 }
 
-function patchCurrent(state: DemoState, patch: Partial<Project>): DemoState {
+/**
+ * 要件・サイトマップ・デザインのデータは 1 案件分（requirements.projectId）だけ持つ。
+ * それらの承認で進める案件は、画面で選んでいる案件ではなくデータの持ち主にする
+ */
+function patchOwner(state: DemoState, patch: Partial<Project>): DemoState {
+  const id = state.requirements.projectId;
   return {
     ...state,
-    projects: state.projects.map((p) => (p.id === state.currentProjectId ? { ...p, ...patch, updatedAt: nowIso() } : p)),
+    projects: state.projects.map((p) => (p.id === id ? { ...p, ...patch, updatedAt: nowIso() } : p)),
   };
 }
+
+const ownerProject = (state: DemoState): Project => state.projects.find((p) => p.id === state.requirements.projectId) ?? currentProject(state);
 
 const STATUS_LABEL: Record<PageStatus, string> = { draft: '下書き保存', review: '承認依頼', scheduled: '予約公開', published: '公開' };
 
@@ -98,15 +105,15 @@ export function reducer(state: DemoState, action: Action): DemoState {
 
     case 'completeAnalysis': {
       const s = { ...state, requirements: { ...state.requirements, status: 'analyzed' as const, analyzedAt: nowIso() } };
-      return log(s, 'AI要件分析を完了し、改善提案書を作成しました', 'ai', 'AI');
+      return log(s, 'AI要件分析を完了し、改善提案書を作成しました', 'ai', 'AI', state.requirements.projectId);
     }
 
     case 'approveRequirements': {
-      const s = patchCurrent(
+      const s = patchOwner(
         { ...state, requirements: { ...state.requirements, status: 'approved', approvedAt: nowIso() } },
-        { stage: 'build', progress: Math.max(25, currentProject(state).progress), nextAction: 'サイトマップを承認する' },
+        { stage: 'build', progress: Math.max(25, ownerProject(state).progress), nextAction: 'サイトマップを承認する' },
       );
-      return log(approval(s, 'client', '要件定義書を承認', '要件定義'), '要件定義書を承認しました', 'approve', ACTOR[action.by ?? 'afro']);
+      return log(approval(s, 'client', '要件定義書を承認', '要件定義'), '要件定義書を承認しました', 'approve', ACTOR[action.by ?? 'afro'], state.requirements.projectId);
     }
 
     case 'resetRequirements':
@@ -116,10 +123,10 @@ export function reducer(state: DemoState, action: Action): DemoState {
       return { ...state, sitemap: { ...state.sitemap, [action.variant]: { nodes: action.nodes, edges: action.edges } } };
 
     case 'approveSitemap': {
-      const s = patchCurrent({ ...state, sitemap: { ...state.sitemap, approvedAt: nowIso() } }, {
-        progress: Math.max(38, currentProject(state).progress), nextAction: 'デザイン案の採用を決める',
+      const s = patchOwner({ ...state, sitemap: { ...state.sitemap, approvedAt: nowIso() } }, {
+        progress: Math.max(38, ownerProject(state).progress), nextAction: 'デザイン案の採用を決める',
       });
-      return log(approval(s, 'client', 'サイトマップを承認', '制作 / サイトマップ'), '改善後のサイトマップを承認しました', 'approve', ACTOR[action.by ?? 'afro']);
+      return log(approval(s, 'client', 'サイトマップを承認', '制作 / サイトマップ'), '改善後のサイトマップを承認しました', 'approve', ACTOR[action.by ?? 'afro'], state.requirements.projectId);
     }
 
     case 'selectDesign':
@@ -127,20 +134,20 @@ export function reducer(state: DemoState, action: Action): DemoState {
 
     case 'approveDesign': {
       if (!state.design.selected) return state;
-      const s = patchCurrent({ ...state, design: { ...state.design, approvedAt: nowIso() } }, {
-        progress: Math.max(52, currentProject(state).progress), nextAction: '全ページを構築する',
+      const s = patchOwner({ ...state, design: { ...state.design, approvedAt: nowIso() } }, {
+        progress: Math.max(52, ownerProject(state).progress), nextAction: '全ページを構築する',
       });
-      return log(approval(s, 'client', 'トップデザインを承認', `制作 / デザイン（${state.design.selected}）`), 'トップデザイン案を採用・承認しました', 'approve', ACTOR[action.by ?? 'afro']);
+      return log(approval(s, 'client', 'トップデザインを承認', `制作 / デザイン（${state.design.selected}）`), 'トップデザイン案を採用・承認しました', 'approve', ACTOR[action.by ?? 'afro'], state.requirements.projectId);
     }
 
     case 'startBuild':
       return { ...state, design: { ...state.design, buildStartedAt: nowIso() } };
 
     case 'completeBuild': {
-      const s = patchCurrent({ ...state, design: { ...state.design, buildCompletedAt: nowIso() } }, {
-        stage: 'quality', progress: Math.max(64, currentProject(state).progress), nextAction: '品質チェック（110問）を進める',
+      const s = patchOwner({ ...state, design: { ...state.design, buildCompletedAt: nowIso() } }, {
+        stage: 'quality', progress: Math.max(64, ownerProject(state).progress), nextAction: '品質チェック（110問）を進める',
       });
-      return log(s, '採用デザインをもとに全 9 ページを構築しました（シミュレーション）', 'ai', 'AI');
+      return log(s, '採用デザインをもとに全 9 ページを構築しました（シミュレーション）', 'ai', 'AI', state.requirements.projectId);
     }
 
     case 'toggleQuality': {
