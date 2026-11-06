@@ -1,6 +1,6 @@
 import {
-  BarChart3, Building2, ClipboardCheck, FileText, FolderKanban, House, LayoutDashboard, LayoutTemplate, ListChecks, Network,
-  ScrollText, Settings, ShieldCheck, Sparkles, Stamp, UserRound, type LucideIcon,
+  BarChart3, Building2, ClipboardCheck, Code2, FileText, FolderKanban, Gauge, House, LayoutDashboard, ListChecks, ListTodo, Network,
+  Rocket, ScrollText, Settings, ShieldCheck, Sparkles, Stamp, UserRound, type LucideIcon,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -17,11 +17,11 @@ export interface NavItem {
 /**
  * 立場ごとの画面（エリア）。
  * - admin: アフロ社内の管理者画面（制作の全工程を進める）
- * - cms: お客様が自社サイトを更新する CMS
- * - portal: お客様が進み具合の確認・承認・レポート閲覧をするポータル
+ * - portal: お客様の画面（進み具合の確認・承認・ページ更新・レポート）
+ * - dev: アフロの制作エンジニアの画面（構築タスク・自動チェック・環境とデプロイ）
  * ログイン・権限はデモの対象外のため、上部の切替で立場を選ぶ。
  */
-export type AreaId = 'admin' | 'cms' | 'portal';
+export type AreaId = 'admin' | 'portal' | 'dev';
 
 export interface AreaDef {
   id: AreaId;
@@ -52,17 +52,20 @@ const ADMIN_ITEMS: NavItem[] = [
   { to: '/insights', label: 'インサイト', icon: BarChart3, match: ['/insights'], hint: '解析と改善提案' },
 ];
 
-const CMS_ITEMS: NavItem[] = [
-  { to: '/cms', label: 'ダッシュボード', icon: LayoutDashboard, match: ['/cms'], exact: true, hint: '更新状況' },
-  { to: '/cms/pages', label: 'ページ・お知らせ', icon: FileText, match: ['/cms/pages'], hint: '編集と公開' },
-  { to: '/cms/approvals', label: '公開承認', icon: Stamp, match: ['/cms/approvals'], hint: '承認ワークフロー' },
-];
-
 const PORTAL_ITEMS: NavItem[] = [
   { to: '/portal', label: 'ホーム', icon: House, match: ['/portal'], exact: true, hint: '制作の進み具合' },
   { to: '/portal/approvals', label: '確認・承認', icon: ClipboardCheck, match: ['/portal/approvals'], hint: '要件・サイトマップ・デザイン' },
   { to: '/portal/quality', label: '品質確認', icon: ListChecks, match: ['/portal/quality'], hint: 'お客様側のチェック' },
+  { to: '/portal/pages', label: 'ページ・お知らせ', icon: FileText, match: ['/portal/pages'], hint: '編集と公開' },
+  { to: '/portal/publish', label: '公開承認', icon: Stamp, match: ['/portal/publish'], hint: '更新の承認ワークフロー' },
   { to: '/portal/reports', label: 'レポート', icon: ScrollText, match: ['/portal/reports'], hint: '改善診断' },
+];
+
+const DEV_ITEMS: NavItem[] = [
+  { to: '/dev', label: 'ダッシュボード', icon: LayoutDashboard, match: ['/dev'], exact: true, hint: '今日の作業' },
+  { to: '/dev/tasks', label: '構築タスク', icon: ListTodo, match: ['/dev/tasks'], hint: 'ページごとの実装状況' },
+  { to: '/dev/checks', label: '自動チェック', icon: Gauge, match: ['/dev/checks'], hint: '品質チェック A 区分' },
+  { to: '/dev/deploys', label: '環境・デプロイ', icon: Rocket, match: ['/dev/deploys'], hint: '開発・検証・本番' },
 ];
 
 export const SETTINGS_ITEM: NavItem = { to: '/settings', label: '設定', icon: Settings, match: ['/settings'], hint: 'デモの設定' };
@@ -74,27 +77,27 @@ export const AREAS: Record<AreaId, AreaDef> = {
     color: '#3B5BDB', soft: '#EEF2FF',
     items: ADMIN_ITEMS, bottom: [ADMIN_ITEMS[0], ADMIN_ITEMS[1], ADMIN_ITEMS[2], ADMIN_ITEMS[4]], settings: SETTINGS_ITEM,
   },
-  cms: {
-    id: 'cms', label: 'CMS画面', short: 'CMS', audience: 'お客様',
-    description: 'ページ・お知らせの更新と公開', home: '/cms', icon: LayoutTemplate,
-    color: '#B45309', soft: '#FDF3E7',
-    items: CMS_ITEMS, bottom: CMS_ITEMS,
-  },
   portal: {
     id: 'portal', label: 'お客様ポータル', short: 'ポータル', audience: 'お客様',
-    description: '進み具合の確認・承認・レポート', home: '/portal', icon: UserRound,
+    description: '進み具合の確認・承認・ページ更新・レポート', home: '/portal', icon: UserRound,
     color: '#0F9D74', soft: '#E7F7F1',
-    items: PORTAL_ITEMS, bottom: PORTAL_ITEMS,
+    items: PORTAL_ITEMS, bottom: [PORTAL_ITEMS[0], PORTAL_ITEMS[1], PORTAL_ITEMS[3], PORTAL_ITEMS[5]],
+  },
+  dev: {
+    id: 'dev', label: '開発者画面', short: '開発者', audience: 'アフロ制作エンジニア',
+    description: '構築タスク・自動チェック・環境とデプロイ', home: '/dev', icon: Code2,
+    color: '#7C5CFA', soft: '#F3F0FF',
+    items: DEV_ITEMS, bottom: [{ ...DEV_ITEMS[0], label: 'ホーム' }, DEV_ITEMS[1], DEV_ITEMS[2], DEV_ITEMS[3]],
   },
 };
 
-export const AREA_ORDER: AreaId[] = ['admin', 'cms', 'portal'];
+export const AREA_ORDER: AreaId[] = ['admin', 'dev', 'portal'];
 
-/** お客様側の画面が扱う案件（デモのデータは MINAMO COFFEE の 1 案件分だけ持っている） */
+/** お客様ポータル・開発者画面が扱う案件（デモのデータは MINAMO COFFEE の 1 案件分だけ持っている） */
 export const CLIENT_PROJECT_ID = 'p1';
 
 export function areaOf(pathname: string): AreaId {
-  if (pathname === '/cms' || pathname.startsWith('/cms/')) return 'cms';
+  if (pathname === '/dev' || pathname.startsWith('/dev/')) return 'dev';
   if (pathname === '/portal' || pathname.startsWith('/portal/')) return 'portal';
   return 'admin';
 }

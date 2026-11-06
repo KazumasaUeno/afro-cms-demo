@@ -1,10 +1,11 @@
 import type {
-  Activity, AnswerValue, ApprovalLog, CmsPage, DemoState, DesignId, DiagnosisReport,
+  Activity, AnswerValue, ApprovalLog, CmsPage, DemoState, DeployEnv, DesignId, DevState, DevTaskStatus, DiagnosisReport,
   PageStatus, Project, QuestionPriority, SitemapEdge, SitemapNode, SitemapVariant,
 } from '@/types';
 import { QUALITY_CATEGORIES, QUALITY_ITEMS } from '@/data/quality';
 import { nowIso } from '@/services/time';
 import { createSeedState } from './seed';
+import { DEV_ENVS, DEV_TASK_STATUSES, deployGate, seedDev } from '@/data/dev';
 
 /** 操作した側。省略時はアフロ（管理者画面）。お客様の画面（CMS・ポータル）からは client を渡す */
 export type Side = 'afro' | 'client';
@@ -31,10 +32,16 @@ export type Action =
   /** 承認ワークフロー: 承認依頼中のページを承認して公開する / コメントを付けて差し戻す */
   | { type: 'reviewPage'; id: string; decision: 'approve' | 'reject'; comment?: string; by?: Side }
   | { type: 'addDiagnosis'; report: Omit<DiagnosisReport, 'id' | 'at' | 'cycle'> }
-  | { type: 'updateSettings'; patch: Partial<DemoState['settings']> };
+  | { type: 'updateSettings'; patch: Partial<DemoState['settings']> }
+  /** 開発者画面（操作者は制作エンジニア） */
+  | { type: 'setDevTaskStatus'; id: string; status: DevTaskStatus }
+  | { type: 'runAutoChecks' }
+  | { type: 'deploy'; env: DeployEnv };
 
 /** 操作した人（デモでは固定） */
 const ACTOR = { afro: '上野 航', client: 'ミナモ珈琲 担当者' } as const;
+/** 開発者画面の操作者（アフロ側の制作エンジニア） */
+const DEV_ACTOR = '黒田 蓮';
 
 let seq = 0;
 const uid = (p: string) => `${p}-${Date.now().toString(36)}-${(seq++).toString(36)}`;
@@ -44,8 +51,8 @@ function log(state: DemoState, text: string, kind: Activity['kind'], actor: stri
   return { ...state, activities: [a, ...state.activities].slice(0, 60) };
 }
 
-function approval(state: DemoState, side: 'afro' | 'client', action: string, target: string): DemoState {
-  const l: ApprovalLog = { id: uid('log'), at: nowIso(), actor: ACTOR[side], side, action, target };
+function approval(state: DemoState, side: 'afro' | 'client', action: string, target: string, actor: string = ACTOR[side]): DemoState {
+  const l: ApprovalLog = { id: uid('log'), at: nowIso(), actor, side, action, target };
   return { ...state, approvalLogs: [l, ...state.approvalLogs].slice(0, 100) };
 }
 
@@ -207,9 +214,51 @@ export function reducer(state: DemoState, action: Action): DemoState {
     case 'updateSettings':
       return { ...state, settings: { ...state.settings, ...action.patch } };
 
+    case 'setDevTaskStatus': {
+      const dev = devState(state);
+      const task = dev.tasks.find((t) => t.id === action.id);
+      if (!task || task.status === action.status) return state;
+      const tasks = dev.tasks.map((t) => (t.id === task.id ? { ...t, status: action.status, updatedAt: nowIso() } : t));
+      const label = DEV_TASK_STATUSES.find((x) => x.id === action.status)?.label ?? action.status;
+      return log({ ...state, dev: { ...dev, tasks } }, `構築タスク「${task.title}」を${label}にしました`, 'edit', DEV_ACTOR);
+    }
+
+    case 'runAutoChecks': {
+      const at = nowIso();
+      const dev = devState(state);
+      const checks = { ...state.qualityChecks };
+      let count = 0;
+      for (const t of QUALITY_ITEMS) {
+        if (t.priority !== 'A' || checks[t.id]?.afroAt) continue;
+        checks[t.id] = { ...checks[t.id], afroAt: at, afroBy: DEV_ACTOR };
+        count++;
+      }
+      let s: DemoState = { ...state, qualityChecks: checks, dev: { ...dev, checksRunAt: at } };
+      // 新たに確認した項目が無い再実行は、実行日時だけ更新する（アクティビティに「0件」を積まない）
+      if (count === 0) return s;
+      s = approval(s, 'afro', `自動チェックで A区分を確認（${count}件）`, '全カテゴリ', DEV_ACTOR);
+      return log(s, `自動チェックを実行しました（A区分 ${count}件を新たに確認・シミュレーション）`, 'check', DEV_ACTOR);
+    }
+
+    case 'deploy': {
+      const dev = devState(state);
+      const gate = deployGate(dev, action.env, state.design.approvedAt);
+      if (!gate.ok || !gate.version) return state;
+      const env = DEV_ENVS.find((e) => e.id === action.env);
+      const note = action.env === 'development' ? '最新の作業内容を反映' : `v${gate.version} を${action.env === 'staging' ? '開発環境' : '検証環境'}から昇格`;
+      const deploy = { id: uid('dep'), env: action.env, version: gate.version, at: nowIso(), by: DEV_ACTOR, status: 'success' as const, note };
+      const s: DemoState = { ...state, dev: { ...dev, deploys: [deploy, ...dev.deploys].slice(0, 50) } };
+      return log(s, `${env?.label ?? action.env}へ v${gate.version} をデプロイしました（シミュレーション）`, 'publish', DEV_ACTOR);
+    }
+
     default:
       return state;
   }
+}
+
+/** 開発者画面のデータ（0.5.0 より前の保存データには無いので初期値で補う） */
+export function devState(state: DemoState): DevState {
+  return state.dev ?? seedDev();
 }
 
 export function currentProject(state: DemoState): Project {

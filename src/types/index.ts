@@ -225,6 +225,42 @@ export interface Activity {
   projectId?: string;
 }
 
+/* ---------- 開発者画面（アフロ制作エンジニア） ---------- */
+
+export type DevTaskStatus = 'todo' | 'doing' | 'review' | 'done';
+
+/** 構築タスク（1 ページ = 1 タスク） */
+export interface DevTask {
+  id: string;
+  /** 対象ページ名（BUILD_PAGES のいずれか） */
+  page: string;
+  title: string;
+  assigneeId: string;
+  status: DevTaskStatus;
+  updatedAt: ISODate;
+}
+
+export type DeployEnv = 'development' | 'staging' | 'production';
+
+/** デプロイ履歴（シミュレーション。実際のサーバーへは公開しない） */
+export interface Deploy {
+  id: string;
+  env: DeployEnv;
+  /** semver（例: 1.4.2） */
+  version: string;
+  at: ISODate;
+  by: string;
+  status: 'success' | 'failed';
+  note: string;
+}
+
+export interface DevState {
+  tasks: DevTask[];
+  /** 新しい順 */
+  deploys: Deploy[];
+  checksRunAt?: ISODate;
+}
+
 /* ---------- ストア全体 ---------- */
 
 export interface DemoState {
@@ -241,4 +277,6 @@ export interface DemoState {
   diagnoses: DiagnosisReport[];
   activities: Activity[];
   settings: { reducedMotion: 'system' | 'on' | 'off'; companyName: string };
+  /** 開発者画面のデータ。0.5.0 で追加したため、それ以前の保存データには無い（devState() で補う） */
+  dev?: DevState;
 }

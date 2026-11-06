@@ -1,5 +1,8 @@
 import type { DesignVariant } from '@/types';
 
+/** 採用デザインから構築するページ（全ページ構築の演出・開発者画面の構築タスクの両方がここを参照する） */
+export const BUILD_PAGES = ['トップ', 'ストーリー', 'オンラインショップ', 'シングルオリジン', '法人ギフト', 'カフェ・店舗', 'ジャーナル', 'よくある質問', 'お問い合わせ'];
+
 export const DESIGN_VARIANTS: DesignVariant[] = [
   {
     id: 'minimal', label: 'Design A', name: 'ミニマル', tagline: '余白で語る、静かな上質',

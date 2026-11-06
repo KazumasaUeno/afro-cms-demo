@@ -80,15 +80,17 @@ function AdminFooter({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-/** お客様側の画面: 誰としてログインしているか（デモでは固定）と担当者 */
-function ClientFooter({ area }: { area: AreaDef }) {
+/** お客様ポータル・開発者画面: 誰としてログインしているか（デモでは固定）と案件の担当 */
+function AreaFooter({ area }: { area: AreaDef }) {
   const { state } = useDemo();
   const project = currentProject(state);
-  const owner = memberById(project.ownerId);
+  const dev = area.id === 'dev';
+  // 開発者画面は担当エンジニア（デモでは黒田）、ポータルは担当ディレクター
+  const person = memberById(dev ? 'm3' : project.ownerId);
   return (
     <Box sx={{ p: 1.5, borderRadius: 3, border: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface }}>
-      <Typography variant="overline" sx={{ display: 'block', lineHeight: 1.4 }}>{area.id === 'cms' ? '公開中のサイト' : '担当ディレクター'}</Typography>
-      {area.id === 'cms' ? (
+      <Typography variant="overline" sx={{ display: 'block', lineHeight: 1.4 }}>{dev ? '担当案件' : '担当ディレクター'}</Typography>
+      {dev ? (
         <>
           <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.75 }}>
             <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: project.accent, flexShrink: 0 }} />
@@ -101,15 +103,15 @@ function ClientFooter({ area }: { area: AreaDef }) {
         </>
       ) : (
         <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mt: 0.75 }}>
-          <MemberAvatar id={owner.id} size={30} />
+          <MemberAvatar id={person.id} size={30} />
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="body2" sx={{ fontWeight: 650 }} noWrap>{owner.name}</Typography>
-            <Typography variant="caption" noWrap sx={{ display: 'block' }}>アフロ株式会社・{owner.role}</Typography>
+            <Typography variant="body2" sx={{ fontWeight: 650 }} noWrap>{person.name}</Typography>
+            <Typography variant="caption" noWrap sx={{ display: 'block' }}>アフロ株式会社・{person.role}</Typography>
           </Box>
         </Stack>
       )}
       <Typography variant="caption" sx={{ display: 'block', mt: 1, pt: 1, borderTop: `1px solid ${tokens.color.border}` }} noWrap>
-        ログイン中: {project.clientName}
+        ログイン中: {dev ? `${person.name}（${person.role}）` : project.clientName}
       </Typography>
     </Box>
   );
@@ -133,7 +135,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       <Box sx={{ flex: 1 }} />
 
-      {area.id === 'admin' ? <AdminFooter onNavigate={onNavigate} /> : <ClientFooter area={area} />}
+      {area.id === 'admin' ? <AdminFooter onNavigate={onNavigate} /> : <AreaFooter area={area} />}
 
       {area.settings && <NavRow item={area.settings} color={area.color} onNavigate={onNavigate} />}
     </Stack>

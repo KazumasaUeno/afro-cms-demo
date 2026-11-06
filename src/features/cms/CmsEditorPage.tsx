@@ -165,7 +165,7 @@ export default function CmsEditorPage() {
   return (
     <>
       <PageHeader
-        eyebrow="CMS画面"
+        eyebrow="お客様ポータル"
         icon={<LayoutTemplate size={15} />}
         title="ページ・お知らせ"
         description="ページとお知らせを編集し、承認を経て公開します。公開はデモ上の状態変更のみで、実際のサーバーには反映されません。"

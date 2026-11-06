@@ -4,14 +4,14 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BuildFlowNav } from '@/components/layout/BuildFlowNav';
 import { AiBadge, PageHeader, Reveal, StatusPill, Surface } from '@/components/ui';
-import { DESIGN_VARIANTS } from '@/data/designs';
+import { BUILD_PAGES, DESIGN_VARIANTS } from '@/data/designs';
 import { useDemo } from '@/store/DemoStore';
 import { useToast } from '@/hooks/useToast';
 import { formatDateTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
 import type { DesignId, DesignVariant } from '@/types';
 import { DeviceFrame } from './DeviceFrame';
-import { BuildSequence, BUILD_PAGES } from './BuildSequence';
+import { BuildSequence } from './BuildSequence';
 import type { Device } from './previews/shared';
 
 const DEVICES: { id: Device; label: string; icon: typeof Monitor }[] = [
@@ -193,7 +193,7 @@ export default function DesignStudioPage() {
                 <Typography variant="body2" color="text.secondary">{selectedVariant?.name}デザインで構築 · {formatDateTime(design.buildCompletedAt)}（シミュレーション）。次は品質チェックとページ編集へ。</Typography>
               </Box>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                <Button variant="outlined" startIcon={<PenLine size={16} />} onClick={() => navigate('/cms/pages')}>CMSで編集</Button>
+                <Button variant="outlined" startIcon={<PenLine size={16} />} onClick={() => navigate('/portal/pages')}>CMSで編集</Button>
                 <Button variant="contained" startIcon={<ShieldCheck size={16} />} onClick={() => navigate('/quality')}>品質チェックへ</Button>
               </Stack>
             </Stack>

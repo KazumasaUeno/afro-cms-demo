@@ -1,5 +1,5 @@
 import { Box, Button, ButtonBase, Stack, Typography } from '@mui/material';
-import { ArrowRight, BadgeCheck, CalendarDays, Clock3, House, Lock, MessageSquare, Stamp } from 'lucide-react';
+import { ArrowRight, BadgeCheck, CalendarDays, Clock3, House, Lock, Megaphone, MessageSquare, PenLine, Stamp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { MemberAvatar, PageHeader, ProgressRing, Reveal, SectionTitle, StageTrack, StatusPill, Surface } from '@/components/ui';
 import { useDemo, currentProject } from '@/store/DemoStore';
@@ -10,8 +10,18 @@ import { STAGES, stageIndex } from '@/data/projects';
 import { tokens } from '@/theme/tokens';
 import { AREAS } from '@/components/layout/nav';
 import { approvalSteps } from './portalSteps';
+import type { PageStatus } from '@/types';
+import type { PillTone } from '@/components/ui';
 
 const AREA = AREAS.portal;
+
+/** サイトの更新カードに出す順（公開中を先頭に） */
+const SITE_STATUSES: { id: PageStatus; label: string; tone: PillTone }[] = [
+  { id: 'published', label: '公開中', tone: 'success' },
+  { id: 'review', label: '承認待ち', tone: 'warning' },
+  { id: 'scheduled', label: '予約公開', tone: 'info' },
+  { id: 'draft', label: '下書き', tone: 'neutral' },
+];
 
 export default function PortalHomePage() {
   const { state } = useDemo();
@@ -24,6 +34,7 @@ export default function PortalHomePage() {
   const cmsReview = state.pages.filter((p) => p.status === 'review').length;
   const stage = STAGES[stageIndex(project.stage)];
   const daysLeft = project.launchDate ? Math.max(0, Math.ceil((new Date(project.launchDate).getTime() - Date.now()) / 86400000)) : null;
+  const pageCounts = SITE_STATUSES.map((x) => ({ ...x, count: state.pages.filter((p) => p.status === x.id).length }));
   const activities = state.activities.filter((a) => !a.projectId || a.projectId === project.id).slice(0, 6);
 
   return (
@@ -112,13 +123,13 @@ export default function PortalHomePage() {
               })}
               {cmsReview > 0 && (
                 <ButtonBase
-                  onClick={() => navigate('/cms/approvals')}
+                  onClick={() => navigate('/portal/publish')}
                   sx={{ justifyContent: 'flex-start', gap: 1.5, textAlign: 'left', borderRadius: 3, p: 1.5, border: `1px solid ${tokens.color.border}`, '&:hover': { borderColor: tokens.color.borderStrong } }}
                 >
-                  <Box sx={{ width: 34, height: 34, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center', bgcolor: AREAS.cms.soft, color: AREAS.cms.color }}><Stamp size={16} /></Box>
+                  <Box sx={{ width: 34, height: 34, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center', bgcolor: tokens.color.warningSoft, color: tokens.color.warning }}><Stamp size={16} /></Box>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 650 }}>CMS の公開承認</Typography>
-                    <Typography variant="caption" sx={{ display: 'block' }}>承認待ちの更新が {cmsReview} 件あります（CMS画面へ移動）</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 650 }}>ページ・お知らせの公開承認</Typography>
+                    <Typography variant="caption" sx={{ display: 'block' }}>承認待ちの更新が {cmsReview} 件あります</Typography>
                   </Box>
                   <ArrowRight size={16} color={tokens.color.muted} />
                 </ButtonBase>
@@ -127,6 +138,25 @@ export default function PortalHomePage() {
           </Surface>
 
           <Stack spacing={{ xs: 2.5, md: 3 }}>
+            {/* サイトの更新（ページ・お知らせ） */}
+            <Surface>
+              <SectionTitle title="サイトの更新" sub={<Typography variant="caption">ページ・お知らせ {state.pages.length} 件</Typography>} />
+              <Box component="dl" sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 1, m: 0 }}>
+                {pageCounts.map((c) => (
+                  <Box key={c.id} sx={{ p: 1.25, borderRadius: `${tokens.radius.md}px`, bgcolor: tokens.color.surfaceMuted, minWidth: 0 }}>
+                    <Box component="dt"><StatusPill tone={c.tone}>{c.label}</StatusPill></Box>
+                    <Typography component="dd" sx={{ m: 0, mt: 0.75, fontSize: 22, fontWeight: 750, fontVariantNumeric: 'tabular-nums' }}>
+                      {c.count}<Box component="span" sx={{ fontSize: 12, fontWeight: 600, color: tokens.color.muted, ml: 0.5 }}>件</Box>
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+              <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+                <Button fullWidth variant="contained" startIcon={<Megaphone size={16} />} onClick={() => navigate('/portal/pages?new=news')}>お知らせを書く</Button>
+                <Button fullWidth variant="outlined" startIcon={<PenLine size={16} />} onClick={() => navigate('/portal/pages')}>編集する</Button>
+              </Stack>
+            </Surface>
+
             {/* 担当者 */}
             <Surface>
               <SectionTitle title="担当" />

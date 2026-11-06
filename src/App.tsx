@@ -14,9 +14,12 @@ const QualityPage = lazy(() => import('@/features/quality/QualityPage'));
 const CmsEditorPage = lazy(() => import('@/features/cms/CmsEditorPage'));
 const InsightsPage = lazy(() => import('@/features/insights/InsightsPage'));
 const SettingsPage = lazy(() => import('@/features/settings/SettingsPage'));
-// お客様側の画面（CMS・ポータル）
-const CmsDashboardPage = lazy(() => import('@/features/client-cms/CmsDashboardPage'));
-const CmsApprovalsPage = lazy(() => import('@/features/client-cms/CmsApprovalsPage'));
+// お客様ポータル・開発者画面
+const PublishApprovalsPage = lazy(() => import('@/features/portal/PublishApprovalsPage'));
+const DevDashboardPage = lazy(() => import('@/features/dev/DevDashboardPage'));
+const DevTasksPage = lazy(() => import('@/features/dev/DevTasksPage'));
+const DevChecksPage = lazy(() => import('@/features/dev/DevChecksPage'));
+const DevDeploysPage = lazy(() => import('@/features/dev/DevDeploysPage'));
 const PortalHomePage = lazy(() => import('@/features/portal/PortalHomePage'));
 const PortalApprovalsPage = lazy(() => import('@/features/portal/PortalApprovalsPage'));
 const PortalQualityPage = lazy(() => import('@/features/portal/PortalQualityPage'));
@@ -35,10 +38,15 @@ const router = createBrowserRouter([
       { path: 'ai-studio/design', element: <DesignStudioPage /> },
       { path: 'site', element: <SitemapPage /> },
       { path: 'quality', element: <QualityPage /> },
-      // 管理者画面（アフロ社内）は従来どおりルート直下。お客様の画面は /cms と /portal 配下
-      { path: 'cms', element: <CmsDashboardPage /> },
-      { path: 'cms/pages', element: <CmsEditorPage /> },
-      { path: 'cms/approvals', element: <CmsApprovalsPage /> },
+      // 管理者画面（アフロ社内）は従来どおりルート直下。お客様ポータルは /portal、開発者画面は /dev 配下
+      { path: 'portal/pages', element: <CmsEditorPage /> },
+      { path: 'portal/publish', element: <PublishApprovalsPage /> },
+      { path: 'dev', element: <DevDashboardPage /> },
+      { path: 'dev/tasks', element: <DevTasksPage /> },
+      { path: 'dev/checks', element: <DevChecksPage /> },
+      { path: 'dev/deploys', element: <DevDeploysPage /> },
+      // 旧 CMS画面の URL（0.4.0）はポータルのページ編集へ
+      { path: 'cms/*', element: <Navigate to="/portal/pages" replace /> },
       { path: 'portal', element: <PortalHomePage /> },
       { path: 'portal/approvals', element: <PortalApprovalsPage /> },
       { path: 'portal/quality', element: <PortalQualityPage /> },

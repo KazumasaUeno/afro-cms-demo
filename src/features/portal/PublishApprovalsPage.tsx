@@ -36,7 +36,7 @@ function RejectDialog({ page, onClose, onConfirm }: { page: CmsPage | null; onCl
   );
 }
 
-export default function CmsApprovalsPage() {
+export default function PublishApprovalsPage() {
   const { state, dispatch } = useDemo();
   const toast = useToast();
   const [preview, setPreview] = useState<CmsPage | null>(null);
@@ -48,7 +48,7 @@ export default function CmsApprovalsPage() {
   return (
     <>
       <PageHeader
-        eyebrow="CMS画面"
+        eyebrow="お客様ポータル"
         icon={<Stamp size={15} />}
         title="公開承認"
         description="編集者から承認を依頼された更新です。プレビューと変更点を確認して、公開するか差し戻してください。"

@@ -4,9 +4,8 @@ import { Check } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { AiBadge, AiMark } from '@/components/ui';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { BUILD_PAGES } from '@/data/designs';
 import { tokens } from '@/theme/tokens';
-
-export const BUILD_PAGES = ['トップ', 'ストーリー', 'オンラインショップ', 'シングルオリジン', '法人ギフト', 'カフェ・店舗', 'ジャーナル', 'よくある質問', 'お問い合わせ'];
 
 /** 全ページ構築の演出（GSAP。動かすのは内側のタイルだけ） */
 export function BuildSequence({ accent, onDone }: { accent: string; onDone: () => void }) {
