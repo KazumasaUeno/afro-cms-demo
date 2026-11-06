@@ -1,6 +1,7 @@
 import { Box, Button, ButtonBase, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, InputAdornment, Menu, MenuItem, Stack, Tab, Tabs, TextField, Typography, ListItemText } from '@mui/material';
 import { ArrowLeft, ChevronDown, Eye, GitCompare, LayoutTemplate, Plus, Search, Send, SlidersHorizontal, Save, Rocket, CalendarClock } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type { CmsPage, PageType } from '@/types';
 import { useDemo } from '@/store/DemoStore';
 import { useToast } from '@/hooks/useToast';
@@ -92,11 +93,24 @@ export default function CmsEditorPage() {
   const toast = useToast();
   const { isDesktop, isMobile } = useBreakpoints();
   const pages = state.pages;
-  const [selectedId, setSelectedId] = useState<string>(pages[0]?.id ?? '');
+  // ダッシュボード・承認画面から ?page=<id>（そのページを開く）/ ?new=page|news（新規作成）で来る
+  const [params, setParams] = useSearchParams();
+  const [selectedId, setSelectedId] = useState<string>(() => {
+    const q = params.get('page');
+    return (q && pages.some((p) => p.id === q) ? q : pages[0]?.id) ?? '';
+  });
   const stored = pages.find((p) => p.id === selectedId) ?? pages[0];
   const [draft, setDraft] = useState<CmsPage | undefined>(stored);
-  const [mobileView, setMobileView] = useState<'list' | 'editor'>('list');
-  const [newType, setNewType] = useState<PageType | null>(null);
+  const [mobileView, setMobileView] = useState<'list' | 'editor'>(() => (params.get('page') ? 'editor' : 'list'));
+  const [newType, setNewType] = useState<PageType | null>(() => {
+    const q = params.get('new');
+    return q === 'page' || q === 'news' ? q : null;
+  });
+
+  // URL のパラメータは開いた時点で使い終わるので消す（再読み込みで同じダイアログが開き直さないように）
+  useEffect(() => {
+    if (params.has('page') || params.has('new')) setParams({}, { replace: true });
+  }, [params, setParams]);
   const [pending, setPending] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
   const [compare, setCompare] = useState(false);
@@ -134,26 +148,26 @@ export default function CmsEditorPage() {
       toast(titleErr ?? slugErr ?? '入力内容を確認してください', 'info');
       return false;
     }
-    if (dirty) dispatch({ type: 'savePage', page: draft });
+    if (dirty) dispatch({ type: 'savePage', page: draft, by: 'client' });
     if (!silent) toast('下書きを保存しました');
     return true;
   };
   const setStatus = (status: CmsPage['status'], scheduledAt?: string) => {
     if (!draft || !save(true)) return;
-    dispatch({ type: 'setPageStatus', id: draft.id, status, scheduledAt });
+    dispatch({ type: 'setPageStatus', id: draft.id, status, scheduledAt, by: 'client' });
     toast(status === 'published' ? '公開しました（シミュレーション）' : status === 'review' ? '承認を依頼しました' : '予約公開を設定しました', status === 'review' ? 'info' : 'success');
   };
 
-  if (!draft) return <PageHeader title="CMS" description="ページがありません" />;
+  if (!draft) return <PageHeader title="ページ・お知らせ" description="ページがありません" />;
   const showList = isDesktop || !isMobile || mobileView === 'list';
   const showEditor = isDesktop || !isMobile || mobileView === 'editor';
 
   return (
     <>
       <PageHeader
-        eyebrow="④ 運用"
+        eyebrow="CMS画面"
         icon={<LayoutTemplate size={15} />}
-        title="CMS"
+        title="ページ・お知らせ"
         description="ページとお知らせを編集し、承認を経て公開します。公開はデモ上の状態変更のみで、実際のサーバーには反映されません。"
       />
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '240px minmax(0,1fr)', lg: '260px minmax(0,1fr) 320px' }, gap: { xs: 2, md: 3 }, alignItems: 'start' }}>
@@ -236,7 +250,7 @@ export default function CmsEditorPage() {
         parentOptions={parentOptions}
         onClose={() => setNewType(null)}
         onCreate={(page) => {
-          dispatch({ type: 'savePage', page });
+          dispatch({ type: 'savePage', page, by: 'client' });
           setNewType(null);
           setSelectedId(page.id);
           setDraft(page);

@@ -1,6 +1,6 @@
 import { Box, ButtonBase, Drawer, IconButton, Menu, MenuItem, Tooltip, Typography, ListItemIcon } from '@mui/material';
 import { AnimatePresence, motion } from 'motion/react';
-import { Check, ChevronDown, Menu as MenuIcon, Presentation, RotateCcw, Bell } from 'lucide-react';
+import { ArrowLeftRight, Check, ChevronDown, Menu as MenuIcon, Presentation, RotateCcw, Bell } from 'lucide-react';
 import { Suspense, useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate, useOutlet } from 'react-router-dom';
 import { tokens } from '@/theme/tokens';
@@ -9,7 +9,7 @@ import { useDemo, currentProject } from '@/store/DemoStore';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { Sidebar, SidebarContent } from './Sidebar';
 import { LogoMark } from './Logo';
-import { isActive, NAV_ITEMS, SETTINGS_ITEM } from './nav';
+import { AREA_ORDER, AREAS, areaOf, CLIENT_PROJECT_ID, isActive, SETTINGS_ITEM, type AreaDef } from './nav';
 import { ResetDemoDialog } from './ResetDemoDialog';
 import { RouteLoader } from './RouteLoader';
 
@@ -55,7 +55,74 @@ function ProjectSwitcher() {
   );
 }
 
-function TopBar({ onMenu }: { onMenu: () => void }) {
+/** 立場（管理者 / CMS / お客様ポータル）の切替。ログインの代わりにデモで使う */
+function AreaSwitcher({ area }: { area: AreaDef }) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const navigate = useNavigate();
+  const Icon = area.icon;
+  return (
+    <>
+      <Tooltip title="表示する画面を切り替える">
+        <ButtonBase
+          onClick={(e) => setAnchor(e.currentTarget)}
+          aria-haspopup="menu"
+          aria-label={`表示する画面を切り替える（現在: ${area.label}）`}
+          sx={{
+            gap: 0.75, px: { xs: 0, sm: 1.25 }, width: { xs: 44, sm: 'auto' }, height: { xs: 44, md: 36 }, flexShrink: 0, borderRadius: '10px',
+            bgcolor: area.soft, color: area.color, fontWeight: 700, fontSize: 13, border: '1px solid transparent',
+            '&:hover': { borderColor: area.color },
+          }}
+        >
+          <Icon size={16} />
+          <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' }, whiteSpace: 'nowrap' }}>{area.label}</Box>
+          <Box component="span" sx={{ display: { xs: 'none', sm: 'inline-flex' }, opacity: 0.7 }}><ArrowLeftRight size={14} /></Box>
+        </ButtonBase>
+      </Tooltip>
+      <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)} slotProps={{ paper: { sx: { width: 320, maxWidth: 'calc(100vw - 32px)' } } }}>
+        <Typography variant="overline" component="div" sx={{ px: 2, pt: 0.5, pb: 1 }}>表示する画面（デモではログインの代わり）</Typography>
+        {AREA_ORDER.map((id) => {
+          const a = AREAS[id];
+          const AIcon = a.icon;
+          return (
+            <MenuItem
+              key={id}
+              selected={id === area.id}
+              onClick={() => {
+                setAnchor(null);
+                if (id !== area.id) navigate(a.home);
+              }}
+              sx={{ py: 1.25, gap: 1.5, alignItems: 'flex-start', whiteSpace: 'normal' }}
+            >
+              <Box sx={{ width: 32, height: 32, borderRadius: '10px', bgcolor: a.soft, color: a.color, display: 'grid', placeItems: 'center', flexShrink: 0 }}><AIcon size={17} /></Box>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography variant="body2" sx={{ fontWeight: 650 }}>
+                  {a.label}
+                  <Box component="span" sx={{ ml: 1, fontSize: 12, fontWeight: 500, color: tokens.color.muted }}>{a.audience}</Box>
+                </Typography>
+                <Typography variant="caption" sx={{ display: 'block' }}>{a.description}</Typography>
+              </Box>
+              {id === area.id && <Check size={16} color={a.color} style={{ marginTop: 8, flexShrink: 0 }} />}
+            </MenuItem>
+          );
+        })}
+      </Menu>
+    </>
+  );
+}
+
+/** お客様側の画面: 案件は固定（切り替えない） */
+function ClientSiteBadge() {
+  const { state } = useDemo();
+  const project = currentProject(state);
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.25, height: { xs: 44, md: 36 }, minWidth: 0, borderRadius: '10px', border: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface, maxWidth: { xs: 150, sm: 260 } }}>
+      <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: project.accent, flexShrink: 0 }} />
+      <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>{project.siteName}</Typography>
+    </Box>
+  );
+}
+
+function TopBar({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
   const [resetOpen, setResetOpen] = useState(false);
   const navigate = useNavigate();
   const { state } = useDemo();
@@ -73,34 +140,35 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
         <MenuIcon size={20} />
       </IconButton>
       <Box sx={{ display: { xs: 'none', sm: 'block', lg: 'none' } }}><LogoMark size={28} /></Box>
-      <ProjectSwitcher />
+      {area.id === 'admin' ? <ProjectSwitcher /> : <ClientSiteBadge />}
+      <AreaSwitcher area={area} />
       <Box sx={{ flex: 1 }} />
       <Typography variant="caption" sx={{ display: { xs: 'none', md: 'block' }, px: 1, py: 0.5, borderRadius: 2, bgcolor: tokens.color.warningSoft, color: '#8A5402', fontWeight: 600 }}>
         デモ環境 — データはこのブラウザだけに保存
       </Typography>
-      <Tooltip title={`承認待ち ${pending}件`}>
+      {area.id === 'admin' && <Tooltip title={`承認待ち ${pending}件`}>
         <IconButton aria-label={`承認待ち ${pending}件を見る`} onClick={() => navigate('/projects')} sx={{ position: 'relative', display: { xs: 'none', sm: 'inline-flex' } }}>
           <Bell size={19} />
           {pending > 0 && <Box sx={{ position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: '50%', bgcolor: tokens.color.danger, border: '2px solid #fff' }} />}
         </IconButton>
-      </Tooltip>
+      </Tooltip>}
       <Tooltip title="デモを初期化">
         <IconButton aria-label="デモを初期化" onClick={() => setResetOpen(true)}><RotateCcw size={18} /></IconButton>
       </Tooltip>
-      <Tooltip title="営業プレゼンモード">
+      {area.id === 'admin' && <Tooltip title="営業プレゼンモード">
         <IconButton aria-label="営業プレゼンモードを開く" onClick={() => navigate('/present')} sx={{ display: { lg: 'none' } }}>
           <Presentation size={19} />
         </IconButton>
-      </Tooltip>
+      </Tooltip>}
       <ResetDemoDialog open={resetOpen} onClose={() => setResetOpen(false)} />
     </Box>
   );
 }
 
 /** スマホ・タブレット下部のタブ（よく使う4画面＋メニュー） */
-function BottomTabs({ onMenu }: { onMenu: () => void }) {
+function BottomTabs({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
   const { pathname } = useLocation();
-  const items = [NAV_ITEMS[0], NAV_ITEMS[1], NAV_ITEMS[2], NAV_ITEMS[5]];
+  const items = area.bottom;
   return (
     <Box
       component="nav"
@@ -118,8 +186,8 @@ function BottomTabs({ onMenu }: { onMenu: () => void }) {
         const Icon = item.icon;
         return (
           <ButtonBase
-            key={item.to} component={NavLink} to={item.to} aria-current={active ? 'page' : undefined}
-            sx={{ flex: 1, flexDirection: 'column', gap: 0.25, height: 58, fontSize: 12, lineHeight: 1.2, whiteSpace: 'nowrap', fontWeight: 600, color: active ? tokens.color.primary : tokens.color.muted }}
+            key={item.to} component={NavLink} to={item.to} end={item.exact} aria-current={active ? 'page' : undefined}
+            sx={{ flex: 1, flexDirection: 'column', gap: 0.25, height: 58, fontSize: 12, lineHeight: 1.2, whiteSpace: 'nowrap', fontWeight: 600, color: active ? area.color : tokens.color.muted }}
           >
             <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
             {item.label}
@@ -140,8 +208,10 @@ function routeLabel(pathname: string): string {
   if (pathname === '/ai-studio') return 'AI要件定義';
   if (pathname === '/site') return 'サイトマップ';
   if (/^\/projects\/[^/]+/.test(pathname)) return 'プロジェクト詳細';
-  const item = [...NAV_ITEMS, SETTINGS_ITEM].find((i) => isActive(i, pathname));
-  return item?.label ?? 'アフロCMS';
+  const area = AREAS[areaOf(pathname)];
+  const item = [...area.items, SETTINGS_ITEM].find((i) => isActive(i, pathname));
+  if (!item) return 'アフロCMS';
+  return area.id === 'admin' ? item.label : `${area.label}・${item.label}`;
 }
 
 /** ページ切り替え: ローディング画面（約0.5秒）→ ページ（Motion。240ms） */
@@ -182,6 +252,13 @@ function AnimatedOutlet() {
 
 export function AppShell() {
   const [open, setOpen] = useState(false);
+  const { pathname } = useLocation();
+  const area = AREAS[areaOf(pathname)];
+  const { state, dispatch } = useDemo();
+  // お客様側の画面は MINAMO COFFEE の案件として表示する（データはこの 1 案件分だけ持っている）
+  useEffect(() => {
+    if (area.id !== 'admin' && state.currentProjectId !== CLIENT_PROJECT_ID) dispatch({ type: 'setCurrentProject', id: CLIENT_PROJECT_ID });
+  }, [area.id, state.currentProjectId, dispatch]);
   return (
     <Box sx={{ minHeight: '100dvh', bgcolor: tokens.color.bg }}>
       <a href="#main" className="skip-link">本文へスキップ</a>
@@ -195,7 +272,7 @@ export function AppShell() {
         <SidebarContent onNavigate={() => setOpen(false)} />
       </Drawer>
       <Box sx={{ pl: { lg: `${tokens.layout.sidebar}px` }, minWidth: 0 }}>
-        <TopBar onMenu={() => setOpen(true)} />
+        <TopBar onMenu={() => setOpen(true)} area={area} />
         <Box
           component="main"
           id="main"
@@ -210,7 +287,7 @@ export function AppShell() {
           <AnimatedOutlet />
         </Box>
       </Box>
-      <BottomTabs onMenu={() => setOpen(true)} />
+      <BottomTabs onMenu={() => setOpen(true)} area={area} />
     </Box>
   );
 }

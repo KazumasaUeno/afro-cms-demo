@@ -10,7 +10,7 @@ export const STAGE_LINKS: Record<Stage, { label: string; to: string }[]> = {
     { label: 'デザインスタジオ', to: '/ai-studio/design' },
   ],
   quality: [{ label: '品質チェック', to: '/quality' }],
-  operation: [{ label: 'CMSで更新', to: '/cms' }],
+  operation: [{ label: 'CMSで更新', to: '/cms/pages' }],
   improvement: [{ label: 'インサイト・改善提案', to: '/insights' }],
 };
 

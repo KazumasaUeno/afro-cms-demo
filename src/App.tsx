@@ -14,6 +14,13 @@ const QualityPage = lazy(() => import('@/features/quality/QualityPage'));
 const CmsEditorPage = lazy(() => import('@/features/cms/CmsEditorPage'));
 const InsightsPage = lazy(() => import('@/features/insights/InsightsPage'));
 const SettingsPage = lazy(() => import('@/features/settings/SettingsPage'));
+// お客様側の画面（CMS・ポータル）
+const CmsDashboardPage = lazy(() => import('@/features/client-cms/CmsDashboardPage'));
+const CmsApprovalsPage = lazy(() => import('@/features/client-cms/CmsApprovalsPage'));
+const PortalHomePage = lazy(() => import('@/features/portal/PortalHomePage'));
+const PortalApprovalsPage = lazy(() => import('@/features/portal/PortalApprovalsPage'));
+const PortalQualityPage = lazy(() => import('@/features/portal/PortalQualityPage'));
+const PortalReportsPage = lazy(() => import('@/features/portal/PortalReportsPage'));
 const PresentPage = lazy(() => import('@/features/present/PresentPage'));
 
 const router = createBrowserRouter([
@@ -28,7 +35,14 @@ const router = createBrowserRouter([
       { path: 'ai-studio/design', element: <DesignStudioPage /> },
       { path: 'site', element: <SitemapPage /> },
       { path: 'quality', element: <QualityPage /> },
-      { path: 'cms', element: <CmsEditorPage /> },
+      // 管理者画面（アフロ社内）は従来どおりルート直下。お客様の画面は /cms と /portal 配下
+      { path: 'cms', element: <CmsDashboardPage /> },
+      { path: 'cms/pages', element: <CmsEditorPage /> },
+      { path: 'cms/approvals', element: <CmsApprovalsPage /> },
+      { path: 'portal', element: <PortalHomePage /> },
+      { path: 'portal/approvals', element: <PortalApprovalsPage /> },
+      { path: 'portal/quality', element: <PortalQualityPage /> },
+      { path: 'portal/reports', element: <PortalReportsPage /> },
       { path: 'insights', element: <InsightsPage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: '*', element: <Navigate to="/" replace /> },

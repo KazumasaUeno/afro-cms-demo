@@ -85,7 +85,7 @@ export default function HomePage() {
     }
     state.pages
       .filter((p) => p.status === 'review')
-      .forEach((p) => list.push({ id: p.id, title: `「${p.title}」の公開承認`, sub: `${project.siteName}・CMS`, to: '/cms', projectId: project.id, color: tokens.color.warning }));
+      .forEach((p) => list.push({ id: p.id, title: `「${p.title}」の公開承認`, sub: `${project.siteName}・CMS`, to: `/cms/approvals`, projectId: project.id, color: tokens.color.warning }));
     state.projects
       .filter((p) => p.id !== project.id && p.pendingApprovals > 0)
       .forEach((p) => list.push({ id: p.id, title: p.nextAction, sub: `${p.siteName}・${stageLabel(p.stage)}（${p.pendingApprovals}件）`, to: stagePrimaryRoute(p.stage), projectId: p.id, color: tokens.color.warning }));
@@ -323,7 +323,7 @@ export default function HomePage() {
               <SectionTitle
                 title="公開予定のページ"
                 icon={<CalendarClock size={18} color={tokens.color.accent} />}
-                action={<Button size="small" onClick={() => navigate('/cms')}>CMSへ</Button>}
+                action={<Button size="small" onClick={() => navigate('/cms/pages')}>CMSへ</Button>}
               />
               {scheduled.length === 0 ? (
                 <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>予約公開のページはありません。CMSで予約できます。</Typography>
@@ -332,7 +332,7 @@ export default function HomePage() {
                   {scheduled.map((p) => {
                     const d = p.scheduledAt ? new Date(p.scheduledAt) : null;
                     return (
-                      <ButtonBase key={p.id} onClick={() => navigate('/cms')} sx={{ justifyContent: 'flex-start', gap: 1.5, textAlign: 'left', borderRadius: 2.5, p: 1, mx: -1, '&:hover': { bgcolor: tokens.color.surfaceMuted } }}>
+                      <ButtonBase key={p.id} onClick={() => navigate(`/cms/pages?page=${p.id}`)} sx={{ justifyContent: 'flex-start', gap: 1.5, textAlign: 'left', borderRadius: 2.5, p: 1, mx: -1, '&:hover': { bgcolor: tokens.color.surfaceMuted } }}>
                         <Box sx={{ width: 48, flexShrink: 0, borderRadius: '12px', border: `1px solid ${tokens.color.border}`, overflow: 'hidden', textAlign: 'center', bgcolor: '#fff' }}>
                           <Box sx={{ bgcolor: tokens.color.accent, color: '#fff', fontSize: 12, fontWeight: 700, py: 0.25 }}>{d ? `${d.getMonth() + 1}月` : '—'}</Box>
                           <Box sx={{ fontSize: 18, fontWeight: 700, py: 0.25 }}>{d ? d.getDate() : '—'}</Box>

@@ -6,6 +6,9 @@ import { QUALITY_CATEGORIES, QUALITY_ITEMS } from '@/data/quality';
 import { nowIso } from '@/services/time';
 import { createSeedState } from './seed';
 
+/** 操作した側。省略時はアフロ（管理者画面）。お客様の画面（CMS・ポータル）からは client を渡す */
+export type Side = 'afro' | 'client';
+
 export type Action =
   | { type: 'reset' }
   | { type: 'setCurrentProject'; id: string }
@@ -13,18 +16,20 @@ export type Action =
   | { type: 'setAnswer'; questionId: string; value: AnswerValue }
   | { type: 'setCompetitors'; urls: string[] }
   | { type: 'completeAnalysis' }
-  | { type: 'approveRequirements' }
+  | { type: 'approveRequirements'; by?: Side }
   | { type: 'resetRequirements' }
   | { type: 'setSitemap'; variant: SitemapVariant; nodes: SitemapNode[]; edges: SitemapEdge[] }
-  | { type: 'approveSitemap' }
+  | { type: 'approveSitemap'; by?: Side }
   | { type: 'selectDesign'; id: DesignId }
-  | { type: 'approveDesign' }
+  | { type: 'approveDesign'; by?: Side }
   | { type: 'startBuild' }
   | { type: 'completeBuild' }
   | { type: 'toggleQuality'; itemId: string; side: 'afro' | 'client' }
   | { type: 'bulkQuality'; side: 'afro' | 'client'; priority: QuestionPriority | 'all'; categoryId?: string }
-  | { type: 'savePage'; page: CmsPage }
-  | { type: 'setPageStatus'; id: string; status: PageStatus; scheduledAt?: string }
+  | { type: 'savePage'; page: CmsPage; by?: Side }
+  | { type: 'setPageStatus'; id: string; status: PageStatus; scheduledAt?: string; by?: Side }
+  /** 承認ワークフロー: 承認依頼中のページを承認して公開する / コメントを付けて差し戻す */
+  | { type: 'reviewPage'; id: string; decision: 'approve' | 'reject'; comment?: string; by?: Side }
   | { type: 'addDiagnosis'; report: Omit<DiagnosisReport, 'id' | 'at' | 'cycle'> }
   | { type: 'updateSettings'; patch: Partial<DemoState['settings']> };
 
@@ -53,6 +58,18 @@ function patchCurrent(state: DemoState, patch: Partial<Project>): DemoState {
 
 const STATUS_LABEL: Record<PageStatus, string> = { draft: '下書き保存', review: '承認依頼', scheduled: '予約公開', published: '公開' };
 
+/** ページの状態を変える（公開時は公開版の内容を記録し、予約日時を整理する） */
+function withStatus(page: CmsPage, status: PageStatus, scheduledAt?: string): CmsPage {
+  const at = nowIso();
+  return {
+    ...page,
+    status,
+    updatedAt: at,
+    ...(status === 'published' ? { publishedAt: at, publishedContent: page.content, scheduledAt: undefined } : {}),
+    ...(status === 'scheduled' ? { scheduledAt } : { ...(status !== 'published' ? { scheduledAt: undefined } : {}) }),
+  };
+}
+
 export function reducer(state: DemoState, action: Action): DemoState {
   switch (action.type) {
     case 'reset':
@@ -80,7 +97,7 @@ export function reducer(state: DemoState, action: Action): DemoState {
         { ...state, requirements: { ...state.requirements, status: 'approved', approvedAt: nowIso() } },
         { stage: 'build', progress: Math.max(25, currentProject(state).progress), nextAction: 'サイトマップを承認する' },
       );
-      return log(approval(s, 'client', '要件定義書を承認', '要件定義'), '要件定義書を承認しました', 'approve');
+      return log(approval(s, 'client', '要件定義書を承認', '要件定義'), '要件定義書を承認しました', 'approve', ACTOR[action.by ?? 'afro']);
     }
 
     case 'resetRequirements':
@@ -93,7 +110,7 @@ export function reducer(state: DemoState, action: Action): DemoState {
       const s = patchCurrent({ ...state, sitemap: { ...state.sitemap, approvedAt: nowIso() } }, {
         progress: Math.max(38, currentProject(state).progress), nextAction: 'デザイン案の採用を決める',
       });
-      return log(approval(s, 'client', 'サイトマップを承認', '制作 / サイトマップ'), '改善後のサイトマップを承認しました', 'approve');
+      return log(approval(s, 'client', 'サイトマップを承認', '制作 / サイトマップ'), '改善後のサイトマップを承認しました', 'approve', ACTOR[action.by ?? 'afro']);
     }
 
     case 'selectDesign':
@@ -104,7 +121,7 @@ export function reducer(state: DemoState, action: Action): DemoState {
       const s = patchCurrent({ ...state, design: { ...state.design, approvedAt: nowIso() } }, {
         progress: Math.max(52, currentProject(state).progress), nextAction: '全ページを構築する',
       });
-      return log(approval(s, 'client', 'トップデザインを承認', `制作 / デザイン（${state.design.selected}）`), 'トップデザイン案を採用・承認しました', 'approve');
+      return log(approval(s, 'client', 'トップデザインを承認', `制作 / デザイン（${state.design.selected}）`), 'トップデザイン案を採用・承認しました', 'approve', ACTOR[action.by ?? 'afro']);
     }
 
     case 'startBuild':
@@ -154,23 +171,32 @@ export function reducer(state: DemoState, action: Action): DemoState {
       const exists = state.pages.some((p) => p.id === action.page.id);
       const page = { ...action.page, updatedAt: nowIso() };
       const pages = exists ? state.pages.map((p) => (p.id === page.id ? page : p)) : [page, ...state.pages];
-      return log({ ...state, pages }, `「${page.title}」を${exists ? '保存' : '作成'}しました`, 'edit');
+      return log({ ...state, pages }, `「${page.title}」を${exists ? '保存' : '作成'}しました`, 'edit', ACTOR[action.by ?? 'afro']);
     }
 
     case 'setPageStatus': {
       const page = state.pages.find((p) => p.id === action.id);
       if (!page) return state;
-      const at = nowIso();
-      const updated: CmsPage = {
-        ...page,
-        status: action.status,
-        updatedAt: at,
-        ...(action.status === 'published' ? { publishedAt: at, publishedContent: page.content, scheduledAt: undefined } : {}),
-        ...(action.status === 'scheduled' ? { scheduledAt: action.scheduledAt } : { ...(action.status !== 'published' ? { scheduledAt: undefined } : {}) }),
-      };
+      const updated = withStatus(page, action.status, action.scheduledAt);
       const s = { ...state, pages: state.pages.map((p) => (p.id === page.id ? updated : p)) };
       const kind: Activity['kind'] = action.status === 'published' || action.status === 'scheduled' ? 'publish' : 'edit';
-      return log(s, `「${page.title}」を${STATUS_LABEL[action.status]}しました`, kind);
+      return log(s, `「${page.title}」を${STATUS_LABEL[action.status]}しました`, kind, ACTOR[action.by ?? 'afro']);
+    }
+
+    case 'reviewPage': {
+      const page = state.pages.find((p) => p.id === action.id);
+      if (!page || page.status !== 'review') return state;
+      const side = action.by ?? 'afro';
+      const approve = action.decision === 'approve';
+      const updated = withStatus(page, approve ? 'published' : 'draft');
+      const s = approval(
+        { ...state, pages: state.pages.map((p) => (p.id === page.id ? updated : p)) },
+        side, approve ? '承認して公開' : '差し戻し', `CMS / ${page.title}`,
+      );
+      const note = action.comment?.trim();
+      return approve
+        ? log(s, `「${page.title}」を承認して公開しました`, 'publish', ACTOR[side])
+        : log(s, `「${page.title}」を差し戻しました${note ? `（${note}）` : ''}`, 'comment', ACTOR[side]);
     }
 
     case 'addDiagnosis': {

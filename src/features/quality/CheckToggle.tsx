@@ -13,6 +13,8 @@ interface Props {
   check: QualityCheck | undefined;
   itemText: string;
   onToggle: () => void;
+  /** 表示名（省略時は「アフロ」「顧客」）。お客様ポータルでは「お客様」と出す */
+  label?: string;
 }
 
 const SIDE = {
@@ -24,11 +26,11 @@ const SIDE = {
  * 確認ボタン。チェックするとタイムスタンプ表示に変わる（資料: 入力後はタイムスタンプにかわる）。
  * もう一度押すと取り消し。
  */
-export function CheckToggle({ side, check, itemText, onToggle }: Props) {
+export function CheckToggle({ side, check, itemText, onToggle, label }: Props) {
   const reduced = useReducedMotion();
   const at = side === 'afro' ? check?.afroAt : check?.clientAt;
   const by = side === 'afro' ? check?.afroBy : check?.clientBy;
-  const s = SIDE[side];
+  const s = { ...SIDE[side], ...(label ? { label } : {}) };
   const checked = !!at;
   return (
     <ButtonBase

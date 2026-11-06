@@ -193,7 +193,7 @@ export default function DesignStudioPage() {
                 <Typography variant="body2" color="text.secondary">{selectedVariant?.name}デザインで構築 · {formatDateTime(design.buildCompletedAt)}（シミュレーション）。次は品質チェックとページ編集へ。</Typography>
               </Box>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                <Button variant="outlined" startIcon={<PenLine size={16} />} onClick={() => navigate('/cms')}>CMSで編集</Button>
+                <Button variant="outlined" startIcon={<PenLine size={16} />} onClick={() => navigate('/cms/pages')}>CMSで編集</Button>
                 <Button variant="contained" startIcon={<ShieldCheck size={16} />} onClick={() => navigate('/quality')}>品質チェックへ</Button>
               </Stack>
             </Stack>

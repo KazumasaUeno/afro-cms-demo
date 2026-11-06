@@ -1,12 +1,14 @@
 import { Box, ButtonBase, Stack, Tooltip, Typography } from '@mui/material';
-import { Presentation } from 'lucide-react';
+import { ExternalLink, Presentation } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { tokens } from '@/theme/tokens';
-import { isActive, NAV_ITEMS, SETTINGS_ITEM, type NavItem } from './nav';
+import { AREAS, areaOf, isActive, type AreaDef, type NavItem } from './nav';
 import { Logo } from './Logo';
+import { MemberAvatar } from '@/components/ui';
+import { memberById } from '@/data/members';
 import { useDemo, currentProject } from '@/store/DemoStore';
 
-function NavRow({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
+function NavRow({ item, color, onNavigate }: { item: NavItem; color: string; onNavigate?: () => void }) {
   const { pathname } = useLocation();
   const active = isActive(item, pathname);
   const Icon = item.icon;
@@ -14,6 +16,7 @@ function NavRow({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }
     <ButtonBase
       component={NavLink}
       to={item.to}
+      end={item.exact}
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
       sx={{
@@ -26,29 +29,29 @@ function NavRow({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }
         '&:hover': { color: tokens.color.ink, bgcolor: active ? tokens.color.surface : 'rgba(15,23,42,0.04)' },
       }}
     >
-      <Icon size={18} strokeWidth={active ? 2.2 : 1.9} color={active ? tokens.color.primary : 'currentColor'} />
+      <Icon size={18} strokeWidth={active ? 2.2 : 1.9} color={active ? color : 'currentColor'} />
       <span>{item.label}</span>
     </ButtonBase>
   );
 }
 
-export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+/** ロゴの下に出す「いまどの立場の画面か」 */
+function AreaBadge({ area }: { area: AreaDef }) {
+  const Icon = area.icon;
+  return (
+    <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 1.25, py: 0.75, borderRadius: '10px', bgcolor: area.soft, color: area.color }}>
+      <Icon size={15} />
+      <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: 'inherit' }} noWrap>{area.label}</Typography>
+      <Typography sx={{ fontSize: 12, color: tokens.color.muted, ml: 'auto !important' }} noWrap>{area.audience}</Typography>
+    </Stack>
+  );
+}
+
+function AdminFooter({ onNavigate }: { onNavigate?: () => void }) {
   const { state } = useDemo();
   const project = currentProject(state);
   return (
-    <Stack sx={{ height: '100%', p: 2, gap: 2 }}>
-      <Box sx={{ px: 1, py: 0.5 }}>
-        <Logo />
-      </Box>
-
-      <Box component="nav" aria-label="メインメニュー">
-        <Stack spacing={0.5}>
-          {NAV_ITEMS.map((item) => <NavRow key={item.to} item={item} onNavigate={onNavigate} />)}
-        </Stack>
-      </Box>
-
-      <Box sx={{ flex: 1 }} />
-
+    <>
       <Box sx={{ p: 1.5, borderRadius: 3, border: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface }}>
         <Typography variant="overline" sx={{ display: 'block', lineHeight: 1.4 }}>作業中のプロジェクト</Typography>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.75 }}>
@@ -73,8 +76,66 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           営業プレゼンモード
         </ButtonBase>
       </Tooltip>
+    </>
+  );
+}
 
-      <NavRow item={SETTINGS_ITEM} onNavigate={onNavigate} />
+/** お客様側の画面: 誰としてログインしているか（デモでは固定）と担当者 */
+function ClientFooter({ area }: { area: AreaDef }) {
+  const { state } = useDemo();
+  const project = currentProject(state);
+  const owner = memberById(project.ownerId);
+  return (
+    <Box sx={{ p: 1.5, borderRadius: 3, border: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface }}>
+      <Typography variant="overline" sx={{ display: 'block', lineHeight: 1.4 }}>{area.id === 'cms' ? '公開中のサイト' : '担当ディレクター'}</Typography>
+      {area.id === 'cms' ? (
+        <>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.75 }}>
+            <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: project.accent, flexShrink: 0 }} />
+            <Typography variant="h6" noWrap>{project.siteName}</Typography>
+          </Stack>
+          <Stack direction="row" spacing={0.5} alignItems="center" sx={{ color: tokens.color.muted }}>
+            <Typography variant="caption" noWrap sx={{ fontFamily: tokens.font.mono }}>{project.siteUrl.replace(/^https?:\/\//, '')}</Typography>
+            <ExternalLink size={12} aria-hidden />
+          </Stack>
+        </>
+      ) : (
+        <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mt: 0.75 }}>
+          <MemberAvatar id={owner.id} size={30} />
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="body2" sx={{ fontWeight: 650 }} noWrap>{owner.name}</Typography>
+            <Typography variant="caption" noWrap sx={{ display: 'block' }}>アフロ株式会社・{owner.role}</Typography>
+          </Box>
+        </Stack>
+      )}
+      <Typography variant="caption" sx={{ display: 'block', mt: 1, pt: 1, borderTop: `1px solid ${tokens.color.border}` }} noWrap>
+        ログイン中: {project.clientName}
+      </Typography>
+    </Box>
+  );
+}
+
+export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+  const { pathname } = useLocation();
+  const area = AREAS[areaOf(pathname)];
+  return (
+    <Stack sx={{ height: '100%', p: 2, gap: 2, overflowY: 'auto' }}>
+      <Stack spacing={1.5} sx={{ px: 1, py: 0.5 }}>
+        <Logo />
+        <AreaBadge area={area} />
+      </Stack>
+
+      <Box component="nav" aria-label={`${area.label}のメニュー`}>
+        <Stack spacing={0.5}>
+          {area.items.map((item) => <NavRow key={item.to} item={item} color={area.color} onNavigate={onNavigate} />)}
+        </Stack>
+      </Box>
+
+      <Box sx={{ flex: 1 }} />
+
+      {area.id === 'admin' ? <AdminFooter onNavigate={onNavigate} /> : <ClientFooter area={area} />}
+
+      {area.settings && <NavRow item={area.settings} color={area.color} onNavigate={onNavigate} />}
     </Stack>
   );
 }
