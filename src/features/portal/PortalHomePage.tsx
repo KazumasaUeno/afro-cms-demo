@@ -10,6 +10,7 @@ import { STAGES, stageIndex } from '@/data/projects';
 import { tokens } from '@/theme/tokens';
 import { AREAS } from '@/components/layout/nav';
 import { approvalSteps, hearingTodo } from './portalSteps';
+import { clientTodos } from './assistant/answers';
 import type { PageStatus } from '@/types';
 import type { PillTone } from '@/components/ui';
 
@@ -30,11 +31,11 @@ export default function PortalHomePage() {
   const project = currentProject(state);
   const owner = memberById(project.ownerId);
   const steps = approvalSteps(state);
-  const todo = steps.filter((s) => s.status === 'waiting');
   const cmsReview = state.pages.filter((p) => p.status === 'review').length;
   const hearing = hearingTodo(state);
   const hearingOpen = hearing.unanswered + hearing.toConfirm > 0;
-  const todoCount = todo.length + (cmsReview ? 1 : 0) + (hearingOpen ? 1 : 0);
+  // 数え方の正は clientTodos（AI アシスタントのボタンの件数と揃える）
+  const todoCount = clientTodos(state).length;
   const stage = STAGES[stageIndex(project.stage)];
   const daysLeft = project.launchDate ? Math.max(0, Math.ceil((new Date(project.launchDate).getTime() - Date.now()) / 86400000)) : null;
   const pageCounts = SITE_STATUSES.map((x) => ({ ...x, count: state.pages.filter((p) => p.status === x.id).length }));

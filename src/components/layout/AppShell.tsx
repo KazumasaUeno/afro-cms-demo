@@ -1,7 +1,7 @@
 import { Box, ButtonBase, Drawer, IconButton, Menu, MenuItem, Tooltip, Typography, ListItemIcon } from '@mui/material';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowLeftRight, Check, ChevronDown, LogOut, Menu as MenuIcon, Presentation, RotateCcw, Bell } from 'lucide-react';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate, useOutlet } from 'react-router-dom';
 import { tokens } from '@/theme/tokens';
 import { LANDSCAPE_PHONE } from '@/theme/media';
@@ -265,6 +265,9 @@ function AnimatedOutlet() {
   );
 }
 
+// お客様ポータルでだけ使うので、管理者画面・開発者画面の読み込みに含めない
+const PortalAssistant = lazy(() => import('@/features/portal/assistant/PortalAssistant').then((m) => ({ default: m.PortalAssistant })));
+
 export function AppShell() {
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
@@ -293,7 +296,8 @@ export function AppShell() {
           id="main"
           tabIndex={-1}
           sx={{
-            px: { xs: 2, sm: 3, md: 4, xl: 5 }, pt: { xs: 3, md: 4 }, pb: { xs: 'calc(96px + env(safe-area-inset-bottom))', md: 6 },
+            // ポータルは右下の AI アシスタントのボタン（56px）に最後の行が隠れないよう、PC でも下を広く空ける
+            px: { xs: 2, sm: 3, md: 4, xl: 5 }, pt: { xs: 3, md: 4 }, pb: { xs: 'calc(96px + env(safe-area-inset-bottom))', md: area.id === 'portal' ? 12 : 6 },
             // 横向きのスマホ（高さが低い）は下部タブを出さないので余白も戻す
             [LANDSCAPE_PHONE]: { pb: 4 },
             maxWidth: tokens.layout.contentMax + 80, mx: 'auto', outline: 'none', minWidth: 0,
@@ -303,6 +307,7 @@ export function AppShell() {
         </Box>
       </Box>
       <BottomTabs onMenu={() => setOpen(true)} area={area} />
+      {area.id === 'portal' && <Suspense fallback={null}><PortalAssistant /></Suspense>}
     </Box>
   );
 }
