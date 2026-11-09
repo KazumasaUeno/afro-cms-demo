@@ -54,6 +54,8 @@ export interface RequirementQuestion {
   placeholder?: string;
   /** デモのウィザードで実際に聞く代表質問か */
   featured?: boolean;
+  /** 共同モードでこの質問に答える側（事業・好みはお客様、技術・分析はアフロ） */
+  owner: AnswerSide;
 }
 
 export interface RequirementCategory {
@@ -66,11 +68,27 @@ export interface RequirementCategory {
 
 export type AnswerValue = string | string[];
 
+/** 要件の回答を誰が入力するか。shared=質問ごとに分担（既定）/ afro=アフロが代理で全部 / client=お客様が全部 */
+export type RequirementMode = 'shared' | 'afro' | 'client';
+/** 操作した側 */
+export type AnswerSide = 'afro' | 'client';
+
+/** 回答の記録。担当ではない側が入力した回答（代理回答）は、担当側の確認（confirmedAt）が要る */
+export interface AnswerMeta {
+  by: AnswerSide;
+  at: ISODate;
+  confirmedAt?: ISODate;
+}
+
 export interface RequirementSession {
   projectId: string;
   answers: Record<string, AnswerValue>;
   competitors: string[];
   status: 'draft' | 'analyzed' | 'approved';
+  /** 0.9.0 で追加。無い保存データは 'shared' として扱う（版は上げない） */
+  mode?: RequirementMode;
+  /** 0.9.0 で追加。無い回答は担当側が答えたものとして扱う */
+  answerMeta?: Record<string, AnswerMeta>;
   analyzedAt?: ISODate;
   approvedAt?: ISODate;
 }

@@ -9,6 +9,7 @@ import { useFullScreenDialog } from '@/hooks/useMediaQueries';
 import { TOUCH } from '@/theme/media';
 import type { RequirementCategory } from '@/types';
 import { AnswerInput } from './AnswerInput';
+import { AnswerOwner, ConfirmAnswerButton } from './AnswerOwner';
 import { isAnswered, validateAnswer } from './validation';
 
 function CategoryDialog({ category, onClose }: { category: RequirementCategory | null; onClose: () => void }) {
@@ -36,6 +37,10 @@ function CategoryDialog({ category, onClose }: { category: RequirementCategory |
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                       <StatusPill tone={q.priority === 'A' ? 'primary' : 'neutral'} dot={false}>{q.priority}</StatusPill>
                       <Typography variant="h6" component="label" htmlFor={`answer-${q.id}`}>{q.text}</Typography>
+                    </Stack>
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.25, flexWrap: 'wrap', rowGap: 0.75 }}>
+                      <AnswerOwner question={q} />
+                      <ConfirmAnswerButton question={q} side="afro" />
                     </Stack>
                     <AnswerInput question={q} value={value} onChange={(v) => dispatch({ type: 'setAnswer', questionId: q.id, value: v })}
                       error={isAnswered(value) ? validateAnswer(q, value, false) : null} />

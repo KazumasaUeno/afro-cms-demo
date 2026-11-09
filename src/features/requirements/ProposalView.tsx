@@ -11,6 +11,7 @@ import { tokens } from '@/theme/tokens';
 import type { ProposalPoint } from '@/types';
 import { buildProposal } from './buildProposal';
 import { isAnswered } from './validation';
+import { pendingConfirmations } from './assignment';
 
 const PRIORITY: Record<ProposalPoint['priority'], { label: string; tone: PillTone; color: string }> = {
   high: { label: '優先度 高', tone: 'danger', color: tokens.color.danger },
@@ -27,6 +28,8 @@ export function ProposalView() {
   const proposal = useMemo(() => buildProposal(req.answers, req.competitors), [req.answers, req.competitors]);
   const answered = REQUIREMENT_QUESTIONS.filter((q) => isAnswered(req.answers[q.id])).length;
   const approved = req.status === 'approved';
+  // 代理入力の確認が残っている間は承認できない（どちらの側の確認待ちでも）
+  const pending = pendingConfirmations(req).length;
 
   return (
     <Stack spacing={2.5}>
@@ -125,6 +128,11 @@ export function ProposalView() {
             <Box sx={{ flex: 1 }}>
               <Typography variant="h4" component="h2">要件定義書の承認</Typography>
               <Typography variant="body2" color="text.secondary">承認すると、この内容をもとにサイトマップとデザイン案の作成に進みます。</Typography>
+              {!approved && pending > 0 && (
+                <Typography variant="caption" role="status" sx={{ display: 'block', mt: 0.5, color: '#8A5402', fontWeight: 650 }}>
+                  代理入力した回答のうち {pending} 問が確認待ちです。確認が終わると承認できます。
+                </Typography>
+              )}
             </Box>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ flexWrap: 'wrap' }}>
               <Button variant="text" startIcon={<RotateCcw size={16} />} onClick={() => setConfirmReset(true)}>回答をやり直す</Button>
@@ -136,7 +144,7 @@ export function ProposalView() {
                   <BadgeCheck size={18} /> 承認済み {formatDateTime(req.approvedAt)}
                 </Box>
               ) : (
-                <Button variant="outlined" startIcon={<CheckCircle2 size={16} />} onClick={() => { dispatch({ type: 'approveRequirements' }); toast('要件定義書を承認しました'); }}>
+                <Button variant="outlined" startIcon={<CheckCircle2 size={16} />} disabled={pending > 0} onClick={() => { dispatch({ type: 'approveRequirements' }); toast('要件定義書を承認しました'); }}>
                   要件定義書を承認
                 </Button>
               )}

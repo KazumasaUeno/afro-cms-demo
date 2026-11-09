@@ -7,7 +7,7 @@ import { QUALITY_ITEMS } from '@/data/quality';
 import { seedDev } from '@/data/dev';
 import { daysAgo, hoursAgo } from '@/services/time';
 
-/** dev（0.5.0 で追加）は任意項目のため版を上げていない。古い保存データは devState() で補う */
+/** dev（0.5.0）・requirements.mode / answerMeta（0.9.0）は任意項目のため版を上げていない。古い保存データは既定値で補う */
 export const STATE_VERSION = 1;
 
 /** 最初から一部チェック済みにしておく（デモの見栄えのため） */
@@ -36,6 +36,8 @@ export const createSeedState = (): DemoState => ({
     answers: {},
     competitors: [],
     status: 'draft',
+    mode: 'shared',
+    answerMeta: {},
   },
   sitemap: seedSitemap(),
   design: { selected: null },

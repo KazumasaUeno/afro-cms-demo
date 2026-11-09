@@ -13,6 +13,7 @@ import { AREAS } from '@/components/layout/nav';
 import { DeviceFrame } from '@/features/design/DeviceFrame';
 import { buildProposal } from '@/features/requirements/buildProposal';
 import { approvalSteps, type ApprovalKey, type ApprovalStep } from './portalSteps';
+import { pendingConfirmations } from '@/features/requirements/assignment';
 
 const AREA = AREAS.portal;
 
@@ -77,6 +78,7 @@ export default function PortalApprovalsPage() {
   const steps = approvalSteps(state);
   const byKey = Object.fromEntries(steps.map((s) => [s.key, s])) as Record<ApprovalKey, ApprovalStep>;
   const req = state.requirements;
+  const pending = pendingConfirmations(req);
   const proposal = useMemo(() => buildProposal(req.answers, req.competitors), [req.answers, req.competitors]);
   const afterPages = state.sitemap.after.nodes;
   const newPages = afterPages.filter((n) => n.data.kind === 'new');
@@ -115,10 +117,18 @@ export default function PortalApprovalsPage() {
       <Stack spacing={{ xs: 2, md: 2.5 }}>
         {/* 1. 要件定義書 */}
         <Reveal>
-          <StepCard step={byKey.requirements} action={approveBtn('requirements')}>
+          <StepCard step={byKey.requirements} action={approveBtn('requirements', pending.length > 0)}>
+            {byKey.requirements.status === 'waiting' && pending.length > 0 && (
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }} role="status" sx={{ mb: 2, px: 1.5, py: 1, borderRadius: 2, bgcolor: tokens.color.warningSoft }}>
+                <Typography variant="caption" sx={{ flex: 1, color: '#8A5402', fontWeight: 650 }}>
+                  代わりに入力された回答が {pending.length} 問、確認待ちです。確認が終わると承認できます。
+                </Typography>
+                <Button size="small" endIcon={<ArrowRight size={14} />} onClick={() => navigate('/portal/requirements')}>ヒアリングで確認</Button>
+              </Stack>
+            )}
             {req.status === 'draft' ? (
               <Typography variant="caption" component="p" sx={{ px: 1.5, py: 1, borderRadius: 2, bgcolor: tokens.color.bgSubtle }}>
-                デモ: 管理者画面の「AI Studio」で要件を分析すると、ここに要件定義書が届きます。
+                デモ: 「ヒアリング」でお客様の担当の質問に答え、管理者画面の「AI Studio」で要件を分析すると、ここに要件定義書が届きます。
               </Typography>
             ) : (
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '200px minmax(0,1fr)' }, gap: 2 }}>

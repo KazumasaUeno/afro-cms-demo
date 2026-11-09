@@ -1,5 +1,5 @@
 import {
-  BarChart3, Building2, ClipboardCheck, Code2, FileText, FolderKanban, Gauge, House, LayoutDashboard, ListChecks, ListTodo, Network,
+  BarChart3, Building2, ClipboardCheck, Code2, FileText, FolderKanban, Gauge, House, LayoutDashboard, ListChecks, ListTodo, MessageSquareText, Network,
   Rocket, ScrollText, Settings, ShieldCheck, Sparkles, Stamp, UserRound, type LucideIcon,
 } from 'lucide-react';
 
@@ -54,6 +54,7 @@ const ADMIN_ITEMS: NavItem[] = [
 
 const PORTAL_ITEMS: NavItem[] = [
   { to: '/portal', label: 'ホーム', icon: House, match: ['/portal'], exact: true, hint: '制作の進み具合' },
+  { to: '/portal/requirements', label: 'ヒアリング', icon: MessageSquareText, match: ['/portal/requirements'], hint: '要件の質問に回答' },
   { to: '/portal/approvals', label: '確認・承認', icon: ClipboardCheck, match: ['/portal/approvals'], hint: '要件・サイトマップ・デザイン' },
   { to: '/portal/quality', label: '品質確認', icon: ListChecks, match: ['/portal/quality'], hint: 'お客様側のチェック' },
   { to: '/portal/pages', label: 'ページ・お知らせ', icon: FileText, match: ['/portal/pages'], hint: '編集と公開' },
@@ -81,7 +82,7 @@ export const AREAS: Record<AreaId, AreaDef> = {
     id: 'portal', label: 'お客様ポータル', short: 'ポータル', audience: 'お客様',
     description: '進み具合の確認・承認・ページ更新・レポート', home: '/portal', icon: UserRound,
     color: '#0F9D74', soft: '#E7F7F1',
-    items: PORTAL_ITEMS, bottom: [PORTAL_ITEMS[0], PORTAL_ITEMS[1], PORTAL_ITEMS[3], PORTAL_ITEMS[5]],
+    items: PORTAL_ITEMS, bottom: [PORTAL_ITEMS[0], PORTAL_ITEMS[2], PORTAL_ITEMS[4], PORTAL_ITEMS[6]],
   },
   dev: {
     id: 'dev', label: '開発者画面', short: '開発者', audience: '制作エンジニア',

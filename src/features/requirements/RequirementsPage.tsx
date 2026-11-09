@@ -11,6 +11,7 @@ import { AnalysisSequence } from './AnalysisSequence';
 import { ProposalView } from './ProposalView';
 import { CategoryPanel } from './CategoryPanel';
 import { hostnameOf } from './buildProposal';
+import { ModeSwitcher } from './AnswerOwner';
 
 type View = 'wizard' | 'analyzing' | 'result';
 
@@ -36,6 +37,7 @@ export default function RequirementsPage() {
         }
         actions={<AiBadge />}
       />
+      <ModeSwitcher />
 
       {view === 'result' ? (
         <ProposalView />

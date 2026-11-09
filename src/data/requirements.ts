@@ -23,29 +23,30 @@ export const IMPROVE_OPTIONS = ['ファーストビュー', 'ナビゲーショ�
 
 /**
  * 代表質問。featured=true がウィザードで実際に聞く質問。
+ * owner は共同モードの担当（事業・ターゲット・好みはお客様、URL・競合・機能・SEO・インフラはアフロ）。
  * それ以外は「カテゴリ一覧」画面で入力できるサンプル（全81問の一部）。
  */
 export const REQUIREMENT_QUESTIONS: RequirementQuestion[] = [
-  { id: 'q-url', categoryId: 'rc1', priority: 'A', kind: 'url', text: '現在のホームページのURLを教えてください', placeholder: 'https://example.co.jp', featured: true },
-  { id: 'q-purpose', categoryId: 'rc1', priority: 'A', kind: 'multi', text: '今回HPをリニューアルしようと考えたきっかけは何ですか？', options: PURPOSE_OPTIONS, featured: true },
-  { id: 'q-issue', categoryId: 'rc1', priority: 'A', kind: 'longtext', text: '現在のHPで最も大きな課題は何ですか？', placeholder: '例：スマホで見づらく、問い合わせがほとんど来ない', featured: true },
-  { id: 'q-competitor', categoryId: 'rc3', priority: 'A', kind: 'url', text: '意識している競合サイトはありますか？', placeholder: 'https://competitor.example.jp', featured: true },
-  { id: 'q-improve', categoryId: 'rc1', priority: 'A', kind: 'multi', text: 'リニューアルによって最も改善したいことは何ですか？', options: IMPROVE_OPTIONS, featured: true },
-  { id: 'q-keep', categoryId: 'rc1', priority: 'B', kind: 'longtext', text: '現在のHPで評価している点・残したい点はありますか？' },
-  { id: 'q-target', categoryId: 'rc2', priority: 'A', kind: 'text', text: '主なターゲットは誰ですか？' },
-  { id: 'q-strength', categoryId: 'rc2', priority: 'A', kind: 'longtext', text: '競合と比べた強み・選ばれる理由は何ですか？' },
-  { id: 'q-market', categoryId: 'rc3', priority: 'B', kind: 'text', text: '競合サイトで良いと感じる点はどこですか？' },
-  { id: 'q-content', categoryId: 'rc4', priority: 'A', kind: 'text', text: '必ず掲載したいコンテンツは何ですか？' },
-  { id: 'q-feature', categoryId: 'rc5', priority: 'B', kind: 'text', text: '必要な機能（予約・EC・会員など）はありますか？' },
-  { id: 'q-cv', categoryId: 'rc6', priority: 'A', kind: 'single', text: '最も重要なコンバージョンは何ですか？', options: ['問い合わせ', '資料請求', '来店予約', '購入', '採用応募'] },
-  { id: 'q-seo', categoryId: 'rc7', priority: 'B', kind: 'text', text: '上位表示したいキーワードはありますか？' },
-  { id: 'q-design-dislike', categoryId: 'rc8', priority: 'A', kind: 'longtext', text: '現在のHPのデザインで不満な点は何ですか？' },
-  { id: 'q-image', categoryId: 'rc8', priority: 'A', kind: 'text', text: 'ユーザーにどのような企業イメージを持ってほしいですか？' },
-  { id: 'q-brand', categoryId: 'rc8', priority: 'B', kind: 'text', text: 'コーポレートカラーやブランドガイドラインはありますか？' },
-  { id: 'q-ops', categoryId: 'rc9', priority: 'A', kind: 'single', text: '公開後の更新は誰が行いますか？', options: ['社内担当者', 'アフロに依頼', '両方'] },
-  { id: 'q-infra', categoryId: 'rc10', priority: 'B', kind: 'text', text: '現在のサーバー・ドメインの管理状況を教えてください' },
-  { id: 'q-schedule', categoryId: 'rc11', priority: 'A', kind: 'text', text: '公開希望時期はいつですか？' },
-  { id: 'q-other', categoryId: 'rc12', priority: 'B', kind: 'longtext', text: 'その他、ご要望があれば自由にご記入ください' },
+  { id: 'q-url', categoryId: 'rc1', priority: 'A', kind: 'url', text: '現在のホームページのURLを教えてください', placeholder: 'https://example.co.jp', featured: true, owner: 'afro' },
+  { id: 'q-purpose', categoryId: 'rc1', priority: 'A', kind: 'multi', text: '今回HPをリニューアルしようと考えたきっかけは何ですか？', options: PURPOSE_OPTIONS, featured: true, owner: 'client' },
+  { id: 'q-issue', categoryId: 'rc1', priority: 'A', kind: 'longtext', text: '現在のHPで最も大きな課題は何ですか？', placeholder: '例：スマホで見づらく、問い合わせがほとんど来ない', featured: true, owner: 'client' },
+  { id: 'q-competitor', categoryId: 'rc3', priority: 'A', kind: 'url', text: '意識している競合サイトはありますか？', placeholder: 'https://competitor.example.jp', featured: true, owner: 'afro' },
+  { id: 'q-improve', categoryId: 'rc1', priority: 'A', kind: 'multi', text: 'リニューアルによって最も改善したいことは何ですか？', options: IMPROVE_OPTIONS, featured: true, owner: 'client' },
+  { id: 'q-keep', categoryId: 'rc1', priority: 'B', kind: 'longtext', text: '現在のHPで評価している点・残したい点はありますか？', owner: 'client' },
+  { id: 'q-target', categoryId: 'rc2', priority: 'A', kind: 'text', text: '主なターゲットは誰ですか？', owner: 'client' },
+  { id: 'q-strength', categoryId: 'rc2', priority: 'A', kind: 'longtext', text: '競合と比べた強み・選ばれる理由は何ですか？', owner: 'client' },
+  { id: 'q-market', categoryId: 'rc3', priority: 'B', kind: 'text', text: '競合サイトで良いと感じる点はどこですか？', owner: 'afro' },
+  { id: 'q-content', categoryId: 'rc4', priority: 'A', kind: 'text', text: '必ず掲載したいコンテンツは何ですか？', owner: 'client' },
+  { id: 'q-feature', categoryId: 'rc5', priority: 'B', kind: 'text', text: '必要な機能（予約・EC・会員など）はありますか？', owner: 'afro' },
+  { id: 'q-cv', categoryId: 'rc6', priority: 'A', kind: 'single', text: '最も重要なコンバージョンは何ですか？', options: ['問い合わせ', '資料請求', '来店予約', '購入', '採用応募'], owner: 'client' },
+  { id: 'q-seo', categoryId: 'rc7', priority: 'B', kind: 'text', text: '上位表示したいキーワードはありますか？', owner: 'afro' },
+  { id: 'q-design-dislike', categoryId: 'rc8', priority: 'A', kind: 'longtext', text: '現在のHPのデザインで不満な点は何ですか？', owner: 'client' },
+  { id: 'q-image', categoryId: 'rc8', priority: 'A', kind: 'text', text: 'ユーザーにどのような企業イメージを持ってほしいですか？', owner: 'client' },
+  { id: 'q-brand', categoryId: 'rc8', priority: 'B', kind: 'text', text: 'コーポレートカラーやブランドガイドラインはありますか？', owner: 'client' },
+  { id: 'q-ops', categoryId: 'rc9', priority: 'A', kind: 'single', text: '公開後の更新は誰が行いますか？', options: ['社内担当者', 'アフロに依頼', '両方'], owner: 'client' },
+  { id: 'q-infra', categoryId: 'rc10', priority: 'B', kind: 'text', text: '現在のサーバー・ドメインの管理状況を教えてください', owner: 'afro' },
+  { id: 'q-schedule', categoryId: 'rc11', priority: 'A', kind: 'text', text: '公開希望時期はいつですか？', owner: 'client' },
+  { id: 'q-other', categoryId: 'rc12', priority: 'B', kind: 'longtext', text: 'その他、ご要望があれば自由にご記入ください', owner: 'client' },
 ];
 
 /** AI分析（シミュレーション）の工程 */

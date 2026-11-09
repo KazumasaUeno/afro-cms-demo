@@ -11,6 +11,8 @@ import { TOUCH } from '@/theme/media';
 import type { AnswerValue } from '@/types';
 import { AnswerInput } from './AnswerInput';
 import { hostnameOf } from './buildProposal';
+import { AnswerOwner, ConfirmAnswerButton } from './AnswerOwner';
+import { questionStatus } from './assignment';
 import { MAX_COMPETITORS, MAX_URL, validateAnswer, validateUrl } from './validation';
 
 const STEPS = REQUIREMENT_QUESTIONS.filter((q) => q.featured);
@@ -92,6 +94,7 @@ export function Wizard({ onAnalyze }: { onAnalyze: () => void }) {
   const [dir, setDir] = useState(1);
 
   const q = STEPS[step];
+  const qs = questionStatus(q, state.requirements);
   const isLast = step === STEPS.length - 1;
   const competitorErrors = competitors.map((u) => validateUrl(u, false));
   const error = q.id === 'q-competitor' ? (competitorErrors.some(Boolean) ? 'invalid' : null) : validateAnswer(q, answers[q.id]);
@@ -110,7 +113,10 @@ export function Wizard({ onAnalyze }: { onAnalyze: () => void }) {
     if (q.id === 'q-competitor') {
       const cleaned = competitors.map((u) => u.trim()).filter(Boolean);
       dispatch({ type: 'setCompetitors', urls: cleaned });
-      dispatch({ type: 'setAnswer', questionId: 'q-competitor', value: cleaned });
+      // 変えていないときは記録し直さない（お客様の回答を代理入力に変えてしまうため）
+      const prev = answers['q-competitor'];
+      const same = Array.isArray(prev) ? prev.join('\n') === cleaned.join('\n') : cleaned.length === 0 && !prev;
+      if (!same) dispatch({ type: 'setAnswer', questionId: 'q-competitor', value: cleaned });
     }
     if (isLast) onAnalyze();
     else go(step + 1);
@@ -169,9 +175,18 @@ export function Wizard({ onAnalyze }: { onAnalyze: () => void }) {
                 <Typography variant="body2" sx={{ color: tokens.color.inkSoft }}>{aiLead(q.id, answers)}</Typography>
               </Box>
             </Stack>
-            <Typography variant="h2" component="h2" sx={{ mb: 2.5 }} id={`wizard-q-${q.id}`}>
+            <Typography variant="h2" component="h2" sx={{ mb: 1.25 }} id={`wizard-q-${q.id}`}>
               <label htmlFor={`answer-${q.id}`}>{q.text}</label>
             </Typography>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2.5, flexWrap: 'wrap', rowGap: 0.75 }}>
+              <AnswerOwner question={q} />
+              <ConfirmAnswerButton question={q} side="afro" />
+            </Stack>
+            {qs.assignee === 'client' && qs.state === 'unanswered' && (
+              <Typography variant="caption" component="p" sx={{ mt: -1.5, mb: 2 }}>
+                お客様がポータルで回答する質問です。ここで入力すると代理入力になり、お客様の確認が必要になります。
+              </Typography>
+            )}
 
             {q.id === 'q-competitor' ? (
               <CompetitorInput urls={competitors} onChange={(u) => dispatch({ type: 'setCompetitors', urls: u })} errors={touched ? competitorErrors : []} onSubmit={next} />

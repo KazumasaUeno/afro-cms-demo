@@ -1,21 +1,29 @@
 import type {
   Activity, AnswerValue, ApprovalLog, CmsPage, DemoState, DeployEnv, DesignId, DevState, DevTaskStatus, DiagnosisReport,
-  PageStatus, Project, QuestionPriority, SitemapEdge, SitemapNode, SitemapVariant,
+  AnswerSide, PageStatus, Project, QuestionPriority, RequirementMode, SitemapEdge, SitemapNode, SitemapVariant,
 } from '@/types';
 import { QUALITY_CATEGORIES, QUALITY_ITEMS } from '@/data/quality';
 import { nowIso } from '@/services/time';
 import { createSeedState } from './seed';
 import { DEV_ENVS, DEV_TASK_STATUSES, DEV_USER_ID, deployGate, seedDev } from '@/data/dev';
 import { memberById } from '@/data/members';
+import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
+import { MODE_LABEL, pendingConfirmations, questionStatus } from '@/features/requirements/assignment';
+import { isAnswered } from '@/features/requirements/validation';
 
 /** 操作した側。省略時はアフロ（管理者画面）。お客様の画面（CMS・ポータル）からは client を渡す */
-export type Side = 'afro' | 'client';
+export type Side = AnswerSide;
 
 export type Action =
   | { type: 'reset' }
   | { type: 'setCurrentProject'; id: string }
   | { type: 'updateProject'; id: string; patch: Partial<Project> }
-  | { type: 'setAnswer'; questionId: string; value: AnswerValue }
+  /** by を省略するとアフロ（管理者画面）。お客様ポータルからは client */
+  | { type: 'setAnswer'; questionId: string; value: AnswerValue; by?: Side }
+  /** 回答の分担を切り替える（承認前のみ） */
+  | { type: 'setRequirementMode'; mode: RequirementMode }
+  /** 担当ではない側が入力した回答（代理回答）を、担当側が確認する */
+  | { type: 'confirmAnswer'; questionId: string; by: Side }
   | { type: 'setCompetitors'; urls: string[] }
   | { type: 'completeAnalysis' }
   | { type: 'approveRequirements'; by?: Side }
@@ -70,6 +78,8 @@ function patchOwner(state: DemoState, patch: Partial<Project>): DemoState {
   };
 }
 
+const modeOfReq = (state: DemoState): RequirementMode => state.requirements.mode ?? 'shared';
+
 const ownerProject = (state: DemoState): Project => state.projects.find((p) => p.id === state.requirements.projectId) ?? currentProject(state);
 
 const STATUS_LABEL: Record<PageStatus, string> = { draft: '下書き保存', review: '承認依頼', scheduled: '予約公開', published: '公開' };
@@ -97,8 +107,36 @@ export function reducer(state: DemoState, action: Action): DemoState {
     case 'updateProject':
       return { ...state, projects: state.projects.map((p) => (p.id === action.id ? { ...p, ...action.patch, updatedAt: nowIso() } : p)) };
 
-    case 'setAnswer':
-      return { ...state, requirements: { ...state.requirements, answers: { ...state.requirements.answers, [action.questionId]: action.value } } };
+    case 'setAnswer': {
+      // 承認後は回答を変えない（変えると確認待ちが生まれ、承認し直す手段が無い）
+      if (state.requirements.status === 'approved') return state;
+      const { answerMeta = {}, ...req } = state.requirements;
+      const meta = { ...answerMeta };
+      // 書き換えた人が新しい回答者になる（代理回答の確認は取り消し）。空にしたら記録も消す
+      if (isAnswered(action.value)) meta[action.questionId] = { by: action.by ?? 'afro', at: nowIso() };
+      else delete meta[action.questionId];
+      // 競合サイトは提案書が competitors を読むため、回答と同じ値に揃える（表現を 1 つにする）
+      const competitors = action.questionId === 'q-competitor' && Array.isArray(action.value) ? action.value : req.competitors;
+      return { ...state, requirements: { ...req, competitors, answers: { ...req.answers, [action.questionId]: action.value }, answerMeta: meta } };
+    }
+
+    case 'setRequirementMode': {
+      // 分担を変えられるのは回答の受付中（AI 分析前）だけ。分析後に変えると、回答済みの質問が確認待ちに変わってしまう
+      if (state.requirements.status !== 'draft' || modeOfReq(state) === action.mode) return state;
+      const s = { ...state, requirements: { ...state.requirements, mode: action.mode } };
+      return log(s, `要件の回答の分担を「${MODE_LABEL[action.mode].label}」に切り替えました`, 'edit', ACTOR.afro, state.requirements.projectId);
+    }
+
+    case 'confirmAnswer': {
+      const q = REQUIREMENT_QUESTIONS.find((x) => x.id === action.questionId);
+      if (!q) return state;
+      const st = questionStatus(q, state.requirements);
+      // 確認できるのは、担当側が、確認待ちの代理回答を確認するときだけ
+      if (st.state !== 'proxy' || st.assignee !== action.by || !st.meta) return state;
+      const meta = { ...state.requirements.answerMeta, [q.id]: { ...st.meta, confirmedAt: nowIso() } };
+      const s = { ...state, requirements: { ...state.requirements, answerMeta: meta } };
+      return log(s, `代理入力された回答「${q.text}」を確認しました`, 'approve', ACTOR[action.by], state.requirements.projectId);
+    }
 
     case 'setCompetitors':
       return { ...state, requirements: { ...state.requirements, competitors: action.urls } };
@@ -109,6 +147,8 @@ export function reducer(state: DemoState, action: Action): DemoState {
     }
 
     case 'approveRequirements': {
+      // 確認待ちの代理回答が残っている間は承認できない（画面でも止めている）
+      if (state.requirements.status !== 'analyzed' || pendingConfirmations(state.requirements).length > 0) return state;
       const s = patchOwner(
         { ...state, requirements: { ...state.requirements, status: 'approved', approvedAt: nowIso() } },
         { stage: 'build', progress: Math.max(25, ownerProject(state).progress), nextAction: 'サイトマップを承認する' },
@@ -117,7 +157,7 @@ export function reducer(state: DemoState, action: Action): DemoState {
     }
 
     case 'resetRequirements':
-      return { ...state, requirements: createSeedState().requirements };
+      return { ...state, requirements: { ...createSeedState().requirements, mode: state.requirements.mode } };
 
     case 'setSitemap':
       return { ...state, sitemap: { ...state.sitemap, [action.variant]: { nodes: action.nodes, edges: action.edges } } };
