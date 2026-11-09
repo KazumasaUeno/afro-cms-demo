@@ -10,6 +10,7 @@ import { QUALITY_CATEGORIES, QUALITY_ITEMS } from '@/data/quality';
 import { tokens } from '@/theme/tokens';
 import type { QualityItem } from '@/types';
 import { DevMono } from './DevMono';
+import { useDevUser } from './useDevUser';
 
 const STEPS = ['ページを読み込んでいます', '表示速度を計測しています', 'アクセシビリティを確認しています', 'SEO の設定を確認しています', '結果をまとめています'];
 
@@ -33,6 +34,8 @@ type Checks = ReturnType<typeof useDemo>['state']['qualityChecks'];
 
 export default function DevChecksPage() {
   const { state, dispatch } = useDemo();
+  // ログイン中のメンバー（「自分の担当」「あなた」の判定と、操作の記録に使う）
+  const me = useDevUser();
   const reduced = useReducedMotion();
   const toast = useToast();
   const dev = devState(state);
@@ -52,7 +55,7 @@ export default function DevChecksPage() {
 
   const finish = () => {
     const before = checked;
-    dispatch({ type: 'runAutoChecks' });
+    dispatch({ type: 'runAutoChecks', by: me.id });
     setStep(null);
     toast(`自動チェックが完了しました（A区分 ${items.length - before}件を新たに確認・シミュレーション）`);
   };

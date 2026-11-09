@@ -2,7 +2,7 @@ import type { Deploy, DeployEnv, DevState, DevTask, DevTaskStatus } from '@/type
 import { BUILD_PAGES } from './designs';
 import { daysAgo, hoursAgo } from '@/services/time';
 
-/** 開発者画面のログインユーザー（デモでは固定） */
+/** 開発者画面の既定のログインユーザー（ログインしたメールがメンバーに当たらないときに使う。正は features/dev/useDevUser） */
 export const DEV_USER_ID = 'm3';
 
 export const DEV_TASK_STATUSES: { id: DevTaskStatus; label: string }[] = [

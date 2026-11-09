@@ -45,9 +45,10 @@ export type Action =
   | { type: 'addDiagnosis'; report: Omit<DiagnosisReport, 'id' | 'at' | 'cycle'> }
   | { type: 'updateSettings'; patch: Partial<DemoState['settings']> }
   /** 開発者画面（操作者は制作エンジニア） */
-  | { type: 'setDevTaskStatus'; id: string; status: DevTaskStatus }
-  | { type: 'runAutoChecks' }
-  | { type: 'deploy'; env: DeployEnv }
+  // by: 操作したメンバーの id（ログイン中の人。省略時は DEV_USER_ID）
+  | { type: 'setDevTaskStatus'; id: string; status: DevTaskStatus; by?: string }
+  | { type: 'runAutoChecks'; by?: string }
+  | { type: 'deploy'; env: DeployEnv; by?: string }
   /** デジタルサイネージ（お客様ポータル。操作者はお客様） */
   | { type: 'saveSlide'; slide: Slide }
   | { type: 'deleteSlide'; id: string }
@@ -68,7 +69,8 @@ export const APPROVE_TEXT = {
 } as const;
 /** 開発者画面の操作者（アフロ側の制作エンジニア） */
 /** 開発者画面で操作する人（デモでは固定。名前の正は data/members） */
-const DEV_ACTOR = memberById(DEV_USER_ID).name;
+/** 開発者画面の操作者の名前（ログイン中のメンバー。省略時は DEV_USER_ID） */
+const devActor = (by?: string) => memberById(by ?? DEV_USER_ID).name;
 
 let seq = 0;
 const uid = (p: string) => `${p}-${Date.now().toString(36)}-${(seq++).toString(36)}`;
@@ -287,7 +289,7 @@ export function reducer(state: DemoState, action: Action): DemoState {
       if (!task || task.status === action.status) return state;
       const tasks = dev.tasks.map((t) => (t.id === task.id ? { ...t, status: action.status, updatedAt: nowIso() } : t));
       const label = DEV_TASK_STATUSES.find((x) => x.id === action.status)?.label ?? action.status;
-      return log({ ...state, dev: { ...dev, tasks } }, `構築タスク「${task.title}」を${label}にしました`, 'edit', DEV_ACTOR);
+      return log({ ...state, dev: { ...dev, tasks } }, `構築タスク「${task.title}」を${label}にしました`, 'edit', devActor(action.by));
     }
 
     case 'runAutoChecks': {
@@ -297,14 +299,14 @@ export function reducer(state: DemoState, action: Action): DemoState {
       let count = 0;
       for (const t of QUALITY_ITEMS) {
         if (t.priority !== 'A' || checks[t.id]?.afroAt) continue;
-        checks[t.id] = { ...checks[t.id], afroAt: at, afroBy: DEV_ACTOR };
+        checks[t.id] = { ...checks[t.id], afroAt: at, afroBy: devActor(action.by) };
         count++;
       }
       let s: DemoState = { ...state, qualityChecks: checks, dev: { ...dev, checksRunAt: at } };
       // 新たに確認した項目が無い再実行は、実行日時だけ更新する（アクティビティに「0件」を積まない）
       if (count === 0) return s;
-      s = approval(s, 'afro', `自動チェックで A区分を確認（${count}件）`, '全カテゴリ', DEV_ACTOR);
-      return log(s, `自動チェックを実行しました（A区分 ${count}件を新たに確認・シミュレーション）`, 'check', DEV_ACTOR);
+      s = approval(s, 'afro', `自動チェックで A区分を確認（${count}件）`, '全カテゴリ', devActor(action.by));
+      return log(s, `自動チェックを実行しました（A区分 ${count}件を新たに確認・シミュレーション）`, 'check', devActor(action.by));
     }
 
     case 'deploy': {
@@ -313,9 +315,9 @@ export function reducer(state: DemoState, action: Action): DemoState {
       if (!gate.ok || !gate.version) return state;
       const env = DEV_ENVS.find((e) => e.id === action.env);
       const note = action.env === 'development' ? '最新の作業内容を反映' : `v${gate.version} を${action.env === 'staging' ? '開発環境' : '検証環境'}から昇格`;
-      const deploy = { id: uid('dep'), env: action.env, version: gate.version, at: nowIso(), by: DEV_ACTOR, status: 'success' as const, note };
+      const deploy = { id: uid('dep'), env: action.env, version: gate.version, at: nowIso(), by: devActor(action.by), status: 'success' as const, note };
       const s: DemoState = { ...state, dev: { ...dev, deploys: [deploy, ...dev.deploys].slice(0, 50) } };
-      return log(s, `${env?.label ?? action.env}へ v${gate.version} をデプロイしました（シミュレーション）`, 'publish', DEV_ACTOR);
+      return log(s, `${env?.label ?? action.env}へ v${gate.version} をデプロイしました（シミュレーション）`, 'publish', devActor(action.by));
     }
 
     case 'saveSlide': {

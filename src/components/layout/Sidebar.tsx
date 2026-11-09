@@ -6,7 +6,7 @@ import { AREAS, areaOf, isActive, type AreaDef, type NavItem } from './nav';
 import { Logo } from './Logo';
 import { MemberAvatar } from '@/components/ui';
 import { memberById } from '@/data/members';
-import { DEV_USER_ID } from '@/data/dev';
+import { useDevUser } from '@/features/dev/useDevUser';
 import { useDemo, currentProject } from '@/store/DemoStore';
 
 function NavRow({ item, color, onNavigate }: { item: NavItem; color: string; onNavigate?: () => void }) {
@@ -87,7 +87,8 @@ function AreaFooter({ area }: { area: AreaDef }) {
   const project = currentProject(state);
   const dev = area.id === 'dev';
   // 開発者画面は担当エンジニア（デモでは黒田）、ポータルは担当ディレクター
-  const person = memberById(dev ? DEV_USER_ID : project.ownerId);
+  const devUser = useDevUser();
+  const person = dev ? devUser : memberById(project.ownerId);
   return (
     <Box sx={{ p: 1.5, borderRadius: 3, border: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface }}>
       <Typography variant="overline" sx={{ display: 'block', lineHeight: 1.4 }}>{dev ? '担当案件' : '担当ディレクター'}</Typography>

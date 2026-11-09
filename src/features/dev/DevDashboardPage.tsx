@@ -5,26 +5,29 @@ import { useNavigate } from 'react-router-dom';
 import { PageHeader, SectionTitle, StatusPill, Surface } from '@/components/ui';
 import { useDemo, devState } from '@/store/DemoStore';
 import { formatDateTime, relativeTime } from '@/services/time';
-import { DEV_ENVS, DEV_TASK_STATUSES, DEV_USER_ID, devRecentErrors, latestDeploy, latestSuccess } from '@/data/dev';
+import { DEV_ENVS, DEV_TASK_STATUSES, devRecentErrors, latestDeploy, latestSuccess } from '@/data/dev';
 import { QUALITY_ITEMS } from '@/data/quality';
 import { tokens } from '@/theme/tokens';
 import type { DevTaskStatus } from '@/types';
 import { ENV_TONE, TASK_TONE, envDef, envSync, nextDevAction, taskLabel } from './devUi';
 import { DevMono } from './DevMono';
+import { useDevUser } from './useDevUser';
 
 /** 「あなたのタスク」の並び順（作業中 → レビュー待ち → 未着手） */
 const MINE_ORDER: Record<DevTaskStatus, number> = { doing: 0, review: 1, todo: 2, done: 3 };
 
 export default function DevDashboardPage() {
   const { state } = useDemo();
+  // ログイン中のメンバー（「自分の担当」「あなた」の判定と、操作の記録に使う）
+  const me = useDevUser();
   const navigate = useNavigate();
   const dev = devState(state);
   const errors = useMemo(() => devRecentErrors(), []);
-  const mineAll = dev.tasks.filter((t) => t.assigneeId === DEV_USER_ID && t.status !== 'done');
+  const mineAll = dev.tasks.filter((t) => t.assigneeId === me.id && t.status !== 'done');
   const mine = [...mineAll].sort((a, b) => MINE_ORDER[a.status] - MINE_ORDER[b.status]).slice(0, 5);
   const aItems = QUALITY_ITEMS.filter((i) => i.priority === 'A');
   const aChecked = aItems.filter((i) => state.qualityChecks[i.id]?.afroAt).length;
-  const next = nextDevAction(dev, !!state.design.approvedAt);
+  const next = nextDevAction(dev, !!state.design.approvedAt, me.id);
 
   return (
     <>

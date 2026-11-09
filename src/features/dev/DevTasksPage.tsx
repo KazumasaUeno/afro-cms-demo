@@ -6,24 +6,27 @@ import { useDemo, devState } from '@/store/DemoStore';
 import { useToast } from '@/hooks/useToast';
 import { relativeTime } from '@/services/time';
 import { memberById } from '@/data/members';
-import { DEV_TASK_STATUSES, DEV_USER_ID } from '@/data/dev';
+import { DEV_TASK_STATUSES } from '@/data/dev';
 import { tokens } from '@/theme/tokens';
 import type { DevTask, DevTaskStatus } from '@/types';
 import { NEXT_STATUS, TASK_TONE, taskLabel } from './devUi';
+import { useDevUser } from './useDevUser';
 
 /** 390px の状態タブで 4 等分に収まらない名前だけ短くする（aria-label は正式名） */
 const SHORT_LABEL: Partial<Record<DevTaskStatus, string>> = { review: 'レビュー' };
 
 export default function DevTasksPage() {
   const { state, dispatch } = useDemo();
+  // ログイン中のメンバー（「自分の担当」「あなた」の判定と、操作の記録に使う）
+  const me = useDevUser();
   const toast = useToast();
   const [mineOnly, setMineOnly] = useState(false);
   const [tab, setTab] = useState<DevTaskStatus>('doing');
   const [menu, setMenu] = useState<{ el: HTMLElement; task: DevTask } | null>(null);
-  const tasks = devState(state).tasks.filter((t) => !mineOnly || t.assigneeId === DEV_USER_ID);
+  const tasks = devState(state).tasks.filter((t) => !mineOnly || t.assigneeId === me.id);
 
   const change = (id: string, title: string, status: DevTaskStatus) => {
-    dispatch({ type: 'setDevTaskStatus', id, status });
+    dispatch({ type: 'setDevTaskStatus', id, status, by: me.id });
     toast(`「${title}」を${taskLabel(status)}にしました`);
   };
 
@@ -91,7 +94,7 @@ export default function DevTasksPage() {
                         <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 1, minWidth: 0 }}>
                           <MemberAvatar id={m.id} size={20} />
                           <Typography variant="caption" noWrap sx={{ minWidth: 0 }}>{m.name}</Typography>
-                          {m.id === DEV_USER_ID && <StatusPill tone="primary" dot={false}>あなた</StatusPill>}
+                          {m.id === me.id && <StatusPill tone="primary" dot={false}>あなた</StatusPill>}
                           <Typography variant="caption" noWrap sx={{ flexShrink: 0 }}>{relativeTime(t.updatedAt)}</Typography>
                         </Stack>
                         <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1.5 }}>

@@ -11,6 +11,7 @@ import { tokens } from '@/theme/tokens';
 import type { DeployEnv } from '@/types';
 import { ENV_TONE, envDef, envSync } from './devUi';
 import { DevMono } from './DevMono';
+import { useDevUser } from './useDevUser';
 
 /** 押せるボタンのうち、どれを「次の 1 手」として強調するか（検証 → 本番 → 開発） */
 const PRIMARY_ORDER: DeployEnv[] = ['staging', 'production', 'development'];
@@ -22,6 +23,8 @@ const PROD_URL = DEV_ENVS.find((e) => e.id === 'production')?.url ?? '';
 
 export default function DevDeploysPage() {
   const { state, dispatch } = useDemo();
+  // ログイン中のメンバー（「自分の担当」「あなた」の判定と、操作の記録に使う）
+  const me = useDevUser();
   const toast = useToast();
   const navigate = useNavigate();
   const dev = devState(state);
@@ -33,7 +36,7 @@ export default function DevDeploysPage() {
   const doDeploy = (env: DeployEnv) => {
     const gate = deployGate(dev, env, state.design.approvedAt);
     if (!gate.ok) return;
-    dispatch({ type: 'deploy', env });
+    dispatch({ type: 'deploy', env, by: me.id });
     toast(`${envDef(env).label}へ v${gate.version} をデプロイしました（シミュレーション）`);
   };
 
