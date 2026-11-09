@@ -13,6 +13,7 @@ import { daysFromNow, formatDate, nowIso, relativeTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
 import { TOUCH } from '@/theme/media';
 import { nextBestAction, stageLabel, stagePrimaryRoute } from '@/features/projects/projectHelpers';
+import { ClientStatusPanel } from '@/features/projects/ClientStatusPanel';
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -224,6 +225,11 @@ export default function HomePage() {
 
         {/* 右カラム */}
         <Stack spacing={{ xs: 2, md: 3 }} sx={{ minWidth: 0 }}>
+          {/* お客様の対応状況（デモの案件） */}
+          <Reveal delay={0.14}>
+            <ClientStatusPanel compact />
+          </Reveal>
+
           {/* 承認待ち */}
           <Reveal delay={0.16}>
             <Surface>

@@ -53,8 +53,12 @@ export type Action =
   | { type: 'setDisplaySlides'; id: string; slideIds: string[] }
   | { type: 'deliverDisplay'; id: string };
 
-/** 操作した人（デモでは固定） */
-const ACTOR = { afro: '上野 航', client: 'ミナモ珈琲 担当者' } as const;
+/** 操作した人の表示名（デモでは固定）。お客様の操作かどうかの判定にも使う */
+export const ACTOR = { afro: '上野 航', client: 'ミナモ珈琲 担当者' } as const;
+/** 承認したときにアクティビティへ残す文（管理者画面の「お客様の対応状況」が承認した人を探すのにも使う） */
+export const APPROVE_TEXT = {
+  requirements: '要件定義書を承認しました', sitemap: '改善後のサイトマップを承認しました', design: 'トップデザイン案を採用・承認しました',
+} as const;
 /** 開発者画面の操作者（アフロ側の制作エンジニア） */
 /** 開発者画面で操作する人（デモでは固定。名前の正は data/members） */
 const DEV_ACTOR = memberById(DEV_USER_ID).name;
@@ -159,7 +163,8 @@ export function reducer(state: DemoState, action: Action): DemoState {
         { ...state, requirements: { ...state.requirements, status: 'approved', approvedAt: nowIso() } },
         { stage: 'build', progress: Math.max(25, ownerProject(state).progress), nextAction: 'サイトマップを承認する' },
       );
-      return log(approval(s, 'client', '要件定義書を承認', '要件定義'), '要件定義書を承認しました', 'approve', ACTOR[action.by ?? 'afro'], state.requirements.projectId);
+      // 承認の記録には実際に操作した人を残す（アフロが代わりに承認した場合はアフロの名前）
+      return log(approval(s, 'client', '要件定義書を承認', '要件定義', ACTOR[action.by ?? 'afro']), APPROVE_TEXT.requirements, 'approve', ACTOR[action.by ?? 'afro'], state.requirements.projectId);
     }
 
     case 'resetRequirements':
@@ -172,7 +177,7 @@ export function reducer(state: DemoState, action: Action): DemoState {
       const s = patchOwner({ ...state, sitemap: { ...state.sitemap, approvedAt: nowIso() } }, {
         progress: Math.max(38, ownerProject(state).progress), nextAction: 'デザイン案の採用を決める',
       });
-      return log(approval(s, 'client', 'サイトマップを承認', '制作 / サイトマップ'), '改善後のサイトマップを承認しました', 'approve', ACTOR[action.by ?? 'afro'], state.requirements.projectId);
+      return log(approval(s, 'client', 'サイトマップを承認', '制作 / サイトマップ', ACTOR[action.by ?? 'afro']), APPROVE_TEXT.sitemap, 'approve', ACTOR[action.by ?? 'afro'], state.requirements.projectId);
     }
 
     case 'selectDesign':
@@ -183,7 +188,7 @@ export function reducer(state: DemoState, action: Action): DemoState {
       const s = patchOwner({ ...state, design: { ...state.design, approvedAt: nowIso() } }, {
         progress: Math.max(52, ownerProject(state).progress), nextAction: '全ページを構築する',
       });
-      return log(approval(s, 'client', 'トップデザインを承認', `制作 / デザイン（${state.design.selected}）`), 'トップデザイン案を採用・承認しました', 'approve', ACTOR[action.by ?? 'afro'], state.requirements.projectId);
+      return log(approval(s, 'client', 'トップデザインを承認', `制作 / デザイン（${state.design.selected}）`, ACTOR[action.by ?? 'afro']), APPROVE_TEXT.design, 'approve', ACTOR[action.by ?? 'afro'], state.requirements.projectId);
     }
 
     case 'startBuild':

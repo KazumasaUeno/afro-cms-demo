@@ -13,6 +13,7 @@ import { formatDate, formatDateTime, relativeTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { nextBestAction, qualityCompletion, STAGE_LINKS, stagePrimaryRoute } from './projectHelpers';
+import { ClientStatusPanel } from './ClientStatusPanel';
 
 function Fact({ label, value, ok }: { label: string; value: ReactNode; ok?: boolean }) {
   return (
@@ -150,6 +151,12 @@ export default function ProjectDetailPage() {
           </Stack>
         </Surface>
       </Reveal>
+
+      {isDemo && (
+        <Reveal delay={0.03}>
+          <Box sx={{ mb: { xs: 3, md: 4 } }}><ClientStatusPanel /></Box>
+        </Reveal>
+      )}
 
       <Typography variant="h3" component="h2" sx={{ mb: 0.5 }}>制作の5段階</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
