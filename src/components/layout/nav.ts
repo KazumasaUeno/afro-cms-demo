@@ -1,5 +1,5 @@
 import {
-  BarChart3, Building2, ClipboardCheck, Code2, FileText, FolderKanban, Gauge, House, LayoutDashboard, ListChecks, ListTodo, MessageSquareText, Monitor, Network,
+  BarChart3, Building2, ClipboardCheck, Code2, FileText, FolderKanban, Gauge, House, LayoutDashboard, ListChecks, ListTodo, MessageSquareText, Monitor,
   Rocket, ScrollText, Settings, ShieldCheck, Sparkles, Stamp, UserRound, type LucideIcon,
 } from 'lucide-react';
 
@@ -46,8 +46,8 @@ export interface AreaDef {
 const ADMIN_ITEMS: NavItem[] = [
   { to: '/', label: 'ホーム', icon: House, match: ['/'], exact: true, hint: '今日の状況' },
   { to: '/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/projects'], hint: '制作案件の一覧' },
-  { to: '/ai-studio', label: 'AI Studio', icon: Sparkles, match: ['/ai-studio'], hint: 'AI要件定義・デザイン生成' },
-  { to: '/site', label: 'サイト制作', icon: Network, match: ['/site'], hint: 'サイトマップ・構築' },
+  // サイトマップ（/site）は AI Studio の流れ（要件 → サイトマップ → デザイン）の 2 段階目なので、AI Studio の中として扱う（段階ナビから移動する）
+  { to: '/ai-studio', label: 'AI Studio', icon: Sparkles, match: ['/ai-studio', '/site'], hint: 'AI要件定義・サイトマップ・デザイン' },
   { to: '/quality', label: '品質チェック', icon: ShieldCheck, match: ['/quality'], hint: '12項目110問' },
   { to: '/insights', label: 'インサイト', icon: BarChart3, match: ['/insights'], hint: '解析と改善提案' },
 ];
@@ -78,7 +78,7 @@ export const AREAS: Record<AreaId, AreaDef> = {
     id: 'admin', label: '管理者画面', short: '管理者', audience: 'アフロ社内',
     description: '案件・要件・制作・品質・改善を進める', home: '/', icon: Building2,
     color: '#3B5BDB', soft: '#EEF2FF',
-    items: ADMIN_ITEMS, bottom: [ADMIN_ITEMS[0], ADMIN_ITEMS[1], ADMIN_ITEMS[2], ADMIN_ITEMS[4]], settings: SETTINGS_ITEM,
+    items: ADMIN_ITEMS, bottom: [ADMIN_ITEMS[0], ADMIN_ITEMS[1], ADMIN_ITEMS[2], ADMIN_ITEMS[3]], settings: SETTINGS_ITEM,
   },
   portal: {
     id: 'portal', label: 'お客様ポータル', short: 'ポータル', audience: 'お客様',

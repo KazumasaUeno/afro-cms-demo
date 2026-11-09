@@ -1,6 +1,6 @@
 import { Box, ButtonBase, Stack, Tooltip, Typography } from '@mui/material';
 import { ExternalLink, Presentation } from 'lucide-react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { tokens } from '@/theme/tokens';
 import { AREAS, areaOf, isActive, type AreaDef, type NavItem } from './nav';
 import { Logo } from './Logo';
@@ -14,10 +14,10 @@ function NavRow({ item, color, onNavigate }: { item: NavItem; color: string; onN
   const active = isActive(item, pathname);
   const Icon = item.icon;
   return (
+    // 選択中の判定は item.match で行う（NavLink は aria-current を自分の判定で上書きするので Link を使う）
     <ButtonBase
-      component={NavLink}
+      component={Link}
       to={item.to}
-      end={item.exact}
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
       sx={{

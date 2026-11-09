@@ -6,7 +6,7 @@ import { tokens } from '@/theme/tokens';
 
 /**
  * 「要件定義 → サイトマップ → デザイン」の制作フロー。
- * AI Studio / サイト制作 の各画面の上部に置き、どこまで承認済みかを示す。
+ * AI Studio の各画面（要件・サイトマップ・デザイン）の上部に置き、どこまで承認済みかを示す。
  */
 export function BuildFlowNav() {
   const { state } = useDemo();

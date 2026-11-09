@@ -2,7 +2,7 @@ import { Box, ButtonBase, Drawer, IconButton, Menu, MenuItem, Tooltip, Typograph
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowLeftRight, Check, ChevronDown, LogOut, Menu as MenuIcon, Presentation, RotateCcw, Bell } from 'lucide-react';
 import { Suspense, lazy, useEffect, useState } from 'react';
-import { NavLink, useLocation, useNavigate, useOutlet } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useOutlet } from 'react-router-dom';
 import { tokens } from '@/theme/tokens';
 import { LANDSCAPE_PHONE } from '@/theme/media';
 import { useDemo, currentProject } from '@/store/DemoStore';
@@ -201,7 +201,8 @@ function BottomTabs({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
         const Icon = item.icon;
         return (
           <ButtonBase
-            key={item.to} component={NavLink} to={item.to} end={item.exact} aria-current={active ? 'page' : undefined}
+            // 選択中の判定は item.match で行う（NavLink だと aria-current が上書きされる）
+            key={item.to} component={Link} to={item.to} aria-current={active ? 'page' : undefined}
             sx={{ flex: 1, flexDirection: 'column', gap: 0.25, height: 58, fontSize: 12, lineHeight: 1.2, whiteSpace: 'nowrap', fontWeight: 600, color: active ? area.color : tokens.color.muted }}
           >
             <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
