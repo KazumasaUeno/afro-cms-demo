@@ -1,11 +1,11 @@
 import { Box, Button, Stack, Typography } from '@mui/material';
-import { ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Clock, FolderSearch, Globe, User } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Clock, Code2, FolderSearch, Globe, User } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import type { Stage } from '@/types';
-import { useDemo } from '@/store/DemoStore';
+import { devProjectsState, useDemo } from '@/store/DemoStore';
 import { STAGES, stageIndex } from '@/data/projects';
-import { memberById } from '@/data/members';
+import { MEMBERS, memberById } from '@/data/members';
 import { TOTAL_REQUIREMENT_QUESTIONS } from '@/data/requirements';
 import { TOTAL_QUALITY_QUESTIONS } from '@/data/quality';
 import { MemberAvatar, ProgressRing, Reveal, StatusPill, Surface } from '@/components/ui';
@@ -52,6 +52,9 @@ export default function ProjectDetailPage() {
 
   const cur = stageIndex(p.stage);
   const owner = memberById(p.ownerId);
+  // 開発担当（ユーザー管理で決める。開発者画面の権限の有無は問わない）
+  const devAll = devProjectsState(state);
+  const devNames = MEMBERS.filter((m) => devAll[m.id]?.includes(p.id)).map((m) => m.name);
   const q = qualityCompletion(state.qualityChecks);
   const answered = Object.values(state.requirements.answers).filter((v) => (Array.isArray(v) ? v.length > 0 : v.trim() !== '')).length;
   const published = state.pages.filter((x) => x.status === 'published').length;
@@ -126,6 +129,7 @@ export default function ProjectDetailPage() {
               <Stack direction="row" sx={{ mt: 1.5, flexWrap: 'wrap', gap: { xs: 1, sm: 2.5 }, color: tokens.color.muted }}>
                 <Stack direction="row" spacing={0.75} alignItems="center"><Globe size={15} /><Typography variant="body2">{p.siteUrl.replace(/^https?:\/\//, '')}</Typography></Stack>
                 <Stack direction="row" spacing={0.75} alignItems="center"><User size={15} /><Typography variant="body2">{owner.name}（{owner.role}）</Typography></Stack>
+                <Stack direction="row" spacing={0.75} alignItems="center"><Code2 size={15} aria-hidden /><Typography variant="body2">開発担当: {devNames.length ? devNames.join('・') : 'なし'}</Typography></Stack>
                 <Stack direction="row" spacing={0.75} alignItems="center"><Clock size={15} /><Typography variant="body2">更新 {relativeTime(p.updatedAt)}</Typography></Stack>
                 {p.launchDate && <Stack direction="row" spacing={0.75} alignItems="center"><CalendarDays size={15} /><Typography variant="body2">公開予定 {formatDate(p.launchDate)}</Typography></Stack>}
               </Stack>

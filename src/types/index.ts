@@ -386,4 +386,6 @@ export interface DemoState {
   clientAccounts?: ClientAccount[];
   /** 開発者画面を開けるメンバー（Member.id → 可否）。0.13.0 で追加（devAccessState() で補う） */
   devAccess?: Record<string, boolean>;
+  /** 開発者が担当するプロジェクト（Member.id → Project.id の一覧）。0.14.0 で追加（devProjectsState() で補う） */
+  devProjects?: Record<string, string[]>;
 }

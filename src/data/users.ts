@@ -61,6 +61,11 @@ export function seedDevAccess(): Record<string, boolean> {
   return Object.fromEntries(MEMBERS.map((m) => [m.id, m.id === 'm1' || m.id === 'm3']));
 }
 
+/** 初期の開発担当（黒田は MINAMO COFFEE と北条建設、上野は MINAMO COFFEE。ほかは未担当） */
+export function seedDevProjects(): Record<string, string[]> {
+  return Object.fromEntries(MEMBERS.map((m) => [m.id, m.id === 'm3' ? ['p1', 'p2'] : m.id === 'm1' ? ['p1'] : []]));
+}
+
 export const memberByEmail = (email: string) => {
   const e = normalizeEmail(email);
   return MEMBERS.find((m) => m.email === e);

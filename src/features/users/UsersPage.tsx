@@ -1,17 +1,19 @@
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Stack, Switch, Tab, Tabs, Typography } from '@mui/material';
-import { Ban, Info, Pencil, Plus, RotateCcw } from 'lucide-react';
+import { Ban, FolderKanban, Info, Pencil, Plus, RotateCcw } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { ClientAccount } from '@/types';
+import type { ClientAccount, Member } from '@/types';
 import { MemberAvatar, PageHeader, Reveal, StatusPill, Surface } from '@/components/ui';
-import { clientAccountsState, devAccessState, useDemo } from '@/store/DemoStore';
+import { clientAccountsState, devAccessState, devProjectsState, useDemo } from '@/store/DemoStore';
 import { useToast } from '@/hooks/useToast';
 import { useSessions } from '@/services/session';
 import { formatDate } from '@/services/time';
 import { MEMBERS } from '@/data/members';
 import { CLIENT_STATUS, normalizeEmail, type ClientAccountDraft } from '@/data/users';
+import { TOUCH } from '@/theme/media';
 import { tokens } from '@/theme/tokens';
 import { ClientAccountDialog } from './ClientAccountDialog';
+import { DevProjectsDialog } from './DevProjectsDialog';
 
 type TabId = 'clients' | 'dev';
 
@@ -77,6 +79,8 @@ export default function UsersPage() {
   const tab: TabId = params.get('tab') === 'dev' ? 'dev' : 'clients';
   const accounts = clientAccountsState(state);
   const access = devAccessState(state);
+  const devProjects = devProjectsState(state);
+  const [assigning, setAssigning] = useState<Member | null>(null);
 
   const [editing, setEditing] = useState<ClientAccountDraft | null>(null);
   const [disabling, setDisabling] = useState<ClientAccount | null>(null);
@@ -112,11 +116,20 @@ export default function UsersPage() {
     toast(enabled ? `${name}に開発者画面の権限を追加しました` : `${name}の開発者画面の権限を外しました`, enabled ? 'success' : 'info');
   };
 
+  const saveDevProjects = (m: Member, projectIds: string[]) => {
+    const prev = devProjects[m.id] ?? [];
+    const next = state.projects.filter((p) => projectIds.includes(p.id)).map((p) => p.id);
+    dispatch({ type: 'setDevProjects', memberId: m.id, projectIds });
+    setAssigning(null);
+    if (prev.length === next.length && prev.every((id, i) => id === next[i])) return;
+    toast(next.length ? `${m.name}の担当プロジェクトを保存しました（${next.length}件）` : `${m.name}の担当プロジェクトをすべて外しました`, next.length ? 'success' : 'info');
+  };
+
   return (
     <>
       <PageHeader
         title="ユーザー管理"
-        description="お客様ポータルにログインできるお客様の登録と、開発者画面を開けるアフロのメンバーを設定します。"
+        description="お客様ポータルにログインできるお客様の登録と、開発者画面を開けるアフロのメンバー・その担当プロジェクトを設定します。"
       />
 
       <Stack spacing={{ xs: 2, md: 2.5 }}>
@@ -128,7 +141,7 @@ export default function UsersPage() {
           sx={{ borderBottom: `1px solid ${tokens.color.border}` }}
         >
           <Tab value="clients" label={`お客様 ${accounts.length}`} id="users-tab-clients" aria-controls="users-panel" />
-          <Tab value="dev" label={`開発者画面の権限 ${devCount}`} id="users-tab-dev" aria-controls="users-panel" />
+          <Tab value="dev" label={`開発者の権限・担当 ${devCount}`} id="users-tab-dev" aria-controls="users-panel" />
         </Tabs>
 
         <Box id="users-panel" role="tabpanel" aria-labelledby={`users-tab-${tab}`}>
@@ -187,6 +200,7 @@ export default function UsersPage() {
             <Stack spacing={2}>
               <DemoNote>
                 スイッチをオンにしたメンバーだけが、開発者画面にログインできます。オフにすると、ログイン中の場合は次に開発者画面を開いたときにログアウトされます。
+                <Box component="span" sx={{ display: 'block', mt: 0.5 }}>開発者画面で開けるのは担当プロジェクトだけです。「担当を変更」から選びます。</Box>
                 <Box component="span" sx={{ display: 'block', mt: 0.5 }}>デモのため画面上の制御だけで、セキュリティ上の保護ではありません。</Box>
               </DemoNote>
               <Reveal>
@@ -195,28 +209,64 @@ export default function UsersPage() {
                     {MEMBERS.map((m) => {
                       const on = !!access[m.id];
                       const loggedIn = devSessionEmail === m.email;
+                      const mine = state.projects.filter((p) => (devProjects[m.id] ?? []).includes(p.id));
                       return (
-                        <Stack
-                          key={m.id} component="li" direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 1, sm: 2 }} alignItems={{ sm: 'center' }}
+                        <Box
+                          key={m.id} component="li"
                           sx={{ px: { xs: 2, md: 2.5 }, py: { xs: 1.75, md: 1.5 }, borderTop: `1px solid ${tokens.color.border}`, '&:first-of-type': { borderTop: 'none' } }}
                         >
-                          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flex: 1, minWidth: 0 }}>
-                            <MemberAvatar id={m.id} size={36} />
-                            <Box sx={{ minWidth: 0 }}>
-                              <Stack direction="row" sx={{ gap: 0.75, flexWrap: 'wrap', alignItems: 'center' }}>
-                                <Typography variant="body2" sx={{ fontWeight: 700 }}>{m.name}</Typography>
-                                <Typography variant="caption">{m.role}</Typography>
-                                {loggedIn && <StatusPill tone="accent" dot={false}>開発者画面にログイン中</StatusPill>}
-                              </Stack>
-                              <Typography variant="caption" sx={{ display: 'block', ...mono }}>{m.email}</Typography>
-                            </Box>
+                          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 1, sm: 2 }} alignItems={{ sm: 'center' }}>
+                            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flex: 1, minWidth: 0 }}>
+                              <MemberAvatar id={m.id} size={36} />
+                              <Box sx={{ minWidth: 0 }}>
+                                <Stack direction="row" sx={{ gap: 0.75, flexWrap: 'wrap', alignItems: 'center' }}>
+                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{m.name}</Typography>
+                                  <Typography variant="caption">{m.role}</Typography>
+                                  {loggedIn && <StatusPill tone="accent" dot={false}>開発者画面にログイン中</StatusPill>}
+                                </Stack>
+                                <Typography variant="caption" sx={{ display: 'block', ...mono }}>{m.email}</Typography>
+                              </Box>
+                            </Stack>
+                            <FormControlLabel
+                              control={<Switch checked={on} onChange={(e) => setDev(m.id, m.name, e.target.checked)} inputProps={{ 'aria-label': `${m.name}が開発者画面を開ける` }} />}
+                              label="開発者画面を開ける"
+                              sx={{ mr: 0, ml: { xs: 5.5, sm: 0 }, flexShrink: 0, '& .MuiFormControlLabel-label': { fontSize: 13.5, fontWeight: 600, color: on ? tokens.color.ink : tokens.color.muted } }}
+                            />
                           </Stack>
-                          <FormControlLabel
-                            control={<Switch checked={on} onChange={(e) => setDev(m.id, m.name, e.target.checked)} inputProps={{ 'aria-label': `${m.name}が開発者画面を開ける` }} />}
-                            label="開発者画面を開ける"
-                            sx={{ mr: 0, ml: { xs: 5.5, sm: 0 }, flexShrink: 0, '& .MuiFormControlLabel-label': { fontSize: 13.5, fontWeight: 600, color: on ? tokens.color.ink : tokens.color.muted } }}
-                          />
-                        </Stack>
+                          {/* 担当プロジェクト（権限がオフでも決めておける。オフの間は薄く表示する） */}
+                          <Stack
+                            direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 1, sm: 2 }} alignItems={{ sm: 'center' }}
+                            sx={{ mt: 1.25, ml: { xs: 0, sm: 6 }, minWidth: 0 }}
+                          >
+                            <Box role="group" aria-label={`${m.name}の担当プロジェクト`} sx={{ flex: 1, minWidth: 0 }}>
+                              <Stack direction="row" sx={{ gap: 0.75, flexWrap: 'wrap', alignItems: 'center', opacity: on ? 1 : 0.6 }}>
+                                <Typography variant="caption" sx={{ fontWeight: 650, color: tokens.color.muted, mr: 0.25 }}>担当プロジェクト</Typography>
+                                {mine.length ? mine.map((p) => (
+                                  <Box
+                                    key={p.id} component="span" data-dev-project={p.id}
+                                    sx={{
+                                      display: 'inline-flex', alignItems: 'center', gap: 0.75, px: 1, height: 26, maxWidth: '100%', minWidth: 0, borderRadius: '8px',
+                                      border: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface, fontSize: 12.5, fontWeight: 600, color: tokens.color.inkSoft,
+                                    }}
+                                  >
+                                    <Box component="span" sx={{ width: 8, height: 8, borderRadius: '2px', bgcolor: p.accent, flexShrink: 0 }} aria-hidden />
+                                    <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.siteName}</Box>
+                                  </Box>
+                                )) : <Typography variant="caption" sx={{ color: tokens.color.muted }}>なし</Typography>}
+                              </Stack>
+                              {!on && mine.length > 0 && (
+                                <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: tokens.color.muted }}>権限がオフのため開けません</Typography>
+                              )}
+                            </Box>
+                            <Button
+                              size="small" variant="outlined" startIcon={<FolderKanban size={14} />} onClick={() => setAssigning(m)}
+                              aria-label={`${m.name}の担当プロジェクトを変更`}
+                              sx={{ flexShrink: 0, alignSelf: { xs: 'flex-start', sm: 'center' }, [TOUCH]: { minHeight: 44 } }}
+                            >
+                              担当を変更
+                            </Button>
+                          </Stack>
+                        </Box>
                       );
                     })}
                   </Box>
@@ -226,6 +276,11 @@ export default function UsersPage() {
           )}
         </Box>
       </Stack>
+
+      <DevProjectsDialog
+        member={assigning} assigned={assigning ? devProjects[assigning.id] ?? [] : []} hasAccess={assigning ? !!access[assigning.id] : false}
+        projects={state.projects} onClose={() => setAssigning(null)} onSave={(ids) => assigning && saveDevProjects(assigning, ids)}
+      />
 
       <ClientAccountDialog draft={editing} accounts={accounts} projects={state.projects} onClose={() => setEditing(null)} onSave={save} />
 

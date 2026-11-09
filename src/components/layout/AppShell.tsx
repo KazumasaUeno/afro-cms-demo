@@ -13,11 +13,16 @@ import { AREA_ORDER, AREAS, areaOf, CLIENT_PROJECT_ID, isActive, SETTINGS_ITEM, 
 import { ResetDemoDialog } from './ResetDemoDialog';
 import { RouteLoader } from './RouteLoader';
 import { LOGIN_PATH, logoutArea, useSessions } from '@/services/session';
+import type { Project } from '@/types';
+import { DevProjectGate } from '@/features/dev/DevProjectGate';
+import { useDevProjects } from '@/features/dev/useDevUser';
 
-function ProjectSwitcher() {
+/** プロジェクトの切替。projects を渡すとその中だけを出す（開発者画面: 担当のプロジェクトだけ） */
+function ProjectSwitcher({ projects, emptyText }: { projects?: Project[]; emptyText?: string }) {
   const { state, dispatch } = useDemo();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const project = currentProject(state);
+  const list = projects ?? state.projects;
   return (
     <>
       <ButtonBase
@@ -34,7 +39,8 @@ function ProjectSwitcher() {
         <ChevronDown size={15} color={tokens.color.muted} style={{ flexShrink: 0 }} />
       </ButtonBase>
       <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)} slotProps={{ paper: { sx: { minWidth: 260 } } }}>
-        {state.projects.map((p) => (
+        {!list.length && emptyText && <MenuItem disabled sx={{ whiteSpace: 'normal' }}>{emptyText}</MenuItem>}
+        {list.map((p) => (
           <MenuItem
             key={p.id}
             selected={p.id === project.id}
@@ -125,6 +131,12 @@ function ClientSiteBadge() {
   );
 }
 
+/** 開発者画面: ログイン中のメンバーの担当プロジェクトだけを切り替えられる */
+function DevProjectSwitcher() {
+  const projects = useDevProjects();
+  return <ProjectSwitcher projects={projects} emptyText="担当プロジェクトがありません" />;
+}
+
 function TopBar({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
   const [resetOpen, setResetOpen] = useState(false);
   const navigate = useNavigate();
@@ -143,7 +155,7 @@ function TopBar({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
         <MenuIcon size={20} />
       </IconButton>
       <Box sx={{ display: { xs: 'none', sm: 'block', lg: 'none' } }}><LogoMark size={28} /></Box>
-      {area.id === 'admin' ? <ProjectSwitcher /> : <ClientSiteBadge />}
+      {area.id === 'admin' ? <ProjectSwitcher /> : area.id === 'dev' ? <DevProjectSwitcher /> : <ClientSiteBadge />}
       <AreaSwitcher area={area} />
       <Box sx={{ flex: 1 }} />
       <Typography variant="caption" sx={{ display: { xs: 'none', md: 'block' }, px: 1, py: 0.5, borderRadius: 2, bgcolor: tokens.color.warningSoft, color: '#8A5402', fontWeight: 600 }}>
@@ -231,7 +243,7 @@ function routeLabel(pathname: string): string {
 }
 
 /** ページ切り替え: ローディング画面（約0.5秒）→ ページ（Motion。240ms） */
-function AnimatedOutlet() {
+function AnimatedOutlet({ dev }: { dev: boolean }) {
   const outlet = useOutlet();
   const { pathname } = useLocation();
   const reduced = useReducedMotion();
@@ -260,7 +272,8 @@ function AnimatedOutlet() {
         style={{ minWidth: 0 }}
       >
         {/* 遅延読み込み（画面のコード取得）が長引いた場合も同じローディング画面を出す */}
-        {loading ? loader : <Suspense fallback={loader}>{outlet}</Suspense>}
+        {/* 開発者画面は、担当のプロジェクトのときだけ中身を出す */}
+        {loading ? loader : <Suspense fallback={loader}>{dev ? <DevProjectGate>{outlet}</DevProjectGate> : outlet}</Suspense>}
       </motion.div>
     </AnimatePresence>
   );
@@ -274,9 +287,10 @@ export function AppShell() {
   const { pathname } = useLocation();
   const area = AREAS[areaOf(pathname)];
   const { state, dispatch } = useDemo();
-  // お客様側の画面は MINAMO COFFEE の案件として表示する（データはこの 1 案件分だけ持っている）
+  // お客様ポータルは MINAMO COFFEE の案件として表示する（データはこの 1 案件分だけ持っている）。
+  // 開発者画面は固定せず、担当のプロジェクトから選ぶ（担当外・データの無い案件は DevProjectGate が理由を出す）
   useEffect(() => {
-    if (area.id !== 'admin' && state.currentProjectId !== CLIENT_PROJECT_ID) dispatch({ type: 'setCurrentProject', id: CLIENT_PROJECT_ID });
+    if (area.id === 'portal' && state.currentProjectId !== CLIENT_PROJECT_ID) dispatch({ type: 'setCurrentProject', id: CLIENT_PROJECT_ID });
   }, [area.id, state.currentProjectId, dispatch]);
   return (
     <Box sx={{ minHeight: '100dvh', bgcolor: tokens.color.bg }}>
@@ -304,7 +318,7 @@ export function AppShell() {
             maxWidth: tokens.layout.contentMax + 80, mx: 'auto', outline: 'none', minWidth: 0,
           }}
         >
-          <AnimatedOutlet />
+          <AnimatedOutlet dev={area.id === 'dev'} />
         </Box>
       </Box>
       <BottomTabs onMenu={() => setOpen(true)} area={area} />

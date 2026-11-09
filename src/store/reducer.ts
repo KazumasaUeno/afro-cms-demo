@@ -6,12 +6,12 @@ import { QUALITY_CATEGORIES, QUALITY_ITEMS } from '@/data/quality';
 import { nowIso } from '@/services/time';
 import { createSeedState } from './seed';
 import { DEV_ENVS, DEV_TASK_STATUSES, DEV_USER_ID, deployGate, seedDev } from '@/data/dev';
-import { memberById } from '@/data/members';
+import { MEMBERS, memberById } from '@/data/members';
 import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
 import { MODE_LABEL, pendingConfirmations, questionStatus } from '@/features/requirements/assignment';
 import { isAnswered } from '@/features/requirements/validation';
 import { DISPLAY_SLIDES_MAX, normalizeSlide, seedSignage, validateSlide } from '@/data/signage';
-import { normalizeEmail, seedClientAccounts, seedDevAccess, validateClientAccount, type ClientAccountDraft } from '@/data/users';
+import { normalizeEmail, seedClientAccounts, seedDevAccess, seedDevProjects, validateClientAccount, type ClientAccountDraft } from '@/data/users';
 
 /** 操作した側。省略時はアフロ（管理者画面）。お客様の画面（CMS・ポータル）からは client を渡す */
 export type Side = AnswerSide;
@@ -59,7 +59,9 @@ export type Action =
   | { type: 'setClientAccountStatus'; id: string; enabled: boolean }
   /** お客様ポータルに初めてログインしたとき（招待中 → 有効） */
   | { type: 'activateClientAccount'; email: string }
-  | { type: 'setDevAccess'; memberId: string; enabled: boolean };
+  | { type: 'setDevAccess'; memberId: string; enabled: boolean }
+  /** 開発者が担当するプロジェクトをまとめて置き換える（存在しない id は捨て、重複は除く） */
+  | { type: 'setDevProjects'; memberId: string; projectIds: string[] };
 
 /** 操作した人の表示名（デモでは固定）。お客様の操作かどうかの判定にも使う */
 export const ACTOR = { afro: '上野 航', client: 'ミナモ珈琲 担当者' } as const;
@@ -67,10 +69,8 @@ export const ACTOR = { afro: '上野 航', client: 'ミナモ珈琲 担当者' }
 export const APPROVE_TEXT = {
   requirements: '要件定義書を承認しました', sitemap: '改善後のサイトマップを承認しました', design: 'トップデザイン案を採用・承認しました',
 } as const;
-/** 開発者画面の操作者（アフロ側の制作エンジニア） */
-/** 開発者画面で操作する人（デモでは固定。名前の正は data/members） */
-/** 開発者画面の操作者の名前（ログイン中のメンバー。省略時は DEV_USER_ID） */
-const devActor = (by?: string) => memberById(by ?? DEV_USER_ID).name;
+/** 開発者画面の操作者の名前（ログイン中のメンバー。省略時・見つからないときは DEV_USER_ID） */
+const devActor = (by?: string) => (MEMBERS.find((m) => m.id === by) ?? memberById(DEV_USER_ID)).name;
 
 let seq = 0;
 const uid = (p: string) => `${p}-${Date.now().toString(36)}-${(seq++).toString(36)}`;
@@ -423,6 +423,19 @@ export function reducer(state: DemoState, action: Action): DemoState {
       return log(s, `${member.name}の開発者画面の権限を${action.enabled ? '追加しました' : '外しました'}`, 'edit', ACTOR.afro);
     }
 
+    case 'setDevProjects': {
+      const all = devProjectsState(state);
+      const member = memberById(action.memberId);
+      if (member.id !== action.memberId) return state;
+      // プロジェクト一覧の並び順にそろえる（存在しない id は捨て、重複は除く）
+      const ids = state.projects.filter((p) => action.projectIds.includes(p.id)).map((p) => p.id);
+      const prev = all[member.id] ?? [];
+      if (prev.length === ids.length && prev.every((id, i) => id === ids[i])) return state;
+      const names = ids.map((id) => state.projects.find((p) => p.id === id)?.siteName).join('・');
+      const s = { ...state, devProjects: { ...all, [member.id]: ids } };
+      return log(s, ids.length ? `${member.name}の担当プロジェクトを「${names}」にしました` : `${member.name}の担当プロジェクトをすべて外しました`, 'edit', ACTOR.afro);
+    }
+
     default:
       return state;
   }
@@ -438,6 +451,12 @@ export function clientAccountsState(state: DemoState): ClientAccount[] {
 let devAccessFallback: Record<string, boolean> | null = null;
 export function devAccessState(state: DemoState): Record<string, boolean> {
   return state.devAccess ?? (devAccessFallback ??= seedDevAccess());
+}
+
+/** 開発者の担当プロジェクト（0.14.0 より前の保存データには無いので初期値で補う。描画のたびに作り直さないよう 1 回だけ作る） */
+let devProjectsFallback: Record<string, string[]> | null = null;
+export function devProjectsState(state: DemoState): Record<string, string[]> {
+  return state.devProjects ?? (devProjectsFallback ??= seedDevProjects());
 }
 
 /** サイネージのデータ（0.11.0 より前の保存データには無いので初期値で補う） */

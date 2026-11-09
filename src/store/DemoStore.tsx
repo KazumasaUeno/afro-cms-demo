@@ -57,4 +57,4 @@ export function useDemo(): StoreValue {
   return v;
 }
 
-export { clientAccountsState, currentProject, devAccessState, devState, signageState } from './reducer';
+export { clientAccountsState, currentProject, devAccessState, devProjectsState, devState, signageState } from './reducer';

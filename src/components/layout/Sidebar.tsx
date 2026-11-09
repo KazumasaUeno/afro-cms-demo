@@ -6,7 +6,7 @@ import { AREAS, areaOf, isActive, type AreaDef, type NavItem } from './nav';
 import { Logo } from './Logo';
 import { MemberAvatar } from '@/components/ui';
 import { memberById } from '@/data/members';
-import { useDevUser } from '@/features/dev/useDevUser';
+import { useDevProjects, useDevUser } from '@/features/dev/useDevUser';
 import { useDemo, currentProject } from '@/store/DemoStore';
 
 function NavRow({ item, color, onNavigate }: { item: NavItem; color: string; onNavigate?: () => void }) {
@@ -81,17 +81,18 @@ function AdminFooter({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-/** お客様ポータル・開発者画面: 誰としてログインしているか（デモでは固定）と案件の担当 */
+/** お客様ポータル・開発者画面: 誰としてログインしているかと案件の担当 */
 function AreaFooter({ area }: { area: AreaDef }) {
   const { state } = useDemo();
   const project = currentProject(state);
   const dev = area.id === 'dev';
-  // 開発者画面は担当エンジニア（デモでは黒田）、ポータルは担当ディレクター
+  // 開発者画面はログイン中のメンバー、ポータルは担当ディレクター
   const devUser = useDevUser();
   const person = dev ? devUser : memberById(project.ownerId);
+  const devAssigned = useDevProjects().some((p) => p.id === project.id);
   return (
     <Box sx={{ p: 1.5, borderRadius: 3, border: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface }}>
-      <Typography variant="overline" sx={{ display: 'block', lineHeight: 1.4 }}>{dev ? '担当案件' : '担当ディレクター'}</Typography>
+      <Typography variant="overline" sx={{ display: 'block', lineHeight: 1.4 }}>{dev ? (devAssigned ? '担当案件' : '表示中の案件（担当外）') : '担当ディレクター'}</Typography>
       {dev ? (
         <>
           <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.75 }}>

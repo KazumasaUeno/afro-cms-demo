@@ -6,10 +6,10 @@ import { seedDiagnoses } from '@/data/insights';
 import { QUALITY_ITEMS } from '@/data/quality';
 import { seedDev } from '@/data/dev';
 import { seedSignage } from '@/data/signage';
-import { seedClientAccounts, seedDevAccess } from '@/data/users';
+import { seedClientAccounts, seedDevAccess, seedDevProjects } from '@/data/users';
 import { daysAgo, hoursAgo } from '@/services/time';
 
-/** dev（0.5.0）・requirements.mode / answerMeta（0.9.0）・signage（0.11.0）・clientAccounts / devAccess（0.13.0）は任意項目のため版を上げていない。古い保存データは既定値で補う */
+/** dev（0.5.0）・requirements.mode / answerMeta（0.9.0）・signage（0.11.0）・clientAccounts / devAccess（0.13.0）・devProjects（0.14.0）は任意項目のため版を上げていない。古い保存データは既定値で補う */
 export const STATE_VERSION = 1;
 
 /** 最初から一部チェック済みにしておく（デモの見栄えのため） */
@@ -57,6 +57,7 @@ export const createSeedState = (): DemoState => ({
   signage: seedSignage(),
   clientAccounts: seedClientAccounts(),
   devAccess: seedDevAccess(),
+  devProjects: seedDevProjects(),
 });
 
 export function isDemoState(v: unknown): v is DemoState {
