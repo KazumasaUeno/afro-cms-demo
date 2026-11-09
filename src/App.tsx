@@ -27,6 +27,7 @@ const PortalRequirementsPage = lazy(() => import('@/features/portal/PortalRequir
 const PortalApprovalsPage = lazy(() => import('@/features/portal/PortalApprovalsPage'));
 const PortalQualityPage = lazy(() => import('@/features/portal/PortalQualityPage'));
 const PortalReportsPage = lazy(() => import('@/features/portal/PortalReportsPage'));
+const PortalSignagePage = lazy(() => import('@/features/portal/PortalSignagePage'));
 const PresentPage = lazy(() => import('@/features/present/PresentPage'));
 
 /** 旧 CMS画面の URL（0.4.0）はポータルのページ編集へ。?page= / ?new= はそのまま引き継ぐ */
@@ -66,6 +67,7 @@ const router = createBrowserRouter([
       { path: 'portal/approvals', element: <PortalApprovalsPage /> },
       { path: 'portal/quality', element: <PortalQualityPage /> },
       { path: 'portal/reports', element: <PortalReportsPage /> },
+      { path: 'portal/signage', element: <PortalSignagePage /> },
       { path: 'insights', element: <InsightsPage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: '*', element: <Navigate to="/" replace /> },

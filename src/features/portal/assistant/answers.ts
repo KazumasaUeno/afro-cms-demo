@@ -1,9 +1,10 @@
 import type { DemoState } from '@/types';
-import { currentProject } from '@/store/DemoStore';
+import { currentProject, signageState } from '@/store/DemoStore';
 import { STAGES, stageIndex } from '@/data/projects';
 import { memberById } from '@/data/members';
 import { formatDate } from '@/services/time';
 import { approvalSteps, hearingTodo } from '../portalSteps';
+import { hasUndelivered } from '@/data/signage';
 
 /**
  * お客様ポータルの AI アシスタント（シミュレーション）。
@@ -40,6 +41,19 @@ function nextTodo(state: DemoState): AssistantReply {
   };
 }
 
+/** サイネージの状況（端末の数・未配信の変更・オフライン） */
+function signageGuide(state: DemoState): AssistantReply {
+  const { displays, slides } = signageState(state);
+  const changed = displays.filter((d) => hasUndelivered(d, slides));
+  const offline = displays.filter((d) => !d.online);
+  const parts = [`店頭の画面は ${displays.length} 台です。`];
+  if (changed.length) parts.push(`${changed.map((d) => `「${d.name}」`).join('')}に未配信の変更があります。「配信する」を押すと店頭の画面に反映されます。`);
+  else parts.push('すべての画面に最新の内容を配信済みです。');
+  if (offline.length) parts.push(`${offline.map((d) => `「${d.name}」`).join('')}はオフラインです。配信した内容は、オンラインになったら反映されます。`);
+  parts.push('（デモのため、実際の端末には接続していません）');
+  return { text: parts.join('') };
+}
+
 /** いま開いている画面の案内（パネルの最初のあいさつ） */
 export function pageGuide(pathname: string, state: DemoState): AssistantReply {
   const project = currentProject(state);
@@ -68,6 +82,8 @@ export function pageGuide(pathname: string, state: DemoState): AssistantReply {
       return { text: state.diagnoses.length
         ? `公開後の改善レポートを ${state.diagnoses.length} 件お届けしています。点数が低いカテゴリから改善の提案を読むのがおすすめです。`
         : '公開後に、サイトの改善レポートがここに届きます。' };
+    case '/portal/signage':
+      return signageGuide(state);
     default: {
       const todos = clientTodos(state);
       return {
@@ -95,6 +111,19 @@ export const TOPICS: Topic[] = [
       const p = currentProject(state);
       const stage = STAGES[stageIndex(p.stage)];
       return { text: `全体の ${p.progress}% まで進んでいます。いまは「${stage.no}. ${stage.label}」の段階で、${stage.description}ところです。` };
+    },
+  },
+  // 「サイネージを更新したい」が news の「更新」に当たらないよう、news より先に判定する（「お知らせを出したい」は下の news に当たる）
+  {
+    id: 'signage', label: 'サイネージを更新したい', // 「画面」は「承認の画面」などにも当たるので入れない
+    keywords: ['サイネージ', '店頭', 'モニター'],
+    answer: (state) => {
+      const { displays, slides } = signageState(state);
+      const changed = displays.filter((d) => hasUndelivered(d, slides)).length;
+      return {
+        text: `「サイネージ」で、店頭の画面に流すコンテンツ（おすすめ・メニュー・お知らせ）を作り、端末ごとに流す内容を選んで「配信する」を押します。公開中のお知らせからも作れます。${changed ? `いま未配信の変更がある画面が ${changed} 台あります。` : ''}`,
+        action: { label: 'サイネージを開く', to: '/portal/signage' },
+      };
     },
   },
   // 「お知らせを公開したい」を公開日の質問と取り違えないよう、launch より先に判定する

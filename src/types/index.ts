@@ -279,6 +279,65 @@ export interface DevState {
   checksRunAt?: ISODate;
 }
 
+/* ---------- デジタルサイネージ（お客様ポータル。デモのため実際の端末とは接続しない） ---------- */
+
+export type SignageOrientation = 'landscape' | 'portrait';
+export type SlideTemplate = 'promo' | 'menu' | 'news';
+/** スライドの差し色（data/signage の SLIDE_ACCENTS のいずれか） */
+export type SlideAccent = 'roast' | 'leaf' | 'night' | 'berry';
+
+export interface SlideMenuItem {
+  name: string;
+  /** 税込の円（整数） */
+  price: number;
+}
+
+/** 店頭の画面に流すコンテンツ 1 枚 */
+export interface Slide {
+  id: string;
+  template: SlideTemplate;
+  title: string;
+  body?: string;
+  /** menu のときだけ使う（1〜6 品） */
+  items?: SlideMenuItem[];
+  accent: SlideAccent;
+  /** デモ画像の id（data/cms の DEMO_IMAGES） */
+  image?: string;
+  /** 1 枚を表示する秒数（5〜30） */
+  durationSec: number;
+  /** 掲載期間（YYYY-MM-DD・その日を含む）。無ければ常に表示 */
+  startAt?: string;
+  endAt?: string;
+  /** お知らせから作ったときの元ページ */
+  sourcePageId?: string;
+  updatedAt: ISODate;
+}
+
+/** 店舗に置いた画面（端末） */
+export interface Display {
+  id: string;
+  name: string;
+  location: string;
+  orientation: SignageOrientation;
+  online: boolean;
+  lastSeenAt: ISODate;
+  /** 編集中の再生順（配信するまで端末には届かない） */
+  slideIds: string[];
+  /** 端末へ配信した再生順 */
+  deliveredSlideIds: string[];
+  /**
+   * 配信した時点のスライドの写し。配信後にスライドを編集・削除しても、再配信するまで端末は配信時の内容を流し続ける。
+   * 無い場合（古い保存データ）は現在のスライドで代用する
+   */
+  deliveredSlides?: Record<string, Slide>;
+  deliveredAt?: ISODate;
+}
+
+export interface SignageState {
+  displays: Display[];
+  slides: Slide[];
+}
+
 /* ---------- ストア全体 ---------- */
 
 export interface DemoState {
@@ -297,4 +356,6 @@ export interface DemoState {
   settings: { reducedMotion: 'system' | 'on' | 'off'; companyName: string };
   /** 開発者画面のデータ。0.5.0 で追加したため、それ以前の保存データには無い（devState() で補う） */
   dev?: DevState;
+  /** デジタルサイネージ。0.11.0 で追加したため、それ以前の保存データには無い（signageState() で補う） */
+  signage?: SignageState;
 }

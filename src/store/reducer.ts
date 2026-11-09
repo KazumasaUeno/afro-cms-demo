@@ -1,6 +1,6 @@
 import type {
   Activity, AnswerValue, ApprovalLog, CmsPage, DemoState, DeployEnv, DesignId, DevState, DevTaskStatus, DiagnosisReport,
-  AnswerSide, PageStatus, Project, QuestionPriority, RequirementMode, SitemapEdge, SitemapNode, SitemapVariant,
+  AnswerSide, PageStatus, Project, QuestionPriority, RequirementMode, SignageState, SitemapEdge, SitemapNode, SitemapVariant, Slide,
 } from '@/types';
 import { QUALITY_CATEGORIES, QUALITY_ITEMS } from '@/data/quality';
 import { nowIso } from '@/services/time';
@@ -10,6 +10,7 @@ import { memberById } from '@/data/members';
 import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
 import { MODE_LABEL, pendingConfirmations, questionStatus } from '@/features/requirements/assignment';
 import { isAnswered } from '@/features/requirements/validation';
+import { DISPLAY_SLIDES_MAX, normalizeSlide, seedSignage, validateSlide } from '@/data/signage';
 
 /** 操作した側。省略時はアフロ（管理者画面）。お客様の画面（CMS・ポータル）からは client を渡す */
 export type Side = AnswerSide;
@@ -45,7 +46,12 @@ export type Action =
   /** 開発者画面（操作者は制作エンジニア） */
   | { type: 'setDevTaskStatus'; id: string; status: DevTaskStatus }
   | { type: 'runAutoChecks' }
-  | { type: 'deploy'; env: DeployEnv };
+  | { type: 'deploy'; env: DeployEnv }
+  /** デジタルサイネージ（お客様ポータル。操作者はお客様） */
+  | { type: 'saveSlide'; slide: Slide }
+  | { type: 'deleteSlide'; id: string }
+  | { type: 'setDisplaySlides'; id: string; slideIds: string[] }
+  | { type: 'deliverDisplay'; id: string };
 
 /** 操作した人（デモでは固定） */
 const ACTOR = { afro: '上野 航', client: 'ミナモ珈琲 担当者' } as const;
@@ -300,9 +306,71 @@ export function reducer(state: DemoState, action: Action): DemoState {
       return log(s, `${env?.label ?? action.env}へ v${gate.version} をデプロイしました（シミュレーション）`, 'publish', DEV_ACTOR);
     }
 
+    case 'saveSlide': {
+      // 画面でも止めているが、不正な値はここでも保存しない
+      if (Object.keys(validateSlide(action.slide)).length > 0) return state;
+      const sg = signageState(state);
+      const exists = sg.slides.some((x) => x.id === action.slide.id);
+      const prev = sg.slides.find((x) => x.id === action.slide.id);
+      const normalized = normalizeSlide(action.slide);
+      // 何も変えずに保存したときは更新日時を進めない（進めると配信済みの端末が「未配信の変更あり」になる）
+      if (prev && JSON.stringify({ ...normalized, updatedAt: '' }) === JSON.stringify({ ...normalizeSlide(prev), updatedAt: '' })) return state;
+      const slide = { ...normalized, updatedAt: nowIso() };
+      const slides = exists ? sg.slides.map((x) => (x.id === slide.id ? slide : x)) : [slide, ...sg.slides];
+      return log({ ...state, signage: { ...sg, slides } }, `サイネージのコンテンツ「${slide.title}」を${exists ? '保存' : '作成'}しました`, 'edit', ACTOR.client, state.requirements.projectId);
+    }
+
+    case 'deleteSlide': {
+      const sg = signageState(state);
+      const slide = sg.slides.find((x) => x.id === action.id);
+      if (!slide) return state;
+      // 編集中の再生順からは外す。配信済みの内容（写し）は残し、再配信するまで端末は流し続ける
+      const displays = sg.displays.map((d) => (d.slideIds.includes(slide.id) ? { ...d, slideIds: d.slideIds.filter((id) => id !== slide.id) } : d));
+      const s = { ...state, signage: { displays, slides: sg.slides.filter((x) => x.id !== slide.id) } };
+      return log(s, `サイネージのコンテンツ「${slide.title}」を削除しました`, 'edit', ACTOR.client, state.requirements.projectId);
+    }
+
+    case 'setDisplaySlides': {
+      const sg = signageState(state);
+      const display = sg.displays.find((d) => d.id === action.id);
+      if (!display) return state;
+      // 存在しない id・重複は落とす
+      const known = new Set(sg.slides.map((x) => x.id));
+      const ids = [...new Set(action.slideIds)].filter((id) => known.has(id)).slice(0, DISPLAY_SLIDES_MAX);
+      if (ids.length === display.slideIds.length && ids.every((id, i) => id === display.slideIds[i])) return state;
+      const displays = sg.displays.map((d) => (d.id === display.id ? { ...d, slideIds: ids } : d));
+      return log({ ...state, signage: { ...sg, displays } }, `サイネージ「${display.name}」の再生内容を変更しました`, 'edit', ACTOR.client, state.requirements.projectId);
+    }
+
+    case 'deliverDisplay': {
+      const sg = signageState(state);
+      const display = sg.displays.find((d) => d.id === action.id);
+      if (!display) return state;
+      // 配信時点のスライドを写して持つ（配信後の編集・削除は、次の配信まで端末に届かない）
+      const delivered = display.slideIds
+        .map((id) => sg.slides.find((x) => x.id === id))
+        .filter((x): x is Slide => !!x);
+      const at = nowIso();
+      const displays = sg.displays.map((d) => (d.id === display.id ? {
+        ...d,
+        deliveredSlideIds: delivered.map((x) => x.id),
+        deliveredSlides: Object.fromEntries(delivered.map((x) => [x.id, x])),
+        deliveredAt: at,
+      } : d));
+      const note = display.online ? '' : '（オフラインのため、オンラインになったら反映・シミュレーション）';
+      return log({ ...state, signage: { ...sg, displays } }, `サイネージ「${display.name}」へ ${delivered.length} 件を配信しました${note}`, 'publish', ACTOR.client, state.requirements.projectId);
+    }
+
     default:
       return state;
   }
+}
+
+/** サイネージのデータ（0.11.0 より前の保存データには無いので初期値で補う） */
+/** 0.11.0 より前の保存データ用の初期値。描画のたびに作り直すとタイマーが毎回やり直しになるので 1 回だけ作る */
+let signageFallback: SignageState | null = null;
+export function signageState(state: DemoState): SignageState {
+  return state.signage ?? (signageFallback ??= seedSignage());
 }
 
 /** 開発者画面のデータ（0.5.0 より前の保存データには無いので初期値で補う） */

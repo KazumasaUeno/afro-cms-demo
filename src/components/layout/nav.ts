@@ -1,5 +1,5 @@
 import {
-  BarChart3, Building2, ClipboardCheck, Code2, FileText, FolderKanban, Gauge, House, LayoutDashboard, ListChecks, ListTodo, MessageSquareText, Network,
+  BarChart3, Building2, ClipboardCheck, Code2, FileText, FolderKanban, Gauge, House, LayoutDashboard, ListChecks, ListTodo, MessageSquareText, Monitor, Network,
   Rocket, ScrollText, Settings, ShieldCheck, Sparkles, Stamp, UserRound, type LucideIcon,
 } from 'lucide-react';
 
@@ -60,6 +60,8 @@ const PORTAL_ITEMS: NavItem[] = [
   { to: '/portal/pages', label: 'ページ・お知らせ', icon: FileText, match: ['/portal/pages'], hint: '編集と公開' },
   { to: '/portal/publish', label: '公開承認', icon: Stamp, match: ['/portal/publish'], hint: '更新の承認ワークフロー' },
   { to: '/portal/reports', label: 'レポート', icon: ScrollText, match: ['/portal/reports'], hint: '改善診断' },
+  // 下部タブは添字 [0,2,4,6] で選んでいるため、新しい項目は末尾に足す
+  { to: '/portal/signage', label: 'サイネージ', icon: Monitor, match: ['/portal/signage'], hint: '店頭の画面' },
 ];
 
 const DEV_ITEMS: NavItem[] = [
@@ -80,7 +82,7 @@ export const AREAS: Record<AreaId, AreaDef> = {
   },
   portal: {
     id: 'portal', label: 'お客様ポータル', short: 'ポータル', audience: 'お客様',
-    description: '進み具合の確認・承認・ページ更新・レポート', home: '/portal', icon: UserRound,
+    description: '進み具合の確認・承認・ページ更新・レポート・サイネージ', home: '/portal', icon: UserRound,
     color: '#0F9D74', soft: '#E7F7F1',
     items: PORTAL_ITEMS, bottom: [PORTAL_ITEMS[0], PORTAL_ITEMS[2], PORTAL_ITEMS[4], PORTAL_ITEMS[6]],
   },
