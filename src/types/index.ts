@@ -17,6 +17,8 @@ export interface Member {
   /** アバターの背景色（トークン外の識別色） */
   color: string;
   initials: string;
+  /** ログインに使うメールアドレス（架空。開発者画面の権限の照合に使う） */
+  email: string;
 }
 
 /* ---------- プロジェクト ---------- */
@@ -338,6 +340,28 @@ export interface SignageState {
   slides: Slide[];
 }
 
+/* ---------- ユーザー管理（管理者画面。デモのため実際の招待メール・認証は行わない） ---------- */
+
+/** お客様アカウントの状態。invited=招待済み・未ログイン / active=ログイン済み / disabled=管理者が無効にした */
+export type ClientAccountStatus = 'invited' | 'active' | 'disabled';
+
+/** お客様ポータルにログインできるお客様（担当者 1 人 = 1 アカウント） */
+export interface ClientAccount {
+  id: string;
+  company: string;
+  /** 担当者名 */
+  name: string;
+  /** 小文字・前後の空白なしで保持する（重複の判定とログインの照合に使う） */
+  email: string;
+  /** 担当案件（Project.id） */
+  projectId: string;
+  status: ClientAccountStatus;
+  createdAt: ISODate;
+  /** 初めてお客様ポータルにログインした日時 */
+  activatedAt?: ISODate;
+  disabledAt?: ISODate;
+}
+
 /* ---------- ストア全体 ---------- */
 
 export interface DemoState {
@@ -358,4 +382,8 @@ export interface DemoState {
   dev?: DevState;
   /** デジタルサイネージ。0.11.0 で追加したため、それ以前の保存データには無い（signageState() で補う） */
   signage?: SignageState;
+  /** お客様アカウント。0.13.0 で追加したため、それ以前の保存データには無い（clientAccountsState() で補う） */
+  clientAccounts?: ClientAccount[];
+  /** 開発者画面を開けるメンバー（Member.id → 可否）。0.13.0 で追加（devAccessState() で補う） */
+  devAccess?: Record<string, boolean>;
 }

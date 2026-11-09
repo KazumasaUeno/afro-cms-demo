@@ -1,6 +1,6 @@
 import { Box, Button, ButtonBase, Stack, TextField, Typography } from '@mui/material';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, ArrowRight, ChevronRight, Info, KeyRound, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, ChevronRight, Info, KeyRound, ShieldCheck } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Surface } from '@/components/ui';
@@ -9,8 +9,10 @@ import { AREA_ORDER, AREAS, CLIENT_PROJECT_ID, type AreaId } from '@/components/
 import { useDemo } from '@/store/DemoStore';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useToast } from '@/hooks/useToast';
-import { LOGIN_PATH, loginArea, safeNext } from '@/services/session';
+import { LOGIN_PATH, loginArea, logoutArea, safeNext, useSessions } from '@/services/session';
 import { tokens } from '@/theme/tokens';
+import { isRevoked, loginDenial } from '@/store/access';
+import { EMAIL_RE, normalizeEmail } from '@/data/users';
 
 /** 画面に出すデモ用アカウント（実在しない。認証には使わない） */
 const DEMO_ACCOUNTS: Record<AreaId, { email: string; name: string }> = {
@@ -20,7 +22,6 @@ const DEMO_ACCOUNTS: Record<AreaId, { email: string; name: string }> = {
 };
 const DEMO_PASSWORD = 'demo-pass';
 const DEMO_CODE = '123456';
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const mono = { fontFamily: tokens.font.mono, fontVariantNumeric: 'tabular-nums' } as const;
 
@@ -44,7 +45,7 @@ export default function LoginPage({ area: areaId }: { area: AreaId }) {
   const [params] = useSearchParams();
   const toast = useToast();
   const reduced = useReducedMotion();
-  const { state } = useDemo();
+  const { state, dispatch } = useDemo();
   const client = state.projects.find((p) => p.id === CLIENT_PROJECT_ID);
 
   const [step, setStep] = useState<1 | 2>(1);
@@ -56,6 +57,13 @@ export default function LoginPage({ area: areaId }: { area: AreaId }) {
   const passwordRef = useRef<HTMLInputElement>(null);
   const codeRef = useRef<HTMLInputElement>(null);
   const movedStep = useRef(false);
+  /** ユーザー管理で権限を外されてログアウトしたとき（AreaGuard が ?reason=revoked を付ける） */
+  const revoked = params.get('reason') === 'revoked';
+  const session = useSessions()[areaId];
+  // 権限を外されたセッションはここでログアウトする（照合に当たらない古いセッションは残す）
+  useEffect(() => {
+    if (session && isRevoked(areaId, session.email, state)) logoutArea(areaId);
+  }, [areaId, session, state]);
 
   // 別のエリアのログイン画面へ移ったら最初からやり直す
   useEffect(() => {
@@ -79,6 +87,8 @@ export default function LoginPage({ area: areaId }: { area: AreaId }) {
     const next: typeof errors = {};
     if (!v) next.email = 'メールアドレスを入力してください';
     else if (!EMAIL_RE.test(v)) next.email = 'メールアドレスの形式が正しくありません（例: name@example.com）';
+    // ユーザー管理の設定と照合する（開発者画面は権限のあるメンバー、お客様ポータルは無効でないお客様だけ。デモのため画面上の照合のみ）
+    else next.email = loginDenial(areaId, v, state) ?? undefined;
     if (!password) next.password = 'パスワードを入力してください';
     setErrors(next);
     if (next.email) { emailRef.current?.focus(); return; }
@@ -96,7 +106,10 @@ export default function LoginPage({ area: areaId }: { area: AreaId }) {
       codeRef.current?.focus();
       return;
     }
-    loginArea(areaId, email);
+    const normalized = normalizeEmail(email);
+    // 招待中のお客様は、初めてのログインで「有効」になる
+    if (areaId === 'portal') dispatch({ type: 'activateClientAccount', email: normalized });
+    loginArea(areaId, normalized);
     navigate(safeNext(areaId, params.get('next')) ?? area.home, { replace: true });
   };
 
@@ -150,6 +163,14 @@ export default function LoginPage({ area: areaId }: { area: AreaId }) {
               {step === 1 ? (
                 <Box component="form" noValidate onSubmit={submitPassword} sx={{ mt: 2.5 }}>
                   <Stack spacing={2.25}>
+                    {revoked && (
+                      <Stack direction="row" spacing={1.25} role="status" sx={{ p: 1.5, borderRadius: `${tokens.radius.sm}px`, bgcolor: tokens.color.warningSoft, color: '#8A5402' }}>
+                        <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
+                        <Typography variant="body2" sx={{ color: 'inherit', fontWeight: 650 }}>
+                          {areaId === 'portal' ? 'お客様アカウントが無効になったため、ログアウトしました。' : `${area.label}の権限が外れたため、ログアウトしました。`}
+                        </Typography>
+                      </Stack>
+                    )}
                     <DemoNotice />
                     <TextField
                       label="メールアドレス" type="email" name="email" fullWidth

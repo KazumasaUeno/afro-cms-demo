@@ -1,6 +1,6 @@
 import {
   BarChart3, Building2, ClipboardCheck, Code2, FileText, FolderKanban, Gauge, House, LayoutDashboard, ListChecks, ListTodo, MessageSquareText, Monitor,
-  Rocket, ScrollText, Settings, ShieldCheck, Sparkles, Stamp, UserRound, type LucideIcon,
+  Rocket, ScrollText, Settings, ShieldCheck, Sparkles, Stamp, UserRound, UsersRound, type LucideIcon,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -50,6 +50,8 @@ const ADMIN_ITEMS: NavItem[] = [
   { to: '/ai-studio', label: 'AI Studio', icon: Sparkles, match: ['/ai-studio', '/site'], hint: 'AI要件定義・サイトマップ・デザイン' },
   { to: '/quality', label: '品質チェック', icon: ShieldCheck, match: ['/quality'], hint: '12項目110問' },
   { to: '/insights', label: 'インサイト', icon: BarChart3, match: ['/insights'], hint: '解析と改善提案' },
+  // 下部タブは添字 [0,1,2,3] で選んでいるため、新しい項目は末尾に足す
+  { to: '/users', label: 'ユーザー管理', icon: UsersRound, match: ['/users'], hint: 'お客様の登録・開発者画面の権限' },
 ];
 
 const PORTAL_ITEMS: NavItem[] = [

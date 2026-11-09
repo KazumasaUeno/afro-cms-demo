@@ -1,5 +1,5 @@
 import type {
-  Activity, AnswerValue, ApprovalLog, CmsPage, DemoState, DeployEnv, DesignId, DevState, DevTaskStatus, DiagnosisReport,
+  Activity, AnswerValue, ApprovalLog, ClientAccount, CmsPage, DemoState, DeployEnv, DesignId, DevState, DevTaskStatus, DiagnosisReport,
   AnswerSide, PageStatus, Project, QuestionPriority, RequirementMode, SignageState, SitemapEdge, SitemapNode, SitemapVariant, Slide,
 } from '@/types';
 import { QUALITY_CATEGORIES, QUALITY_ITEMS } from '@/data/quality';
@@ -11,6 +11,7 @@ import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
 import { MODE_LABEL, pendingConfirmations, questionStatus } from '@/features/requirements/assignment';
 import { isAnswered } from '@/features/requirements/validation';
 import { DISPLAY_SLIDES_MAX, normalizeSlide, seedSignage, validateSlide } from '@/data/signage';
+import { normalizeEmail, seedClientAccounts, seedDevAccess, validateClientAccount, type ClientAccountDraft } from '@/data/users';
 
 /** 操作した側。省略時はアフロ（管理者画面）。お客様の画面（CMS・ポータル）からは client を渡す */
 export type Side = AnswerSide;
@@ -51,7 +52,13 @@ export type Action =
   | { type: 'saveSlide'; slide: Slide }
   | { type: 'deleteSlide'; id: string }
   | { type: 'setDisplaySlides'; id: string; slideIds: string[] }
-  | { type: 'deliverDisplay'; id: string };
+  | { type: 'deliverDisplay'; id: string }
+  /** ユーザー管理（管理者画面）。id が無ければ新規登録（招待中で作る） */
+  | { type: 'saveClientAccount'; account: ClientAccountDraft }
+  | { type: 'setClientAccountStatus'; id: string; enabled: boolean }
+  /** お客様ポータルに初めてログインしたとき（招待中 → 有効） */
+  | { type: 'activateClientAccount'; email: string }
+  | { type: 'setDevAccess'; memberId: string; enabled: boolean };
 
 /** 操作した人の表示名（デモでは固定）。お客様の操作かどうかの判定にも使う */
 export const ACTOR = { afro: '上野 航', client: 'ミナモ珈琲 担当者' } as const;
@@ -366,9 +373,69 @@ export function reducer(state: DemoState, action: Action): DemoState {
       return log({ ...state, signage: { ...sg, displays } }, `サイネージ「${display.name}」へ ${delivered.length} 件を配信しました${note}`, 'publish', ACTOR.client, state.requirements.projectId);
     }
 
+    case 'saveClientAccount': {
+      const accounts = clientAccountsState(state);
+      // 画面でも止めているが、不正な値・重複はここでも保存しない
+      if (Object.keys(validateClientAccount(action.account, accounts, state.projects)).length > 0) return state;
+      const a = action.account;
+      const fields = { company: a.company.trim(), name: a.name.trim(), email: normalizeEmail(a.email), projectId: a.projectId };
+      const prev = a.id ? accounts.find((x) => x.id === a.id) : undefined;
+      if (a.id && !prev) return state;
+      if (prev) {
+        if ((Object.keys(fields) as (keyof typeof fields)[]).every((k) => prev[k] === fields[k])) return state;
+        // メールアドレスを変えたら、新しいアドレスでのログインはまだなので「招待中」に戻す（無効はそのまま）
+        const reinvite = prev.email !== fields.email && prev.status === 'active';
+        const next = accounts.map((x) => (x.id === prev.id ? { ...x, ...fields, ...(reinvite ? { status: 'invited' as const, activatedAt: undefined } : {}) } : x));
+        return log({ ...state, clientAccounts: next }, `お客様「${fields.company} ${fields.name}」の登録内容を変更しました`, 'edit', ACTOR.afro, fields.projectId);
+      }
+      const created: ClientAccount = { id: uid('ca'), ...fields, status: 'invited', createdAt: nowIso() };
+      return log({ ...state, clientAccounts: [created, ...accounts] }, `お客様「${fields.company} ${fields.name}」を登録し、招待メールを送信しました（デモ: 実際には送信しない）`, 'edit', ACTOR.afro, fields.projectId);
+    }
+
+    case 'setClientAccountStatus': {
+      const accounts = clientAccountsState(state);
+      const prev = accounts.find((x) => x.id === action.id);
+      if (!prev || (prev.status === 'disabled') === !action.enabled) return state;
+      // 有効に戻すときは、ログインしたことがあれば「有効」、まだなら「招待中」に戻す
+      const updated: ClientAccount = action.enabled
+        ? { ...prev, status: prev.activatedAt ? 'active' : 'invited', disabledAt: undefined }
+        : { ...prev, status: 'disabled', disabledAt: nowIso() };
+      const s = { ...state, clientAccounts: accounts.map((x) => (x.id === prev.id ? updated : x)) };
+      return log(s, `お客様「${prev.company} ${prev.name}」を${action.enabled ? '有効に戻しました' : '無効にしました'}`, 'edit', ACTOR.afro, prev.projectId);
+    }
+
+    case 'activateClientAccount': {
+      const accounts = clientAccountsState(state);
+      const email = normalizeEmail(action.email);
+      const prev = accounts.find((x) => x.email === email);
+      if (!prev || prev.status !== 'invited') return state;
+      const s = { ...state, clientAccounts: accounts.map((x) => (x.id === prev.id ? { ...x, status: 'active' as const, activatedAt: nowIso() } : x)) };
+      return log(s, `お客様ポータルに初めてログインしました（${prev.company}）`, 'edit', prev.name, prev.projectId);
+    }
+
+    case 'setDevAccess': {
+      const access = devAccessState(state);
+      const member = memberById(action.memberId);
+      if (member.id !== action.memberId || !!access[member.id] === action.enabled) return state;
+      const s = { ...state, devAccess: { ...access, [member.id]: action.enabled } };
+      return log(s, `${member.name}の開発者画面の権限を${action.enabled ? '追加しました' : '外しました'}`, 'edit', ACTOR.afro);
+    }
+
     default:
       return state;
   }
+}
+
+/** お客様アカウント（0.13.0 より前の保存データには無いので初期値で補う。描画のたびに作り直さないよう 1 回だけ作る） */
+let clientAccountsFallback: ClientAccount[] | null = null;
+export function clientAccountsState(state: DemoState): ClientAccount[] {
+  return state.clientAccounts ?? (clientAccountsFallback ??= seedClientAccounts());
+}
+
+/** 開発者画面の権限（0.13.0 より前の保存データには無いので初期値で補う） */
+let devAccessFallback: Record<string, boolean> | null = null;
+export function devAccessState(state: DemoState): Record<string, boolean> {
+  return state.devAccess ?? (devAccessFallback ??= seedDevAccess());
 }
 
 /** サイネージのデータ（0.11.0 より前の保存データには無いので初期値で補う） */

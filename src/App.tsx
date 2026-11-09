@@ -16,6 +16,7 @@ const QualityPage = lazy(() => import('@/features/quality/QualityPage'));
 const CmsEditorPage = lazy(() => import('@/features/cms/CmsEditorPage'));
 const InsightsPage = lazy(() => import('@/features/insights/InsightsPage'));
 const SettingsPage = lazy(() => import('@/features/settings/SettingsPage'));
+const UsersPage = lazy(() => import('@/features/users/UsersPage'));
 // お客様ポータル・開発者画面
 const PublishApprovalsPage = lazy(() => import('@/features/portal/PublishApprovalsPage'));
 const DevDashboardPage = lazy(() => import('@/features/dev/DevDashboardPage'));
@@ -69,6 +70,7 @@ const router = createBrowserRouter([
       { path: 'portal/reports', element: <PortalReportsPage /> },
       { path: 'portal/signage', element: <PortalSignagePage /> },
       { path: 'insights', element: <InsightsPage /> },
+      { path: 'users', element: <UsersPage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
