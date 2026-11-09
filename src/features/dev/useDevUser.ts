@@ -1,21 +1,20 @@
-import type { DemoState, Member, Project } from '@/types';
-import { MEMBERS, memberById } from '@/data/members';
+import type { DemoState, Project } from '@/types';
 import { DEV_USER_ID } from '@/data/dev';
-import { normalizeEmail } from '@/data/users';
+import { personByEmail, personById, type DevPerson } from '@/data/people';
 import { useSessions } from '@/services/session';
 import { devProjectsState, useDemo } from '@/store/DemoStore';
 
 /**
- * 開発者画面にログインしているメンバー。ログインしたメールアドレスから探す。
- * メンバーに当たらないメール（デモの初期セッションなど）は、従来どおり DEV_USER_ID（黒田）とみなす
+ * 開発者画面にログインしている人。ログインしたメールアドレスから、固定のメンバーと登録した開発者の両方を探す（data/people）。
+ * どちらにも当たらないメール（デモの初期セッションなど）は、従来どおり DEV_USER_ID（黒田）とみなす
  */
-export function devMemberFor(email: string | undefined): Member {
-  const e = email ? normalizeEmail(email) : '';
-  return MEMBERS.find((m) => m.email && normalizeEmail(m.email) === e) ?? memberById(DEV_USER_ID);
+export function devMemberFor(state: DemoState, email: string | undefined): DevPerson {
+  return personByEmail(state, email) ?? (personById(state, DEV_USER_ID) as DevPerson);
 }
 
-export function useDevUser(): Member {
-  return devMemberFor(useSessions().dev?.email);
+export function useDevUser(): DevPerson {
+  const { state } = useDemo();
+  return devMemberFor(state, useSessions().dev?.email);
 }
 
 /** メンバーが担当するプロジェクト（プロジェクト一覧の並び順） */

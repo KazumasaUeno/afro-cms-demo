@@ -1,17 +1,21 @@
 import type {
-  Activity, AnswerValue, ApprovalLog, ClientAccount, CmsPage, DemoState, DeployEnv, DesignId, DevState, DevTaskStatus, DiagnosisReport,
+  Activity, AnswerValue, ApprovalLog, ClientAccount, CmsPage, DevUser, DemoState, DeployEnv, DesignId, DevState, DevTaskStatus, DiagnosisReport,
   AnswerSide, PageStatus, Project, QuestionPriority, RequirementMode, SignageState, SitemapEdge, SitemapNode, SitemapVariant, Slide,
 } from '@/types';
 import { QUALITY_CATEGORIES, QUALITY_ITEMS } from '@/data/quality';
 import { nowIso } from '@/services/time';
 import { createSeedState } from './seed';
 import { DEV_ENVS, DEV_TASK_STATUSES, DEV_USER_ID, deployGate, seedDev } from '@/data/dev';
-import { MEMBERS, memberById } from '@/data/members';
+import { memberById } from '@/data/members';
+import { devUsersState, personById } from '@/data/people';
 import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
 import { MODE_LABEL, pendingConfirmations, questionStatus } from '@/features/requirements/assignment';
 import { isAnswered } from '@/features/requirements/validation';
 import { DISPLAY_SLIDES_MAX, normalizeSlide, seedSignage, validateSlide } from '@/data/signage';
-import { normalizeEmail, seedClientAccounts, seedDevAccess, seedDevProjects, validateClientAccount, type ClientAccountDraft } from '@/data/users';
+import {
+  DEV_AFFILIATION, normalizeEmail, seedClientAccounts, seedDevAccess, seedDevProjects, validateClientAccount, validateDevUser,
+  type ClientAccountDraft, type DevUserDraft,
+} from '@/data/users';
 
 /** 操作した側。省略時はアフロ（管理者画面）。お客様の画面（CMS・ポータル）からは client を渡す */
 export type Side = AnswerSide;
@@ -61,7 +65,11 @@ export type Action =
   | { type: 'activateClientAccount'; email: string }
   | { type: 'setDevAccess'; memberId: string; enabled: boolean }
   /** 開発者が担当するプロジェクトをまとめて置き換える（存在しない id は捨て、重複は除く） */
-  | { type: 'setDevProjects'; memberId: string; projectIds: string[] };
+  | { type: 'setDevProjects'; memberId: string; projectIds: string[] }
+  /** 開発者の登録（id なし。権限オン・選んだ担当で作る）と編集（id あり。氏名・役割・メール・所属だけ） */
+  | { type: 'saveDevUser'; user: DevUserDraft }
+  /** 登録した開発者を無効にする / 有効に戻す（固定のメンバーは対象外） */
+  | { type: 'setDevUserStatus'; id: string; enabled: boolean };
 
 /** 操作した人の表示名（デモでは固定）。お客様の操作かどうかの判定にも使う */
 export const ACTOR = { afro: '上野 航', client: 'ミナモ珈琲 担当者' } as const;
@@ -69,8 +77,8 @@ export const ACTOR = { afro: '上野 航', client: 'ミナモ珈琲 担当者' }
 export const APPROVE_TEXT = {
   requirements: '要件定義書を承認しました', sitemap: '改善後のサイトマップを承認しました', design: 'トップデザイン案を採用・承認しました',
 } as const;
-/** 開発者画面の操作者の名前（ログイン中のメンバー。省略時・見つからないときは DEV_USER_ID） */
-const devActor = (by?: string) => (MEMBERS.find((m) => m.id === by) ?? memberById(DEV_USER_ID)).name;
+/** 開発者画面の操作者の名前（ログイン中の人。登録した開発者も含む。省略時・見つからないときは DEV_USER_ID） */
+const devActor = (state: DemoState, by?: string) => (personById(state, by) ?? memberById(DEV_USER_ID)).name;
 
 let seq = 0;
 const uid = (p: string) => `${p}-${Date.now().toString(36)}-${(seq++).toString(36)}`;
@@ -289,7 +297,7 @@ export function reducer(state: DemoState, action: Action): DemoState {
       if (!task || task.status === action.status) return state;
       const tasks = dev.tasks.map((t) => (t.id === task.id ? { ...t, status: action.status, updatedAt: nowIso() } : t));
       const label = DEV_TASK_STATUSES.find((x) => x.id === action.status)?.label ?? action.status;
-      return log({ ...state, dev: { ...dev, tasks } }, `構築タスク「${task.title}」を${label}にしました`, 'edit', devActor(action.by));
+      return log({ ...state, dev: { ...dev, tasks } }, `構築タスク「${task.title}」を${label}にしました`, 'edit', devActor(state, action.by));
     }
 
     case 'runAutoChecks': {
@@ -299,14 +307,14 @@ export function reducer(state: DemoState, action: Action): DemoState {
       let count = 0;
       for (const t of QUALITY_ITEMS) {
         if (t.priority !== 'A' || checks[t.id]?.afroAt) continue;
-        checks[t.id] = { ...checks[t.id], afroAt: at, afroBy: devActor(action.by) };
+        checks[t.id] = { ...checks[t.id], afroAt: at, afroBy: devActor(state, action.by) };
         count++;
       }
       let s: DemoState = { ...state, qualityChecks: checks, dev: { ...dev, checksRunAt: at } };
       // 新たに確認した項目が無い再実行は、実行日時だけ更新する（アクティビティに「0件」を積まない）
       if (count === 0) return s;
-      s = approval(s, 'afro', `自動チェックで A区分を確認（${count}件）`, '全カテゴリ', devActor(action.by));
-      return log(s, `自動チェックを実行しました（A区分 ${count}件を新たに確認・シミュレーション）`, 'check', devActor(action.by));
+      s = approval(s, 'afro', `自動チェックで A区分を確認（${count}件）`, '全カテゴリ', devActor(state, action.by));
+      return log(s, `自動チェックを実行しました（A区分 ${count}件を新たに確認・シミュレーション）`, 'check', devActor(state, action.by));
     }
 
     case 'deploy': {
@@ -315,9 +323,9 @@ export function reducer(state: DemoState, action: Action): DemoState {
       if (!gate.ok || !gate.version) return state;
       const env = DEV_ENVS.find((e) => e.id === action.env);
       const note = action.env === 'development' ? '最新の作業内容を反映' : `v${gate.version} を${action.env === 'staging' ? '開発環境' : '検証環境'}から昇格`;
-      const deploy = { id: uid('dep'), env: action.env, version: gate.version, at: nowIso(), by: devActor(action.by), status: 'success' as const, note };
+      const deploy = { id: uid('dep'), env: action.env, version: gate.version, at: nowIso(), by: devActor(state, action.by), status: 'success' as const, note };
       const s: DemoState = { ...state, dev: { ...dev, deploys: [deploy, ...dev.deploys].slice(0, 50) } };
-      return log(s, `${env?.label ?? action.env}へ v${gate.version} をデプロイしました（シミュレーション）`, 'publish', devActor(action.by));
+      return log(s, `${env?.label ?? action.env}へ v${gate.version} をデプロイしました（シミュレーション）`, 'publish', devActor(state, action.by));
     }
 
     case 'saveSlide': {
@@ -417,16 +425,16 @@ export function reducer(state: DemoState, action: Action): DemoState {
 
     case 'setDevAccess': {
       const access = devAccessState(state);
-      const member = memberById(action.memberId);
-      if (member.id !== action.memberId || !!access[member.id] === action.enabled) return state;
+      const member = personById(state, action.memberId);
+      if (!member || !!access[member.id] === action.enabled) return state;
       const s = { ...state, devAccess: { ...access, [member.id]: action.enabled } };
       return log(s, `${member.name}の開発者画面の権限を${action.enabled ? '追加しました' : '外しました'}`, 'edit', ACTOR.afro);
     }
 
     case 'setDevProjects': {
       const all = devProjectsState(state);
-      const member = memberById(action.memberId);
-      if (member.id !== action.memberId) return state;
+      const member = personById(state, action.memberId);
+      if (!member) return state;
       // プロジェクト一覧の並び順にそろえる（存在しない id は捨て、重複は除く）
       const ids = state.projects.filter((p) => action.projectIds.includes(p.id)).map((p) => p.id);
       const prev = all[member.id] ?? [];
@@ -434,6 +442,49 @@ export function reducer(state: DemoState, action: Action): DemoState {
       const names = ids.map((id) => state.projects.find((p) => p.id === id)?.siteName).join('・');
       const s = { ...state, devProjects: { ...all, [member.id]: ids } };
       return log(s, ids.length ? `${member.name}の担当プロジェクトを「${names}」にしました` : `${member.name}の担当プロジェクトをすべて外しました`, 'edit', ACTOR.afro);
+    }
+
+    case 'saveDevUser': {
+      const users = devUsersState(state);
+      const accounts = clientAccountsState(state);
+      // 画面でも止めているが、不正な値・重複はここでも保存しない
+      if (Object.keys(validateDevUser(action.user, users, accounts)).length > 0) return state;
+      const d = action.user;
+      const partner = d.affiliation === 'partner';
+      const fields = {
+        name: d.name.trim(), role: d.role.trim(), email: normalizeEmail(d.email), affiliation: d.affiliation,
+        partnerCompany: partner ? d.partnerCompany.trim() : undefined,
+      };
+      const where = partner ? `${DEV_AFFILIATION.partner}・${fields.partnerCompany}` : DEV_AFFILIATION.internal;
+      if (d.id) {
+        const prev = users.find((u) => u.id === d.id);
+        if (!prev) return state;
+        if ((Object.keys(fields) as (keyof typeof fields)[]).every((k) => prev[k] === fields[k])) return state;
+        const next = users.map((u) => (u.id === prev.id ? { ...u, ...fields } : u));
+        return log({ ...state, devUsers: next }, `開発者「${fields.name}」の登録内容を変更しました（${where}）`, 'edit', ACTOR.afro);
+      }
+      const created: DevUser = { id: uid('du'), ...fields, status: 'active', createdAt: nowIso() };
+      if (!partner) delete created.partnerCompany;
+      // 担当はプロジェクト一覧の並び順にそろえる（存在しない id は捨て、重複は除く）
+      const ids = state.projects.filter((p) => d.projectIds.includes(p.id)).map((p) => p.id);
+      const s: DemoState = {
+        ...state,
+        devUsers: [...users, created],
+        devAccess: { ...devAccessState(state), [created.id]: true },
+        devProjects: { ...devProjectsState(state), [created.id]: ids },
+      };
+      return log(s, `開発者「${created.name}」を登録しました（${where}・担当 ${ids.length}件）`, 'edit', ACTOR.afro);
+    }
+
+    case 'setDevUserStatus': {
+      const users = devUsersState(state);
+      const prev = users.find((u) => u.id === action.id);
+      if (!prev || (prev.status === 'disabled') === !action.enabled) return state;
+      const updated: DevUser = action.enabled
+        ? { ...prev, status: 'active', disabledAt: undefined }
+        : { ...prev, status: 'disabled', disabledAt: nowIso() };
+      const s = { ...state, devUsers: users.map((u) => (u.id === prev.id ? updated : u)) };
+      return log(s, `開発者「${prev.name}」を${action.enabled ? '有効に戻しました' : '無効にしました'}`, 'edit', ACTOR.afro);
     }
 
     default:

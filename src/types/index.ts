@@ -362,6 +362,29 @@ export interface ClientAccount {
   disabledAt?: ISODate;
 }
 
+/** 開発者の所属。internal=アフロの社員 / partner=外部の協力会社 */
+export type DevAffiliation = 'internal' | 'partner';
+
+/**
+ * 管理者がユーザー管理で登録した開発者（固定のメンバー MEMBERS とは別に持つ）。
+ * 頭文字・アバターの色は名前と id から作る（保存しない）
+ */
+export interface DevUser {
+  id: string;
+  name: string;
+  /** 役割（例: フロントエンドエンジニア） */
+  role: string;
+  /** 小文字・前後の空白なしで保持する（重複の判定とログインの照合に使う） */
+  email: string;
+  affiliation: DevAffiliation;
+  /** 外部パートナーの会社名（affiliation が partner のときだけ必須） */
+  partnerCompany?: string;
+  /** disabled=管理者が無効にした（開発者画面にログインできない） */
+  status: 'active' | 'disabled';
+  createdAt: ISODate;
+  disabledAt?: ISODate;
+}
+
 /* ---------- ストア全体 ---------- */
 
 export interface DemoState {
@@ -388,4 +411,6 @@ export interface DemoState {
   devAccess?: Record<string, boolean>;
   /** 開発者が担当するプロジェクト（Member.id → Project.id の一覧）。0.14.0 で追加（devProjectsState() で補う） */
   devProjects?: Record<string, string[]>;
+  /** 管理者が登録した開発者。0.15.0 で追加（devUsersState() で補う） */
+  devUsers?: DevUser[];
 }

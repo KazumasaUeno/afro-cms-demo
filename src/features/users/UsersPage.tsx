@@ -2,18 +2,19 @@ import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormCon
 import { Ban, FolderKanban, Info, Pencil, Plus, RotateCcw } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { ClientAccount, Member } from '@/types';
+import type { ClientAccount } from '@/types';
 import { MemberAvatar, PageHeader, Reveal, StatusPill, Surface } from '@/components/ui';
-import { clientAccountsState, devAccessState, devProjectsState, useDemo } from '@/store/DemoStore';
+import { clientAccountsState, devAccessState, devProjectsState, devUsersState, useDemo } from '@/store/DemoStore';
 import { useToast } from '@/hooks/useToast';
 import { useSessions } from '@/services/session';
 import { formatDate } from '@/services/time';
-import { MEMBERS } from '@/data/members';
-import { CLIENT_STATUS, normalizeEmail, type ClientAccountDraft } from '@/data/users';
+import { allDevPeople, type DevPerson } from '@/data/people';
+import { CLIENT_STATUS, DEV_AFFILIATION, normalizeEmail, type ClientAccountDraft, type DevUserDraft } from '@/data/users';
 import { TOUCH } from '@/theme/media';
 import { tokens } from '@/theme/tokens';
 import { ClientAccountDialog } from './ClientAccountDialog';
 import { DevProjectsDialog } from './DevProjectsDialog';
+import { DevUserDialog } from './DevUserDialog';
 
 type TabId = 'clients' | 'dev';
 
@@ -80,7 +81,14 @@ export default function UsersPage() {
   const accounts = clientAccountsState(state);
   const access = devAccessState(state);
   const devProjects = devProjectsState(state);
-  const [assigning, setAssigning] = useState<Member | null>(null);
+  const devUsers = devUsersState(state);
+  const people = allDevPeople(state);
+  const [assigning, setAssigning] = useState<DevPerson | null>(null);
+  const [devEditing, setDevEditing] = useState<DevUserDraft | null>(null);
+  const [devDisabling, setDevDisabling] = useState<DevPerson | null>(null);
+  const [lastDevDisabling, setLastDevDisabling] = useState<DevPerson | null>(null);
+  if (devDisabling && devDisabling !== lastDevDisabling) setLastDevDisabling(devDisabling);
+  const shownDevDisabling = devDisabling ?? lastDevDisabling;
 
   const [editing, setEditing] = useState<ClientAccountDraft | null>(null);
   const [disabling, setDisabling] = useState<ClientAccount | null>(null);
@@ -89,7 +97,8 @@ export default function UsersPage() {
   const shownDisabling = disabling ?? lastDisabling;
 
   const count = (s: ClientAccount['status']) => accounts.filter((a) => a.status === s).length;
-  const devCount = MEMBERS.filter((m) => access[m.id]).length;
+  // 開発者画面を開ける人（権限オンで、無効にしていない人）
+  const devCount = people.filter((m) => access[m.id] && !m.disabled).length;
   const devSessionEmail = sessions.dev ? normalizeEmail(sessions.dev.email) : null;
   const projectOf = (id: string) => state.projects.find((p) => p.id === id);
 
@@ -116,7 +125,31 @@ export default function UsersPage() {
     toast(enabled ? `${name}に開発者画面の権限を追加しました` : `${name}の開発者画面の権限を外しました`, enabled ? 'success' : 'info');
   };
 
-  const saveDevProjects = (m: Member, projectIds: string[]) => {
+  const saveDevUser = (d: DevUserDraft) => {
+    const prev = d.id ? devUsers.find((u) => u.id === d.id) : undefined;
+    dispatch({ type: 'saveDevUser', user: d });
+    setDevEditing(null);
+    const name = d.name.trim();
+    if (!prev) {
+      toast(`${name}を開発者として登録しました（開発者画面の権限: オン）`);
+      return;
+    }
+    const company = d.affiliation === 'partner' ? d.partnerCompany.trim() : undefined;
+    const changed = prev.name !== name || prev.role !== d.role.trim() || prev.email !== normalizeEmail(d.email) || prev.affiliation !== d.affiliation || prev.partnerCompany !== company;
+    if (changed) toast('登録内容を保存しました');
+  };
+
+  const editDevUser = (m: DevPerson) => {
+    const u = devUsers.find((x) => x.id === m.id);
+    if (u) setDevEditing({ id: u.id, name: u.name, role: u.role, email: u.email, affiliation: u.affiliation, partnerCompany: u.partnerCompany ?? '', projectIds: [] });
+  };
+
+  const enableDevUser = (m: DevPerson) => {
+    dispatch({ type: 'setDevUserStatus', id: m.id, enabled: true });
+    toast(`${m.name}を有効に戻しました`);
+  };
+
+  const saveDevProjects = (m: DevPerson, projectIds: string[]) => {
     const prev = devProjects[m.id] ?? [];
     const next = state.projects.filter((p) => projectIds.includes(p.id)).map((p) => p.id);
     dispatch({ type: 'setDevProjects', memberId: m.id, projectIds });
@@ -129,7 +162,7 @@ export default function UsersPage() {
     <>
       <PageHeader
         title="ユーザー管理"
-        description="お客様ポータルにログインできるお客様の登録と、開発者画面を開けるアフロのメンバー・その担当プロジェクトを設定します。"
+        description="お客様ポータルにログインできるお客様の登録と、開発者画面を開ける開発者（社外のパートナーを含む）の登録・権限・担当プロジェクトを設定します。"
       />
 
       <Stack spacing={{ xs: 2, md: 2.5 }}>
@@ -198,16 +231,30 @@ export default function UsersPage() {
             </Stack>
           ) : (
             <Stack spacing={2}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
+                <Stack direction="row" sx={{ gap: 0.75, flexWrap: 'wrap', flex: 1 }}>
+                  <StatusPill tone="success">開発者画面を開ける {devCount}</StatusPill>
+                  <StatusPill tone="neutral">登録した開発者 {devUsers.length}</StatusPill>
+                </Stack>
+                <Button
+                  variant="contained" startIcon={<Plus size={16} />} sx={{ alignSelf: { xs: 'stretch', sm: 'auto' } }}
+                  onClick={() => setDevEditing({ name: '', role: '', email: '', affiliation: 'internal', partnerCompany: '', projectIds: [] })}
+                >
+                  開発者を登録
+                </Button>
+              </Stack>
               <DemoNote>
                 スイッチをオンにしたメンバーだけが、開発者画面にログインできます。オフにすると、ログイン中の場合は次に開発者画面を開いたときにログアウトされます。
                 <Box component="span" sx={{ display: 'block', mt: 0.5 }}>開発者画面で開けるのは担当プロジェクトだけです。「担当を変更」から選びます。</Box>
+                <Box component="span" sx={{ display: 'block', mt: 0.5 }}>社外のパートナーなど新しい開発者は「開発者を登録」から追加します。登録した開発者は編集・無効にできます（はじめからいるアフロのメンバーは変更できません）。</Box>
                 <Box component="span" sx={{ display: 'block', mt: 0.5 }}>デモのため画面上の制御だけで、セキュリティ上の保護ではありません。</Box>
               </DemoNote>
               <Reveal>
                 <Surface padding={0} sx={{ overflow: 'hidden' }}>
-                  <Box component="ul" aria-label="アフロのメンバー" sx={{ listStyle: 'none', m: 0, p: 0 }}>
-                    {MEMBERS.map((m) => {
-                      const on = !!access[m.id];
+                  <Box component="ul" aria-label="開発者の一覧" sx={{ listStyle: 'none', m: 0, p: 0 }}>
+                    {people.map((m) => {
+                      const on = !!access[m.id] && !m.disabled;
+                      const registered = m.kind === 'registered';
                       const loggedIn = devSessionEmail === m.email;
                       const mine = state.projects.filter((p) => (devProjects[m.id] ?? []).includes(p.id));
                       return (
@@ -217,17 +264,21 @@ export default function UsersPage() {
                         >
                           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 1, sm: 2 }} alignItems={{ sm: 'center' }}>
                             <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flex: 1, minWidth: 0 }}>
-                              <MemberAvatar id={m.id} size={36} />
+                              <MemberAvatar id={m.id} person={m} size={36} />
                               <Box sx={{ minWidth: 0 }}>
                                 <Stack direction="row" sx={{ gap: 0.75, flexWrap: 'wrap', alignItems: 'center' }}>
-                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{m.name}</Typography>
-                                  <Typography variant="caption">{m.role}</Typography>
+                                  <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: 'anywhere', color: m.disabled ? tokens.color.muted : tokens.color.ink }}>{m.name}</Typography>
+                                  <Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>{m.role}</Typography>
+                                  {m.affiliation === 'partner' && <StatusPill tone="warning" dot={false}>{DEV_AFFILIATION.partner}</StatusPill>}
+                                  {m.disabled && <StatusPill tone="neutral">無効</StatusPill>}
                                   {loggedIn && <StatusPill tone="accent" dot={false}>開発者画面にログイン中</StatusPill>}
                                 </Stack>
+                                {m.partnerCompany && <Typography variant="caption" sx={{ display: 'block', overflowWrap: 'anywhere' }}>{m.partnerCompany}</Typography>}
                                 <Typography variant="caption" sx={{ display: 'block', ...mono }}>{m.email}</Typography>
                               </Box>
                             </Stack>
                             <FormControlLabel
+                              disabled={m.disabled}
                               control={<Switch checked={on} onChange={(e) => setDev(m.id, m.name, e.target.checked)} inputProps={{ 'aria-label': `${m.name}が開発者画面を開ける` }} />}
                               label="開発者画面を開ける"
                               sx={{ mr: 0, ml: { xs: 5.5, sm: 0 }, flexShrink: 0, '& .MuiFormControlLabel-label': { fontSize: 13.5, fontWeight: 600, color: on ? tokens.color.ink : tokens.color.muted } }}
@@ -255,16 +306,28 @@ export default function UsersPage() {
                                 )) : <Typography variant="caption" sx={{ color: tokens.color.muted }}>なし</Typography>}
                               </Stack>
                               {!on && mine.length > 0 && (
-                                <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: tokens.color.muted }}>権限がオフのため開けません</Typography>
+                                <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: tokens.color.muted }}>{m.disabled ? '無効のため開けません' : '権限がオフのため開けません'}</Typography>
                               )}
                             </Box>
-                            <Button
-                              size="small" variant="outlined" startIcon={<FolderKanban size={14} />} onClick={() => setAssigning(m)}
-                              aria-label={`${m.name}の担当プロジェクトを変更`}
-                              sx={{ flexShrink: 0, alignSelf: { xs: 'flex-start', sm: 'center' }, [TOUCH]: { minHeight: 44 } }}
-                            >
-                              担当を変更
-                            </Button>
+                            <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap', flexShrink: 0, alignSelf: { xs: 'flex-start', sm: 'center' } }}>
+                              <Button
+                                size="small" variant="outlined" startIcon={<FolderKanban size={14} />} onClick={() => setAssigning(m)}
+                                aria-label={`${m.name}の担当プロジェクトを変更`}
+                                sx={{ [TOUCH]: { minHeight: 44 } }}
+                              >
+                                担当を変更
+                              </Button>
+                              {registered && (
+                                <>
+                                  <Button size="small" variant="outlined" startIcon={<Pencil size={14} />} onClick={() => editDevUser(m)} aria-label={`${m.name}の登録内容を編集`} sx={{ [TOUCH]: { minHeight: 44 } }}>編集</Button>
+                                  {m.disabled ? (
+                                    <Button size="small" variant="text" startIcon={<RotateCcw size={14} />} onClick={() => enableDevUser(m)} aria-label={`${m.name}を有効に戻す`} sx={{ [TOUCH]: { minHeight: 44 } }}>有効に戻す</Button>
+                                  ) : (
+                                    <Button size="small" variant="text" color="error" startIcon={<Ban size={14} />} onClick={() => setDevDisabling(m)} aria-label={`${m.name}を無効にする`} sx={{ [TOUCH]: { minHeight: 44 } }}>無効にする</Button>
+                                  )}
+                                </>
+                              )}
+                            </Stack>
                           </Stack>
                         </Box>
                       );
@@ -281,6 +344,32 @@ export default function UsersPage() {
         member={assigning} assigned={assigning ? devProjects[assigning.id] ?? [] : []} hasAccess={assigning ? !!access[assigning.id] : false}
         projects={state.projects} onClose={() => setAssigning(null)} onSave={(ids) => assigning && saveDevProjects(assigning, ids)}
       />
+
+      <DevUserDialog draft={devEditing} devUsers={devUsers} accounts={accounts} projects={state.projects} onClose={() => setDevEditing(null)} onSave={saveDevUser} />
+
+      <Dialog open={!!devDisabling} onClose={() => setDevDisabling(null)} maxWidth="xs" fullWidth aria-labelledby="dev-disable-title">
+        <DialogTitle id="dev-disable-title">{shownDevDisabling?.name}を無効にしますか？</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            開発者画面にログインできなくなります。ログイン中の場合は、次に開発者画面を開いたときにログアウトされます。登録内容と担当プロジェクトは残り、あとから「有効に戻す」で戻せます。
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button variant="outlined" onClick={() => setDevDisabling(null)}>キャンセル</Button>
+          <Button
+            variant="contained" color="error"
+            onClick={() => {
+              if (devDisabling) {
+                dispatch({ type: 'setDevUserStatus', id: devDisabling.id, enabled: false });
+                toast(`${devDisabling.name}を無効にしました`, 'info');
+              }
+              setDevDisabling(null);
+            }}
+          >
+            無効にする
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <ClientAccountDialog draft={editing} accounts={accounts} projects={state.projects} onClose={() => setEditing(null)} onSave={save} />
 

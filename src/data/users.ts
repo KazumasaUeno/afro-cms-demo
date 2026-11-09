@@ -1,4 +1,4 @@
-import type { ClientAccount, ClientAccountStatus, Project } from '@/types';
+import type { ClientAccount, ClientAccountStatus, DevAffiliation, DevUser, Project } from '@/types';
 import { MEMBERS } from './members';
 import { daysAgo, hoursAgo } from '@/services/time';
 
@@ -47,6 +47,47 @@ export function validateClientAccount(d: ClientAccountDraft, accounts: ClientAcc
   return e;
 }
 
+export const DEV_USER_LIMITS = { name: 30, role: 24, partnerCompany: 40, email: 254 } as const;
+
+export const DEV_AFFILIATION: Record<DevAffiliation, string> = { internal: '社内', partner: '外部パートナー' };
+
+/** 開発者の登録・編集ダイアログの入力（projectIds は新規登録のときだけ使う。登録後の担当は「担当を変更」で変える） */
+export interface DevUserDraft {
+  id?: string;
+  name: string;
+  role: string;
+  email: string;
+  affiliation: DevAffiliation;
+  partnerCompany: string;
+  projectIds: string[];
+}
+export type DevUserField = 'name' | 'role' | 'email' | 'partnerCompany';
+
+/**
+ * 画面と reducer の両方で使う開発者の入力チェック。
+ * メールアドレスの重複は、固定のメンバー・登録した開発者（自分以外。無効も含む）・お客様アカウントのすべてと比べる（ログイン画面の照合先が 1 人に決まるようにする）
+ */
+export function validateDevUser(d: DevUserDraft, devUsers: DevUser[], accounts: ClientAccount[]): Partial<Record<DevUserField, string>> {
+  const e: Partial<Record<DevUserField, string>> = {};
+  const name = d.name.trim();
+  const role = d.role.trim();
+  const email = normalizeEmail(d.email);
+  const company = d.partnerCompany.trim();
+  if (!name) e.name = '氏名を入力してください';
+  else if (name.length > DEV_USER_LIMITS.name) e.name = `${DEV_USER_LIMITS.name}文字以内で入力してください`;
+  if (!role) e.role = '役割を入力してください';
+  else if (role.length > DEV_USER_LIMITS.role) e.role = `${DEV_USER_LIMITS.role}文字以内で入力してください`;
+  if (!email) e.email = 'メールアドレスを入力してください';
+  else if (email.length > DEV_USER_LIMITS.email || !EMAIL_RE.test(email)) e.email = 'メールアドレスの形式が正しくありません（例: name@example.com）';
+  else if (MEMBERS.some((m) => normalizeEmail(m.email) === email) || devUsers.some((u) => u.id !== d.id && u.email === email)) e.email = 'このメールアドレスはすでに開発者として登録されています';
+  else if (accounts.some((a) => a.email === email)) e.email = 'このメールアドレスはお客様として登録されています。別のメールアドレスを入力してください';
+  if (d.affiliation === 'partner') {
+    if (!company) e.partnerCompany = 'パートナーの会社名を入力してください';
+    else if (company.length > DEV_USER_LIMITS.partnerCompany) e.partnerCompany = `${DEV_USER_LIMITS.partnerCompany}文字以内で入力してください`;
+  }
+  return e;
+}
+
 /** 初期のお客様アカウント（架空。MINAMO COFFEE の担当者はお客様ポータルのデモ用アカウントと同じ） */
 export function seedClientAccounts(): ClientAccount[] {
   return [
@@ -65,11 +106,6 @@ export function seedDevAccess(): Record<string, boolean> {
 export function seedDevProjects(): Record<string, string[]> {
   return Object.fromEntries(MEMBERS.map((m) => [m.id, m.id === 'm3' ? ['p1', 'p2'] : m.id === 'm1' ? ['p1'] : []]));
 }
-
-export const memberByEmail = (email: string) => {
-  const e = normalizeEmail(email);
-  return MEMBERS.find((m) => m.email === e);
-};
 
 export const accountByEmail = (accounts: ClientAccount[], email: string) => {
   const e = normalizeEmail(email);

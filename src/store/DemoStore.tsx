@@ -58,3 +58,4 @@ export function useDemo(): StoreValue {
 }
 
 export { clientAccountsState, currentProject, devAccessState, devProjectsState, devState, signageState } from './reducer';
+export { devUsersState } from '@/data/people';

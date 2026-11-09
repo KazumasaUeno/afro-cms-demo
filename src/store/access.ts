@@ -1,6 +1,7 @@
 import type { DemoState } from '@/types';
 import type { AreaId } from '@/components/layout/nav';
-import { accountByEmail, memberByEmail } from '@/data/users';
+import { accountByEmail } from '@/data/users';
+import { personByEmail } from '@/data/people';
 import { clientAccountsState, devAccessState } from './reducer';
 
 /**
@@ -11,7 +12,9 @@ import { clientAccountsState, devAccessState } from './reducer';
 /** ログイン画面で入力されたメールアドレスで、そのエリアに入れるか（管理者画面は従来どおり照合しない） */
 export function loginDenial(area: AreaId, email: string, state: DemoState): string | null {
   if (area === 'dev') {
-    const m = memberByEmail(email);
+    // 固定のメンバーと、ユーザー管理で登録した開発者（無効にした人は入れない）
+    const m = personByEmail(state, email);
+    if (m?.disabled) return 'この開発者アカウントは無効になっています。管理者に確認してください';
     return m && devAccessState(state)[m.id] ? null : 'このメールアドレスには開発者画面の権限がありません。管理者に権限の追加を依頼してください';
   }
   if (area === 'portal') {
@@ -27,8 +30,8 @@ export function loginDenial(area: AreaId, email: string, state: DemoState): stri
  */
 export function isRevoked(area: AreaId, email: string, state: DemoState): boolean {
   if (area === 'dev') {
-    const m = memberByEmail(email);
-    return !!m && !devAccessState(state)[m.id];
+    const m = personByEmail(state, email);
+    return !!m && (m.disabled || !devAccessState(state)[m.id]);
   }
   if (area === 'portal') {
     const a = accountByEmail(clientAccountsState(state), email);

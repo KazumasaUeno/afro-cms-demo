@@ -5,7 +5,8 @@ import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import type { Stage } from '@/types';
 import { devProjectsState, useDemo } from '@/store/DemoStore';
 import { STAGES, stageIndex } from '@/data/projects';
-import { MEMBERS, memberById } from '@/data/members';
+import { memberById } from '@/data/members';
+import { allDevPeople } from '@/data/people';
 import { TOTAL_REQUIREMENT_QUESTIONS } from '@/data/requirements';
 import { TOTAL_QUALITY_QUESTIONS } from '@/data/quality';
 import { MemberAvatar, ProgressRing, Reveal, StatusPill, Surface } from '@/components/ui';
@@ -52,9 +53,9 @@ export default function ProjectDetailPage() {
 
   const cur = stageIndex(p.stage);
   const owner = memberById(p.ownerId);
-  // 開発担当（ユーザー管理で決める。開発者画面の権限の有無は問わない）
+  // 開発担当（ユーザー管理で決める。開発者画面の権限の有無は問わない。登録した開発者も含め、無効にした人は除く）
   const devAll = devProjectsState(state);
-  const devNames = MEMBERS.filter((m) => devAll[m.id]?.includes(p.id)).map((m) => m.name);
+  const devNames = allDevPeople(state).filter((m) => !m.disabled).filter((m) => devAll[m.id]?.includes(p.id)).map((m) => m.name);
   const q = qualityCompletion(state.qualityChecks);
   const answered = Object.values(state.requirements.answers).filter((v) => (Array.isArray(v) ? v.length > 0 : v.trim() !== '')).length;
   const published = state.pages.filter((x) => x.status === 'published').length;
