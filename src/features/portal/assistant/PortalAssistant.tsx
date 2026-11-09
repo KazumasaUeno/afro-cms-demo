@@ -3,23 +3,20 @@ import { AnimatePresence, motion } from 'motion/react';
 import { ArrowRight, Send, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { AiMark } from '@/components/ui';
 import { useDemo } from '@/store/DemoStore';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { tokens } from '@/theme/tokens';
 import { LANDSCAPE_PHONE, TOUCH } from '@/theme/media';
 import { AREAS } from '@/components/layout/nav';
+import { AssistantAvatar } from './AssistantAvatar';
 import { TOPICS, clientTodos, pageGuide, reply, type AssistantReply } from './answers';
 
 const AREA = AREAS.portal;
 const MAX_INPUT = 200;
 
-/**
- * アバターの顔。見た目は未決定（2026-11-09 保留）のため、既存の AI マークを仮に使う。
- * 決まったらここだけ差し替える
- */
-function AssistantFace({ size }: { size: number }) {
-  return <AiMark size={size} />;
+/** アバターの顔（見た目の正は AssistantAvatar） */
+function AssistantFace({ size, talking }: { size: number; talking?: boolean }) {
+  return <AssistantAvatar size={size} talking={talking} />;
 }
 
 interface Message extends AssistantReply {
@@ -118,7 +115,7 @@ export function PortalAssistant() {
               }}
             >
               <Stack direction="row" spacing={1.25} alignItems="center" sx={{ px: 2, py: 1.5, borderBottom: `1px solid ${tokens.color.border}` }}>
-                <AssistantFace size={34} />
+                <AssistantFace size={38} talking={typing} />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography sx={{ fontWeight: 700, fontSize: 15 }}>AIアシスタント</Typography>
                   <Typography variant="caption" sx={{ display: 'block' }}>デモ: 用意した回答を表示します。入力は送信されません</Typography>
