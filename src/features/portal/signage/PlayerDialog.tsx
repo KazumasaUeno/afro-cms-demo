@@ -8,6 +8,7 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { LANDSCAPE_PHONE } from '@/theme/media';
 import { tokens } from '@/theme/tokens';
 import { EmptyScreen, SlideView } from './SlideView';
+import { useToday } from './useToday';
 
 const TICK = 100;
 
@@ -27,14 +28,17 @@ export function PlayerDialog({ open, display, slides, onClose }: { open: boolean
   const shown = display ?? last;
 
   const delivered = useMemo(() => (shown ? deliveredSlidesOf(shown, slides) : []), [shown, slides]);
-  const playlist = useMemo(() => delivered.filter((s) => periodState(s) === 'active'), [delivered]);
+  // 開いたまま日付が変わったら、掲載期間を判定し直す
+  const today = useToday(open);
+  const playlist = useMemo(() => delivered.filter((s) => periodState(s, today) === 'active'), [delivered, today]);
   const skipped = delivered.length - playlist.length;
 
-  // 開くたびに最初から
+  // 開くたびに最初から（速度も等速に戻す）
   useEffect(() => {
     if (open) {
       setPos({ i: 0, t: 0 });
       setPaused(false);
+      setSpeed(1);
     }
   }, [open, display?.id]);
 

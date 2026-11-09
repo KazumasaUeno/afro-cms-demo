@@ -4,4 +4,5 @@
 export const TOUCH = '@media (max-width: 899.95px), (pointer: coarse)';
 
 /** 横向きのスマホ（高さが低い）。下部タブを隠し、キャンバス等の高さを画面に合わせる */
-export const LANDSCAPE_PHONE = '@media (orientation: landscape) and (max-height: 500px)';
+export const LANDSCAPE_PHONE_QUERY = '(orientation: landscape) and (max-height: 500px)';
+export const LANDSCAPE_PHONE = `@media ${LANDSCAPE_PHONE_QUERY}`;

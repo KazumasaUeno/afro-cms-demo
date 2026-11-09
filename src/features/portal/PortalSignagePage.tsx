@@ -19,6 +19,7 @@ import { EmptyScreen, SlideView } from './signage/SlideView';
 import { SlideEditorDialog } from './signage/SlideEditorDialog';
 import { DisplaySlidesDialog } from './signage/DisplaySlidesDialog';
 import { PlayerDialog } from './signage/PlayerDialog';
+import { useToday } from './signage/useToday';
 
 const AREA = AREAS.portal;
 
@@ -39,7 +40,8 @@ const cut = (text: string, max: number) => (text.length > max ? `${text.slice(0,
 /** 端末カードの小さな画面。配信済みの内容を、表示秒数ごとに切り替える（動きを減らす設定では 1 枚目で止める） */
 function LiveThumb({ display, slides }: { display: Display; slides: Slide[] }) {
   const reduced = useReducedMotion();
-  const list = useMemo(() => deliveredSlidesOf(display, slides).filter((s) => periodState(s) === 'active'), [display, slides]);
+  const today = useToday();
+  const list = useMemo(() => deliveredSlidesOf(display, slides).filter((s) => periodState(s, today) === 'active'), [display, slides, today]);
   const [i, setI] = useState(0);
   const index = list.length ? i % list.length : 0;
   const cur = list[index];
@@ -120,7 +122,7 @@ function DisplayCard({ display, slides, onEdit, onPreview, onDeliver }: { displa
 }
 
 function SlideCard({ slide, usedBy, onEdit, onDelete }: { slide: Slide; usedBy: string[]; onEdit: () => void; onDelete: () => void }) {
-  const st = periodState(slide);
+  const st = periodState(slide, useToday());
   return (
     <Surface padding={{ xs: 1.5, md: 2 }} sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, height: '100%' }}>
       <Box sx={{ borderRadius: '8px', overflow: 'hidden', border: `1px solid ${tokens.color.border}` }}>

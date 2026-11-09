@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { Display, Slide } from '@/types';
 import { StatusPill } from '@/components/ui';
 import { DISPLAY_SLIDES_MAX, periodLabel, periodState, TEMPLATE_LABEL } from '@/data/signage';
+import { useToday } from './useToday';
 import { useFullScreenDialog } from '@/hooks/useMediaQueries';
 import { tokens } from '@/theme/tokens';
 import { SlideView } from './SlideView';
@@ -12,6 +13,8 @@ import { SlideView } from './SlideView';
 export function DisplaySlidesDialog({ display, slides, onClose, onSave }: { display: Display | null; slides: Slide[]; onClose: () => void; onSave: (ids: string[]) => void }) {
   const fullScreen = useFullScreenDialog();
   const [ids, setIds] = useState<string[]>([]);
+  // 掲載期間の表示（開いている間だけ日付の変わり目を確かめる）
+  const today = useToday(!!display);
   // 開いた端末が変わったときだけ選択を作り直す（閉じるアニメーションの間は最後の端末を表示）
   const [openId, setOpenId] = useState<string | null>(null);
   const [last, setLast] = useState<Display | null>(null);
@@ -38,7 +41,7 @@ export function DisplaySlidesDialog({ display, slides, onClose, onSave }: { disp
 
   const row = (s: Slide, i: number | null) => {
     const checked = i !== null;
-    const st = periodState(s);
+    const st = periodState(s, today);
     const labelId = `display-slide-${s.id}`;
     return (
       <Box

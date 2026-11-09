@@ -1,4 +1,4 @@
-import { Box, Button, ButtonBase, IconButton, InputBase, Stack, Typography } from '@mui/material';
+import { Box, Button, ButtonBase, IconButton, InputBase, Stack, Typography, useTheme } from '@mui/material';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowRight, Send, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -6,13 +6,14 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useDemo } from '@/store/DemoStore';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { tokens } from '@/theme/tokens';
-import { LANDSCAPE_PHONE, TOUCH } from '@/theme/media';
+import { LANDSCAPE_PHONE, LANDSCAPE_PHONE_QUERY, TOUCH } from '@/theme/media';
 import { AREAS } from '@/components/layout/nav';
 import { AssistantAvatar } from './AssistantAvatar';
 import { TOPICS, clientTodos, pageGuide, reply, type AssistantReply } from './answers';
 
 const AREA = AREAS.portal;
 const MAX_INPUT = 200;
+const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
 
 /** アバターの顔（見た目の正は AssistantAvatar） */
 function AssistantFace({ size, talking }: { size: number; talking?: boolean }) {
@@ -28,7 +29,7 @@ let seq = 0;
 
 /**
  * お客様ポータルの AI アシスタント（案内役）。右下に常駐し、画面ごとの案内と質問への回答をする（シミュレーション）。
- * 非モーダルのパネル（フォーカスを閉じ込めない）。スマホでは画面の大半を覆うが、背後も操作できる前提のデモとして受け入れている
+ * 非モーダルのパネル。PC では背後も操作できる。パネルが画面の大半を覆う幅（covering）では、Tab をパネル内で回す
  */
 export function PortalAssistant() {
   const { state } = useDemo();
@@ -43,6 +44,10 @@ export function PortalAssistant() {
   const listRef = useRef<HTMLDivElement>(null);
   const fabRef = useRef<HTMLButtonElement>(null);
   const timer = useRef<number>();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const theme = useTheme();
+  // 開いている間ボタンを隠す画面（md 未満と横向きのスマホ。ボタンの sx と同じ条件）。パネルが画面の大半を覆うので Tab をパネル内で回す
+  const covering = `${theme.breakpoints.down('md').replace(/^@media\s*/, '')}, ${LANDSCAPE_PHONE_QUERY}`;
   const guide = pageGuide(pathname, state);
   const todoCount = clientTodos(state).length;
 
@@ -51,6 +56,29 @@ export function PortalAssistant() {
   useEffect(() => {
     if (open) inputRef.current?.focus({ preventScroll: true });
   }, [open]);
+  // Tab の閉じ込め。押したボタンが無効になる（回答の作成中など）とフォーカスが body へ移るので、パネルではなく document で拾う
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      const panel = panelRef.current;
+      if (e.key !== 'Tab' || !panel || !window.matchMedia(covering).matches) return;
+      const items = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE));
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      const outside = !panel.contains(active);
+      if (e.shiftKey && (outside || active === first)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (outside || active === last)) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, covering]);
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: reduced ? 'auto' : 'smooth' });
   }, [messages, typing, reduced]);
@@ -100,6 +128,7 @@ export function PortalAssistant() {
             <Box
               role="dialog"
               aria-label="AIアシスタント"
+              ref={panelRef}
               onKeyDown={(e) => { if (e.key === 'Escape') close(); }}
               sx={{
                 position: 'fixed', zIndex: 40, display: 'flex', flexDirection: 'column', overflow: 'hidden',

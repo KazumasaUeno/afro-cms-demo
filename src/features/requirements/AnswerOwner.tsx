@@ -1,5 +1,6 @@
 import { Box, ButtonBase, Stack, Typography } from '@mui/material';
 import { Users } from 'lucide-react';
+import { useRef, type KeyboardEvent } from 'react';
 import { StatusPill, type PillTone } from '@/components/ui';
 import { useDemo } from '@/store/DemoStore';
 import { useToast } from '@/hooks/useToast';
@@ -37,6 +38,26 @@ export function ModeSwitcher() {
   const clientDone = clientQs.filter((q) => isAnswered(req.answers[q.id])).length;
   const waitingClient = pendingConfirmations(req, 'client').length;
   const waitingAfro = pendingConfirmations(req, 'afro').length;
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const select = (m: RequirementMode) => {
+    if (m === mode || locked) return;
+    dispatch({ type: 'setRequirementMode', mode: m });
+    toast(`回答の分担を「${MODE_LABEL[m].label}」にしました`);
+  };
+
+  // ラジオボタンの操作: 矢印キーで選び直す（Tab では選択中の 1 つにだけ止まる）
+  const onKeyDown = (e: KeyboardEvent) => {
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    const at = { Home: 0, End: MODES.length - 1 }[e.key];
+    if (step === undefined && at === undefined) return;
+    e.preventDefault();
+    // 押し続けたときの繰り返しでは切り替えない（通知が連続で出るため）
+    if (locked || e.repeat) return;
+    const next = at ?? (MODES.indexOf(mode) + step! + MODES.length) % MODES.length;
+    select(MODES[next]);
+    refs.current[next]?.focus();
+  };
 
   return (
     <Box sx={{ p: { xs: 1.75, md: 2 }, mb: 2.5, borderRadius: `${tokens.radius.lg}px`, border: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface }}>
@@ -45,20 +66,18 @@ export function ModeSwitcher() {
           <Users size={17} color={tokens.color.primary} />
           <Typography variant="h6" component="h2" id="req-mode-label">回答の分担</Typography>
         </Stack>
-        <Box role="radiogroup" aria-labelledby="req-mode-label" sx={{ display: 'flex', p: 0.5, gap: 0.5, borderRadius: '12px', bgcolor: tokens.color.bgSubtle, alignSelf: { xs: 'stretch', md: 'auto' } }}>
-          {MODES.map((m) => {
+        <Box role="radiogroup" aria-labelledby="req-mode-label" onKeyDown={onKeyDown} sx={{ display: 'flex', p: 0.5, gap: 0.5, borderRadius: '12px', bgcolor: tokens.color.bgSubtle, alignSelf: { xs: 'stretch', md: 'auto' } }}>
+          {MODES.map((m, i) => {
             const on = m === mode;
             return (
               <ButtonBase
                 key={m}
+                ref={(el: HTMLButtonElement | null) => { refs.current[i] = el; }}
                 role="radio"
                 aria-checked={on}
+                tabIndex={on ? 0 : -1}
                 disabled={locked && !on}
-                onClick={() => {
-                  if (on) return;
-                  dispatch({ type: 'setRequirementMode', mode: m });
-                  toast(`回答の分担を「${MODE_LABEL[m].label}」にしました`);
-                }}
+                onClick={() => select(m)}
                 sx={{
                   flex: { xs: 1, md: 'none' }, px: 1.5, height: 34, [TOUCH]: { height: 44 }, borderRadius: '9px', fontSize: 13, fontWeight: 650, whiteSpace: 'nowrap',
                   color: on ? tokens.color.ink : tokens.color.muted, bgcolor: on ? tokens.color.surface : 'transparent', boxShadow: on ? tokens.shadow.xs : 'none',
