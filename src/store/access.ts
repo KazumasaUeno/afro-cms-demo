@@ -1,7 +1,8 @@
 import type { DemoState } from '@/types';
 import type { AreaId } from '@/components/layout/nav';
 import { accountByEmail } from '@/data/users';
-import { personByEmail } from '@/data/people';
+import { devUsersState, personByEmail } from '@/data/people';
+import { normalizeEmail } from '@/data/users';
 import { clientAccountsState, devAccessState } from './reducer';
 
 /**
@@ -31,7 +32,11 @@ export function loginDenial(area: AreaId, email: string, state: DemoState): stri
 export function isRevoked(area: AreaId, email: string, state: DemoState): boolean {
   if (area === 'dev') {
     const m = personByEmail(state, email);
-    return !!m && (m.disabled || !devAccessState(state)[m.id]);
+    if (m) return m.disabled || !devAccessState(state)[m.id];
+    // 管理者がメールアドレスを変えた登録開発者の旧メール（DevUser.previousEmails）でのセッションは失効させる。
+    // どの開発者の現在・過去のメールにも当たらないセッション（デモの初期セッションなど）は、従来どおり黒田として通す
+    const e = normalizeEmail(email);
+    return devUsersState(state).some((u) => u.previousEmails?.includes(e));
   }
   if (area === 'portal') {
     const a = accountByEmail(clientAccountsState(state), email);

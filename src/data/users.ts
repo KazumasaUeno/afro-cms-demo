@@ -30,8 +30,11 @@ export interface ClientAccountDraft {
 }
 export type ClientField = 'company' | 'name' | 'email' | 'projectId';
 
-/** 画面と reducer の両方で使う入力チェック（重複は id が違うアカウントとだけ比べる。無効のアカウントも含める） */
-export function validateClientAccount(d: ClientAccountDraft, accounts: ClientAccount[], projects: Project[]): Partial<Record<ClientField, string>> {
+/**
+ * 画面と reducer の両方で使う入力チェック（重複は id が違うアカウントとだけ比べる。無効のアカウントも含める）。
+ * 開発者（固定のメンバー・登録した開発者。無効も含む）のメールとも重ねない（開発者の登録と同じく、ログインの照合先を 1 人に決めるため）
+ */
+export function validateClientAccount(d: ClientAccountDraft, accounts: ClientAccount[], projects: Project[], devUsers: DevUser[]): Partial<Record<ClientField, string>> {
   const e: Partial<Record<ClientField, string>> = {};
   const company = d.company.trim();
   const name = d.name.trim();
@@ -43,6 +46,7 @@ export function validateClientAccount(d: ClientAccountDraft, accounts: ClientAcc
   if (!email) e.email = 'メールアドレスを入力してください';
   else if (email.length > CLIENT_LIMITS.email || !EMAIL_RE.test(email)) e.email = 'メールアドレスの形式が正しくありません（例: name@example.com）';
   else if (accounts.some((a) => a.id !== d.id && a.email === email)) e.email = 'このメールアドレスはすでに登録されています';
+  else if (MEMBERS.some((m) => normalizeEmail(m.email) === email) || devUsers.some((u) => u.email === email)) e.email = 'このメールアドレスは開発者として登録されています。別のメールアドレスを入力してください';
   if (!projects.some((p) => p.id === d.projectId)) e.projectId = '担当案件を選んでください';
   return e;
 }

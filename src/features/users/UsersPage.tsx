@@ -371,7 +371,7 @@ export default function UsersPage() {
         </DialogActions>
       </Dialog>
 
-      <ClientAccountDialog draft={editing} accounts={accounts} projects={state.projects} onClose={() => setEditing(null)} onSave={save} />
+      <ClientAccountDialog draft={editing} accounts={accounts} projects={state.projects} devUsers={devUsers} onClose={() => setEditing(null)} onSave={save} />
 
       <Dialog open={!!disabling} onClose={() => setDisabling(null)} maxWidth="xs" fullWidth aria-labelledby="client-disable-title">
         <DialogTitle id="client-disable-title">{shownDisabling?.company} {shownDisabling?.name}を無効にしますか？</DialogTitle>

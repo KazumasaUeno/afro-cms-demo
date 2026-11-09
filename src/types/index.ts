@@ -383,6 +383,8 @@ export interface DevUser {
   status: 'active' | 'disabled';
   createdAt: ISODate;
   disabledAt?: ISODate;
+  /** 変更前のメールアドレス（0.16.0 で追加）。旧メールでログイン中のセッションを失効させる判定に使う */
+  previousEmails?: string[];
 }
 
 /* ---------- ストア全体 ---------- */

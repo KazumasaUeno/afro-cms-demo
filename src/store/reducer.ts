@@ -6,8 +6,9 @@ import { QUALITY_CATEGORIES, QUALITY_ITEMS } from '@/data/quality';
 import { nowIso } from '@/services/time';
 import { createSeedState } from './seed';
 import { DEV_ENVS, DEV_TASK_STATUSES, DEV_USER_ID, deployGate, seedDev } from '@/data/dev';
-import { memberById } from '@/data/members';
-import { devUsersState, personById } from '@/data/people';
+import { MEMBERS, memberById } from '@/data/members';
+import { allDevPeople, devUsersState, personById } from '@/data/people';
+import { pickAccent, projectChanged, projectDraftOf, projectFields, validateProject, type ProjectDraft } from '@/data/projects';
 import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
 import { MODE_LABEL, pendingConfirmations, questionStatus } from '@/features/requirements/assignment';
 import { isAnswered } from '@/features/requirements/validation';
@@ -24,6 +25,8 @@ export type Action =
   | { type: 'reset' }
   | { type: 'setCurrentProject'; id: string }
   | { type: 'updateProject'; id: string; patch: Partial<Project> }
+  /** プロジェクトの登録（id なし。要件定義・進捗 0% で作る）と編集（id あり）。開発担当（devIds）もここで合わせる。削除は無い */
+  | { type: 'saveProject'; project: ProjectDraft }
   /** by を省略するとアフロ（管理者画面）。お客様ポータルからは client */
   | { type: 'setAnswer'; questionId: string; value: AnswerValue; by?: Side }
   /** 回答の分担を切り替える（承認前のみ） */
@@ -133,6 +136,47 @@ export function reducer(state: DemoState, action: Action): DemoState {
 
     case 'updateProject':
       return { ...state, projects: state.projects.map((p) => (p.id === action.id ? { ...p, ...action.patch, updatedAt: nowIso() } : p)) };
+
+    case 'saveProject': {
+      const d = action.project;
+      // 画面でも止めているが、不正な値・重複はここでも保存しない
+      if (Object.keys(validateProject(d, state.projects, MEMBERS.map((m) => m.id))).length > 0) return state;
+      const prev = d.id ? state.projects.find((p) => p.id === d.id) : undefined;
+      if (d.id && !prev) return state;
+      const people = allDevPeople(state);
+      const all = devProjectsState(state);
+      const id = prev?.id ?? uid('p');
+      // 開発担当: 選ばれた人に追加し、選ばれていない人から外す（無効にした人は画面に出さないので、その担当は変えない）
+      const devPatch: Record<string, string[]> = {};
+      for (const person of people) {
+        if (person.disabled) continue;
+        const cur = all[person.id] ?? [];
+        const want = d.devIds.includes(person.id);
+        if (want !== cur.includes(id)) devPatch[person.id] = want ? [...cur, id] : cur.filter((x) => x !== id);
+      }
+      const devsChanged = Object.keys(devPatch).length > 0;
+      const fieldsChanged = !prev || projectChanged(projectDraftOf(prev, people, all), d).fields;
+      if (!fieldsChanged && !devsChanged) return state;
+      const fields = projectFields(d, prev);
+      const project: Project = !prev
+        ? {
+          id, ...fields, stage: 'requirements', progress: 0, pendingApprovals: 0, nextAction: 'ヒアリングを始める',
+          accent: pickAccent(state.projects), updatedAt: nowIso(),
+        }
+        : fieldsChanged ? { ...prev, ...fields, updatedAt: nowIso() } : prev;
+      if (!project.launchDate) delete project.launchDate;
+      const projects = prev ? state.projects.map((p) => (p.id === id ? project : p)) : [...state.projects, project];
+      // 担当はプロジェクト一覧の並び順にそろえる
+      const devProjects = { ...all };
+      for (const [pid, ids] of Object.entries(devPatch)) devProjects[pid] = projects.filter((p) => ids.includes(p.id)).map((p) => p.id);
+      const s: DemoState = { ...state, projects, ...(devsChanged ? { devProjects } : {}) };
+      if (prev) {
+        const text = fieldsChanged ? `プロジェクト「${project.siteName}」の登録内容を変更しました` : `プロジェクト「${project.siteName}」の開発担当を変更しました`;
+        return log(s, text, 'edit', ACTOR.afro, id);
+      }
+      const devCount = people.filter((m) => !m.disabled && d.devIds.includes(m.id)).length;
+      return log(s, `プロジェクト「${project.siteName}」を登録しました（開発担当 ${devCount}人）`, 'edit', ACTOR.afro, id);
+    }
 
     case 'setAnswer': {
       // 承認後は回答を変えない（変えると確認待ちが生まれ、承認し直す手段が無い）
@@ -386,7 +430,7 @@ export function reducer(state: DemoState, action: Action): DemoState {
     case 'saveClientAccount': {
       const accounts = clientAccountsState(state);
       // 画面でも止めているが、不正な値・重複はここでも保存しない
-      if (Object.keys(validateClientAccount(action.account, accounts, state.projects)).length > 0) return state;
+      if (Object.keys(validateClientAccount(action.account, accounts, state.projects, devUsersState(state))).length > 0) return state;
       const a = action.account;
       const fields = { company: a.company.trim(), name: a.name.trim(), email: normalizeEmail(a.email), projectId: a.projectId };
       const prev = a.id ? accounts.find((x) => x.id === a.id) : undefined;
@@ -426,7 +470,8 @@ export function reducer(state: DemoState, action: Action): DemoState {
     case 'setDevAccess': {
       const access = devAccessState(state);
       const member = personById(state, action.memberId);
-      if (!member || !!access[member.id] === action.enabled) return state;
+      // 無効にした開発者は画面にスイッチを出さない。reducer でも変えない
+      if (!member || member.disabled || !!access[member.id] === action.enabled) return state;
       const s = { ...state, devAccess: { ...access, [member.id]: action.enabled } };
       return log(s, `${member.name}の開発者画面の権限を${action.enabled ? '追加しました' : '外しました'}`, 'edit', ACTOR.afro);
     }
@@ -434,7 +479,7 @@ export function reducer(state: DemoState, action: Action): DemoState {
     case 'setDevProjects': {
       const all = devProjectsState(state);
       const member = personById(state, action.memberId);
-      if (!member) return state;
+      if (!member || member.disabled) return state;
       // プロジェクト一覧の並び順にそろえる（存在しない id は捨て、重複は除く）
       const ids = state.projects.filter((p) => action.projectIds.includes(p.id)).map((p) => p.id);
       const prev = all[member.id] ?? [];
@@ -460,7 +505,9 @@ export function reducer(state: DemoState, action: Action): DemoState {
         const prev = users.find((u) => u.id === d.id);
         if (!prev) return state;
         if ((Object.keys(fields) as (keyof typeof fields)[]).every((k) => prev[k] === fields[k])) return state;
-        const next = users.map((u) => (u.id === prev.id ? { ...u, ...fields } : u));
+        // メールを変えたら旧メールを残す（旧メールでログイン中のセッションを失効させるため。store/access の isRevoked）
+        const previousEmails = prev.email !== fields.email ? [...new Set([...(prev.previousEmails ?? []), prev.email])].filter((x) => x !== fields.email) : prev.previousEmails;
+        const next = users.map((u) => (u.id === prev.id ? { ...u, ...fields, ...(previousEmails?.length ? { previousEmails } : {}) } : u));
         return log({ ...state, devUsers: next }, `開発者「${fields.name}」の登録内容を変更しました（${where}）`, 'edit', ACTOR.afro);
       }
       const created: DevUser = { id: uid('du'), ...fields, status: 'active', createdAt: nowIso() };

@@ -1,5 +1,5 @@
 import { Box, Button, Stack, Typography } from '@mui/material';
-import { ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Clock, Code2, FolderSearch, Globe, User } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Clock, Code2, FolderSearch, Globe, Pencil, User } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import type { Stage } from '@/types';
@@ -12,9 +12,11 @@ import { TOTAL_QUALITY_QUESTIONS } from '@/data/quality';
 import { MemberAvatar, ProgressRing, Reveal, StatusPill, Surface } from '@/components/ui';
 import { formatDate, formatDateTime, relativeTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
+import { TOUCH } from '@/theme/media';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { nextBestAction, qualityCompletion, STAGE_LINKS, stagePrimaryRoute } from './projectHelpers';
 import { ClientStatusPanel } from './ClientStatusPanel';
+import { useProjectEditor } from './useProjectEditor';
 
 function Fact({ label, value, ok }: { label: string; value: ReactNode; ok?: boolean }) {
   return (
@@ -48,6 +50,7 @@ export default function ProjectDetailPage() {
   const { projectId } = useParams();
   const { state, dispatch } = useDemo();
   const navigate = useNavigate();
+  const editor = useProjectEditor();
   const p = state.projects.find((x) => x.id === projectId);
   if (!p) return <NotFound />;
 
@@ -112,9 +115,14 @@ export default function ProjectDetailPage() {
 
   return (
     <Box>
-      <Button component={RouterLink} to="/projects" size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>
-        プロジェクト一覧
-      </Button>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+        <Button component={RouterLink} to="/projects" size="small" startIcon={<ArrowLeft size={16} />} sx={{ ml: -1 }}>
+          プロジェクト一覧
+        </Button>
+        <Button variant="outlined" size="small" startIcon={<Pencil size={15} aria-hidden />} onClick={() => editor.openEdit(p)} aria-label={`${p.siteName}の登録内容を編集`} sx={{ minHeight: 40, [TOUCH]: { minHeight: 44 } }}>
+          編集
+        </Button>
+      </Stack>
 
       {/* ヘッダー */}
       <Reveal>
@@ -227,6 +235,7 @@ export default function ProjectDetailPage() {
           );
         })}
       </Box>
+      {editor.dialog}
     </Box>
   );
 }

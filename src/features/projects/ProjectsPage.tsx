@@ -1,5 +1,5 @@
-import { Box, InputAdornment, LinearProgress, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
-import { Clock, Globe, Search, SearchX } from 'lucide-react';
+import { Box, Button, InputAdornment, LinearProgress, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { Clock, Globe, Plus, Search, SearchX } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Project, Stage } from '@/types';
@@ -10,6 +10,7 @@ import { MemberAvatar, PageHeader, Reveal, StageTrack, StatusPill, Surface } fro
 import { relativeTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
 import { stageLabel } from './projectHelpers';
+import { useProjectEditor } from './useProjectEditor';
 
 const MAX_QUERY = 50;
 type Filter = Stage | 'all';
@@ -96,6 +97,7 @@ export default function ProjectsPage() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
+  const editor = useProjectEditor();
 
   const q = normalize(query);
   const list = useMemo(
@@ -124,6 +126,7 @@ export default function ProjectsPage() {
       <PageHeader
         title="プロジェクト"
         description="顧客ごとのWebサイト制作を、要件定義から改善まで5つの段階で管理します。カードを開くと各段階の作業に進めます。"
+        actions={<Button variant="contained" startIcon={<Plus size={16} aria-hidden />} onClick={editor.openNew} sx={{ minHeight: 44 }}>プロジェクトを登録</Button>}
       />
 
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ md: 'center' }} justifyContent="space-between" sx={{ mb: 3 }}>
@@ -176,6 +179,7 @@ export default function ProjectsPage() {
           ))}
         </Box>
       )}
+      {editor.dialog}
     </Box>
   );
 }

@@ -1,7 +1,7 @@
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { Info } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
-import type { ClientAccount, Project } from '@/types';
+import type { ClientAccount, DevUser, Project } from '@/types';
 import { CLIENT_LIMITS, validateClientAccount, type ClientAccountDraft, type ClientField } from '@/data/users';
 import { useFullScreenDialog } from '@/hooks/useMediaQueries';
 import { tokens } from '@/theme/tokens';
@@ -11,6 +11,8 @@ interface Props {
   draft: ClientAccountDraft | null;
   accounts: ClientAccount[];
   projects: Project[];
+  /** 登録した開発者（メールの重複チェック用） */
+  devUsers: DevUser[];
   onClose: () => void;
   onSave: (draft: ClientAccountDraft) => void;
 }
@@ -18,7 +20,7 @@ interface Props {
 const FIELDS: ClientField[] = ['projectId', 'company', 'name', 'email'];
 
 /** お客様の登録・編集（入力チェックは reducer と同じ validateClientAccount） */
-export function ClientAccountDialog({ draft: initial, accounts, projects, onClose, onSave }: Props) {
+export function ClientAccountDialog({ draft: initial, accounts, projects, devUsers, onClose, onSave }: Props) {
   const fullScreen = useFullScreenDialog();
   const [draft, setDraft] = useState<ClientAccountDraft | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -33,7 +35,7 @@ export function ClientAccountDialog({ draft: initial, accounts, projects, onClos
     }
   }
 
-  const errors = useMemo(() => (draft ? validateClientAccount(draft, accounts, projects) : {}), [draft, accounts, projects]);
+  const errors = useMemo(() => (draft ? validateClientAccount(draft, accounts, projects, devUsers) : {}), [draft, accounts, projects, devUsers]);
   if (!draft) return <Dialog open={false} />;
 
   const isNew = !draft.id;
