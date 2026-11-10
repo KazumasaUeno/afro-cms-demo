@@ -1,19 +1,15 @@
-import { Box, Button, ButtonBase, Link, Stack, Typography } from '@mui/material';
-import { AlertTriangle, ArrowRight, CircleAlert, CircleCheck, ExternalLink, FolderKanban, FolderLock, LayoutDashboard, Rocket, UserRound } from 'lucide-react';
-import { useMemo } from 'react';
+import { Box, Button, ButtonBase, Stack, Typography } from '@mui/material';
+import { ArrowRight, CircleCheck, FolderKanban, FolderLock, LayoutDashboard, Rocket } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader, SectionTitle, StatusPill, Surface } from '@/components/ui';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { useDemo, devState } from '@/store/DemoStore';
 import { formatDateTime, relativeTime } from '@/services/time';
-import { DEV_ENVS, DEV_TASK_STATUSES, devRecentErrors, latestDeploy, latestSuccess } from '@/data/dev';
+import { DEV_TASK_STATUSES } from '@/data/dev';
 import { nextBestAction, stagePrimaryRoute } from '@/features/projects/projectHelpers';
-import { ClientStatusPanel } from '@/features/projects/ClientStatusPanel';
-import { ApprovalHistory } from '@/features/projects/ApprovalHistory';
 import { tokens } from '@/theme/tokens';
-import { TOUCH } from '@/theme/media';
 import type { DevTaskStatus, Project } from '@/types';
-import { ENV_TONE, TASK_TONE, envDef, envSync, nextDevAction, taskLabel } from './devUi';
+import { ENV_TONE, TASK_TONE, envDef, nextDevAction, taskLabel } from './devUi';
 import { DevMono } from './DevMono';
 import { DevProjectCard } from './DevProjectCard';
 import { useDevProjects, useDevUser } from './useDevUser';
@@ -36,7 +32,6 @@ export default function DevDashboardPage() {
   const navigate = useNavigate();
   // 開発データ・お客様の承認のデータがあるのはデモの案件（MINAMO COFFEE）だけ
   const demo = projects.find((p) => p.id === CLIENT_PROJECT_ID);
-  const others = projects.filter((p) => p.id !== CLIENT_PROJECT_ID);
   const flow = nextBestAction(state);
 
   // 作業画面（管理者画面・構築タスクなど）は表示中の案件で動くので、案件を切り替えてから開く
@@ -70,7 +65,7 @@ export default function DevDashboardPage() {
           </Stack>
         </Surface>
       ) : (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0,1fr)', lg: 'minmax(0,1fr) 360px' }, gap: { xs: 2.5, md: 3 }, alignItems: 'start' }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: { xs: 2.5, md: 3 }, alignItems: 'start' }}>
           {/* 担当している案件 */}
           <Box component="section" aria-label="担当している案件" sx={{ minWidth: 0 }}>
             <SectionTitle
@@ -86,41 +81,6 @@ export default function DevDashboardPage() {
             </Box>
           </Box>
 
-          {/* お客様の承認待ち・対応状況（デモの案件は承認の節目、ほかの案件は承認待ちの件数） */}
-          <Box component="section" aria-label="お客様の承認待ち・対応状況" sx={{ minWidth: 0 }}>
-            <SectionTitle title="お客様の承認待ち・対応状況" icon={<UserRound size={18} color={tokens.color.muted} />} />
-            <Stack spacing={2}>
-              {demo && <ClientStatusPanel />}
-              {demo && <ApprovalHistory projectId={demo.id} siteName={demo.siteName} />}
-              {others.length > 0 && (
-                <Surface data-testid="dev-other-approvals">
-                  <Typography variant="body2" component="h3" sx={{ fontWeight: 700 }}>{demo ? 'ほかの担当案件' : '担当案件'}</Typography>
-                  <Typography variant="caption" sx={{ display: 'block', mb: 1 }}>お客様の承認待ちの件数です</Typography>
-                  <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
-                    {others.map((p) => (
-                      <Box component="li" key={p.id}>
-                        <ButtonBase
-                          onClick={() => open(p.id, `/projects/${p.id}`)}
-                          aria-label={`${p.siteName}: ${p.pendingApprovals > 0 ? `お客様の承認待ち ${p.pendingApprovals} 件` : '承認待ちなし'}。詳細を開く`}
-                          sx={{
-                            width: 'calc(100% + 16px)', minHeight: 44, px: 1, mx: -1, borderRadius: `${tokens.radius.sm}px`, gap: 1, justifyContent: 'flex-start', textAlign: 'left',
-                            '&:hover': { bgcolor: tokens.color.surfaceMuted }, '&:hover .go': { opacity: 1 }, '&.Mui-focusVisible': { boxShadow: tokens.shadow.focus },
-                          }}
-                        >
-                          <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: p.accent, flexShrink: 0 }} aria-hidden />
-                          <Typography variant="body2" sx={{ fontWeight: 600, flex: 1, minWidth: 0 }} noWrap>{p.siteName}</Typography>
-                          {p.pendingApprovals > 0
-                            ? <StatusPill tone="warning">承認待ち {p.pendingApprovals} 件</StatusPill>
-                            : <StatusPill tone="success">待ちなし</StatusPill>}
-                          <Box className="go" sx={{ display: 'flex', opacity: 0.4, color: tokens.color.muted, flexShrink: 0, [TOUCH]: { opacity: 0.8 } }}><ArrowRight size={16} /></Box>
-                        </ButtonBase>
-                      </Box>
-                    ))}
-                  </Box>
-                </Surface>
-              )}
-            </Stack>
-          </Box>
         </Box>
       )}
 
@@ -136,7 +96,6 @@ export default function DevDashboardPage() {
 function BuildStatus({ project, meId, openWork }: { project: Project; meId: string; openWork: (to: string) => void }) {
   const { state } = useDemo();
   const dev = devState(state);
-  const errors = useMemo(() => devRecentErrors().slice(0, 3), []);
   const mineAll = dev.tasks.filter((t) => t.assigneeId === meId && t.status !== 'done');
   const mine = [...mineAll].sort((a, b) => MINE_ORDER[a.status] - MINE_ORDER[b.status]).slice(0, 3);
   const next = nextDevAction(dev, !!state.design.approvedAt, meId);
@@ -150,8 +109,8 @@ function BuildStatus({ project, meId, openWork }: { project: Project; meId: stri
         </Typography>
       </Box>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0,1fr)', lg: 'minmax(0,1fr) 360px' }, gap: { xs: 2.5, md: 3 }, alignItems: 'start' }}>
-        {/* 左列: 次にやること → あなたのタスク（件数つき） → 最近のデプロイ */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: { xs: 2.5, md: 3 }, alignItems: 'start' }}>
+        {/* 次にやること → あなたのタスク（件数つき） → 最近のデプロイ（環境の詳細は「環境・デプロイ」） */}
         <Stack spacing={{ xs: 2.5, md: 3 }} sx={{ minWidth: 0 }}>
           <Surface padding={{ xs: 2, md: 2.5 }} data-testid="next-action">
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
@@ -233,62 +192,6 @@ function BuildStatus({ project, meId, openWork }: { project: Project; meId: stri
           </Surface>
         </Stack>
 
-        {/* 右列: 環境 → 最近のエラー（390px では左列の直後） */}
-        <Stack spacing={{ xs: 2.5, md: 3 }} sx={{ minWidth: 0 }}>
-          <Surface>
-            <SectionTitle title="環境" sub={<StatusPill tone="neutral" dot={false}>シミュレーション</StatusPill>} />
-            <Stack>
-              {DEV_ENVS.map((e, i) => {
-                // 表示する版は「いま動いている版」＝最後に成功した版（失敗は状態の印で示す）
-                const d = latestSuccess(dev.deploys, e.id) ?? latestDeploy(dev.deploys, e.id);
-                const sync = envSync(dev, e.id);
-                return (
-                  <Box key={e.id} data-env={e.id} sx={{ pt: i ? 1.5 : 0, pb: i < DEV_ENVS.length - 1 ? 1.5 : 0, borderTop: i ? `1px solid ${tokens.color.border}` : 'none' }}>
-                    <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-                      <Typography variant="body2" component="h3" sx={{ fontWeight: 650 }}>{e.label}</Typography>
-                      <StatusPill tone={sync.tone}>{sync.label}</StatusPill>
-                    </Stack>
-                    <DevMono size="lg" sx={{ display: 'block', mt: 0.5 }}>{d ? `v${d.version}` : '—'}</DevMono>
-                    <Stack direction="row" useFlexGap flexWrap="wrap" alignItems="center" sx={{ columnGap: 1.5 }}>
-                      <Link
-                        href={e.url} target="_blank" rel="noopener noreferrer"
-                        onClick={(ev) => ev.preventDefault()}
-                        title="デモのため開きません"
-                        underline="hover"
-                        sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, minHeight: 44, wordBreak: 'break-all', color: tokens.color.muted }}
-                      >
-                        <DevMono size="sm">{e.url.replace('https://', '')}</DevMono>
-                        <ExternalLink size={13} style={{ flexShrink: 0 }} />
-                      </Link>
-                      <Typography variant="caption">{d ? `${relativeTime(d.at)}・${d.by}` : 'まだデプロイしていません'}</Typography>
-                    </Stack>
-                  </Box>
-                );
-              })}
-            </Stack>
-          </Surface>
-
-          <Surface>
-            <SectionTitle title="最近のエラー" sub={<StatusPill tone="neutral" dot={false}>デモデータ</StatusPill>} />
-            <Stack component="ul" spacing={1.5} sx={{ listStyle: 'none', m: 0, p: 0 }}>
-              {errors.map((e) => (
-                <Stack component="li" key={e.id} direction="row" spacing={1.25} alignItems="flex-start">
-                  <Box sx={{ color: e.level === 'error' ? tokens.color.danger : tokens.color.warning, pt: 0.25, flexShrink: 0 }}>
-                    {e.level === 'error' ? <CircleAlert size={17} aria-hidden /> : <AlertTriangle size={17} aria-hidden />}
-                  </Box>
-                  <Box sx={{ minWidth: 0, flex: 1 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{e.message}</Typography>
-                    <Stack direction="row" useFlexGap flexWrap="wrap" alignItems="center" sx={{ gap: 0.75, mt: 0.5 }}>
-                      <StatusPill tone={ENV_TONE[e.env]} dot={false}>{envDef(e.env).label}</StatusPill>
-                      <Typography variant="caption">{e.level === 'error' ? 'エラー' : '警告'}・{relativeTime(e.at)}</Typography>
-                      <Typography variant="caption"><DevMono size="sm">{e.count}</DevMono> 回</Typography>
-                    </Stack>
-                  </Box>
-                </Stack>
-              ))}
-            </Stack>
-          </Surface>
-        </Stack>
       </Box>
     </Box>
   );
