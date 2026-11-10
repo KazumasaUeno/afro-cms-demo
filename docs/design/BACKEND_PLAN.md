@@ -38,3 +38,23 @@
 
 ## ロールバック
 - live はまだ利用者がいないので、Hosting を前の版に戻す（`firebase hosting:rollback` 相当）か公開を止める。demo（GitHub Pages）は影響を受けない
+
+## Plan Review の反映（impact-analyzer: APPROVE WITH CONDITIONS、2026-11-10）
+
+状態: **承認（条件反映済み）**。以下は上の各段階に優先する。
+
+- **C1 設計書の無効化した記述**: §13.1（同じ URL でモード切替・`afro-cms-demo:mode`）、§15（pages.yml に VITE_FIREBASE_* を渡す・参照元に github.io / localhost）、§16.2（Pages の CI で test:rules）は §27 で無効。Pages の workflow には Firebase の変数・Java・エミュレータを入れない。live は Firebase Hosting 用の別ビルド
+- **C2 demo に SDK を入れない方法**: `VITE_DATA_MODE` をビルド時定数にし、live のコードは tree-shake で落とす。検証: env なしの `npm run build` の dist に `firebase` / `googleapis` が無いこと（grep）、bundle サイズを前回と比べる
+- **C3 B0 を独立**: B の前に「repository の型と demo 実装だけ入れて画面を差し替える（Firebase なし）」を行い、demo の回帰確認を通してから Auth へ。live の認証は SESSION_KEY と demo の state を読まない別の Guard
+- **C4 CSP**: live のビルドの index.html だけに入れる（demo には入れない）
+- **C5 M-3**: A2 の前に「A0: devTransition / submitOrWithdrawOk の式を設計書へ明記 → security-engineer がレビュー」
+- **C6 公開の前提**: C1（公開）は、A の拒否テスト（M-1〜M-5）全件成功と security-engineer の再監査の後
+- A2 に追加: validProposal（M-11）、accounts の読み取り範囲（§27 Low-1）、アーカイブは開発者のみ（§27 Low-2）
+- C2 に追加: API キーの参照元は `<projectId>.web.app` / `firebaseapp.com` のみ、「参照元の制限は境界ではない」と記録（M-10）。admin の無効化は Console で行う手順（M-5）。削除依頼の手順
+- B に追加: メール変更の UI を作らない（M-8）。大文字混在メールの扱いをエミュレータで確認
+- 運用手順（M-12）: PRIVACY_REVIEW に記録。バックアップのファイル名に個人名を入れない
+- M-7: 対応済み（0445487）
+- **gcloud の既定 = 他社の本番への対策**: `firebase init` は使わず手で作る（`.firebaserc` に default を書かせない）。本番 ID の許可リストはコミットした定数。deploy は `--project <ID> --only hosting,firestore:rules,firestore:indexes` 必須。firebase-admin・gcloud・ADC は使わない。エミュレータ接続の分岐が本番ビルドに残らないことを確認
+- firebase-tools は devDependencies。lock の差分と `npm audit` を確認（Pages の `npm ci` が重くなる点は許容）
+- [UNKNOWN] Auth の永続化方式（IndexedDB 既定）と §13.4 の方針の整合 → A0 で決める
+- **demo の回帰の照合表**（自動テストが無いので手動。qa-engineer が作り、B0・B・C の各段階で回す）: ①env なし build・dist に firebase 無し ②3 エリアのログイン・ログアウト・next・revoked ③既存 localStorage のまま読める・「デモを初期化」でログアウトしない ④ウィザード・CSV 入出力・分析→承認（demo の代理承認を含む）・要件定義書 HTML ⑤CMS・サイネージ・診断レポートのダウンロード ⑥Pages の深いリンク（404.html）と VITE_BASE ⑦`.env.local` があっても demo の挙動が変わらない

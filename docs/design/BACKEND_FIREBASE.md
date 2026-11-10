@@ -905,6 +905,8 @@ src/repositories/
 
 ## 27. 追加の決定（2026-11-10。§26 への対応）
 
+> §13.1（同じ URL でのモード切替）・§15（pages.yml へ Firebase の変数）・§16.2（Pages の CI で Rules テスト）は、live を Firebase Hosting に分けたことで**無効**。正は `BACKEND_PLAN.md` の「Plan Review の反映」。
+
 | # | 論点 | 決定 | 決めた人 |
 |---|---|---|---|
 | M-6 | live 版の公開場所 | **Firebase Hosting**（`<projectId>.web.app`。他アプリと origin を分ける）。GitHub Pages は営業用デモ（demo モード・Firebase SDK を読み込まない）のまま残す | ユーザー |
