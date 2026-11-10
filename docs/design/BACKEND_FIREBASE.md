@@ -673,7 +673,7 @@ src/repositories/
 ### 16.2 実行環境
 
 - テストランナーは追加しない: Node 22 組み込みの `node --test`（`@firebase/rules-unit-testing` はランナー非依存）
-- Java 11 以上（エミュレータの要件。このPCは 17 [FACT] `CLAUDE.md` 11章）
+- **Java 21 以上**（firebase-tools 15 のエミュレータの要件）。`npm run test:rules` は `scripts/test-rules.mjs` 経由で、`JAVA_HOME` があればその `bin` を**子プロセスの PATH の先頭にだけ**足す（ユーザーの PATH・システム設定は変えない）。このPC（Windows）は PATH の java が 17、`JAVA_HOME` が 21.0.12 [FACT] 2026-11-10 実行ログ
 - `npm run test:rules` = 上記 `emulators:exec`。CI（GitHub Actions）にも同じものを Build の前に置く（エミュレータは CI 上でも `demo-` プロジェクトで動く）
 
 ### 16.3 観点（qa-engineer が実行。件数は実装時に確定）
@@ -796,10 +796,12 @@ src/repositories/
 
 | 項目 | 確認方法 | 担当 |
 |---|---|---|
+| 大文字混在メールの `token.email` | **[FACT] 2026-11-10 Auth エミュレータ**: `signUp('Mixed.Case@Example.COM')` の ID トークンは `mixed.case@example.com`（小文字化される）。本番の挙動は未確認 | — |
+| 開発者の accounts の list に `assigned(resource.data.projectId)` を使う式 | **[FACT] 2026-11-10 エミュレータ**: `where(role==client)`＋`where(projectId==pid)` のクエリで評価でき、許可される（§28.3 の INFERENCE を確認） | — |
 | Spark のメール確認・パスワード再設定メールの 1 日上限 | [Firebase Auth limits](https://firebase.google.com/docs/auth/limits) | platform-engineer |
-| Rules の `string.size()` の数え方（文字 / バイト）と JS `length` との差 | エミュレータ | database-engineer / qa-engineer |
-| 全問回答時に Rules の式数上限に収まるか | エミュレータ | 同上 |
-| 同じ文書への重複 `get()` が上限で 1 回と数えられるか | エミュレータ・公式資料 | 同上 |
+| Rules の `string.size()` の数え方（文字 / バイト）と JS `length` との差 | エミュレータ（**未計測**。2026-11-10 A2 で probe 未作成。長さの判定は正規表現 `.`＝コードポイントに切り替えたため、JS の length 以下になり画面で通る値は落ちない [INFERENCE: RE2 の仕様]） | database-engineer / qa-engineer |
+| 全問回答時に Rules の式数上限に収まるか | **[FACT] 2026-11-10 エミュレータ**: 1 リクエスト 1000 式の上限あり。`trim().size()` の比較を 23 問並べた版は全問回答の 1 文書更新で上限超過 → 「trim 後 1〜N 文字」を生成した正規表現 1 回に変更して**全問回答の更新は通過**。**確認依頼（submit）の 3 文書バッチは依然として上限超過**（`tests/rules/approvals.test.mjs` 2 件失敗。トランザクション版は通過）→ 未解決（A2 の残課題） | 同上 |
+| 同じ文書への重複 `get()` が上限で 1 回と数えられるか | **未計測**（probe 未作成）。submit の get/getAfter/exists の重複を除いた呼び出し先は accounts/me・projects/pid（get と getAfter）・requirements/current（getAfter）・approvals（existsAfter）の 5 文書・6 種類 [INFERENCE: firestore.rules を読んで数えた] | 同上 |
 | Rules に拒否されたクエリの読み取り課金 | 公式の料金資料 | platform-engineer |
 | Spark で managed export / TTL ポリシーが使えるか | 公式資料 | platform-engineer |
 | 無料枠のリセット時刻（太平洋時間 0 時か） | 公式資料 | platform-engineer |

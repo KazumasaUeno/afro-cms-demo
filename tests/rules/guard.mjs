@@ -25,7 +25,12 @@ export function emulatorHostFromEnv(name, env = process.env) {
   return { host: m[1], port: Number(m[2]) };
 }
 
-export async function createRulesEnv() {
+export function readRules() {
+  return readFileSync(join(root, 'firestore.rules'), 'utf8');
+}
+
+/** rules を渡すとその本文で起動する（計測用の probe。tests/rules/semantics.test.mjs）。既定は firestore.rules */
+export async function createRulesEnv({ rules } = {}) {
   // emulators:exec は --project の値を GCLOUD_PROJECT に入れる。固定の ID と一致しなければ止める
   const projectId = assertDemoProject(process.env.GCLOUD_PROJECT);
   if (projectId !== EMULATOR_PROJECT_ID) {
@@ -34,6 +39,6 @@ export async function createRulesEnv() {
   const { host, port } = emulatorHostFromEnv('FIRESTORE_EMULATOR_HOST');
   return initializeTestEnvironment({
     projectId,
-    firestore: { host, port, rules: readFileSync(join(root, 'firestore.rules'), 'utf8') },
+    firestore: { host, port, rules: rules ?? readRules() },
   });
 }

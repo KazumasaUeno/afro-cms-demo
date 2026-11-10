@@ -1,12 +1,414 @@
 rules_version = '2';
 
-// A1 のプレースホルダ: すべて拒否する。
-// 本体は A2 で docs/design/BACKEND_FIREBASE.md §8・§28（security-engineer のレビュー後）どおりに書く。
-// このファイルは firebase.json の firestore.rules としてデプロイ対象に入っている。
+// afro-cms live モードの Security Rules（A2）。
+// 正は docs/design/BACKEND_FIREBASE.md §28（§8 より優先）と §28.9 のレビュー修正 R-1〜R-3・Low-1 (b)。
+// サーバー側コードが無いので、権限・整合性・証跡はここだけで守る（Rules が唯一の境界）。
+// - テスト: npm run test:rules（エミュレータ・demo-afro-cms 固定）。tests/rules/*.test.mjs
+// - 下の「GENERATED」の区間は scripts/gen-rules-questions.mjs が src/ の定数から作る。手で編集しない
+//   （npm run rules:gen で更新、npm run rules:check で差分があれば失敗）
+// - 明示的に allow していないパスはすべて拒否（既定）
 service cloud.firestore {
-  match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if false;
+  match /databases/{db}/documents {
+
+    // ================= 共通（§28.1） =================
+    function authed()  { return request.auth != null && request.auth.token.email_verified == true; }
+    function me()      { return /databases/$(db)/documents/accounts/$(request.auth.uid); }
+    function acct()    { return get(me()).data; }
+    // M-8: accounts.email と token.email の一致を毎回要求（Auth 側でメールを変えたら全権限を失う）
+    function active()  { return authed() && exists(me()) && acct().status == 'active'
+                             && acct().email == request.auth.token.email; }
+    function isAdmin() { return active() && acct().role == 'admin'; }
+    function isDev()   { return active() && acct().role == 'developer'; }
+    function isClient(){ return active() && acct().role == 'client'; }
+    // §28.9 Low-1 (b): affiliation が無い開発者は協力会社として扱う（制限側）
+    function internalDev()   { return isDev() && acct().get('affiliation', null) == 'internal'; }
+    function internalAcct(d) { return d.role == 'admin' || (d.role == 'developer' && d.get('affiliation', null) == 'internal'); }
+
+    function projPath(pid)     { return /databases/$(db)/documents/projects/$(pid); }
+    function reqPath(pid)      { return /databases/$(db)/documents/projects/$(pid)/requirements/current; }
+    function apprPath(pid, id) { return /databases/$(db)/documents/projects/$(pid)/approvals/$(id); }
+    function sitePath(key)     { return /databases/$(db)/documents/siteKeys/$(key); }
+    function proj(pid)         { return get(projPath(pid)).data; }
+    function assigned(pid)     { return isDev() && request.auth.uid in proj(pid).memberUids; }
+    // projects/{pid} の中では自分自身を get しない（get の回数を節約）
+    function assignedHere()    { return isDev() && request.auth.uid in resource.data.memberUids; }
+    function clientOf(pid)     { return isClient() && acct().projectId == pid; }
+    function canRead(pid)      { return isAdmin() || assigned(pid) || clientOf(pid); }
+    // 書き込みの重い経路用: accounts を 1 回だけ読み、役割を 1 回だけ判定する（isAdmin() 等を並べると
+    // そのたびに active() が展開され、1 リクエスト 1000 式の上限に当たる。tests/rules/approvals.test.mjs で計測）
+    function acctOrNull()      { return authed() && exists(me()) ? get(me()).data : null; }
+    function roleOf(a)         { return a != null && a.status == 'active' && a.email == request.auth.token.email ? a.role : 'none'; }
+
+    function changed()  { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function stamped()  { return request.resource.data.updatedAt == request.time
+                              && request.resource.data.updatedBy == request.auth.uid; }
+    function str(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
+    function optStr(d, k, min, max) { return !d.keys().hasAny([k]) || str(d[k], min, max); }
+    // 任意項目は「両方とも無い」も一致とみなす
+    function optEq(d, b, k)   { return d.get(k, null) == b.get(k, null); }
+    function approvalId(rev, action) { return 'requirements-r' + string(rev) + '-' + action; }
+
+    // ================= 回答の検査（§9。GENERATED から呼ぶ部品） =================
+    // validation.ts は trim 後の長さで判定する。Rules の string.size() の数え方は
+    // tests/rules/semantics.test.mjs で計測（設計書 §23）。画面で通る値を Rules が落とさないこと
+    // 1 リクエスト 1000 式の上限（エミュレータで計測。trim().size() の比較を 23 問並べると全問回答で上限を超えた）ため、
+    // 「trim 後 1〜max 文字」は生成した正規表現 1 回で判定する（re は GENERATED の reMax*()。空白は JS の trim と同じ集合）
+    function ansText(v, re)      { return v is string && v.matches(re); }
+    // URL は解析できないので近似（http(s)://ホストに "." を含む）。画面の validateUrl より緩い
+    function ansUrl(v, re)       { return ansText(v, re) && v.trim().matches('(?i)https?://[^/\\s]+[.][^/\\s]+.*'); }
+    function ansSingle(v, opts)  { return v is string && v in opts; }
+    function ansMulti(v, opts)   { return v is list && v.size() >= 1 && v.size() <= opts.size() && v.hasOnly(opts); }
+    // 競合サイト（q-competitor）: 1〜max 件の文字列。各要素は 1〜maxLen 文字（形式は画面の責任。§11）
+    function ansUrlList(v, max, maxLen) {
+      return v is list && v.size() >= 1 && v.size() <= max
+        && (v.size() < 1 || str(v[0], 1, maxLen))
+        && (v.size() < 2 || str(v[1], 1, maxLen))
+        && (v.size() < 3 || str(v[2], 1, maxLen));
+    }
+
+    // <GENERATED:requirements> scripts/gen-rules-questions.mjs が生成。手で編集しない
+    // 出典: src/features/requirements/validation.ts / src/data/requirements.ts / src/features/projects/projectForm.ts
+    function purposeOptions() { return ['問い合わせを増やしたい', '採用を強化したい', 'ブランドを刷新したい', 'EC売上を伸ばしたい', '更新を楽にしたい', 'スマホ対応したい']; }
+    function improveOptions() { return ['ファーストビュー', 'ナビゲーション', 'スマホ表示', '表示速度', '問い合わせ導線', '写真・ビジュアル', 'SEO', '更新のしやすさ']; }
+    function accentOptions() { return ['#B45309', '#C2410C', '#BE185D', '#7C3AED', '#1D4ED8', '#0D9488', '#15803D', '#475569']; }
+    function maxUrl() { return 200; }
+    function maxCompetitors() { return 3; }
+    // trim 後 1〜N 文字（N: MAX_TEXT=120 / MAX_LONGTEXT=600 / MAX_URL=200 / PROJECT_LIMITS）
+    function reMaxText() { return '(?s)[\\s\\p{Z}\\x{FEFF}\\x{0B}]*([^\\s\\p{Z}\\x{FEFF}\\x{0B}]|[^\\s\\p{Z}\\x{FEFF}\\x{0B}].{0,118}[^\\s\\p{Z}\\x{FEFF}\\x{0B}])[\\s\\p{Z}\\x{FEFF}\\x{0B}]*'; }
+    function reMaxLongtext() { return '(?s)[\\s\\p{Z}\\x{FEFF}\\x{0B}]*([^\\s\\p{Z}\\x{FEFF}\\x{0B}]|[^\\s\\p{Z}\\x{FEFF}\\x{0B}].{0,598}[^\\s\\p{Z}\\x{FEFF}\\x{0B}])[\\s\\p{Z}\\x{FEFF}\\x{0B}]*'; }
+    function reMaxUrl() { return '(?s)[\\s\\p{Z}\\x{FEFF}\\x{0B}]*([^\\s\\p{Z}\\x{FEFF}\\x{0B}]|[^\\s\\p{Z}\\x{FEFF}\\x{0B}].{0,198}[^\\s\\p{Z}\\x{FEFF}\\x{0B}])[\\s\\p{Z}\\x{FEFF}\\x{0B}]*'; }
+    function reClientName() { return '(?s)[\\s\\p{Z}\\x{FEFF}\\x{0B}]*([^\\s\\p{Z}\\x{FEFF}\\x{0B}]|[^\\s\\p{Z}\\x{FEFF}\\x{0B}].{0,38}[^\\s\\p{Z}\\x{FEFF}\\x{0B}])[\\s\\p{Z}\\x{FEFF}\\x{0B}]*'; }
+    function reSiteName() { return '(?s)[\\s\\p{Z}\\x{FEFF}\\x{0B}]*([^\\s\\p{Z}\\x{FEFF}\\x{0B}]|[^\\s\\p{Z}\\x{FEFF}\\x{0B}].{0,38}[^\\s\\p{Z}\\x{FEFF}\\x{0B}])[\\s\\p{Z}\\x{FEFF}\\x{0B}]*'; }
+    function reIndustry() { return '(?s)[\\s\\p{Z}\\x{FEFF}\\x{0B}]*([^\\s\\p{Z}\\x{FEFF}\\x{0B}]|[^\\s\\p{Z}\\x{FEFF}\\x{0B}].{0,18}[^\\s\\p{Z}\\x{FEFF}\\x{0B}])[\\s\\p{Z}\\x{FEFF}\\x{0B}]*'; }
+    function validAnswers(a) {
+      return a is map
+        && a.keys().hasOnly(['q-url', 'q-purpose', 'q-issue', 'q-competitor', 'q-improve', 'q-keep', 'q-target', 'q-strength', 'q-market', 'q-content', 'q-feature', 'q-cv', 'q-seo', 'q-design-dislike', 'q-image', 'q-brand', 'q-ops', 'q-infra', 'q-schedule', 'q-other', 'q-dns-owner', 'q-dns-switch', 'q-dns-note'])
+        && (!('q-url' in a) || ansUrl(a['q-url'], reMaxUrl()))
+        && (!('q-purpose' in a) || ansMulti(a['q-purpose'], purposeOptions()))
+        && (!('q-issue' in a) || ansText(a['q-issue'], reMaxLongtext()))
+        && (!('q-competitor' in a) || ansUrlList(a['q-competitor'], 3, 200))
+        && (!('q-improve' in a) || ansMulti(a['q-improve'], improveOptions()))
+        && (!('q-keep' in a) || ansText(a['q-keep'], reMaxLongtext()))
+        && (!('q-target' in a) || ansText(a['q-target'], reMaxText()))
+        && (!('q-strength' in a) || ansText(a['q-strength'], reMaxLongtext()))
+        && (!('q-market' in a) || ansText(a['q-market'], reMaxText()))
+        && (!('q-content' in a) || ansText(a['q-content'], reMaxText()))
+        && (!('q-feature' in a) || ansText(a['q-feature'], reMaxText()))
+        && (!('q-cv' in a) || ansSingle(a['q-cv'], ['問い合わせ', '資料請求', '来店予約', '購入', '採用応募']))
+        && (!('q-seo' in a) || ansText(a['q-seo'], reMaxText()))
+        && (!('q-design-dislike' in a) || ansText(a['q-design-dislike'], reMaxLongtext()))
+        && (!('q-image' in a) || ansText(a['q-image'], reMaxText()))
+        && (!('q-brand' in a) || ansText(a['q-brand'], reMaxText()))
+        && (!('q-ops' in a) || ansSingle(a['q-ops'], ['社内担当者', 'アフロに依頼', '両方']))
+        && (!('q-infra' in a) || ansText(a['q-infra'], reMaxText()))
+        && (!('q-schedule' in a) || ansText(a['q-schedule'], reMaxText()))
+        && (!('q-other' in a) || ansText(a['q-other'], reMaxLongtext()))
+        && (!('q-dns-owner' in a) || ansSingle(a['q-dns-owner'], ['お客様', '制作会社・他社', 'アフロ', '不明']))
+        && (!('q-dns-switch' in a) || ansSingle(a['q-dns-switch'], ['アフロへ移管', 'お客様側で設定変更', '未定']))
+        && (!('q-dns-note' in a) || ansText(a['q-dns-note'], reMaxLongtext()));
+    }
+    // </GENERATED:requirements>
+
+    // ================= accounts（§28.2・§28.3・§28.9） =================
+    function invPath() { return /databases/$(db)/documents/invites/$(request.auth.token.email); }
+    // M-1: 招待の全項目を写しで強制（証跡の actorName を偽れない）
+    function claimOk(uid) {
+      let before = get(invPath()).data;
+      let after  = getAfter(invPath()).data;
+      let d = request.resource.data;
+      return authed() && request.auth.uid == uid
+        && before.status == 'invited' && after.status == 'claimed'
+        && after.claimedBy == uid && after.claimedAt == request.time
+        && d.role == before.role && d.name == before.name
+        && optEq(d, before, 'company') && optEq(d, before, 'projectId')
+        && optEq(d, before, 'affiliation') && optEq(d, before, 'partnerCompany') && optEq(d, before, 'devRole')
+        && d.schemaVersion == 1 && d.status == 'active'
+        && d.email == request.auth.token.email
+        && d.activatedAt == request.time && d.updatedAt == request.time && d.updatedBy == uid
+        && d.keys().hasAll(['schemaVersion','role','status','email','name','activatedAt','updatedAt','updatedBy'])
+        && d.keys().hasOnly(['schemaVersion','role','status','email','name','company','projectId',
+                             'affiliation','partnerCompany','devRole','activatedAt','updatedAt','updatedBy']);
+    }
+
+    match /accounts/{uid} {
+      allow get: if (authed() && request.auth.uid == uid)                       // 自分（disabled でも理由の表示用に読める）
+                 || isAdmin()
+                 || (internalDev() && resource.data.role in ['admin','developer'])  // 社内の開発者は社内・協力会社とも
+                 || (isDev() && internalAcct(resource.data))                       // 協力会社の開発者は社内の人だけ
+                 || (isDev() && resource.data.role == 'client'
+                             && assigned(resource.data.projectId));                // 担当案件のお客様だけ
+      // 開発者のクエリは where('role','==','client') と where('projectId','==',pid) の両方が必須
+      allow list: if isAdmin()
+                  || (isDev() && resource.data.role == 'client' && assigned(resource.data.projectId));
+      allow create: if claimOk(uid);
+      allow update: if isAdmin() && uid != request.auth.uid
+                    && resource.data.role != 'admin'                                  // M-5
+                    && changed().hasOnly(['status','disabledAt','name','devRole','updatedAt','updatedBy'])
+                    && request.resource.data.status in ['active','disabled']
+                    && str(request.resource.data.name, 1, 40)
+                    && optStr(request.resource.data, 'devRole', 1, 40)
+                    && (!changed().hasAny(['devRole']) || resource.data.role == 'developer')   // R-3
+                    && (!changed().hasAny(['status','disabledAt'])
+                        || (request.resource.data.status == 'disabled' && request.resource.data.disabledAt == request.time)
+                        || (request.resource.data.status == 'active' && !changed().hasAny(['disabledAt'])))
+                    && stamped();
+      allow delete: if false;                                                         // 削除は Console の運用手順（§17）
+    }
+
+    // ================= invites（§8・§5.2） =================
+    function inviteBase() { return ['schemaVersion','role','status','name','createdAt','createdBy']; }
+    function validInvite(email) {
+      let d = request.resource.data;
+      return email == email.lower() && email.size() <= 254 && email.matches('[^@\\s]+@[^@\\s]+[.][^@\\s]+')
+        && d.schemaVersion == 1 && d.status == 'invited'
+        && d.createdAt == request.time && d.createdBy == request.auth.uid
+        && str(d.name, 1, 40)
+        && (
+             // お客様: 会社名と担当案件（存在する案件だけ）
+             (d.role == 'client'
+               && d.keys().hasAll(inviteBase().concat(['company','projectId']))
+               && d.keys().hasOnly(inviteBase().concat(['company','projectId']))
+               && str(d.company, 1, 80) && str(d.projectId, 1, 128) && exists(projPath(d.projectId)))
+             // 開発者: 社内 / 協力会社（協力会社だけ会社名が必須。types/index.ts の DevUser と同じ）
+          || (d.role == 'developer'
+               && d.keys().hasAll(inviteBase().concat(['affiliation']))
+               && d.keys().hasOnly(inviteBase().concat(['affiliation','partnerCompany','devRole']))
+               && ((d.affiliation == 'partner' && str(d.get('partnerCompany', null), 1, 80))
+                   || (d.affiliation == 'internal' && !d.keys().hasAny(['partnerCompany'])))
+               && optStr(d, 'devRole', 1, 40))
+        );                                                                            // admin はアプリから招待できない（Console のみ）
+    }
+
+    match /invites/{email} {
+      allow get:  if isAdmin() || (authed() && request.auth.token.email == email);
+      allow list: if isAdmin();
+      allow create: if isAdmin() && validInvite(email);
+      allow update: if (isAdmin() && resource.data.status == 'invited'
+                         && changed().hasOnly(['status','revokedAt'])
+                         && request.resource.data.status == 'revoked'
+                         && request.resource.data.revokedAt == request.time)
+                    || (authed() && request.auth.token.email == email && resource.data.status == 'invited'
+                         && changed().hasOnly(['status','claimedBy','claimedAt'])
+                         && request.resource.data.status == 'claimed'
+                         && request.resource.data.claimedBy == request.auth.uid
+                         && request.resource.data.claimedAt == request.time
+                         && existsAfter(me()));
+      allow delete: if false;
+    }
+
+    // ================= projects（§5.3・§28.4） =================
+    function validProject(d) {
+      return d.schemaVersion == 1
+        && d.keys().hasAll(['schemaVersion','clientName','siteName','siteUrl','siteUrlKey','industry','accent',
+                            'ownerUid','memberUids','requirements','archived','createdAt','createdBy','updatedAt','updatedBy'])
+        && d.keys().hasOnly(['schemaVersion','clientName','siteName','siteUrl','siteUrlKey','industry','accent','launchDate',
+                             'ownerUid','memberUids','requirements','archived','createdAt','createdBy','updatedAt','updatedBy'])
+        && ansText(d.clientName, reClientName()) && ansText(d.siteName, reSiteName())
+        && ansUrl(d.siteUrl, reMaxUrl()) && str(d.siteUrlKey, 1, 253)
+        && ansText(d.industry, reIndustry()) && d.accent in accentOptions()
+        && (!d.keys().hasAny(['launchDate']) || d.launchDate is timestamp)
+        && d.memberUids is list && d.requirements is map && d.archived is bool;
+    }
+
+    // M-3: 開発者ができる遷移は 2 つだけ。approved への遷移・approved からの遷移はどの分岐にも無い
+    function devTransition(pid) {
+      let b = resource.data.requirements;
+      let a = request.resource.data.requirements;
+      return
+        (b.status == 'draft' && a.status == 'analyzed'
+          && a.revision == b.revision + 1
+          && a.analyzedAt == request.time
+          && a.keys().hasOnly(['status','revision','analyzedAt'])
+          && a.diff(b).affectedKeys().hasOnly(['status','revision','analyzedAt'])
+          && getAfter(reqPath(pid)).data.get('proposalRevision', -1) == a.revision
+          && existsAfter(apprPath(pid, approvalId(a.revision, 'submit'))))
+     || (b.status == 'analyzed' && a.status == 'draft'
+          && a.diff(b).affectedKeys().hasOnly(['status'])
+          && existsAfter(apprPath(pid, approvalId(b.revision, 'withdraw'))));
+    }
+
+    // M-2: お客様が変えられるのは 4 キーだけ
+    function clientApprove(pid) {
+      let b = resource.data.requirements;
+      let a = request.resource.data.requirements;
+      return b.status == 'analyzed' && a.status == 'approved'
+        && a.diff(b).affectedKeys().hasOnly(['status','approvedAt','approvedBy','approvalId'])
+        && a.approvedAt == request.time && a.approvedBy == request.auth.uid
+        && a.approvalId == approvalId(b.revision, 'approve')
+        && existsAfter(apprPath(pid, a.approvalId));
+    }
+
+    // §28.4 の allow update（式は同じ。役割の判定を 1 回にまとめた形）
+    function projUpdateOk(pid, a, ch) {
+      let r = roleOf(a);
+      let mine = r == 'developer' && request.auth.uid in resource.data.memberUids;
+      return
+           // admin: アサインだけ（Low-2: archived は書けない）
+           (r == 'admin' && ch.hasOnly(['memberUids','updatedAt','updatedBy'])
+              && request.resource.data.memberUids is list && request.resource.data.memberUids.size() <= 20)
+           // 開発者: 基本情報（siteUrl / siteUrlKey は作成後に変えない。§5.4）
+        || (mine && ch.hasOnly(['clientName','siteName','industry','accent','launchDate','updatedAt','updatedBy'])
+              && validProject(request.resource.data))
+           // 開発者: アーカイブ／解除（Low-2）
+        || (mine && ch.hasOnly(['archived','updatedAt','updatedBy']) && request.resource.data.archived is bool)
+           // 開発者: 確認依頼・差し戻し（M-3）
+        || (mine && ch.hasOnly(['requirements','updatedAt','updatedBy']) && devTransition(pid))
+           // お客様: 承認（M-2）
+        || (r == 'client' && a.projectId == pid && ch.hasOnly(['requirements','updatedAt','updatedBy']) && clientApprove(pid));
+    }
+
+    // §28.5 の allow update（回答: 事前も事後も draft＝M-4 ／ 提案: submit と同じバッチでだけ）
+    function reqUpdateOk(pid, a, ch, before, after) {
+      let d = request.resource.data;
+      return roleOf(a) == 'developer' && request.auth.uid in before.memberUids && (
+           (before.requirements.status == 'draft' && after.requirements.status == 'draft'
+              && ch.hasOnly(['answers','answerMeta','updatedAt','updatedBy'])
+              && validAnswers(d.answers)
+              && d.answerMeta is map && d.answerMeta.keys().hasOnly(d.answers.keys()))
+        || (before.requirements.status == 'draft' && after.requirements.status == 'analyzed'
+              && ch.hasOnly(['proposal','proposalRevision','updatedAt','updatedBy'])
+              && d.proposalRevision == after.requirements.revision
+              && validProposal(d.proposal)));
+    }
+
+    // §28.6 の allow create（お客様の承認 ／ 開発者の submit・withdraw）
+    function apprCreateOk(pid, aid, a) {
+      let r = roleOf(a);
+      return (r == 'client' && a.projectId == pid && approveOk(pid, aid, a))
+          || (r == 'developer' && request.auth.uid in proj(pid).memberUids && submitOrWithdrawOk(pid, aid, a));
+    }
+
+    // R-1: requirements/current の create では proposal / proposalRevision を持たせない（validProposal の迂回を防ぐ）
+    // mode は §5.5 の形に合わせ任意で 'afro' だけ許す（2026-11-10 決定で固定。R-1 の式からの追加）
+    function validReq(d) {
+      return d.keys().hasAll(['schemaVersion','answers','answerMeta','updatedAt','updatedBy'])
+        && d.keys().hasOnly(['schemaVersion','mode','answers','answerMeta','updatedAt','updatedBy'])
+        && d.get('mode', 'afro') == 'afro'
+        && d.schemaVersion == 1 && validAnswers(d.answers)
+        && d.answerMeta is map && d.answerMeta.keys().hasOnly(d.answers.keys());
+    }
+
+    match /projects/{pid} {
+      allow get:  if isAdmin() || assignedHere() || clientOf(pid);
+      // Rules はフィルタではない: 開発者は where('memberUids','array-contains', uid) を必ず付ける
+      allow list: if isAdmin() || assignedHere();
+      allow create: if isDev() && validProject(request.resource.data)
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.memberUids == [request.auth.uid]
+                    && request.resource.data.requirements == {'status': 'draft', 'revision': 0}
+                    && request.resource.data.archived == false
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.createdBy == request.auth.uid
+                    && stamped()
+                    && getAfter(sitePath(request.resource.data.siteUrlKey)).data.projectId == pid;
+      allow update: if stamped() && projUpdateOk(pid, acctOrNull(), changed());
+      allow delete: if false;
+
+      // ---------- requirements/current（§28.5） ----------
+      match /requirements/current {
+        allow get: if canRead(pid);
+        // 案件作成と同じバッチでも作れるよう、事前状態ではなく getAfter で見る
+        allow create: if isDev() && request.auth.uid in getAfter(projPath(pid)).data.memberUids
+                      && getAfter(projPath(pid)).data.requirements.status == 'draft'
+                      && validReq(request.resource.data) && stamped();
+        allow update: if stamped() && reqUpdateOk(pid, acctOrNull(), changed(), proj(pid), getAfter(projPath(pid)).data);
+        allow delete: if false;
+      }
+
+      // ---------- approvals（§28.6。追記のみ） ----------
+      match /approvals/{aid} {
+        allow get, list: if canRead(pid);
+        allow create: if apprCreateOk(pid, aid, acctOrNull());
+        allow update, delete: if false;                                               // admin を含む全員
+      }
+    }
+
+    function actorOk(d, a) {
+      return d.schemaVersion == 1 && d.kind == 'requirements'
+        && d.actorUid == request.auth.uid && d.actorEmail == request.auth.token.email
+        && d.actorName == a.name && d.at == request.time;
+    }
+
+    // お客様の承認（本人のみ。§25-2）
+    function approveOk(pid, aid, acc) {
+      let b = proj(pid).requirements;
+      let r = get(reqPath(pid)).data;
+      let d = request.resource.data;
+      return actorOk(d, acc) && d.action == 'approve' && d.side == 'client'
+        && b.status == 'analyzed' && getAfter(projPath(pid)).data.requirements.status == 'approved'
+        && d.revision == b.revision && aid == approvalId(b.revision, 'approve')
+        && r.get('proposalRevision', -1) == b.revision
+        && d.answers == r.answers && d.proposal == r.proposal
+        && d.keys().hasOnly(['schemaVersion','kind','action','revision','side','actorUid','actorName','actorEmail','at','answers','proposal']);
+    }
+
+    // M-3: 開発者が作れるのは submit / withdraw だけ、side は必ず 'afro'
+    function submitOrWithdrawOk(pid, aid, acc) {
+      let b = proj(pid).requirements;
+      let a = getAfter(projPath(pid)).data.requirements;
+      let d = request.resource.data;
+      return actorOk(d, acc) && d.side == 'afro' && (
+           (d.action == 'submit'
+              && b.status == 'draft' && a.status == 'analyzed' && a.revision == b.revision + 1
+              && d.revision == a.revision && aid == approvalId(a.revision, 'submit')
+              && d.answers == getAfter(reqPath(pid)).data.answers
+              && d.proposal == getAfter(reqPath(pid)).data.proposal
+              && d.keys().hasOnly(['schemaVersion','kind','action','revision','side','actorUid','actorName','actorEmail','at','answers','proposal']))
+        || (d.action == 'withdraw'
+              && b.status == 'analyzed' && a.status == 'draft'
+              && d.revision == b.revision && aid == approvalId(b.revision, 'withdraw')
+              && d.keys().hasOnly(['schemaVersion','kind','action','revision','side','actorUid','actorName','actorEmail','at','note'])
+              && optStr(d, 'note', 0, 200))
+      );
+    }
+
+    // ================= validProposal（§28.7・M-11・R-2） =================
+    // 式の数を節約: hasAll+hasOnly の代わりに size()==N+hasOnly、長さは正規表現 1 回（. はコードポイント）
+    function sre(v, re)      { return v is string && v.matches(re); }
+    function inOpts(v, opts) { return v is list && v.size() <= opts.size() && v.hasOnly(opts); }   // R-2: 重複で水増しできない
+    function validPoint(p) {
+      return p is map && p.size() == 6
+        && p.keys().hasOnly(['id','title','detail','priority','impact','area'])
+        && sre(p.id, '(?s).{1,40}') && sre(p.title, '(?s).{1,80}') && sre(p.detail, '(?s).{1,600}')
+        && p.priority in ['high','medium','low'] && sre(p.impact, '(?s).{1,200}') && sre(p.area, '(?s).{1,40}');
+    }
+    function validProposal(p) {
+      return p is map && p.size() == 8
+        && p.keys().hasOnly(['hostname','issue','purposes','improves','competitors','currentScore','projectedScore','points'])
+        && sre(p.hostname, '(?s).{1,253}') && sre(p.issue, '(?s).{0,600}')
+        && inOpts(p.purposes, purposeOptions()) && inOpts(p.improves, improveOptions())
+        && p.competitors is list && p.competitors.size() <= maxCompetitors()
+        && (p.competitors.size() < 1 || sre(p.competitors[0], '(?s).{1,253}'))
+        && (p.competitors.size() < 2 || sre(p.competitors[1], '(?s).{1,253}'))
+        && (p.competitors.size() < 3 || sre(p.competitors[2], '(?s).{1,253}'))
+        && p.currentScore is number && p.currentScore >= 0 && p.currentScore <= 100
+        && p.projectedScore is number && p.projectedScore >= 0 && p.projectedScore <= 100
+        && p.points is list && p.points.size() <= 6
+        && (p.points.size() < 1 || validPoint(p.points[0]))
+        && (p.points.size() < 2 || validPoint(p.points[1]))
+        && (p.points.size() < 3 || validPoint(p.points[2]))
+        && (p.points.size() < 4 || validPoint(p.points[3]))
+        && (p.points.size() < 5 || validPoint(p.points[4]))
+        && (p.points.size() < 6 || validPoint(p.points[5]));
+    }
+
+    // 管理者の横断一覧（collectionGroup('approvals')）
+    match /{path=**}/approvals/{aid} {
+      allow list: if isAdmin();
+    }
+
+    // ================= siteKeys（§5.4） =================
+    match /siteKeys/{key} {
+      allow get: if isDev() || isAdmin();
+      // 同じバッチで作る新しい案件だけを指せる（既存の案件を指す鍵で URL を先取りさせない）
+      allow create: if isDev()
+                    && request.resource.data.keys().hasAll(['projectId','createdAt'])
+                    && request.resource.data.keys().hasOnly(['projectId','createdAt'])
+                    && request.resource.data.createdAt == request.time
+                    && str(request.resource.data.projectId, 1, 128)
+                    && !exists(projPath(request.resource.data.projectId))
+                    && getAfter(projPath(request.resource.data.projectId)).data.siteUrlKey == key;
+      allow update, delete: if false;
     }
   }
 }
