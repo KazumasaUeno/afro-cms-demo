@@ -1,5 +1,6 @@
-import { Box } from '@mui/material';
-import { Sparkles } from 'lucide-react';
+import { Box, Button, Stack } from '@mui/material';
+import { ListChecks, Sparkles } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { BuildFlowNav } from '@/components/layout/BuildFlowNav';
 import { AiBadge, PageHeader, Reveal } from '@/components/ui';
@@ -18,6 +19,7 @@ type View = 'wizard' | 'analyzing' | 'result';
 export default function RequirementsPage() {
   const { state, dispatch } = useDemo();
   const toast = useToast();
+  const navigate = useNavigate();
   const status = state.requirements.status;
   const [analyzing, setAnalyzing] = useState(false);
   const view: View = analyzing ? 'analyzing' : status === 'draft' ? 'wizard' : 'result';
@@ -35,7 +37,12 @@ export default function RequirementsPage() {
             ? 'ご回答と現行サイトの分析から、優先度つきの改善提案をまとめました。'
             : '長いアンケートの代わりに、AIが1問ずつ質問します。5つの質問に答えるだけで、改善提案書ができあがります。'
         }
-        actions={<AiBadge />}
+        actions={
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Button variant="outlined" size="small" startIcon={<ListChecks size={15} />} onClick={() => navigate('/ai-studio/hearing')}>{status === 'draft' ? '回答の一覧・入力' : '回答の一覧'}</Button>
+            <AiBadge />
+          </Stack>
+        }
       />
       <ModeSwitcher />
 

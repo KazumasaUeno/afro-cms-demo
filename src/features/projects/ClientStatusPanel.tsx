@@ -76,7 +76,7 @@ export function ClientStatusPanel({ compact = false }: { compact?: boolean }) {
           {h.afroToConfirm > 0 && <StatusPill tone="info">お客様の代理入力・アフロの確認待ち {h.afroToConfirm}</StatusPill>}
           {!h.unanswered && !h.clientToConfirm && !h.afroToConfirm && <StatusPill tone="success">お客様の対応は完了</StatusPill>}
         </Stack>
-        <Button size="small" endIcon={<ArrowRight size={14} />} onClick={() => go('/ai-studio')} sx={{ mt: 1, ml: -1 }}>回答を見る</Button>
+        <Button size="small" endIcon={<ArrowRight size={14} />} onClick={() => go('/ai-studio/hearing')} sx={{ mt: 1, ml: -1 }}>回答を見る</Button>
       </Box>
 
       {/* 承認 */}

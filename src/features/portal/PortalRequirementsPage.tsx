@@ -1,4 +1,4 @@
-import { Box, Button, Stack, TextField, Typography } from '@mui/material';
+import { Box, Button, Stack, Typography } from '@mui/material';
 import { ArrowRight, ChevronDown, MessageSquareText } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -7,11 +7,12 @@ import { useDemo } from '@/store/DemoStore';
 import { REQUIREMENT_CATEGORIES } from '@/data/requirements';
 import { tokens } from '@/theme/tokens';
 import { AREAS } from '@/components/layout/nav';
-import type { AnswerValue, RequirementQuestion } from '@/types';
+import type { RequirementQuestion } from '@/types';
 import { AnswerInput } from '@/features/requirements/AnswerInput';
+import { CompetitorField } from '@/features/requirements/CompetitorField';
 import { AnswerOwner, ConfirmAnswerButton } from '@/features/requirements/AnswerOwner';
 import { MODE_LABEL, modeOf, pendingConfirmations, questionsFor } from '@/features/requirements/assignment';
-import { isAnswered, validateAnswer } from '@/features/requirements/validation';
+import { answerText, isAnswered, validateAnswer } from '@/features/requirements/validation';
 
 const AREA = AREAS.portal;
 
@@ -20,40 +21,6 @@ const INTRO: Record<ReturnType<typeof modeOf>, string> = {
   client: 'すべての質問にお客様が回答する進め方です。分からない質問は空欄のままで構いません（アフロが補います）。',
   afro: 'アフロの担当者がヒアリングして入力する進め方です。入力された内容はここで確認でき、追記もできます。',
 };
-
-function summarize(v: AnswerValue | undefined): string {
-  if (Array.isArray(v)) return v.join('、');
-  return v ?? '';
-}
-
-/**
- * 競合サイトは URL の配列で持つ（ウィザード・提案書と同じ形）。1 行に 1 つ入力してもらう。
- * 入力中の改行が消えないよう、入力欄の文字列は手元に持ち、確定した URL の配列だけを保存する
- */
-function CompetitorField() {
-  const { state, dispatch } = useDemo();
-  const saved = state.requirements.answers['q-competitor'];
-  const [raw, setRaw] = useState(() => (Array.isArray(saved) ? saved.join('\n') : ''));
-  return (
-    <TextField
-      id="answer-q-competitor"
-      fullWidth
-      multiline
-      minRows={2}
-      value={raw}
-      placeholder={'https://competitor.example.jp\n（1 行に 1 つ、最大 3 つ）'}
-      helperText="1 行に 1 つ。最大 3 つまで使います"
-      inputProps={{ 'aria-label': '意識している競合サイトのURL（1 行に 1 つ）' }}
-      onChange={(e) => {
-        const v = e.target.value.slice(0, 700);
-        setRaw(v);
-        const urls = v.split(/\s+/).map((x) => x.trim()).filter(Boolean).slice(0, 3);
-        dispatch({ type: 'setAnswer', questionId: 'q-competitor', value: urls, by: 'client' });
-      }}
-      sx={{ '& .MuiOutlinedInput-root': { fontSize: 16 } }}
-    />
-  );
-}
 
 /** anchor=false は確認待ちの一覧に出す複製（id を重複させない・入力欄を出さない） */
 function QuestionBlock({ q, editable, anchor = true }: { q: RequirementQuestion; editable: boolean; anchor?: boolean }) {
@@ -69,7 +36,7 @@ function QuestionBlock({ q, editable, anchor = true }: { q: RequirementQuestion;
         <ConfirmAnswerButton question={q} side="client" />
       </Stack>
       {editable && anchor && q.id === 'q-competitor' ? (
-        <CompetitorField />
+        <CompetitorField by="client" />
       ) : editable && anchor ? (
         <AnswerInput
           question={q}
@@ -79,7 +46,7 @@ function QuestionBlock({ q, editable, anchor = true }: { q: RequirementQuestion;
         />
       ) : (
         <Typography variant="body2" sx={{ px: 1.5, py: 1, borderRadius: 2, bgcolor: tokens.color.surfaceMuted, color: isAnswered(value) ? tokens.color.ink : tokens.color.muted }}>
-          {isAnswered(value) ? summarize(value) : '未回答'}
+          {isAnswered(value) ? answerText(value) : '未回答'}
         </Typography>
       )}
     </Box>

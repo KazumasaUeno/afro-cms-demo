@@ -46,3 +46,9 @@ export function validateAnswer(q: RequirementQuestion, value: AnswerValue | unde
 export function isAnswered(value: AnswerValue | undefined): boolean {
   return Array.isArray(value) ? value.length > 0 : typeof value === 'string' && value.trim().length > 0;
 }
+
+/** 回答を 1 行の文字列にする（一覧・確認用の表示。複数選択・URL の配列は「、」でつなぐ） */
+export function answerText(v: AnswerValue | undefined): string {
+  if (Array.isArray(v)) return v.join('、');
+  return v ?? '';
+}

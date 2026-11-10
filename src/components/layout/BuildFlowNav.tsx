@@ -23,7 +23,8 @@ export function BuildFlowNav() {
       sx={{ display: 'inline-flex', p: 0.5, gap: 0.5, mb: 3, borderRadius: '14px', bgcolor: tokens.color.bgSubtle, maxWidth: '100%', overflowX: 'auto' }}
     >
       {steps.map((s, i) => {
-        const active = pathname === s.to;
+        // ヒアリングの回答の一覧（/ai-studio/hearing）は要件定義の段階に含める
+        const active = pathname === s.to || (s.to === '/ai-studio' && pathname === '/ai-studio/hearing');
         const Icon = s.icon;
         return (
           <ButtonBase

@@ -10,6 +10,7 @@ import LoginPage from '@/features/auth/LoginPage';
 const ProjectsPage = lazy(() => import('@/features/projects/ProjectsPage'));
 const ProjectDetailPage = lazy(() => import('@/features/projects/ProjectDetailPage'));
 const RequirementsPage = lazy(() => import('@/features/requirements/RequirementsPage'));
+const HearingAnswersPage = lazy(() => import('@/features/requirements/HearingAnswersPage'));
 const DesignStudioPage = lazy(() => import('@/features/design/DesignStudioPage'));
 const SitemapPage = lazy(() => import('@/features/sitemap/SitemapPage'));
 const QualityPage = lazy(() => import('@/features/quality/QualityPage'));
@@ -53,6 +54,7 @@ const router = createBrowserRouter([
       { path: 'projects', element: <ProjectsPage /> },
       { path: 'projects/:projectId', element: <ProjectDetailPage /> },
       { path: 'ai-studio', element: <RequirementsPage /> },
+      { path: 'ai-studio/hearing', element: <HearingAnswersPage /> },
       { path: 'ai-studio/design', element: <DesignStudioPage /> },
       { path: 'site', element: <SitemapPage /> },
       { path: 'quality', element: <QualityPage /> },
