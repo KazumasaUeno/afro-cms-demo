@@ -39,7 +39,7 @@ export default function RequirementsPage() {
         }
         actions={
           <Stack direction="row" spacing={1} alignItems="center">
-            <Button variant="outlined" size="small" startIcon={<ListChecks size={15} />} onClick={() => navigate('/ai-studio/hearing')}>{status === 'draft' ? '回答の一覧・入力' : '回答の一覧'}</Button>
+            <Button variant="outlined" size="small" startIcon={<ListChecks size={15} />} onClick={() => navigate('/ai-studio/hearing')}>{status !== 'approved' ? '回答の一覧・入力' : '回答の一覧'}</Button>
             <AiBadge />
           </Stack>
         }

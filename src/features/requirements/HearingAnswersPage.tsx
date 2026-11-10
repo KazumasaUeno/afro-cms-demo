@@ -20,7 +20,8 @@ import { answerText, isAnswered, validateAnswer } from './validation';
  * 管理者画面: ヒアリングの回答の一覧（/ai-studio/hearing）。
  * お客様ポータルの回答・アフロの入力・代理入力の確認状態を 1 画面で見て、全問をその場で入力できる。
  * 値は store の requirements から毎回導く（専用の状態は持たない）。
- * 入力できるのは回答の受付中（AI 分析前）だけ（お客様ポータルと同じ締め切り）。ここでの入力はアフロの入力として記録し、
+ * アフロは要件定義書の承認まで入力できる（AI 分析の後も。お客様ポータルは分析で締め切る）。承認後は reducer が変更を受け付けないため閲覧のみ。
+ * 分析後に変えた回答は、提案書（回答から毎回作る）にすぐ反映される。ここでの入力はアフロの入力として記録し、
  * お客様の担当の質問ではお客様の確認が必要になる（ウィザードと同じ扱い）。
  */
 
@@ -110,7 +111,9 @@ export default function HearingAnswersPage() {
     setFilter(f);
     setPicked(all.filter((q) => matches(q, req, f)).map((q) => q.id));
   };
+  // open: お客様の回答の受付中（AI 分析前）。editable: アフロが入力できる（承認まで）
   const open = req.status === 'draft';
+  const editable = req.status !== 'approved';
 
   return (
     <Box>
@@ -119,7 +122,7 @@ export default function HearingAnswersPage() {
         eyebrow="① 要件定義"
         icon={<MessageSquareText size={14} />}
         title="ヒアリングの回答"
-        description={open
+        description={editable
           ? 'お客様がポータルで答えた内容とアフロが入力した内容を、全問まとめて確認・入力できます。入力は自動で保存され、お客様ポータルにもすぐ反映されます。'
           : 'お客様がポータルで答えた内容とアフロが入力した内容を、全問まとめて確認できます。'}
         actions={
@@ -136,14 +139,16 @@ export default function HearingAnswersPage() {
               {project && <StatusPill tone="neutral" dot={false}>{project.clientName}</StatusPill>}
               <StatusPill tone="info" dot={false}>分担: {MODE_LABEL[modeOf(req)].label}</StatusPill>
               <StatusPill tone={open ? 'warning' : 'success'}>
-                {open ? '回答の受付中' : req.status === 'approved' ? `要件定義書 承認済み ${formatDateTime(req.approvedAt)}` : `締め切り済み（AI 分析 ${formatDateTime(req.analyzedAt)}）`}
+                {open ? '回答の受付中' : req.status === 'approved' ? `要件定義書 承認済み ${formatDateTime(req.approvedAt)}` : `お客様の回答は締め切り済み（AI 分析 ${formatDateTime(req.analyzedAt)}）`}
               </StatusPill>
             </Stack>
             <Typography variant="caption" component="p">
               デモに収録した {all.length} 問のうち <b style={{ color: tokens.color.ink }}>{answeredCount} 問</b> 回答済み（資料上は 12 項目 {TOTAL_REQUIREMENT_QUESTIONS} 問）。
               {open
                 ? ' ここで入力した内容はアフロの入力として記録します（お客様の担当の質問は、お客様の確認が必要になります）。'
-                : ' AI 分析の後は回答を締め切っているため、ここでは閲覧だけできます。'}
+                : editable
+                  ? ' AI 分析の後もアフロは要件定義書の承認まで入力できます。変えた内容は提案書にすぐ反映されます（お客様の担当の質問は代理入力になり、お客様のポータルでの確認が済むまで承認できません）。'
+                  : ' 要件定義書を承認済みのため、ここでは閲覧だけできます。'}
             </Typography>
           </Surface>
         </Reveal>
@@ -190,7 +195,7 @@ export default function HearingAnswersPage() {
                   title={<span id={`hearing-cat-${c.id}`}>{c.no}. {c.title}</span>}
                   sub={<Typography variant="caption">{qs.length} 問</Typography>}
                 />
-                {qs.map((q) => <AnswerRow key={q.id} q={q} editable={open} />)}
+                {qs.map((q) => <AnswerRow key={q.id} q={q} editable={editable} />)}
               </Surface>
             );
           })
