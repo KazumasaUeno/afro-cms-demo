@@ -3,7 +3,7 @@ import { ArrowRight, BadgeCheck, CheckCircle2, Download, Globe, Quote, RotateCcw
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { REQUIREMENT_QUESTIONS, TOTAL_REQUIREMENT_QUESTIONS } from '@/data/requirements';
-import { useDemo } from '@/store/DemoStore';
+import { useRepositories } from '@/repositories';
 import { AiBadge, CountUp, ProgressRing, Reveal, StatusPill, Surface, type PillTone } from '@/components/ui';
 import { useToast } from '@/hooks/useToast';
 import { formatDateTime } from '@/services/time';
@@ -21,11 +21,12 @@ const PRIORITY: Record<ProposalPoint['priority'], { label: string; tone: PillTon
 };
 
 export function ProposalView() {
-  const { state, dispatch } = useDemo();
+  const { requirements, approvals, projects } = useRepositories();
+  const { data: req } = requirements.useCurrent();
+  const { data: projectList } = projects.useList();
   const navigate = useNavigate();
   const toast = useToast();
   const [confirmReset, setConfirmReset] = useState(false);
-  const req = state.requirements;
   const proposal = useMemo(() => buildProposal(req.answers, req.competitors), [req.answers, req.competitors]);
   const answered = REQUIREMENT_QUESTIONS.filter((q) => isAnswered(req.answers[q.id])).length;
   const approved = req.status === 'approved';
@@ -143,7 +144,7 @@ export function ProposalView() {
             </Box>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ flexWrap: 'wrap' }}>
               {!approved && <Button variant="text" startIcon={<RotateCcw size={16} />} onClick={() => setConfirmReset(true)}>回答をやり直す</Button>}
-              <Button variant="outlined" startIcon={<Download size={16} />} onClick={() => { downloadRequirementsDoc(state); toast('要件定義書をダウンロードしました'); }}>要件定義書をダウンロード</Button>
+              <Button variant="outlined" startIcon={<Download size={16} />} onClick={() => { downloadRequirementsDoc({ requirements: req, projects: projectList }); toast('要件定義書をダウンロードしました'); }}>要件定義書をダウンロード</Button>
               {approved ? (
                 <Box
                   role="status"
@@ -152,7 +153,7 @@ export function ProposalView() {
                   <BadgeCheck size={18} /> 承認済み {formatDateTime(req.approvedAt)}
                 </Box>
               ) : (
-                <Button variant="outlined" startIcon={<CheckCircle2 size={16} />} disabled={pending > 0} onClick={() => { dispatch({ type: 'approveRequirements' }); toast('要件定義書を承認しました'); }}>
+                <Button variant="outlined" startIcon={<CheckCircle2 size={16} />} disabled={pending > 0} onClick={() => { void approvals.approveRequirements(req.projectId); toast('要件定義書を承認しました'); }}>
                   アフロが代わりに承認
                 </Button>
               )}
@@ -169,7 +170,7 @@ export function ProposalView() {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
           <Button variant="outlined" onClick={() => setConfirmReset(false)}>キャンセル</Button>
-          <Button variant="contained" onClick={() => { dispatch({ type: 'resetRequirements' }); setConfirmReset(false); }}>やり直す</Button>
+          <Button variant="contained" onClick={() => { void requirements.reset(req.projectId); setConfirmReset(false); }}>やり直す</Button>
         </DialogActions>
       </Dialog>
     </Stack>

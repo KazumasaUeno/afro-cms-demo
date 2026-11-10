@@ -3,7 +3,7 @@ import { ArrowRight, MessageSquareText } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader, Reveal, SectionTitle, StatusPill, Surface } from '@/components/ui';
-import { useDemo } from '@/store/DemoStore';
+import { useRepositories } from '@/repositories';
 import { REQUIREMENT_CATEGORIES, REQUIREMENT_QUESTIONS, TOTAL_REQUIREMENT_QUESTIONS } from '@/data/requirements';
 import { formatDateTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
@@ -46,8 +46,8 @@ function matches(q: RequirementQuestion, req: RequirementSession, f: Filter): bo
 }
 
 function AnswerRow({ q, editable }: { q: RequirementQuestion; editable: boolean }) {
-  const { state, dispatch } = useDemo();
-  const req = state.requirements;
+  const { requirements } = useRepositories();
+  const { data: req } = requirements.useCurrent();
   const value = req.answers[q.id];
   const s = questionStatus(q, req);
   const answered = isAnswered(value);
@@ -67,7 +67,7 @@ function AnswerRow({ q, editable }: { q: RequirementQuestion; editable: boolean 
         <AnswerInput
           question={q}
           value={value}
-          onChange={(v) => dispatch({ type: 'setAnswer', questionId: q.id, value: v, by: 'afro' })}
+          onChange={(v) => void requirements.setAnswer(req.projectId, q.id, v, 'afro')}
           error={answered ? validateAnswer(q, value, false) : null}
         />
       ) : (
@@ -89,15 +89,16 @@ function AnswerRow({ q, editable }: { q: RequirementQuestion; editable: boolean 
 }
 
 export default function HearingAnswersPage() {
-  const { state } = useDemo();
+  const { requirements, projects } = useRepositories();
+  const { data: req } = requirements.useCurrent();
+  const { data: projectList } = projects.useList();
   const navigate = useNavigate();
-  const req = state.requirements;
   const [filter, setFilter] = useState<Filter>('all');
   // 絞り込みの結果は選んだ時点で固定する（「未回答」で入力した質問が、入力の途中で一覧から消えないように）
   const [picked, setPicked] = useState<string[]>([]);
   // CSV を取り込んだら、入力途中の値を手元に持つ欄（競合サイト）を読み直す
   const [csvVersion, setCsvVersion] = useState(0);
-  const project = state.projects.find((p) => p.id === req.projectId);
+  const project = projectList.find((p) => p.id === req.projectId);
 
   const all = REQUIREMENT_QUESTIONS;
   const answeredCount = all.filter((q) => isAnswered(req.answers[q.id])).length;

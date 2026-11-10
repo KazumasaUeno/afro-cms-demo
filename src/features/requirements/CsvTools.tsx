@@ -2,7 +2,7 @@ import { Box, Button, IconButton, Stack, Typography } from '@mui/material';
 import { CheckCircle2, Download, FileUp, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
-import { useDemo } from '@/store/DemoStore';
+import { useRepositories } from '@/repositories';
 import { useToast } from '@/hooks/useToast';
 import { downloadText } from '@/services/download';
 import { tokens } from '@/theme/tokens';
@@ -16,9 +16,9 @@ interface Result extends CsvPlan { fileName: string; applied: number }
  * onApplied: 反映したあと、手元に入力途中の値を持つ欄（競合サイトの欄など）を読み直すために呼ぶ
  */
 export function CsvTools({ onApplied, dense = false }: { onApplied?: () => void; dense?: boolean }) {
-  const { state, dispatch } = useDemo();
+  const { requirements } = useRepositories();
+  const { data: req } = requirements.useCurrent();
   const toast = useToast();
-  const req = state.requirements;
   const input = useRef<HTMLInputElement>(null);
   const [result, setResult] = useState<Result | null>(null);
   const locked = req.status === 'approved';
@@ -47,7 +47,7 @@ export function CsvTools({ onApplied, dense = false }: { onApplied?: () => void;
     const plan = planCsvImport(parseCsv(decodeCsv(buf)), req);
     // 承認後は reducer が受け付けないので、反映したことにしない
     const applied = !plan.error && !locked ? plan.apply.length : 0;
-    if (applied) plan.apply.forEach((a) => dispatch({ type: 'setAnswer', questionId: a.questionId, value: a.value, by: 'afro' }));
+    if (applied) void requirements.setAnswers(req.projectId, plan.apply, 'afro');
     setResult({ ...plan, fileName: file.name, applied });
     if (applied) {
       onApplied?.();

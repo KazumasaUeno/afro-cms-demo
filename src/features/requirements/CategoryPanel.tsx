@@ -2,7 +2,7 @@ import { Box, ButtonBase, Dialog, DialogContent, DialogTitle, IconButton, Stack,
 import { Check, ChevronRight, Layers, X } from 'lucide-react';
 import { useState } from 'react';
 import { REQUIREMENT_CATEGORIES, REQUIREMENT_QUESTIONS, TOTAL_REQUIREMENT_QUESTIONS } from '@/data/requirements';
-import { useDemo } from '@/store/DemoStore';
+import { useRepositories } from '@/repositories';
 import { StatusPill, Surface } from '@/components/ui';
 import { tokens } from '@/theme/tokens';
 import { useFullScreenDialog } from '@/hooks/useMediaQueries';
@@ -15,7 +15,8 @@ import { isAnswered, validateAnswer } from './validation';
 
 function CategoryDialog({ category, onClose }: { category: RequirementCategory | null; onClose: () => void }) {
   const fullScreen = useFullScreenDialog();
-  const { state, dispatch } = useDemo();
+  const { requirements } = useRepositories();
+  const { data: req } = requirements.useCurrent();
   const questions = category ? REQUIREMENT_QUESTIONS.filter((q) => q.categoryId === category.id) : [];
   return (
     <Dialog open={!!category} onClose={onClose} fullWidth maxWidth="sm" fullScreen={fullScreen} aria-labelledby="cat-title">
@@ -32,7 +33,7 @@ function CategoryDialog({ category, onClose }: { category: RequirementCategory |
             </Typography>
             <Stack spacing={3}>
               {questions.map((q) => {
-                const value = state.requirements.answers[q.id];
+                const value = req.answers[q.id];
                 return (
                   <Box key={q.id}>
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
@@ -45,7 +46,7 @@ function CategoryDialog({ category, onClose }: { category: RequirementCategory |
                     </Stack>
                     {/* 競合サイトは URL の配列で持つ（回答の一覧と同じ欄） */}
                     {q.id === 'q-competitor' ? <CompetitorField by="afro" /> : (
-                      <AnswerInput question={q} value={value} onChange={(v) => dispatch({ type: 'setAnswer', questionId: q.id, value: v, by: 'afro' })}
+                      <AnswerInput question={q} value={value} onChange={(v) => void requirements.setAnswer(req.projectId, q.id, v, 'afro')}
                         error={isAnswered(value) ? validateAnswer(q, value, false) : null} />
                     )}
                   </Box>
@@ -61,9 +62,9 @@ function CategoryDialog({ category, onClose }: { category: RequirementCategory |
 
 /** 要件の全体像（資料の 12 項目 81 問＋公開・ドメイン）。答えた数がリアルタイムに増え、答え終えたカテゴリは緑のチェック */
 export function CategoryPanel() {
-  const { state } = useDemo();
+  const { data: req } = useRepositories().requirements.useCurrent();
   const [open, setOpen] = useState<RequirementCategory | null>(null);
-  const answers = state.requirements.answers;
+  const answers = req.answers;
   const answeredTotal = REQUIREMENT_QUESTIONS.filter((q) => isAnswered(answers[q.id])).length;
 
   return (

@@ -1,7 +1,7 @@
 import { Box, Button } from '@mui/material';
 import { Check, Save } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { useDemo } from '@/store/DemoStore';
+import { useRepositories } from '@/repositories';
 import { tokens } from '@/theme/tokens';
 
 /**
@@ -11,8 +11,8 @@ import { tokens } from '@/theme/tokens';
  * beforeSave: 保存の前に確定させたい値（ウィザードの競合サイト欄など）を dispatch する
  */
 export function SaveAnswersButton({ beforeSave, disabled = false }: { beforeSave?: () => void; disabled?: boolean }) {
-  const { state, flush } = useDemo();
-  const req = state.requirements;
+  const { requirements } = useRepositories();
+  const { data: req } = requirements.useCurrent();
   const current = JSON.stringify([req.answers, req.competitors]);
   const [saved, setSaved] = useState<{ snapshot: string; ok: boolean; at: Date } | null>(null);
   const [requested, setRequested] = useState(false);
@@ -23,8 +23,10 @@ export function SaveAnswersButton({ beforeSave, disabled = false }: { beforeSave
   useEffect(() => {
     if (!requested) return;
     setRequested(false);
-    setSaved({ snapshot: currentRef.current, ok: flush(), at: new Date() });
-  }, [requested, flush, current]);
+    const snapshot = currentRef.current;
+    const at = new Date();
+    void requirements.saveNow().then((ok) => setSaved({ snapshot, ok, at }));
+  }, [requested, requirements, current]);
 
   const isSaved = !!saved && saved.snapshot === current;
   const failed = isSaved && !saved?.ok;

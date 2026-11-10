@@ -1,6 +1,6 @@
 import { TextField } from '@mui/material';
 import { useState } from 'react';
-import { useDemo } from '@/store/DemoStore';
+import { useRepositories } from '@/repositories';
 import type { AnswerSide } from '@/types';
 import { MAX_COMPETITORS } from './validation';
 
@@ -10,8 +10,9 @@ import { MAX_COMPETITORS } from './validation';
  * 入力中の改行が消えないよう、入力欄の文字列は手元に持ち、確定した URL の配列だけを保存する。by は入力した側
  */
 export function CompetitorField({ by }: { by: AnswerSide }) {
-  const { state, dispatch } = useDemo();
-  const saved = state.requirements.answers['q-competitor'];
+  const { requirements } = useRepositories();
+  const { data: req } = requirements.useCurrent();
+  const saved = req.answers['q-competitor'];
   const [raw, setRaw] = useState(() => (Array.isArray(saved) ? saved.join('\n') : ''));
   return (
     <TextField
@@ -27,7 +28,7 @@ export function CompetitorField({ by }: { by: AnswerSide }) {
         const v = e.target.value.slice(0, 700);
         setRaw(v);
         const urls = v.split(/\s+/).map((x) => x.trim()).filter(Boolean).slice(0, MAX_COMPETITORS);
-        dispatch({ type: 'setAnswer', questionId: 'q-competitor', value: urls, by });
+        void requirements.setAnswer(req.projectId, 'q-competitor', urls, by);
       }}
       sx={{ '& .MuiOutlinedInput-root': { fontSize: 16 } }}
     />

@@ -2,10 +2,9 @@ import { Box, Button, Stack, Typography } from '@mui/material';
 import { Download, History } from 'lucide-react';
 import { useState } from 'react';
 import { StatusPill, Surface } from '@/components/ui';
-import { useDemo } from '@/store/DemoStore';
+import { useRepositories } from '@/repositories';
 import { downloadText } from '@/services/download';
 import { tokens } from '@/theme/tokens';
-import type { ApprovalLog, DemoState } from '@/types';
 
 /**
  * 承認の履歴（日時つき）。後で「承認しましたよね」と示せる証跡として、管理者画面（プロジェクト詳細）と開発者画面の両方に出す。
@@ -14,10 +13,6 @@ import type { ApprovalLog, DemoState } from '@/types';
 
 const SIDE = { client: { label: 'お客様', tone: 'success' }, afro: { label: 'アフロ', tone: 'info' } } as const;
 const SHOW = 8;
-
-export function approvalLogsOf(state: DemoState, projectId: string): ApprovalLog[] {
-  return state.approvalLogs.filter((l) => (l.projectId ?? state.requirements.projectId) === projectId);
-}
 
 /** 秒まで・日本時間で出す（証跡なので分単位に丸めず、見る端末のタイムゾーンで変わらないようにする） */
 const stamp = (iso: string) => new Date(iso).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -29,9 +24,8 @@ const cell = (v: string) => {
 };
 
 export function ApprovalHistory({ projectId, siteName }: { projectId: string; siteName: string }) {
-  const { state } = useDemo();
+  const { data: logs } = useRepositories().approvals.useHistory(projectId);
   const [all, setAll] = useState(false);
-  const logs = approvalLogsOf(state, projectId);
   const shown = all ? logs : logs.slice(0, SHOW);
 
   const download = () => {

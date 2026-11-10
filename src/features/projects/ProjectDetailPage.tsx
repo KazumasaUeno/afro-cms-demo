@@ -3,10 +3,10 @@ import { ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Clock, Code2,
 import type { ReactNode } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import type { Stage } from '@/types';
-import { devProjectsState, useDemo } from '@/store/DemoStore';
+import { useDemo } from '@/store/DemoStore';
+import { useRepositories } from '@/repositories';
 import { STAGES, stageIndex } from '@/data/projects';
 import { memberById } from '@/data/members';
-import { allDevPeople } from '@/data/people';
 import { TOTAL_REQUIREMENT_QUESTIONS } from '@/data/requirements';
 import { TOTAL_QUALITY_QUESTIONS } from '@/data/quality';
 import { MemberAvatar, ProgressRing, Reveal, StatusPill, Surface } from '@/components/ui';
@@ -47,22 +47,27 @@ function NotFound() {
 /** プロジェクト詳細（ヘッダーの直下に5段階のパイプライン、その下にお客様の対応状況） */
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
-  const { state, dispatch } = useDemo();
+  // サイトマップ・デザイン・品質・CMS・診断は repository の範囲外（live では隠す。§14）なので DemoStore から読む
+  const { state } = useDemo();
+  const { projects, requirements, accounts } = useRepositories();
+  const { data: list } = projects.useList();
+  const { data: req } = requirements.useCurrent();
+  const { data: devAll } = accounts.useDevProjects();
+  const { data: people } = accounts.useDevPeople();
   const navigate = useNavigate();
-  const p = state.projects.find((x) => x.id === projectId);
+  const p = list.find((x) => x.id === projectId);
   if (!p) return <NotFound />;
 
   const cur = stageIndex(p.stage);
   const owner = memberById(p.ownerId);
   // 開発担当（ユーザー管理で決める。開発者画面の権限の有無は問わない。登録した開発者も含め、無効にした人は除く）
-  const devAll = devProjectsState(state);
-  const devNames = allDevPeople(state).filter((m) => !m.disabled).filter((m) => devAll[m.id]?.includes(p.id)).map((m) => m.name);
+  const devNames = people.filter((m) => !m.disabled).filter((m) => devAll[m.id]?.includes(p.id)).map((m) => m.name);
   const q = qualityCompletion(state.qualityChecks);
-  const answered = Object.values(state.requirements.answers).filter((v) => (Array.isArray(v) ? v.length > 0 : v.trim() !== '')).length;
+  const answered = Object.values(req.answers).filter((v) => (Array.isArray(v) ? v.length > 0 : v.trim() !== '')).length;
   const published = state.pages.filter((x) => x.status === 'published').length;
   const scheduled = state.pages.filter((x) => x.status === 'scheduled').length;
   const latest = state.diagnoses[0];
-  const reqStatus = { draft: '入力中', analyzed: 'AI分析済み', approved: '承認済み' }[state.requirements.status];
+  const reqStatus = { draft: '入力中', analyzed: 'AI分析済み', approved: '承認済み' }[req.status];
   /** デモの数値（state）は MINAMO COFFEE の 1 案件分だけ。他の案件では出さない */
   const isDemo = p.id === CLIENT_PROJECT_ID;
   const demoAction = nextBestAction(state);
@@ -71,9 +76,9 @@ export default function ProjectDetailPage() {
   const facts: Record<Stage, ReactNode> = {
     requirements: (
       <>
-        <Fact label="状態" value={reqStatus} ok={state.requirements.status === 'approved'} />
+        <Fact label="状態" value={reqStatus} ok={req.status === 'approved'} />
         <Fact label="回答" value={`${answered} / ${TOTAL_REQUIREMENT_QUESTIONS}問`} />
-        <Fact label="承認日時" value={formatDateTime(state.requirements.approvedAt)} />
+        <Fact label="承認日時" value={formatDateTime(req.approvedAt)} />
       </>
     ),
     build: (
@@ -107,7 +112,7 @@ export default function ProjectDetailPage() {
   };
 
   const go = (to: string) => {
-    dispatch({ type: 'setCurrentProject', id: p.id });
+    projects.select(p.id);
     navigate(to);
   };
 

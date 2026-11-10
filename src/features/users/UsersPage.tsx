@@ -4,11 +4,11 @@ import { useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { ClientAccount } from '@/types';
 import { MemberAvatar, PageHeader, Reveal, StatusPill, Surface } from '@/components/ui';
-import { clientAccountsState, devAccessState, devProjectsState, devUsersState, useDemo } from '@/store/DemoStore';
+import { useRepositories } from '@/repositories';
 import { useToast } from '@/hooks/useToast';
 import { useSessions } from '@/services/session';
 import { formatDate } from '@/services/time';
-import { allDevPeople, type DevPerson } from '@/data/people';
+import type { DevPerson } from '@/data/people';
 import { CLIENT_STATUS, DEV_AFFILIATION, normalizeEmail, type ClientAccountDraft, type DevUserDraft } from '@/data/users';
 import { TOUCH } from '@/theme/media';
 import { tokens } from '@/theme/tokens';
@@ -73,16 +73,18 @@ function ClientRow({ account, siteName, accent, onEdit, onToggle }: {
 
 /** 管理者画面: お客様（お客様ポータルにログインできる人）の登録と、開発者画面を開けるメンバーの指定（デモ: 実際の招待・認証は行わない） */
 export default function UsersPage() {
-  const { state, dispatch } = useDemo();
+  const { accounts: repo, projects: projectsRepo } = useRepositories();
   const toast = useToast();
   const sessions = useSessions();
   const [params, setParams] = useSearchParams();
   const tab: TabId = params.get('tab') === 'dev' ? 'dev' : 'clients';
-  const accounts = clientAccountsState(state);
-  const access = devAccessState(state);
-  const devProjects = devProjectsState(state);
-  const devUsers = devUsersState(state);
-  const people = allDevPeople(state);
+  const { data: accounts } = repo.useClientAccounts();
+  const { data: access } = repo.useDevAccess();
+  const { data: devProjects } = repo.useDevProjects();
+  const { data: devUsers } = repo.useDevUsers();
+  const { data: people } = repo.useDevPeople();
+  const { data: projects } = projectsRepo.useList();
+  const currentProjectId = projectsRepo.useCurrentId();
   const [assigning, setAssigning] = useState<DevPerson | null>(null);
   const [devEditing, setDevEditing] = useState<DevUserDraft | null>(null);
   const [devDisabling, setDevDisabling] = useState<DevPerson | null>(null);
@@ -100,34 +102,34 @@ export default function UsersPage() {
   // 開発者画面を開ける人（権限オンで、無効にしていない人）
   const devCount = people.filter((m) => access[m.id] && !m.disabled).length;
   const devSessionEmail = sessions.dev ? normalizeEmail(sessions.dev.email) : null;
-  const projectOf = (id: string) => state.projects.find((p) => p.id === id);
+  const projectOf = (id: string) => projects.find((p) => p.id === id);
 
   const openNew = () => {
-    const p = state.projects.find((x) => x.id === state.currentProjectId) ?? state.projects[0];
+    const p = projects.find((x) => x.id === currentProjectId) ?? projects[0];
     setEditing({ company: p.clientName, name: '', email: '', projectId: p.id });
   };
 
   const save = (d: ClientAccountDraft) => {
     const prev = d.id ? accounts.find((a) => a.id === d.id) : undefined;
-    dispatch({ type: 'saveClientAccount', account: d });
+    void repo.saveClientAccount(d);
     setEditing(null);
     if (!prev) toast('招待メールを送信しました（デモ: 実際には送信されません）');
     else if (prev.company !== d.company.trim() || prev.name !== d.name.trim() || prev.email !== normalizeEmail(d.email) || prev.projectId !== d.projectId) toast('登録内容を保存しました');
   };
 
   const enable = (a: ClientAccount) => {
-    dispatch({ type: 'setClientAccountStatus', id: a.id, enabled: true });
+    void repo.setClientAccountStatus(a.id, true);
     toast(`${a.company} ${a.name}を有効に戻しました`);
   };
 
   const setDev = (memberId: string, name: string, enabled: boolean) => {
-    dispatch({ type: 'setDevAccess', memberId, enabled });
+    void repo.setDevAccess(memberId, enabled);
     toast(enabled ? `${name}に開発者画面の権限を追加しました` : `${name}の開発者画面の権限を外しました`, enabled ? 'success' : 'info');
   };
 
   const saveDevUser = (d: DevUserDraft) => {
     const prev = d.id ? devUsers.find((u) => u.id === d.id) : undefined;
-    dispatch({ type: 'saveDevUser', user: d });
+    void repo.saveDevUser(d);
     setDevEditing(null);
     const name = d.name.trim();
     if (!prev) {
@@ -145,14 +147,14 @@ export default function UsersPage() {
   };
 
   const enableDevUser = (m: DevPerson) => {
-    dispatch({ type: 'setDevUserStatus', id: m.id, enabled: true });
+    void repo.setDevUserStatus(m.id, true);
     toast(`${m.name}を有効に戻しました`);
   };
 
   const saveDevProjects = (m: DevPerson, projectIds: string[]) => {
     const prev = devProjects[m.id] ?? [];
-    const next = state.projects.filter((p) => projectIds.includes(p.id)).map((p) => p.id);
-    dispatch({ type: 'setDevProjects', memberId: m.id, projectIds });
+    const next = projects.filter((p) => projectIds.includes(p.id)).map((p) => p.id);
+    void repo.setDevProjects(m.id, projectIds);
     setAssigning(null);
     if (prev.length === next.length && prev.every((id, i) => id === next[i])) return;
     toast(next.length ? `${m.name}の担当プロジェクトを保存しました（${next.length}件）` : `${m.name}の担当プロジェクトをすべて外しました`, next.length ? 'success' : 'info');
@@ -256,7 +258,7 @@ export default function UsersPage() {
                       const on = !!access[m.id] && !m.disabled;
                       const registered = m.kind === 'registered';
                       const loggedIn = devSessionEmail === m.email;
-                      const mine = state.projects.filter((p) => (devProjects[m.id] ?? []).includes(p.id));
+                      const mine = projects.filter((p) => (devProjects[m.id] ?? []).includes(p.id));
                       return (
                         <Box
                           key={m.id} component="li"
@@ -342,10 +344,10 @@ export default function UsersPage() {
 
       <DevProjectsDialog
         member={assigning} assigned={assigning ? devProjects[assigning.id] ?? [] : []} hasAccess={assigning ? !!access[assigning.id] : false}
-        projects={state.projects} onClose={() => setAssigning(null)} onSave={(ids) => assigning && saveDevProjects(assigning, ids)}
+        projects={projects} onClose={() => setAssigning(null)} onSave={(ids) => assigning && saveDevProjects(assigning, ids)}
       />
 
-      <DevUserDialog draft={devEditing} devUsers={devUsers} accounts={accounts} projects={state.projects} onClose={() => setDevEditing(null)} onSave={saveDevUser} />
+      <DevUserDialog draft={devEditing} devUsers={devUsers} accounts={accounts} projects={projects} onClose={() => setDevEditing(null)} onSave={saveDevUser} />
 
       <Dialog open={!!devDisabling} onClose={() => setDevDisabling(null)} maxWidth="xs" fullWidth aria-labelledby="dev-disable-title">
         <DialogTitle id="dev-disable-title">{shownDevDisabling?.name}を無効にしますか？</DialogTitle>
@@ -360,7 +362,7 @@ export default function UsersPage() {
             variant="contained" color="error"
             onClick={() => {
               if (devDisabling) {
-                dispatch({ type: 'setDevUserStatus', id: devDisabling.id, enabled: false });
+                void repo.setDevUserStatus(devDisabling.id, false);
                 toast(`${devDisabling.name}を無効にしました`, 'info');
               }
               setDevDisabling(null);
@@ -371,7 +373,7 @@ export default function UsersPage() {
         </DialogActions>
       </Dialog>
 
-      <ClientAccountDialog draft={editing} accounts={accounts} projects={state.projects} onClose={() => setEditing(null)} onSave={save} />
+      <ClientAccountDialog draft={editing} accounts={accounts} projects={projects} onClose={() => setEditing(null)} onSave={save} />
 
       <Dialog open={!!disabling} onClose={() => setDisabling(null)} maxWidth="xs" fullWidth aria-labelledby="client-disable-title">
         <DialogTitle id="client-disable-title">{shownDisabling?.company} {shownDisabling?.name}を無効にしますか？</DialogTitle>
@@ -386,7 +388,7 @@ export default function UsersPage() {
             variant="contained" color="error"
             onClick={() => {
               if (disabling) {
-                dispatch({ type: 'setClientAccountStatus', id: disabling.id, enabled: false });
+                void repo.setClientAccountStatus(disabling.id, false);
                 toast(`${disabling.company} ${disabling.name}を無効にしました`, 'info');
               }
               setDisabling(null);

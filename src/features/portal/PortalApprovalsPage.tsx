@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { PageHeader, Reveal, StatusPill, Surface } from '@/components/ui';
 import { useDemo } from '@/store/DemoStore';
+import { useRepositories } from '@/repositories';
 import { useToast } from '@/hooks/useToast';
 import { formatDateTime } from '@/services/time';
 import { DESIGN_VARIANTS } from '@/data/designs';
@@ -69,7 +70,10 @@ const CONFIRM: Record<Exclude<ApprovalKey, 'quality'>, { title: string; body: st
 };
 
 export default function PortalApprovalsPage() {
+  // サイトマップ・デザインの承認は repository の範囲外（live では隠す。§14）なので DemoStore のまま
   const { state, dispatch } = useDemo();
+  const { requirements, approvals } = useRepositories();
+  const { data: req } = requirements.useCurrent();
   const toast = useToast();
   const navigate = useNavigate();
   const { hash } = useLocation();
@@ -79,7 +83,6 @@ export default function PortalApprovalsPage() {
   if (confirm) lastConfirm.current = confirm;
   const steps = approvalSteps(state);
   const byKey = Object.fromEntries(steps.map((s) => [s.key, s])) as Record<ApprovalKey, ApprovalStep>;
-  const req = state.requirements;
   const pending = pendingConfirmations(req);
   const proposal = useMemo(() => buildProposal(req.answers, req.competitors), [req.answers, req.competitors]);
   const afterPages = state.sitemap.after.nodes;
@@ -94,7 +97,7 @@ export default function PortalApprovalsPage() {
 
   const approve = () => {
     if (!confirm) return;
-    if (confirm === 'requirements') dispatch({ type: 'approveRequirements', by: 'client' });
+    if (confirm === 'requirements') void approvals.approveRequirements(req.projectId, 'client');
     if (confirm === 'sitemap') dispatch({ type: 'approveSitemap', by: 'client' });
     if (confirm === 'design') dispatch({ type: 'approveDesign', by: 'client' });
     toast(CONFIRM[confirm].done);

@@ -2,6 +2,7 @@ import { Box, ButtonBase, Stack, Typography } from '@mui/material';
 import { ArrowRight, CheckCircle2, Circle, Clock, UserRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useDemo } from '@/store/DemoStore';
+import { useRepositories } from '@/repositories';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { StatusPill, Surface, type PillTone } from '@/components/ui';
 import { formatDateTime, relativeTime } from '@/services/time';
@@ -21,7 +22,8 @@ const STATUS: Record<ClientApprovalRow['status'], { label: string; tone: PillTon
  * プロジェクト詳細と開発者画面で使う（ホームからは 2026-11-10 に外した）
  */
 export function ClientStatusPanel() {
-  const { state, dispatch } = useDemo();
+  const { state } = useDemo();
+  const { projects } = useRepositories();
   const navigate = useNavigate();
   const project = state.projects.find((p) => p.id === CLIENT_PROJECT_ID);
 
@@ -29,7 +31,7 @@ export function ClientStatusPanel() {
   const s = clientStatus(state);
 
   const go = (to: string) => {
-    dispatch({ type: 'setCurrentProject', id: project.id });
+    projects.select(project.id);
     navigate(to);
   };
 

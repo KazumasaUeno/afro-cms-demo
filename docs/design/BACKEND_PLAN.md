@@ -58,3 +58,10 @@
 - firebase-tools は devDependencies。lock の差分と `npm audit` を確認（Pages の `npm ci` が重くなる点は許容）
 - [UNKNOWN] Auth の永続化方式（IndexedDB 既定）と §13.4 の方針の整合 → A0 で決める
 - **demo の回帰の照合表**（自動テストが無いので手動。qa-engineer が作り、B0・B・C の各段階で回す）: ①env なし build・dist に firebase 無し ②3 エリアのログイン・ログアウト・next・revoked ③既存 localStorage のまま読める・「デモを初期化」でログアウトしない ④ウィザード・CSV 入出力・分析→承認（demo の代理承認を含む）・要件定義書 HTML ⑤CMS・サイネージ・診断レポートのダウンロード ⑥Pages の深いリンク（404.html）と VITE_BASE ⑦`.env.local` があっても demo の挙動が変わらない
+
+## B の着手条件（B0 レビュー 2026-11-10。code-reviewer: Approve with comments、demo の回帰なし）
+B（live 実装）に入る前に次を直す。demo では表に出ないため B0 では直していない。
+1. 書き込みの完了とエラーを画面が受ける: `void repo.x(); toast()` をやめ、await して成功時だけ toast・catch でエラー表示する共通の形にする（UsersPage・AnswerStatus・ProposalView・PortalApprovalsPage・NewProjectPage ほか全呼び出し）
+2. 読み込み中・エラーを扱う: `requirements.useCurrent(projectId)` に揃え、loading 中は描画しない・書き込みを止める方針を repositories/types.ts に明記（ProjectDetailPage の一瞬の NotFound、UsersPage の `projects[0]` 例外を防ぐ）
+3. 「選んでいる案件」を `projects.select` に一本化（AppShell・DevDashboardPage・DevProjectGate・HomePage の setCurrentProject の dispatch）
+- Minor: PortalApprovalsPage の approvalSteps を repo の値から導く／Wizard の setCompetitors と setAnswer を 1 回の書き込みに／repositories → features の型依存の向き

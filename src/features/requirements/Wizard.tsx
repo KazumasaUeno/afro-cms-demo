@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { ArrowLeft, ArrowRight, Check, CornerDownLeft, Globe, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { REQUIREMENT_CATEGORIES, REQUIREMENT_QUESTIONS } from '@/data/requirements';
-import { useDemo } from '@/store/DemoStore';
+import { useRepositories } from '@/repositories';
 import { Surface } from '@/components/ui';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { tokens } from '@/theme/tokens';
@@ -85,10 +85,11 @@ function CompetitorInput({ urls, onChange, errors, onSubmit }: { urls: string[];
 }
 
 export function Wizard({ onAnalyze }: { onAnalyze: () => void }) {
-  const { state, dispatch } = useDemo();
+  const { requirements } = useRepositories();
+  const { data: req } = requirements.useCurrent();
   const reduced = useReducedMotion();
-  const answers = state.requirements.answers;
-  const competitors = state.requirements.competitors;
+  const answers = req.answers;
+  const competitors = req.competitors;
   // 初回表示時は、まだ答えていない最初の質問から始める
   const [step, setStep] = useState(() => {
     const i = STEPS.findIndex((q) => q.id !== 'q-competitor' && validateAnswer(q, answers[q.id]));
@@ -119,11 +120,11 @@ export function Wizard({ onAnalyze }: { onAnalyze: () => void }) {
     const cleaned = competitors.map((u) => u.trim()).filter(Boolean);
     // 形式が正しくない URL は回答として確定しない（次へと同じ扱い。欄にはエラーが出ている）
     if (cleaned.some((u) => validateUrl(u, false))) return;
-    dispatch({ type: 'setCompetitors', urls: cleaned });
+    void requirements.setCompetitors(req.projectId, cleaned);
     // 変えていないときは記録し直さない（入力日時が進まないように）
     const prev = answers['q-competitor'];
     const same = Array.isArray(prev) ? prev.join('\n') === cleaned.join('\n') : cleaned.length === 0 && !prev;
-    if (!same) dispatch({ type: 'setAnswer', questionId: 'q-competitor', value: cleaned });
+    if (!same) void requirements.setAnswer(req.projectId, 'q-competitor', cleaned);
   };
 
   const next = () => {
@@ -136,7 +137,7 @@ export function Wizard({ onAnalyze }: { onAnalyze: () => void }) {
     else go(step + 1);
   };
 
-  const setValue = (v: AnswerValue) => dispatch({ type: 'setAnswer', questionId: q.id, value: v });
+  const setValue = (v: AnswerValue) => void requirements.setAnswer(req.projectId, q.id, v);
 
   return (
     <Surface padding={0} sx={{ overflow: 'hidden' }}>
@@ -197,7 +198,7 @@ export function Wizard({ onAnalyze }: { onAnalyze: () => void }) {
             <Box sx={{ mb: 1.5, '&:empty': { display: 'none' } }}><ConfirmAnswerButton question={q} /></Box>
 
             {q.id === 'q-competitor' ? (
-              <CompetitorInput urls={competitors} onChange={(u) => dispatch({ type: 'setCompetitors', urls: u })} errors={touched ? competitorErrors : []} onSubmit={next} />
+              <CompetitorInput urls={competitors} onChange={(u) => void requirements.setCompetitors(req.projectId, u)} errors={touched ? competitorErrors : []} onSubmit={next} />
             ) : (
               <AnswerInput question={q} value={answers[q.id]} onChange={setValue} error={touched ? error : null} autoFocus onSubmit={next} />
             )}

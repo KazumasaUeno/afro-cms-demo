@@ -3,7 +3,7 @@ import { Plus, Search, SearchX } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import type { Project, Stage } from '@/types';
-import { useDemo } from '@/store/DemoStore';
+import { useRepositories } from '@/repositories';
 import { STAGES } from '@/data/projects';
 import { PageHeader, Reveal, Surface } from '@/components/ui';
 import { tokens } from '@/theme/tokens';
@@ -17,7 +17,8 @@ const normalize = (s: string) => s.replace(/　/g, ' ').trim().toLowerCase();
 
 /** プロジェクト一覧（カード） */
 export default function ProjectsPage() {
-  const { state, dispatch } = useDemo();
+  const { projects: repo } = useRepositories();
+  const { data: projects } = repo.useList();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
@@ -25,22 +26,22 @@ export default function ProjectsPage() {
   const q = normalize(query);
   const list = useMemo(
     () =>
-      state.projects.filter(
+      projects.filter(
         (p) =>
           (filter === 'all' || p.stage === filter) &&
           (!q || [p.clientName, p.siteName, p.siteUrl, p.industry].some((v) => v.toLowerCase().includes(q))),
       ),
-    [state.projects, filter, q],
+    [projects, filter, q],
   );
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: state.projects.length };
-    state.projects.forEach((p) => (c[p.stage] = (c[p.stage] ?? 0) + 1));
+    const c: Record<string, number> = { all: projects.length };
+    projects.forEach((p) => (c[p.stage] = (c[p.stage] ?? 0) + 1));
     return c;
-  }, [state.projects]);
+  }, [projects]);
 
   const open = (p: Project) => {
-    dispatch({ type: 'setCurrentProject', id: p.id });
+    repo.select(p.id);
     navigate(`/projects/${p.id}`);
   };
 

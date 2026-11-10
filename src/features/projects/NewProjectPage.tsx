@@ -3,7 +3,7 @@ import { ArrowLeft, Check, FolderPlus, Globe } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import type { Project } from '@/types';
-import { useDemo } from '@/store/DemoStore';
+import { useRepositories } from '@/repositories';
 import { MEMBERS } from '@/data/members';
 import { MAX_URL } from '@/features/requirements/validation';
 import { MemberAvatar, PageHeader, Reveal, Surface } from '@/components/ui';
@@ -32,7 +32,9 @@ function Section({ title, sub, children }: { title: string; sub?: string; childr
 
 /** 新しいプロジェクト（管理者画面）。入力チェックは reducer と同じ validateProject */
 export default function NewProjectPage() {
-  const { state, dispatch } = useDemo();
+  const { projects: repo } = useRepositories();
+  const { data: projects } = repo.useList();
+  const currentProjectId = repo.useCurrentId();
   const navigate = useNavigate();
   const toast = useToast();
   const [draft, setDraft] = useState<ProjectDraft>(() => emptyProjectDraft());
@@ -45,30 +47,30 @@ export default function NewProjectPage() {
   // 「今日以降」の判定は日付で変わるため、作成を押すたびに数え直す（日付をまたいで開いたままでも、画面と保存時の判定をそろえる）
   const [checks, setChecks] = useState(0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const errors = useMemo(() => validateProject(draft, state.projects), [draft, state.projects, checks]);
+  const errors = useMemo(() => validateProject(draft, projects), [draft, projects, checks]);
   const set = (patch: Partial<ProjectDraft>) => setDraft((d) => ({ ...d, ...patch }));
   const show = (k: ProjectField) => (submitted ? errors[k] : undefined);
 
   // id は reducer が作る。作成が反映されたら、作業中になった新しいプロジェクトを開く
   useEffect(() => {
-    if (!before.current || before.current.has(state.currentProjectId)) return;
-    if (!state.projects.some((p) => p.id === state.currentProjectId)) return;
+    if (!before.current || before.current.has(currentProjectId)) return;
+    if (!projects.some((p) => p.id === currentProjectId)) return;
     before.current = null;
     toast('プロジェクトを作成しました');
-    navigate(`/projects/${state.currentProjectId}`, { replace: true });
-  }, [state.currentProjectId, state.projects, navigate, toast]);
+    navigate(`/projects/${currentProjectId}`, { replace: true });
+  }, [currentProjectId, projects, navigate, toast]);
 
   const submit = () => {
     setSubmitted(true);
     setChecks((n) => n + 1);
-    const fresh = validateProject(draft, state.projects);
+    const fresh = validateProject(draft, projects);
     const first = FIELDS.find((k) => fresh[k]);
     if (first) {
       refs.current[first]?.focus();
       return;
     }
-    before.current = new Set(state.projects.map((p) => p.id));
-    dispatch({ type: 'createProject', project: draft });
+    before.current = new Set(projects.map((p) => p.id));
+    void repo.create(draft);
   };
 
   // プレビューは入力途中でも崩れないよう、空の項目は仮の文言で埋める

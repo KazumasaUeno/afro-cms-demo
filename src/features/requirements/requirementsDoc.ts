@@ -13,7 +13,7 @@ import { answerText, isAnswered } from './validation';
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const PRIORITY = { high: '優先度 高', medium: '優先度 中', low: '優先度 低' } as const;
 
-export function buildRequirementsDocHtml(state: DemoState): string {
+export function buildRequirementsDocHtml(state: Pick<DemoState, 'requirements' | 'projects'>): string {
   const req = state.requirements;
   const project = state.projects.find((p) => p.id === req.projectId);
   const proposal = buildProposal(req.answers, req.competitors);
@@ -55,7 +55,7 @@ ${answers}
 </body></html>`;
 }
 
-export function downloadRequirementsDoc(state: DemoState): void {
+export function downloadRequirementsDoc(state: Pick<DemoState, 'requirements' | 'projects'>): void {
   const host = buildProposal(state.requirements.answers, state.requirements.competitors).hostname;
   downloadText(`requirements-${host}-${new Date().toISOString().slice(0, 10)}.html`, buildRequirementsDocHtml(state), 'text/html;charset=utf-8');
 }

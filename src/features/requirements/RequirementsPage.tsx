@@ -3,7 +3,7 @@ import { FileSpreadsheet, ListChecks, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { AiBadge, PageHeader, Reveal, Surface } from '@/components/ui';
-import { useDemo } from '@/store/DemoStore';
+import { useRepositories } from '@/repositories';
 import { useToast } from '@/hooks/useToast';
 import { tokens } from '@/theme/tokens';
 import { Wizard } from './Wizard';
@@ -16,13 +16,14 @@ import { CsvTools } from './CsvTools';
 type View = 'wizard' | 'analyzing' | 'result';
 
 export default function RequirementsPage() {
-  const { state, dispatch } = useDemo();
+  const { requirements } = useRepositories();
+  const { data: req } = requirements.useCurrent();
   const toast = useToast();
   const navigate = useNavigate();
-  const status = state.requirements.status;
+  const status = req.status;
   const [analyzing, setAnalyzing] = useState(false);
   const view: View = analyzing ? 'analyzing' : status === 'draft' ? 'wizard' : 'result';
-  const url = state.requirements.answers['q-url'];
+  const url = req.answers['q-url'];
 
   return (
     <Box>
@@ -53,7 +54,7 @@ export default function RequirementsPage() {
               <AnalysisSequence
                 hostname={hostnameOf(typeof url === 'string' ? url : '')}
                 onDone={() => {
-                  dispatch({ type: 'completeAnalysis' });
+                  void requirements.completeAnalysis(req.projectId);
                   setAnalyzing(false);
                   toast('改善提案書ができました', 'ai');
                   window.scrollTo({ top: 0 });
