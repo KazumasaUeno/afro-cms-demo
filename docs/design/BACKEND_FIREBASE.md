@@ -902,3 +902,13 @@ src/repositories/
 | SEC-5 | admin が他の admin を無効化 → 拒否（M-5） |
 | SEC-6 | `accounts.email` と異なる `token.email` で承認 → 拒否（M-8）／大文字混在メールで招待受け取り |
 | SEC-7 | `proposal` に未知キー・巨大文字列・数値欄に文字列 → 拒否（M-11） |
+
+## 27. 追加の決定（2026-11-10。§26 への対応）
+
+| # | 論点 | 決定 | 決めた人 |
+|---|---|---|---|
+| M-6 | live 版の公開場所 | **Firebase Hosting**（`<projectId>.web.app`。他アプリと origin を分ける）。GitHub Pages は営業用デモ（demo モード・Firebase SDK を読み込まない）のまま残す | ユーザー |
+| Low-2 | 案件のアーカイブ（§17.2） | 開発者が行う（§25-1: 管理者は閲覧＋人の管理のみ）。admin の archived 書き込みは Rules で拒否 | lead-architect |
+| Low-1 | 開発者が読める accounts | 自分の担当案件の memberUids に含まれる人と、アフロ社内（admin / dev）の氏名だけ。他案件のお客様の accounts は読めない | lead-architect |
+
+§26 の M-1〜M-12 はすべて実装計画（`docs/design/BACKEND_PLAN.md`）に入れる。M-1〜M-5 は Rules テストで拒否を確かめるまで live を公開しない。
