@@ -840,3 +840,65 @@ src/repositories/
 
 保留:
 - 11: 個人情報・回答・承認ログの保持期間と、削除依頼時の承認ログの氏名の扱い → **LEGAL REVIEW REQUIRED**（本番運用前に決める。実装は削除できる形にしておく）
+
+## 26. Security Review（security-engineer, 2026-11-10）
+
+- 対象: 本書 DRAFT（§25 の決定を前提）。設計段階の脅威モデル。**コード・設定は変更していない**
+- 判定: **CONDITIONAL**（方針＝Rules を唯一の境界、`accounts` を正、承認ログ追記のみ、は妥当。下の M-1〜M-12 を実装計画に入れることが条件。**M-1〜M-5 は Rules テストで拒否を確認するまで live 公開不可**）
+
+### 26.1 確認した実物（[FACT]）
+
+| 項目 | 結果 |
+|---|---|
+| 同じ origin の別アプリ | `gh api users/KazumasaUeno/repos`（has_pages）→ `afro-cms-demo` と **`avatar-chat-demo`** が同じ `https://kazumasaueno.github.io` で公開 |
+| `.gitignore` | `node_modules / dist / *.log / .DS_Store` のみ。**`.env*` / `*.local` が無い**（§15 の「`.env.local` は .gitignore」は現状と不一致） |
+| lockfile | `package-lock.json` 追跡済み |
+| 要件定義書 HTML | `src/features/requirements/requirementsDoc.ts:13` の `esc()` で文字列は全てエスケープ。ただし `proposal.currentScore / projectedScore`（:51）は未エスケープ（現状は計算値なので無害） |
+| CSV | 書き出しに数式ガード（`csv.ts:30` 付近 `guardFormula/unguardFormula`）、取り込みは `planCsvImport` で質問 ID・形式を検査 |
+| `dangerouslySetInnerHTML` | CMS 機能のみ（`CompareDialog.tsx:21,79` / `SitePreview.tsx:43`。`sanitize.ts` 経由）。live では §14 で非表示 |
+
+### 26.2 Must-fix（実装計画へ）
+
+| # | 重大度 | 場所 | 問題 / 攻撃シナリオ | 修正（防ぐ層） |
+|---|---|---|---|---|
+| M-1 | High | §8 `claimOk` | role・projectId 以外（`name` / `company` / `affiliation` / `partnerCompany` / `devRole`）が招待と照合されない。お客様が受け取り時に `name` を他人名にすると、`approveOk` の `actorName == acct().name` を満たしたまま**証跡の承認者名を偽れる** | 全項目を `before` と一致で強制（`d.name == before.name` …）、`schemaVersion == 1`、`updatedAt == request.time`、`updatedBy == uid`（Rules） |
+| M-2 | High | §8 `clientApprove` | `requirements` マップ内の他キー（`analyzedAt` 等）を同時に書き換えられる | `a.diff(b).affectedKeys().hasOnly(['status','approvedAt','approvedBy','approvalId'])`（Rules） |
+| M-3 | High | §8 `devTransition` / `submitOrWithdrawOk`（未記述） | 「同じ型で書く」だけでは、開発者が `status:'approved'` へ遷移・`action:'approve'` / `side:'client'` の記録を作れる余地が残る（§25-2 の代理承認禁止に反する） | 実装前に式を本書へ明記: 開発者は `draft→analyzed`（revision+1・proposal 同時）と `analyzed→draft` のみ、approvals は `action in ['submit','withdraw']` かつ `side=='afro'`、`approved` からの遷移は全員不可（Rules。レビューは本担当） |
+| M-4 | Medium | §8 `requirements/current` 更新の第 1 分岐 | 事前状態 `draft` しか見ないため、同じバッチで「analyzed へ遷移＋回答変更」ができる | `getAfter(projPath(pid)).data.requirements.status == 'draft'` も要求（Rules） |
+| M-5 | Medium | §8 `accounts` update | admin が他の admin を無効化・改名できる（admin は Console だけで作る方針と非対称。乗っ取られた 1 admin で全 admin 停止） | `resource.data.role != 'admin'` を条件に追加。admin の無効化は Console 手順（Rules＋Runbook） |
+| M-6 | High | 公開先（§0.1） | 同じ origin の `avatar-chat-demo` の JS（依存・XSS を含む）が、Firebase Auth の IndexedDB（refresh token）と localStorage を読める＝**お客様セッションの窃取** | live 公開前に**別 origin**（独自サブドメイン or 専用の GitHub org/user の Pages）へ。不可なら live は不可とし lead-architect → ユーザー判断（platform） |
+| M-7 | Medium | `.gitignore` | `.env.local` がコミットされうる | `.env*` と `!.env.example` を追加（設定） |
+| M-8 | Medium | §8 共通 `active()` | 受け取り後に Auth のメールを変更すると `accounts.email` と `token.email` がずれたまま承認できる | `active()` に `acct().email == request.auth.token.email` を追加。アプリにメール変更 UI を作らない。大文字混在メールで登録した場合の `token.email` 小文字化をエミュレータで確認（Rules／qa） |
+| M-9 | Medium | §12.2 / §25-7 | Spark は課金でなく停止なので費用リスクは無いが、公開 API キーで**新規登録の量産・確認メール送信・拒否クエリ**により枠を使い切られうる（承認が日単位で止まる） | App Check の「第 2 段階」は**最初の外部のお客様を招待する前**に強制（Firestore・Auth）。それまでは社内試用のみ。メール列挙保護 ON、匿名認証 OFF（platform）。この条件でのみ延期を受容 |
+| M-10 | Medium | §15 / §19 | 本番キーの参照元に `http://localhost:*`、Auth の承認済みドメインに既定の `localhost` が残る | 本番は `https://kazumasaueno.github.io/*`（M-6 後は新 origin）のみ。開発はエミュレータ（`demo-afro-cms`）で行う。参照元制限は境界ではない（Rules が境界）と記録（ユーザー作業） |
+| M-11 | Medium | 表示・要件定義書 HTML | live では `proposal` が開発者の書いた任意マップになる | Rules で `proposal` の型・件数・長さを検査（`validProposal`）。HTML 化は保存値でも `esc()` を通し、数値は `is number` を強制。競合 URL は `validateUrl` 済みの http(s) だけリンク化。live データの HTML を `blob:` URL でタブに開かない（`blob:` は作成元 origin を継ぐ。download 属性の保存のみ）。`<meta http-equiv="Content-Security-Policy">` で `script-src 'self'`、`connect-src` を Firebase のエンドポイントに限定（frontend） |
+| M-12 | Medium | §18 / §25-12 JSON 書き出し | 全お客様の氏名・メール・回答・証跡が admin の PC に平文で残る | 保存先（会社管理の暗号化領域のみ・Git／個人クラウド禁止）、保持（最新 N 世代）、書き出し時に SHA-256 を記録（NC-6 の証拠力にも使う）を Runbook に記載。書き出しファイル名に個人名を入れない（運用。PRIVACY_REVIEW に記録） |
+
+### 26.3 確認済みで問題なし（設計どおり実装すれば成立）
+
+- 自己昇格: `accounts` の create は招待と role/projectId 一致、update は admin のみで role 不可、admin 招待はアプリ不可 → 成立（M-1 で他項目も固定）
+- 他人の招待: `invites/{token.email}` 固定＋`email_verified` 必須 → メール受信箱を持たない限り不可。再受け取り: `invited` 以外は不可、`accounts` は create-only → 無効化後の再受け取り不可（Auth を消して再登録しても招待は `claimed`）
+- 無効化: 全権限が `active()` を経由 → 即時。案件越境: お客様は `projectId` 一致の get のみ、開発者は `memberUids` 必須 → 成立
+- 証跡: `request.time`・uid/email 一致・現物一致・決定的 ID・update/delete 全員不可・状態と同時のトランザクション → 成立（M-2/M-3 前提）。Console オーナーの書き換え可能性は §25-6 で受容済み
+- 列挙: `invites` / `accounts` の list は admin のみ、`siteKeys` は dev/admin の get のみ（ID 推測で存在が分かるのは社内の開発者だけ）→ 受容
+- gcloud 既定が他社本番: §16.1 で十分。加えて deploy スクリプトは**本案件の本番 ID と完全一致する場合だけ**実行する許可リスト方式にする
+
+### 26.4 記録のみ（Low / 判断事項）
+
+- `accounts` の get を開発者に全件許可（他案件のお客様の氏名・メール・会社名を uid が分かれば読める）。アサイン先のお客様だけにするか、表示名を `projects` 側に持つかを database-engineer と決める（Medium 寄り）
+- §17.2「プロジェクトの archived を admin が書く」は §25-1（admin＝閲覧＋招待・無効化・割り当てのみ）と食い違う → lead-architect が裁定
+- ログ: `console.warn` に出すのは projectId・aid のみ。メール・氏名・回答を出さない。エラートラッカー・Analytics を足すなら本担当の再確認
+- 削除: Rules で delete 全面禁止のため削除は Console のみ。Auth 削除後の再招待は `invites/{email}` を Console で消す必要がある → Runbook に入れる。保持期間・承認ログの氏名は **LEGAL REVIEW REQUIRED**（本担当は結論を出さない）
+- 未実施: `npm audit`（依存追加時に実行）、Rules 実体のテスト（実装後）
+
+### 26.5 qa-engineer へ追加する偽申告テスト（§16.3 に追加）
+
+| TEST | 内容 |
+|---|---|
+| SEC-1 | 招待受け取り時に `name` / `company` を変えて create → 拒否（M-1） |
+| SEC-2 | お客様の承認で `requirements.analyzedAt` を同時変更 → 拒否（M-2） |
+| SEC-3 | 開発者が `status:'approved'` へ更新、`action:'approve'` / `side:'client'` の記録を作成 → 拒否（M-3） |
+| SEC-4 | 1 バッチで analyzed 遷移＋回答変更 → 拒否（M-4） |
+| SEC-5 | admin が他の admin を無効化 → 拒否（M-5） |
+| SEC-6 | `accounts.email` と異なる `token.email` で承認 → 拒否（M-8）／大文字混在メールで招待受け取り |
+| SEC-7 | `proposal` に未知キー・巨大文字列・数値欄に文字列 → 拒否（M-11） |

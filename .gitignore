@@ -2,3 +2,7 @@ node_modules
 dist
 *.log
 .DS_Store
+
+# Firebase の設定値（ローカル）。公開情報だがリポジトリに直書きしない（BACKEND_FIREBASE.md §15・§26 M-7）
+.env*
+!.env.example
