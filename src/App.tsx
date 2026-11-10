@@ -8,6 +8,7 @@ import LoginPage from '@/features/auth/LoginPage';
 
 // 重いライブラリ（React Flow / Tiptap / Recharts / GSAP）を使う画面は遅延読み込み
 const ProjectsPage = lazy(() => import('@/features/projects/ProjectsPage'));
+const NewProjectPage = lazy(() => import('@/features/projects/NewProjectPage'));
 const ProjectDetailPage = lazy(() => import('@/features/projects/ProjectDetailPage'));
 const RequirementsPage = lazy(() => import('@/features/requirements/RequirementsPage'));
 const HearingAnswersPage = lazy(() => import('@/features/requirements/HearingAnswersPage'));
@@ -52,6 +53,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <HomePage /> },
       { path: 'projects', element: <ProjectsPage /> },
+      { path: 'projects/new', element: <NewProjectPage /> },
       { path: 'projects/:projectId', element: <ProjectDetailPage /> },
       { path: 'ai-studio', element: <RequirementsPage /> },
       { path: 'ai-studio/hearing', element: <HearingAnswersPage /> },

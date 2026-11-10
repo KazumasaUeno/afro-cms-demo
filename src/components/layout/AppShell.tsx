@@ -235,6 +235,7 @@ function routeLabel(pathname: string): string {
   if (pathname === '/ai-studio/design') return 'AIデザインスタジオ';
   if (pathname === '/ai-studio') return 'AI要件定義';
   if (pathname === '/site') return 'サイトマップ';
+  if (pathname === '/projects/new') return '新しいプロジェクト';
   if (/^\/projects\/[^/]+/.test(pathname)) return 'プロジェクト詳細';
   const area = AREAS[areaOf(pathname)];
   const item = [...area.items, SETTINGS_ITEM].find((i) => isActive(i, pathname));

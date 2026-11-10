@@ -16,6 +16,7 @@ import {
   DEV_AFFILIATION, normalizeEmail, seedClientAccounts, seedDevAccess, seedDevProjects, validateClientAccount, validateDevUser,
   type ClientAccountDraft, type DevUserDraft,
 } from '@/data/users';
+import { projectFromDraft, validateProject, type ProjectDraft } from '@/features/projects/projectForm';
 
 /** 操作した側。省略時はアフロ（管理者画面）。お客様の画面（CMS・ポータル）からは client を渡す */
 export type Side = AnswerSide;
@@ -24,6 +25,8 @@ export type Action =
   | { type: 'reset' }
   | { type: 'setCurrentProject'; id: string }
   | { type: 'updateProject'; id: string; patch: Partial<Project> }
+  /** 新しいプロジェクト（管理者画面）。要件定義・0% で作り、作業中のプロジェクトにする */
+  | { type: 'createProject'; project: ProjectDraft }
   /** by を省略するとアフロ（管理者画面）。お客様ポータルからは client */
   | { type: 'setAnswer'; questionId: string; value: AnswerValue; by?: Side }
   /** 回答の分担を切り替える（承認前のみ） */
@@ -130,6 +133,14 @@ export function reducer(state: DemoState, action: Action): DemoState {
 
     case 'setCurrentProject':
       return state.projects.some((p) => p.id === action.id) ? { ...state, currentProjectId: action.id } : state;
+
+    case 'createProject': {
+      // 画面でも止めているが、不正な値・URL の重複はここでも作らない
+      if (Object.keys(validateProject(action.project, state.projects)).length > 0) return state;
+      const created: Project = { id: uid('p'), ...projectFromDraft(action.project), updatedAt: nowIso() };
+      const s = { ...state, projects: [created, ...state.projects], currentProjectId: created.id };
+      return log(s, `プロジェクト「${created.siteName}」（${created.clientName}）を作成しました`, 'edit', ACTOR.afro, created.id);
+    }
 
     case 'updateProject':
       return { ...state, projects: state.projects.map((p) => (p.id === action.id ? { ...p, ...action.patch, updatedAt: nowIso() } : p)) };
