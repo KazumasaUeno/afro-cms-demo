@@ -64,7 +64,9 @@ describe('確認依頼（submit: draft → analyzed）', () => {
   deny('ログの日時を過去にする → 拒否', { mutate: { log: approvalDoc('devA', 'submit', 1, { answers: ANSWERS, proposal: PROPOSAL, at: PAST }) } });
   deny('ログの名義を他人にする → 拒否', { mutate: { log: { ...approvalDoc('devA', 'submit', 1, { answers: ANSWERS, proposal: PROPOSAL }), actorName: '協力 開発B' } } });
   deny('ログの side を client にする → 拒否', { mutate: { log: { ...approvalDoc('devA', 'submit', 1, { answers: ANSWERS, proposal: PROPOSAL }), side: 'client' } } });
-  deny('M-4 / SEC-4: 1 バッチで analyzed 遷移＋回答変更 → 拒否', { mutate: { req: { proposal: PROPOSAL, proposalRevision: 1, 'answers.q-issue': '直前に変更', ...stamp('devA') } } });
+  // SEC-4 の拒否の原因は requirements/current の update の hasOnly 分岐（回答だけ／提案だけ。両方は書けない）。
+  // M-4 の条件（after が draft）を外しても拒否される＝多重防御（mutation.test.mjs C-2 で軽量化した Rules でも確認）
+  deny('SEC-4: 1 バッチで analyzed 遷移＋回答変更 → hasOnly で拒否（M-4 は多重防御）', { mutate: { req: { proposal: PROPOSAL, proposalRevision: 1, 'answers.q-issue': '直前に変更', ...stamp('devA') } } });
   deny('analyzed から 2 回目の submit → 拒否', { fromRev: 1, mutate: {} }, 'devA', 'analyzed');
   deny('approved から submit → 拒否', { fromRev: 1 }, 'devA', 'approved');
 });

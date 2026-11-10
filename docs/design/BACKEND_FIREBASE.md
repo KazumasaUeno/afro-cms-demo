@@ -903,7 +903,7 @@ src/repositories/
 | SEC-1 | 招待受け取り時に `name` / `company` を変えて create → 拒否（M-1） |
 | SEC-2 | お客様の承認で `requirements.analyzedAt` を同時変更 → 拒否（M-2） |
 | SEC-3 | 開発者が `status:'approved'` へ更新、`action:'approve'` / `side:'client'` の記録を作成 → 拒否（M-3） |
-| SEC-4 | 1 バッチで analyzed 遷移＋回答変更 → 拒否（M-4） |
+| SEC-4 | 1 バッチで analyzed 遷移＋回答変更 → 拒否（hasOnly で拒否。M-4 は多重防御） |
 | SEC-5 | admin が他の admin を無効化 → 拒否（M-5） |
 | SEC-6 | `accounts.email` と異なる `token.email` で承認 → 拒否（M-8）／大文字混在メールで招待受け取り |
 | SEC-7 | `proposal` に未知キー・巨大文字列・数値欄に文字列 → 拒否（M-11） |
