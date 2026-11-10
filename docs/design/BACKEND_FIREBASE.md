@@ -1193,3 +1193,33 @@ function validProposal(p) {
 - [DECISION 案] database-engineer（security-engineer のレビュー対象）。理由: §13.4 の「端末に個人情報・回答を残さない」と、再読み込みに耐える最低限の UX の両立。`initializeAuth(app, { persistence: browserSessionPersistence })` で初期化し、**`getAuth()` を先に呼ばない**（既定の IndexedDB で初期化されるため）。Firestore は `initializeFirestore` の既定（メモリキャッシュ）のままで、`persistentLocalCache` を使わない
 - 代償: 新しいタブ・ウィンドウでは再ログインが要る（要件定義書 HTML は download 保存なので影響しない。M-11）。ブラウザの「前回のタブを復元」で sessionStorage が戻る場合がある [INFERENCE] → 画面の「ログアウト」は `signOut()` で必ず消す
 - 確認方法（B2）: ログイン → タブを閉じて開き直す → 未ログイン、DevTools の IndexedDB `firebaseLocalStorageDb` に認証情報が無いこと
+
+### 28.9 Security Review（security-engineer, 2026-11-10）
+
+- 対象: §28.1〜28.8（commit d120c2d）を §26 M-1〜M-12・§25・§27 と照合。**構文・実挙動は未検証**（エミュレータ未実行。A2 の Rules テストで件数つきで確定）
+- 判定: **CHANGES（軽微。下の R-1〜R-4 を A2 の実装に入れれば APPROVE）**。M-1〜M-5・M-8・M-11・Low-2 の式は意図どおり。approved の終端性、開発者による approve/side=client の作成不可、M-4 の事前・事後 draft、claim の全項目固定はいずれも成立
+- M-6/7/9/10/12 は Rules ではない（platform / frontend / 運用）。本節の対象外で、§26 の条件のまま
+
+| # | 重大度 | 場所 | 問題 | 修正 |
+|---|---|---|---|---|
+| R-1 | High | §28.5 create の `validReq`（未定義） | create で `proposal` と `proposalRevision: 1` を書けると、初回 submit は requirements を更新しなくても `devTransition` の `getAfter(reqPath).proposalRevision == a.revision` を満たし、**`validProposal`（M-11）を迂回**できる | `function validReq(d) { return d.keys().hasAll(['schemaVersion','answers','answerMeta','updatedAt','updatedBy']) && d.keys().hasOnly(['schemaVersion','answers','answerMeta','updatedAt','updatedBy']) && d.schemaVersion == 1 && validAnswers(d.answers) && d.answerMeta is map && d.answerMeta.keys().hasOnly(d.answers.keys()); }`（create で proposal / proposalRevision を持たせない）。SEC-8「proposalRevision 付きで create → 拒否」を追加 |
+| R-2 | Medium | §28.7 `purposes` / `improves` | `hasOnly` は重複を許すため件数が無制限 | `&& p.purposes.size() <= 選択肢数` と `&& p.improves.size() <= 選択肢数`（生成スクリプトで差し込む） |
+| R-3 | Low | §28.3 update | admin がお客様・admin 以外にも `devRole` を足せる | `&& (!changed().hasAny(['devRole']) \|\| resource.data.role == 'developer')` |
+| R-4 | Low | `answerMeta.by` | Rules はマップを走査できず、開発者が `by:'client'` と書ける（「お客様が回答」と誤表示） | live では `by` を表示に使わない（常に「アフロ入力」）。証跡は approvals の answers スナップショットが正 |
+
+**判断 (1) Low-1 → (b) を採用。** 理由: (a) は氏名の重複データで、改名時に全案件の同期が要り Rules で整合を強制できない（§4 の重複禁止に反する）。(b) は Rules だけで閉じ、データを増やさない。§28.3 の get を次へ差し替え（list は変更なし）:
+
+```
+function internalDev()     { return isDev() && acct().get('affiliation', null) == 'internal'; }
+function internalAcct(d)   { return d.role == 'admin' || (d.role == 'developer' && d.get('affiliation', null) == 'internal'); }
+allow get: if (authed() && request.auth.uid == uid)
+           || isAdmin()
+           || (internalDev() && resource.data.role in ['admin','developer'])   // 社内の開発者は社内・協力会社とも読める
+           || (isDev() && internalAcct(resource.data))                           // 協力会社の開発者は社内の人だけ
+           || (isDev() && resource.data.role == 'client' && assigned(resource.data.projectId));
+```
+- `affiliation` が無い開発者は協力会社として扱う（制限側）。同じ案件の協力会社どうしは名前が読めない → 画面は「協力会社メンバー」と表示。必要なら PM 判断で同じ `partnerCompany` の許可を後から足す。SEC-9「協力会社の開発者が他社の協力会社開発者・他案件のお客様を get → 拒否」を追加
+
+**判断 (2) npm audit → overrides は入れず、受容（条件つき）。** 理由: 指摘は gRPC のサーバ側の問題で、ブラウザの SDK は webchannel を使い grpc-js を同梱しない [INFERENCE]。grpc-js を使うのは Node 上の `@firebase/rules-unit-testing` からローカルのエミュレータへの接続だけで、外部の入力を受けない。overrides はその経路を壊しうるうえ、本番には効かない。条件: ① B のビルド後に `grep -rl grpc dist` が 0 件であることを確認して記録（現状の dist は Firebase 導入前のもので 0 件 [FACT]）② 受容リスクとして `SECURITY.md` に記録し、firebase を上げるたびに `npm audit --omit=dev` をやり直す ③ 本番の依存で high が grpc-js 以外に出たら受容しない
+
+**判断 (3) `browserSessionPersistence` を `initializeAuth` で使う → OK。** 条件: `getAuth()` を先に呼ぶ箇所が無いことを Grep で確かめる（B）。`signOut()` を必ず実行。B2 の確認手順（タブを閉じたら未ログイン、IndexedDB の `firebaseLocalStorageDb` が空）を TEST に入れる。sessionStorage は同じ origin の XSS から読めるので、M-11 の CSP が前提
