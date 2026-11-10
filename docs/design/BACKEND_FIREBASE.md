@@ -1229,3 +1229,41 @@ allow get: if (authed() && request.auth.uid == uid)
 **判断 (2) npm audit → overrides は入れず、受容（条件つき）。** 理由: 指摘は gRPC のサーバ側の問題で、ブラウザの SDK は webchannel を使い grpc-js を同梱しない [INFERENCE]。grpc-js を使うのは Node 上の `@firebase/rules-unit-testing` からローカルのエミュレータへの接続だけで、外部の入力を受けない。overrides はその経路を壊しうるうえ、本番には効かない。条件: ① B のビルド後に `grep -rl grpc dist` が 0 件であることを確認して記録（現状の dist は Firebase 導入前のもので 0 件 [FACT]）② 受容リスクとして `SECURITY.md` に記録し、firebase を上げるたびに `npm audit --omit=dev` をやり直す ③ 本番の依存で high が grpc-js 以外に出たら受容しない
 
 **判断 (3) `browserSessionPersistence` を `initializeAuth` で使う → OK。** 条件: `getAuth()` を先に呼ぶ箇所が無いことを Grep で確かめる（B）。`signOut()` を必ず実行。B2 の確認手順（タブを閉じたら未ログイン、IndexedDB の `firebaseLocalStorageDb` が空）を TEST に入れる。sessionStorage は同じ origin の XSS から読めるので、M-11 の CSP が前提
+
+### 28.10 Re-audit（2026-11-10）
+
+- 対象: commit 9be26b3 の `firestore.rules`（416 行）と `tests/rules/*.test.mjs`。§26 M-1〜M-5・M-8・M-11、§28.9 R-1〜R-4・Low-1 (b)、§28.7・§23 の実装差（`matches()` 直書き、`validReq` の任意 `mode=='afro'`、siteKeys create の `!exists(project) && getAfter(project).siteUrlKey == key`、q-competitor 要素 1〜200 文字・形式なし）と照合。security-engineer。**Rules・テストは変更していない**
+- 判定: **CONDITIONAL**（式は §28 と一致し、M-1〜M-3・M-5 は「意図した条件で拒否される」ことを下の変異テストで確認。条件 C-1〜C-3 を満たすまで本番デプロイ不可）
+
+**[FACT] 実行結果**
+- `npm run test:rules`: 271 / 271 pass（2026-11-10 再実行。ログ中の 1000 式上限の表示 107 行）。`npm run rules:check`: OK。`firebase.json` に firestore（rules / indexes）セクションあり
+- 変異テスト（一時 probe。体制側 scratchpad、`demo-afro-cms` エミュレータのみ。リポジトリ外）: 1 条件だけ外した Rules で同じ攻撃を流し、**元の Rules = 拒否／変異 = 許可**なら、その条件が拒否の原因と言える
+
+| 攻撃 | 外した条件 | 元 | 変異 |
+|---|---|---|---|
+| M-1 claim で name 変更 | `d.name == before.name` | DENY | ALLOW |
+| M-1 claim で company 変更 | `optEq(d, before, 'company')` | DENY | ALLOW |
+| M-1 claim で role=admin | `d.role == before.role` | DENY | ALLOW |
+| M-2 承認で analyzedAt 同時変更 | `a.diff(b).affectedKeys().hasOnly([...4 キー])` | DENY | ALLOW |
+| M-3 submit ログ side=client | `d.side == 'afro'` | DENY（上限表示あり） | ALLOW |
+| M-3 開発者の承認バッチ（side=client） | projUpdateOk / apprCreateOk の `r == 'client'`（開発者にも開く） | DENY | ALLOW |
+| M-5 admin が admin を無効化 / 改名 | `resource.data.role != 'admin'` | DENY / DENY | ALLOW / ALLOW |
+| M-4 SEC-4（1 update で proposal＋answers） | `after.requirements.status == 'draft'` | DENY（上限） | **DENY（上限）** |
+| M-4 同じバッチで requirements を 2 回 update（回答→提案） | 同上 | DENY（上限） | **DENY（上限）** |
+| M-4 回答だけ update＋遷移（提案を書かない） | 同上 | DENY（上限） | **DENY（上限）** |
+
+- M-4 の追加確認: `validAnswers` / `validProposal` を `is map` に軽くした版（上限に当たらない）でも上の 3 経路は**上限表示なしで拒否**、M-4 の条件を外しても拒否。→ 攻撃は塞がっている（`hasOnly` の分岐分け＋`proposalRevision` の一致で止まる）が、**M-4 の条件そのものを証明するテストは無い**（多重防御として残す）。同じ文書への 2 回の update（回答のみ・draft のまま）は許可される（バッチの同一文書複数書き込みは評価される）
+- 1000 式の上限: 拒否経路で出る（requirements/current の update の評価）。M-1〜M-3・M-5 は変異で許可に転じるため**上限が拒否の原因ではない**。上限の表示は「拒否の理由」の検査には使えない（エミュレータの文言は API ではない）
+
+**条件（本番デプロイ前の must-fix）**
+
+| # | 内容 | 担当 |
+|---|---|---|
+| C-1 | 上の変異テストをリポジトリのテストにする（`createRulesEnv({ rules })` で 1 条件ずつ外した Rules を読み、元＝`assertFails`・変異＝`assertSucceeds` の対）。M-1×3・M-2・M-3×2・M-5×2 の 8 対以上。アンカー文字列が見つからなければ throw（Rules の書き換えで黙って無効化させない） | qa-engineer |
+| C-2 | M-4: SEC-4 は「`hasOnly` で拒否」と注記を直し、上の 3 経路を「軽量化した Rules（上限に当たらない）でも拒否」のテストとして追加。M-4 の条件は削らない | qa-engineer |
+| C-3 | §23 の本番の式数の数え方（UNKNOWN）は可用性の問題として残る（全項目上限の submit が本番で通るか）。初回デプロイ後に実データ外の案件で 1 回試し、結果を §23 に記録。拒否が本番で緩むことはない（上限超過は評価エラー＝拒否） | platform-engineer |
+
+**記録のみ（Low）**
+- q-competitor は文字列 1〜200 文字のみで形式を見ない（§28.7 の差）。表示でリンクにするのは `validateUrl` を通った http(s) だけ（M-11。B の確認項目）
+- `validReq` の任意 `mode=='afro'` と siteKeys create の `!exists && getAfter` は安全側の追加で問題なし（既存案件を指す鍵の先取りは拒否テストあり）
+- R-1（SEC-8 2 件）・R-2（重複水増し 2 件）・R-3・Low-1 (b)（SEC-9）・M-8（approve で token.email 変更）・M-11（SEC-7 の型・件数・長さ）はテストあり。R-4 は表示側（B）の確認項目のまま
