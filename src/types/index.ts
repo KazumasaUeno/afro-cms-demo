@@ -187,6 +187,8 @@ export interface ApprovalLog {
   side: 'afro' | 'client';
   action: string;
   target: string;
+  /** どの案件の承認か（0.20.0 から。無い古い記録はデモのデータを持つ案件のもの） */
+  projectId?: string;
 }
 
 /* ---------- CMS ---------- */

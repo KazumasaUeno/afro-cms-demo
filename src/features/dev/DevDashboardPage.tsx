@@ -9,6 +9,7 @@ import { formatDateTime, relativeTime } from '@/services/time';
 import { DEV_ENVS, DEV_TASK_STATUSES, devRecentErrors, latestDeploy, latestSuccess } from '@/data/dev';
 import { nextBestAction, stagePrimaryRoute } from '@/features/projects/projectHelpers';
 import { ClientStatusPanel } from '@/features/projects/ClientStatusPanel';
+import { ApprovalHistory } from '@/features/projects/ApprovalHistory';
 import { tokens } from '@/theme/tokens';
 import { TOUCH } from '@/theme/media';
 import type { DevTaskStatus, Project } from '@/types';
@@ -90,6 +91,7 @@ export default function DevDashboardPage() {
             <SectionTitle title="お客様の承認待ち・対応状況" icon={<UserRound size={18} color={tokens.color.muted} />} />
             <Stack spacing={2}>
               {demo && <ClientStatusPanel />}
+              {demo && <ApprovalHistory projectId={demo.id} siteName={demo.siteName} />}
               {others.length > 0 && (
                 <Surface data-testid="dev-other-approvals">
                   <Typography variant="body2" component="h3" sx={{ fontWeight: 700 }}>{demo ? 'ほかの担当案件' : '担当案件'}</Typography>

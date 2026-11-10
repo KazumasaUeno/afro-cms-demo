@@ -93,8 +93,9 @@ function log(state: DemoState, text: string, kind: Activity['kind'], actor: stri
 }
 
 function approval(state: DemoState, side: 'afro' | 'client', action: string, target: string, actor: string = ACTOR[side]): DemoState {
-  const l: ApprovalLog = { id: uid('log'), at: nowIso(), actor, side, action, target };
-  return { ...state, approvalLogs: [l, ...state.approvalLogs].slice(0, 100) };
+  // 承認の記録は後で示す証跡なので件数で消さない。承認の対象（要件・制作・品質・CMS）はデモのデータを持つ案件のもの
+  const l: ApprovalLog = { id: uid('log'), at: nowIso(), actor, side, action, target, projectId: state.requirements.projectId };
+  return { ...state, approvalLogs: [l, ...state.approvalLogs] };
 }
 
 /**

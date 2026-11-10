@@ -15,6 +15,7 @@ import { tokens } from '@/theme/tokens';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { nextBestAction, qualityCompletion, STAGE_LINKS, stagePrimaryRoute } from './projectHelpers';
 import { ClientStatusPanel } from './ClientStatusPanel';
+import { ApprovalHistory } from './ApprovalHistory';
 
 function Fact({ label, value, ok }: { label: string; value: ReactNode; ok?: boolean }) {
   return (
@@ -232,6 +233,7 @@ export default function ProjectDetailPage() {
           <Box sx={{ mt: { xs: 3, md: 4 } }}><ClientStatusPanel /></Box>
         </Reveal>
       )}
+      <Box sx={{ mt: { xs: 3, md: 4 } }}><ApprovalHistory projectId={p.id} siteName={p.siteName} /></Box>
     </Box>
   );
 }
