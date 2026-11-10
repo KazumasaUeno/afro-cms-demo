@@ -18,6 +18,8 @@ export interface ClientApprovalRow {
   /** 承認した人（アクティビティに残っているときだけ）。アフロが代わりに承認したかどうか */
   byAfro?: boolean;
   progress?: { done: number; total: number };
+  /** locked のときの理由 */
+  lockedReason?: string;
   /** 管理者画面で開く先 */
   to: string;
 }
@@ -59,7 +61,7 @@ export function clientStatus(state: DemoState): ClientStatus {
       ? state.activities.find((a) => a.kind === 'approve' && a.text === text && a.projectId === req.projectId)
       : undefined;
     return {
-      key: s.key, title: s.title, status: s.status, approvedAt: s.approvedAt, progress: s.progress, to: ADMIN_ROUTE[s.key],
+      key: s.key, title: s.title, status: s.status, approvedAt: s.approvedAt, progress: s.progress, lockedReason: s.lockedReason, to: ADMIN_ROUTE[s.key],
       byAfro: act ? act.actor !== ACTOR.client : undefined,
     };
   });

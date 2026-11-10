@@ -233,6 +233,8 @@ export default function SitemapPage() {
   const toast = useToast();
   const [variant, setVariant] = useState<SitemapVariant>('after');
   const approvedAt = state.sitemap.approvedAt;
+  // ウォーターフォール: 要件定義書の承認が先
+  const reqApproved = state.requirements.status === 'approved';
 
   return (
     <Box>
@@ -251,9 +253,12 @@ export default function SitemapPage() {
               <Button variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate('/ai-studio/design')}>デザインへ進む</Button>
             </>
           ) : (
-            <Button variant="contained" startIcon={<CheckCircle2 size={16} />} onClick={() => { dispatch({ type: 'approveSitemap' }); toast('改善後のサイトマップを承認しました'); }}>
-              改善後のサイトマップを承認
-            </Button>
+            <Stack alignItems={{ xs: 'stretch', sm: 'flex-end' }} spacing={0.5}>
+              <Button variant="contained" startIcon={<CheckCircle2 size={16} />} disabled={!reqApproved} onClick={() => { dispatch({ type: 'approveSitemap' }); toast('改善後のサイトマップを承認しました'); }}>
+                改善後のサイトマップを承認
+              </Button>
+              {!reqApproved && <Typography variant="caption">要件定義書の承認の後に承認できます</Typography>}
+            </Stack>
           )
         }
       />

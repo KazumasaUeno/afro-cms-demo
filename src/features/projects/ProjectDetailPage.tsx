@@ -43,7 +43,7 @@ function NotFound() {
   );
 }
 
-/** プロジェクト詳細（5段階のパイプライン） */
+/** プロジェクト詳細（ヘッダーの直下に5段階のパイプライン、その下にお客様の対応状況） */
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
   const { state, dispatch } = useDemo();
@@ -157,12 +157,6 @@ export default function ProjectDetailPage() {
         </Surface>
       </Reveal>
 
-      {isDemo && (
-        <Reveal delay={0.03}>
-          <Box sx={{ mb: { xs: 3, md: 4 } }}><ClientStatusPanel /></Box>
-        </Reveal>
-      )}
-
       <Typography variant="h3" component="h2" sx={{ mb: 0.5 }}>制作の5段階</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
         作る「まえ」「なか」「あと」をひとつの流れで管理します。各段階から関連する作業画面を開けます。
@@ -200,6 +194,10 @@ export default function ProjectDetailPage() {
                       <CheckCircle2 size={16} color={tokens.color.success} style={{ flexShrink: 0, marginTop: 2 }} />
                       <Typography sx={{ fontSize: 13, lineHeight: 1.5, color: tokens.color.inkSoft }}>この段階は完了しています</Typography>
                     </Stack>
+                  ) : !active ? (
+                    <Typography variant="caption" sx={{ display: 'block', py: 0.75, borderTop: `1px solid ${tokens.color.border}` }}>
+                      前の段階が終わると始まります
+                    </Typography>
                   ) : isDemo ? (
                     <Box>{facts[s.id]}</Box>
                   ) : (
@@ -227,6 +225,13 @@ export default function ProjectDetailPage() {
           );
         })}
       </Box>
+
+      {/* プロジェクト全体（ヘッダー）→ 制作の段階 → お客様の対応状況の順に、全体像から細部へ */}
+      {isDemo && (
+        <Reveal delay={0.03}>
+          <Box sx={{ mt: { xs: 3, md: 4 } }}><ClientStatusPanel /></Box>
+        </Reveal>
+      )}
     </Box>
   );
 }

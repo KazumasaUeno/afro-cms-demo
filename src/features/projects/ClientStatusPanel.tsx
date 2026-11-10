@@ -87,7 +87,7 @@ export function ClientStatusPanel({ compact = false }: { compact?: boolean }) {
           const color = a.status === 'approved' ? tokens.color.success : a.status === 'waiting' ? tokens.color.warning : tokens.color.faint;
           const detail = a.status === 'approved'
             ? `${formatDateTime(a.approvedAt)}${a.byAfro === true ? '・アフロが代わりに承認' : a.byAfro === false ? '・お客様が承認' : ''}`
-            : a.progress ? `お客様のチェック ${a.progress.done} / ${a.progress.total} 項目` : a.status === 'locked' ? 'アフロが要件定義書を作成中（できたらお客様に承認をお願いします）' : '';
+            : a.status === 'locked' ? (a.lockedReason ?? '') : a.progress ? `お客様のチェック ${a.progress.done} / ${a.progress.total} 項目` : '';
           return (
             <Box component="li" key={a.key}>
               <ButtonBase

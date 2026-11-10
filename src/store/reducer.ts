@@ -5,6 +5,7 @@ import type {
 import { QUALITY_CATEGORIES, QUALITY_ITEMS } from '@/data/quality';
 import { nowIso } from '@/services/time';
 import { createSeedState } from './seed';
+import { syncDemoProject } from './demoProject';
 import { DEV_ENVS, DEV_TASK_STATUSES, DEV_USER_ID, deployGate, seedDev } from '@/data/dev';
 import { memberById } from '@/data/members';
 import { devUsersState, personById } from '@/data/people';
@@ -97,6 +98,7 @@ function approval(state: DemoState, side: 'afro' | 'client', action: string, tar
 }
 
 /**
+ * 承認などで、データの持ち主の案件の更新日時を進める（段階・進捗は syncDemoProject が導く）。
  * 要件・サイトマップ・デザインのデータは 1 案件分（requirements.projectId）だけ持つ。
  * それらの承認で進める案件は、画面で選んでいる案件ではなくデータの持ち主にする
  */
@@ -109,8 +111,6 @@ function patchOwner(state: DemoState, patch: Partial<Project>): DemoState {
 }
 
 const modeOfReq = (state: DemoState): RequirementMode => state.requirements.mode ?? 'shared';
-
-const ownerProject = (state: DemoState): Project => state.projects.find((p) => p.id === state.requirements.projectId) ?? currentProject(state);
 
 const STATUS_LABEL: Record<PageStatus, string> = { draft: '下書き保存', review: '承認依頼', scheduled: '予約公開', published: '公開' };
 
@@ -126,7 +126,12 @@ function withStatus(page: CmsPage, status: PageStatus, scheduledAt?: string): Cm
   };
 }
 
+/** 段階・進捗・次の作業・承認待ちの数は、patchOwner で書かず syncDemoProject がデモのデータから導く */
 export function reducer(state: DemoState, action: Action): DemoState {
+  return syncDemoProject(baseReducer(state, action));
+}
+
+function baseReducer(state: DemoState, action: Action): DemoState {
   switch (action.type) {
     case 'reset':
       return createSeedState();
@@ -189,22 +194,24 @@ export function reducer(state: DemoState, action: Action): DemoState {
       if (state.requirements.status !== 'analyzed' || pendingConfirmations(state.requirements).length > 0) return state;
       const s = patchOwner(
         { ...state, requirements: { ...state.requirements, status: 'approved', approvedAt: nowIso() } },
-        { stage: 'build', progress: Math.max(25, ownerProject(state).progress), nextAction: 'サイトマップを承認する' },
+        {},
       );
       // 承認の記録には実際に操作した人を残す（アフロが代わりに承認した場合はアフロの名前）
       return log(approval(s, 'client', '要件定義書を承認', '要件定義', ACTOR[action.by ?? 'afro']), APPROVE_TEXT.requirements, 'approve', ACTOR[action.by ?? 'afro'], state.requirements.projectId);
     }
 
     case 'resetRequirements':
+      // 承認後はやり直せない（後ろの段階の承認が残り、表示が食い違うため。回答の変更を止めるのと同じ方針）
+      if (state.requirements.status === 'approved') return state;
       return { ...state, requirements: { ...createSeedState().requirements, mode: state.requirements.mode } };
 
     case 'setSitemap':
       return { ...state, sitemap: { ...state.sitemap, [action.variant]: { nodes: action.nodes, edges: action.edges } } };
 
     case 'approveSitemap': {
-      const s = patchOwner({ ...state, sitemap: { ...state.sitemap, approvedAt: nowIso() } }, {
-        progress: Math.max(38, ownerProject(state).progress), nextAction: 'デザイン案の採用を決める',
-      });
+      // ウォーターフォール: 要件定義書の承認の後だけ（画面でも止めている）
+      if (state.requirements.status !== 'approved' || state.sitemap.approvedAt) return state;
+      const s = patchOwner({ ...state, sitemap: { ...state.sitemap, approvedAt: nowIso() } }, {});
       return log(approval(s, 'client', 'サイトマップを承認', '制作 / サイトマップ', ACTOR[action.by ?? 'afro']), APPROVE_TEXT.sitemap, 'approve', ACTOR[action.by ?? 'afro'], state.requirements.projectId);
     }
 
@@ -212,20 +219,18 @@ export function reducer(state: DemoState, action: Action): DemoState {
       return { ...state, design: { ...state.design, selected: action.id } };
 
     case 'approveDesign': {
-      if (!state.design.selected) return state;
-      const s = patchOwner({ ...state, design: { ...state.design, approvedAt: nowIso() } }, {
-        progress: Math.max(52, ownerProject(state).progress), nextAction: '全ページを構築する',
-      });
+      if (!state.design.selected || !state.sitemap.approvedAt) return state;
+      const s = patchOwner({ ...state, design: { ...state.design, approvedAt: nowIso() } }, {});
       return log(approval(s, 'client', 'トップデザインを承認', `制作 / デザイン（${state.design.selected}）`, ACTOR[action.by ?? 'afro']), APPROVE_TEXT.design, 'approve', ACTOR[action.by ?? 'afro'], state.requirements.projectId);
     }
 
     case 'startBuild':
+      if (!state.design.approvedAt) return state;
       return { ...state, design: { ...state.design, buildStartedAt: nowIso() } };
 
     case 'completeBuild': {
-      const s = patchOwner({ ...state, design: { ...state.design, buildCompletedAt: nowIso() } }, {
-        stage: 'quality', progress: Math.max(64, ownerProject(state).progress), nextAction: '品質チェック（110問）を進める',
-      });
+      if (!state.design.approvedAt) return state;
+      const s = patchOwner({ ...state, design: { ...state.design, buildCompletedAt: nowIso() } }, {});
       return log(s, '採用デザインをもとに全 9 ページを構築しました（シミュレーション）', 'ai', 'AI', state.requirements.projectId);
     }
 

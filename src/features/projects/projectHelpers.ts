@@ -27,11 +27,18 @@ export function qualityCompletion(checks: Record<string, QualityCheck>): { done:
 /** 作業中プロジェクトで、次に取るべき行動（制作フローの未承認の最初の段階） */
 export function nextBestAction(state: DemoState): { title: string; detail: string; to: string; cta: string } {
   const q = qualityCompletion(state.qualityChecks);
-  if (state.requirements.status !== 'approved') {
+  if (state.requirements.status === 'draft') {
     return {
-      title: 'AI要件定義で、課題と目的を整理しましょう',
-      detail: 'URLと課題を入力するだけで、AIが現行サイトを分析し、改善提案書のたたき台を作ります。',
-      to: '/ai-studio', cta: 'AI要件定義を始める',
+      title: 'ヒアリングを入力して、課題と目的を整理しましょう',
+      detail: '回答がそろったら AI が現行サイトを分析し、要件定義書（改善提案書）のたたき台を作ります。',
+      to: '/ai-studio', cta: 'ヒアリングを入力する',
+    };
+  }
+  if (state.requirements.status === 'analyzed') {
+    return {
+      title: '要件定義書ができました。お客様の承認をもらいましょう',
+      detail: '承認をもらうと、サイトマップの作成へ進めます。',
+      to: '/ai-studio', cta: '要件定義書を確認する',
     };
   }
   if (!state.sitemap.approvedAt) {

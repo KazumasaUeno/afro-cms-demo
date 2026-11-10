@@ -245,9 +245,11 @@ export default function DesignStudioPage() {
             <Box sx={{ width: 48, height: 48, borderRadius: 3, bgcolor: tokens.color.primarySoft, color: tokens.color.primary, display: { xs: 'none', md: 'grid' }, placeItems: 'center', flexShrink: 0 }}><LayoutTemplate size={22} /></Box>
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography variant="h4" component="h2" sx={{ fontSize: { xs: 16, md: undefined } }}>{current.label}「{current.name}」を採用しますか？</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>採用すると承認の記録が残り、このデザインで全ページを構築できます。</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
+                {state.sitemap.approvedAt ? '採用すると承認の記録が残り、このデザインで全ページを構築できます。' : 'サイトマップの承認の後に採用できます（案の比較はできます）。'}
+              </Typography>
             </Box>
-            <Button size="large" variant="contained" startIcon={<Check size={18} />} onClick={adoptCurrent}
+            <Button size="large" variant="contained" startIcon={<Check size={18} />} onClick={adoptCurrent} disabled={!state.sitemap.approvedAt}
               sx={{ flexShrink: 0, minHeight: 48, [TOUCH]: { minHeight: 48 }, width: { xs: '100%', md: 'auto' } }}>
               この案を採用して承認
             </Button>

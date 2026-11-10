@@ -3,6 +3,7 @@ import type { DemoState } from '@/types';
 import { loadJson, removeKey, saveJson, STORAGE_KEY } from '@/services/storage';
 import { createSeedState, isDemoState } from './seed';
 import { reducer, type Action } from './reducer';
+import { syncDemoProject } from './demoProject';
 
 interface StoreValue {
   state: DemoState;
@@ -13,7 +14,8 @@ interface StoreValue {
 const StoreContext = createContext<StoreValue | null>(null);
 
 function init(): DemoState {
-  return loadJson(STORAGE_KEY, isDemoState) ?? createSeedState();
+  // 保存済みのデータに古い進捗が残っていても、デモのデータに合わせ直す
+  return syncDemoProject(loadJson(STORAGE_KEY, isDemoState) ?? createSeedState());
 }
 
 export function DemoStoreProvider({ children }: { children: ReactNode }) {

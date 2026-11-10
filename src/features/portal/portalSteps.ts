@@ -33,6 +33,7 @@ export function hearingTodo(state: DemoState): { unanswered: number; toConfirm: 
 /**
  * お客様が承認する 4 つの節目（資料: 要件定義書 → サイトマップ → トップデザイン → 品質チェック）。
  * 状態は store の既存の値から導く（ポータル専用の状態は持たない）。
+ * ウォーターフォールなので、前の節目が終わるまで次は locked（お客様の確認待ちにしない）。
  */
 export function approvalSteps(state: DemoState): ApprovalStep[] {
   const req = state.requirements;
@@ -50,15 +51,18 @@ export function approvalSteps(state: DemoState): ApprovalStep[] {
     },
     {
       key: 'sitemap', no: 2, title: 'サイトマップ', ask: 'リニューアル後のページ構成をご確認ください',
-      status: state.sitemap.approvedAt ? 'approved' : 'waiting', approvedAt: state.sitemap.approvedAt,
+      status: state.sitemap.approvedAt ? 'approved' : req.status === 'approved' ? 'waiting' : 'locked', approvedAt: state.sitemap.approvedAt,
+      lockedReason: '要件定義書の承認のあとに、アフロがサイトマップを作成します。',
     },
     {
       key: 'design', no: 3, title: 'トップデザイン', ask: '3 つの案から採用するデザインを選んでください',
-      status: state.design.approvedAt ? 'approved' : 'waiting', approvedAt: state.design.approvedAt,
+      status: state.design.approvedAt ? 'approved' : state.sitemap.approvedAt ? 'waiting' : 'locked', approvedAt: state.design.approvedAt,
+      lockedReason: 'サイトマップの承認のあとに、アフロがデザイン案を作成します。',
     },
     {
       key: 'quality', no: 4, title: '品質チェック', ask: '公開前の確認項目をチェックしてください',
-      status: clientDone === total ? 'approved' : 'waiting',
+      status: clientDone === total ? 'approved' : state.design.buildCompletedAt ? 'waiting' : 'locked',
+      lockedReason: '全ページの構築が終わると、公開前の確認をお願いします。',
       approvedAt: clientDone === total ? lastClientAt : undefined,
       progress: { done: clientDone, total },
     },

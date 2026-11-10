@@ -17,7 +17,8 @@ import { pendingConfirmations } from '@/features/requirements/assignment';
 
 const AREA = AREAS.portal;
 
-function StepCard({ step, children, action }: { step: ApprovalStep; children?: ReactNode; action?: ReactNode }) {
+/** keepWhenLocked: 準備中でも中身を出す（要件定義書はデモの進め方の案内を出すため）。それ以外は前の節目が終わるまで中身を出さない */
+function StepCard({ step, children, action, keepWhenLocked = false }: { step: ApprovalStep; children?: ReactNode; action?: ReactNode; keepWhenLocked?: boolean }) {
   const approved = step.status === 'approved';
   const locked = step.status === 'locked';
   return (
@@ -42,7 +43,7 @@ function StepCard({ step, children, action }: { step: ApprovalStep; children?: R
           <StatusPill tone="neutral">準備中</StatusPill>
         ) : action}
       </Stack>
-      {children}
+      {(!locked || keepWhenLocked) && children}
     </Surface>
   );
 }
@@ -117,7 +118,7 @@ export default function PortalApprovalsPage() {
       <Stack spacing={{ xs: 2, md: 2.5 }}>
         {/* 1. 要件定義書 */}
         <Reveal>
-          <StepCard step={byKey.requirements} action={approveBtn('requirements', pending.length > 0)}>
+          <StepCard step={byKey.requirements} action={approveBtn('requirements', pending.length > 0)} keepWhenLocked>
             {byKey.requirements.status === 'waiting' && pending.length > 0 && (
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }} role="status" sx={{ mb: 2, px: 1.5, py: 1, borderRadius: 2, bgcolor: tokens.color.warningSoft }}>
                 <Typography variant="caption" sx={{ flex: 1, color: '#8A5402', fontWeight: 650 }}>

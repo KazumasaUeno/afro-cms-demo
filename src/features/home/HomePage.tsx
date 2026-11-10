@@ -14,6 +14,7 @@ import { tokens } from '@/theme/tokens';
 import { TOUCH } from '@/theme/media';
 import { nextBestAction, stageLabel, stagePrimaryRoute } from '@/features/projects/projectHelpers';
 import { ClientStatusPanel } from '@/features/projects/ClientStatusPanel';
+import { approvalSteps } from '@/features/portal/portalSteps';
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -63,12 +64,12 @@ export default function HomePage() {
   /** 承認待ち: デモ状態から導いたもの＋他プロジェクトの承認件数 */
   const approvals = useMemo(() => {
     const list: { id: string; title: string; sub: string; to: string; projectId: string; color: string }[] = [];
-    if (!state.design.approvedAt) {
-      list.push({ id: 'design', title: 'トップデザイン案の採用', sub: `${project.siteName}・制作`, to: '/ai-studio/design', projectId: project.id, color: tokens.color.info });
-    }
-    if (!state.sitemap.approvedAt) {
-      list.push({ id: 'sitemap', title: '改善後サイトマップの承認', sub: `${project.siteName}・制作`, to: '/site', projectId: project.id, color: tokens.color.primary });
-    }
+    // デモの案件はお客様の承認の節目（ウォーターフォール。前が終わるまで locked）から作る。件数（pendingApprovals）と同じ数え方
+    const titles = { requirements: '要件定義書の承認', sitemap: '改善後サイトマップの承認', design: 'トップデザイン案の採用', quality: '品質チェック（お客様）' } as const;
+    const routes = { requirements: '/ai-studio', sitemap: '/site', design: '/ai-studio/design', quality: '/quality' } as const;
+    approvalSteps(state).filter((s) => s.status === 'waiting').forEach((s) => {
+      list.push({ id: s.key, title: titles[s.key], sub: `${project.siteName}・${s.key === 'requirements' ? '要件定義' : s.key === 'quality' ? '品質管理' : '制作'}`, to: routes[s.key], projectId: project.id, color: tokens.color.primary });
+    });
     state.pages
       .filter((p) => p.status === 'review')
       .forEach((p) => list.push({ id: p.id, title: `「${p.title}」の公開承認`, sub: `${project.siteName}・ページ公開`, to: '/portal/publish', projectId: project.id, color: tokens.color.warning }));
@@ -76,7 +77,7 @@ export default function HomePage() {
       .filter((p) => p.id !== project.id && p.pendingApprovals > 0)
       .forEach((p) => list.push({ id: p.id, title: p.nextAction, sub: `${p.siteName}・${stageLabel(p.stage)}（${p.pendingApprovals}件）`, to: stagePrimaryRoute(p.stage), projectId: p.id, color: tokens.color.warning }));
     return list.slice(0, 5);
-  }, [state.design.approvedAt, state.sitemap.approvedAt, state.pages, state.projects, project]);
+  }, [state, project]);
 
   /** 次回のAI改善診断（公開後4か月ごと）。デモ用に段階から日付を導く */
   const diagnosisPlan = useMemo(

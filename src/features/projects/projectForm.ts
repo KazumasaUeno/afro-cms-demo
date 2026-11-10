@@ -22,7 +22,7 @@ export type ProjectField = keyof ProjectDraft;
 
 export const PROJECT_LIMITS = { clientName: 40, siteName: 40, industry: 20, nextAction: 40 } as const;
 
-export const DEFAULT_NEXT_ACTION = 'AI要件定義を始める';
+export const DEFAULT_NEXT_ACTION = 'ヒアリングを入力する';
 
 export const INDUSTRY_SUGGESTIONS = ['飲食・EC', '建設・不動産', '医療', 'ブライダル', '製造業', '教育・NPO', '美容・サロン', '士業・コンサル'];
 
