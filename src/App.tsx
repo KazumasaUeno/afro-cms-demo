@@ -23,7 +23,6 @@ const UsersPage = lazy(() => import('@/features/users/UsersPage'));
 const PublishApprovalsPage = lazy(() => import('@/features/portal/PublishApprovalsPage'));
 const DevDashboardPage = lazy(() => import('@/features/dev/DevDashboardPage'));
 const DevTasksPage = lazy(() => import('@/features/dev/DevTasksPage'));
-const DevChecksPage = lazy(() => import('@/features/dev/DevChecksPage'));
 const DevDeploysPage = lazy(() => import('@/features/dev/DevDeploysPage'));
 const PortalHomePage = lazy(() => import('@/features/portal/PortalHomePage'));
 const PortalApprovalsPage = lazy(() => import('@/features/portal/PortalApprovalsPage'));
@@ -64,7 +63,8 @@ const router = createBrowserRouter([
       { path: 'portal/publish', element: <PublishApprovalsPage /> },
       { path: 'dev', element: <DevDashboardPage /> },
       { path: 'dev/tasks', element: <DevTasksPage /> },
-      { path: 'dev/checks', element: <DevChecksPage /> },
+      // 自動チェックは 0.19.0 で開発者画面から外した（11/10 レビュー）。古いリンク・ブックマークはダッシュボードへ
+      { path: 'dev/checks', element: <Navigate to="/dev" replace /> },
       { path: 'dev/deploys', element: <DevDeploysPage /> },
       { path: 'portal', element: <PortalHomePage /> },
       // お客様ポータルのヒアリングは 0.18.0 で廃止（アフロが入力する）。古いリンク・ブックマークは確認・承認へ

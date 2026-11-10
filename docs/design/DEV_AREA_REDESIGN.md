@@ -1,5 +1,7 @@
 # 開発者画面 デザイン改善仕様（/dev 配下）
 
+> 0.19.0（2026-11-10）で「自動チェック」（`/dev/checks`・DevChecksPage）は廃止し、ダッシュボードは「担当案件」中心に変えた。以下の該当箇所は当時の記録。
+
 - 作成: 2026-11-06 ui-ux-designer ／ 実装: frontend-engineer
 - 対象: `src/features/dev/*.tsx`・`devUi.ts`（必要最小限で `src/data/dev.ts` の関数戻り値のみ）
 - 前提: ライトテーマ・既存トークン（`src/theme/tokens.ts`）・既存部品（`src/components/ui`）のまま。**依存追加なし。データ構造（`DevState` / `Deploy` / `DevTask`）は変更しない**

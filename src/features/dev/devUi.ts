@@ -52,6 +52,5 @@ export function nextDevAction(dev: DevState, designApproved: boolean, userId: st
   }
   const review = dev.tasks.filter((t) => t.assigneeId === userId && t.status === 'review').length;
   if (review > 0) return { title: `レビュー待ちが ${review} 件あります`, cta: 'タスクを見る', to: '/dev/tasks' };
-  if (!dev.checksRunAt) return { title: '自動チェックがまだです', cta: '自動チェックを実行する', to: '/dev/checks' };
   return { title: '今すぐ対応が必要なものはありません' };
 }

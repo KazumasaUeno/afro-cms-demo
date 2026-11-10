@@ -273,8 +273,8 @@ function AnimatedOutlet({ dev }: { dev: boolean }) {
         style={{ minWidth: 0 }}
       >
         {/* 遅延読み込み（画面のコード取得）が長引いた場合も同じローディング画面を出す */}
-        {/* 開発者画面は、担当のプロジェクトのときだけ中身を出す */}
-        {loading ? loader : <Suspense fallback={loader}>{dev ? <DevProjectGate>{outlet}</DevProjectGate> : outlet}</Suspense>}
+        {/* 開発者画面は、担当のプロジェクトのときだけ中身を出す。ダッシュボード（/dev）は担当案件の一覧を先に出すので、ページの中で分ける */}
+        {loading ? loader : <Suspense fallback={loader}>{dev && pathname.replace(/\/+$/, '') !== '/dev' ? <DevProjectGate>{outlet}</DevProjectGate> : outlet}</Suspense>}
       </motion.div>
     </AnimatePresence>
   );
