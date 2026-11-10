@@ -914,3 +914,282 @@ src/repositories/
 | Low-1 | 開発者が読める accounts | 自分の担当案件の memberUids に含まれる人と、アフロ社内（admin / dev）の氏名だけ。他案件のお客様の accounts は読めない | lead-architect |
 
 §26 の M-1〜M-12 はすべて実装計画（`docs/design/BACKEND_PLAN.md`）に入れる。M-1〜M-5 は Rules テストで拒否を確かめるまで live を公開しない。
+
+## 28. 承認・遷移の Rules 式（A0）
+
+- 作成: database-engineer 2026-11-10。状態: **security-engineer のレビュー待ち（A2 の前）**。§8 の骨子に対する**差し替え・追加**で、ここに書いた式が §8 より優先する
+- 対象: M-1 / M-2 / M-3 / M-4 / M-5 / M-8 / M-11、§27 Low-1 / Low-2、§13.4 の UNKNOWN（Auth の永続化）
+- 構文はエミュレータで未検証（A1 の時点の `firestore.rules` は全拒否のプレースホルダ）。A2 で実装し、§26.5 SEC-1〜7 と §16.3 で拒否を件数つきで確かめる
+
+### 28.1 共通関数（§8 の置き換え）
+
+```
+function authed()  { return request.auth != null && request.auth.token.email_verified == true; }
+function me()      { return /databases/$(db)/documents/accounts/$(request.auth.uid); }
+function acct()    { return get(me()).data; }
+// M-8: accounts.email と token.email の一致を毎回要求（Auth 側でメールを変えたら全権限を失う）
+function active()  { return authed() && exists(me()) && acct().status == 'active'
+                         && acct().email == request.auth.token.email; }
+function isAdmin() { return active() && acct().role == 'admin'; }
+function isDev()   { return active() && acct().role == 'developer'; }
+function isClient(){ return active() && acct().role == 'client'; }
+function projPath(pid)     { return /databases/$(db)/documents/projects/$(pid); }
+function reqPath(pid)      { return /databases/$(db)/documents/projects/$(pid)/requirements/current; }
+function apprPath(pid, id) { return /databases/$(db)/documents/projects/$(pid)/approvals/$(id); }
+function proj(pid)         { return get(projPath(pid)).data; }
+function assigned(pid)     { return isDev() && request.auth.uid in proj(pid).memberUids; }
+// projects/{pid} の中では自分自身を get しない（get の回数を節約）
+function assignedHere()    { return isDev() && request.auth.uid in resource.data.memberUids; }
+function clientOf(pid)     { return isClient() && acct().projectId == pid; }
+function canRead(pid)      { return isAdmin() || assigned(pid) || clientOf(pid); }
+function changed()  { return request.resource.data.diff(resource.data).affectedKeys(); }
+function stamped()  { return request.resource.data.updatedAt == request.time
+                          && request.resource.data.updatedBy == request.auth.uid; }
+function str(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
+// 任意項目は「両方とも無い」も一致とみなす
+function optEq(d, b, k)   { return d.get(k, null) == b.get(k, null); }
+function approvalId(rev, action) { return 'requirements-r' + string(rev) + '-' + action; }
+```
+
+### 28.2 招待の受け取り（M-1: 全項目一致）
+
+```
+function invPath() { return /databases/$(db)/documents/invites/$(request.auth.token.email); }
+function claimOk(uid) {
+  let before = get(invPath()).data;
+  let after  = getAfter(invPath()).data;
+  let d = request.resource.data;
+  return authed() && request.auth.uid == uid
+    && before.status == 'invited' && after.status == 'claimed'
+    && after.claimedBy == uid && after.claimedAt == request.time
+    // 招待からの写し: role・name と任意 5 項目をすべて招待と一致で強制（証跡の actorName を偽れない）
+    && d.role == before.role && d.name == before.name
+    && optEq(d, before, 'company') && optEq(d, before, 'projectId')
+    && optEq(d, before, 'affiliation') && optEq(d, before, 'partnerCompany') && optEq(d, before, 'devRole')
+    // 本人とサーバーが決める値
+    && d.schemaVersion == 1 && d.status == 'active'
+    && d.email == request.auth.token.email
+    && d.activatedAt == request.time && d.updatedAt == request.time && d.updatedBy == uid
+    && d.keys().hasAll(['schemaVersion','role','status','email','name','activatedAt','updatedAt','updatedBy'])
+    && d.keys().hasOnly(['schemaVersion','role','status','email','name','company','projectId',
+                         'affiliation','partnerCompany','devRole','activatedAt','updatedAt','updatedBy']);
+}
+```
+
+- `disabledAt` は create で持てない（hasOnly に無い）。`invites` 側の update 分岐（§8）はそのまま。両方が同じバッチで互いを `getAfter` / `existsAfter` で確かめる
+- **大文字混在メール**: `invPath()` は `token.email` をそのまま使う。Auth が小文字化しない場合は招待文書が見つからず拒否になる（安全側に倒れる）。小文字化の有無は A2 のエミュレータで確認（SEC-6）。小文字化されないなら、アプリが登録前に入力を小文字化し、Rules は変えない
+
+### 28.3 accounts の更新・読み取り（M-5、§27 Low-1）
+
+```
+match /accounts/{uid} {
+  allow get: if (authed() && request.auth.uid == uid)   // 自分（disabled でも自分の状態は読める＝理由の表示用）
+             || isAdmin()
+             || (isDev() && resource.data.role in ['admin','developer'])          // 社内・開発者の氏名
+             || (isDev() && resource.data.role == 'client'
+                         && assigned(resource.data.projectId));                   // 担当案件のお客様だけ
+  allow list: if isAdmin()
+              || (isDev() && resource.data.role == 'client' && assigned(resource.data.projectId));
+              // 開発者のクエリは where('role','==','client') と where('projectId','==',pid) の両方が必須
+  allow create: if claimOk(uid);
+  allow update: if isAdmin() && uid != request.auth.uid
+                && resource.data.role != 'admin'                                  // M-5: admin は admin を変えられない
+                && changed().hasOnly(['status','disabledAt','name','devRole','updatedAt','updatedBy'])
+                && request.resource.data.status in ['active','disabled']
+                && str(request.resource.data.name, 1, 40)
+                && (!request.resource.data.keys().hasAny(['devRole']) || str(request.resource.data.devRole, 1, 40))
+                && (!changed().hasAny(['status','disabledAt'])
+                    || (request.resource.data.status == 'disabled' && request.resource.data.disabledAt == request.time)
+                    || (request.resource.data.status == 'active' && !changed().hasAny(['disabledAt'])))
+                && stamped();
+  allow delete: if false;
+}
+```
+
+- M-5: admin の無効化・改名は **Console の運用手順だけ**（Runbook。C2）
+- **Low-1 との差（レビューで判断してほしい点）**: §27 は「担当案件の memberUids の人と社内の氏名」。Rules は `accounts/{uid}` の get で「どの案件の memberUids か」を知る手段が無い（案件 ID がパスにも開発者の文書にも無い）。上の式は **admin と開発者（社内・協力会社とも）は全員読める／お客様は担当案件の人だけ**。協力会社の開発者どうしが他案件でも氏名・メール・所属会社を読める点が残る。塞ぐなら (a) `projects` に `memberNames` を持つ（重複データ。DBA 判断）か、(b) 協力会社の開発者が読めるのは `affiliation == 'internal'` の人と自分だけにする
+- 開発者の list に `assigned(resource.data.projectId)` を使う式は、クエリの等価条件から値が決まる場合に評価できる想定 [INFERENCE]。A2 で確認し、駄目なら案件のお客様は get のみにする
+
+### 28.4 projects の更新（M-2・M-3・Low-2）
+
+```
+allow update: if stamped() && (
+     // admin: アサインだけ（Low-2: archived は書けない）
+     (isAdmin() && changed().hasOnly(['memberUids','updatedAt','updatedBy'])
+        && request.resource.data.memberUids is list && request.resource.data.memberUids.size() <= 20)
+     // 開発者: 基本情報
+  || (assignedHere() && changed().hasOnly(['clientName','siteName','industry','accent','launchDate','updatedAt','updatedBy'])
+        && validProject(request.resource.data))
+     // 開発者: アーカイブ／解除（Low-2）
+  || (assignedHere() && changed().hasOnly(['archived','updatedAt','updatedBy'])
+        && request.resource.data.archived is bool)
+     // 開発者: 確認依頼・差し戻し（M-3）
+  || (assignedHere() && changed().hasOnly(['requirements','updatedAt','updatedBy']) && devTransition(pid))
+     // お客様: 承認（M-2）
+  || (clientOf(pid) && changed().hasOnly(['requirements','updatedAt','updatedBy']) && clientApprove(pid))
+);
+
+// M-3: 開発者ができる遷移は 2 つだけ。approved への遷移・approved からの遷移はどの分岐にも無い
+function devTransition(pid) {
+  let b = resource.data.requirements;
+  let a = request.resource.data.requirements;
+  return
+    // submit: draft → analyzed（revision+1、提案と submit ログを同じバッチで）
+    (b.status == 'draft' && a.status == 'analyzed'
+      && a.revision == b.revision + 1
+      && a.analyzedAt == request.time
+      && a.keys().hasOnly(['status','revision','analyzedAt'])          // approvedAt / approvedBy / approvalId を持たせない
+      && a.diff(b).affectedKeys().hasOnly(['status','revision','analyzedAt'])
+      && getAfter(reqPath(pid)).data.proposalRevision == a.revision
+      && existsAfter(apprPath(pid, approvalId(a.revision, 'submit'))))
+    // withdraw: analyzed → draft（revision はそのまま。withdraw ログを同じバッチで）
+ || (b.status == 'analyzed' && a.status == 'draft'
+      && a.diff(b).affectedKeys().hasOnly(['status'])
+      && existsAfter(apprPath(pid, approvalId(b.revision, 'withdraw'))));
+}
+
+// M-2: お客様が変えられるのは 4 キーだけ
+function clientApprove(pid) {
+  let b = resource.data.requirements;
+  let a = request.resource.data.requirements;
+  return b.status == 'analyzed' && a.status == 'approved'
+    && a.diff(b).affectedKeys().hasOnly(['status','approvedAt','approvedBy','approvalId'])
+    && a.approvedAt == request.time && a.approvedBy == request.auth.uid
+    && a.approvalId == approvalId(b.revision, 'approve')
+    && existsAfter(apprPath(pid, a.approvalId));
+}
+```
+
+- approved を終端にする根拠: `devTransition` は事前 `draft` / `analyzed` だけ、`clientApprove` は事前 `analyzed` だけ、他の分岐は `requirements` を `hasOnly` に含まない → **approved からの更新はどの分岐も満たさない**（SEC-3 と §16.3「approved から draft→拒否」で確認）
+
+### 28.5 requirements/current（M-4・M-11）
+
+```
+match /requirements/current {
+  allow get: if canRead(pid);
+  // 案件作成と同じバッチでも作れるよう、事前状態ではなく getAfter で見る
+  allow create: if isDev() && request.auth.uid in getAfter(projPath(pid)).data.memberUids
+                && getAfter(projPath(pid)).data.requirements.status == 'draft'
+                && validReq(request.resource.data) && stamped();
+  allow update: if assigned(pid) && stamped() && (
+       // 回答: 事前も事後も draft（M-4: 同じバッチで analyzed へ進めながら回答を変えられない）
+       (proj(pid).requirements.status == 'draft'
+          && getAfter(projPath(pid)).data.requirements.status == 'draft'
+          && changed().hasOnly(['answers','answerMeta','updatedAt','updatedBy'])
+          && validAnswers(request.resource.data.answers)                       // §9.1 生成
+          && request.resource.data.answerMeta.keys().hasOnly(request.resource.data.answers.keys()))
+       // 提案: submit と同じバッチ（draft → analyzed）でだけ書ける
+    || (proj(pid).requirements.status == 'draft'
+          && getAfter(projPath(pid)).data.requirements.status == 'analyzed'
+          && changed().hasOnly(['proposal','proposalRevision','updatedAt','updatedBy'])
+          && request.resource.data.proposalRevision == getAfter(projPath(pid)).data.requirements.revision
+          && validProposal(request.resource.data.proposal))                    // M-11
+  );
+  allow delete: if false;
+}
+```
+
+### 28.6 approvals（M-3）
+
+```
+match /approvals/{aid} {
+  allow get, list: if canRead(pid);
+  allow create: if (clientOf(pid) && approveOk(pid, aid))
+                || (assigned(pid) && submitOrWithdrawOk(pid, aid));
+  allow update, delete: if false;
+}
+
+function actorOk(d) {
+  return d.schemaVersion == 1 && d.kind == 'requirements'
+    && d.actorUid == request.auth.uid && d.actorEmail == request.auth.token.email
+    && d.actorName == acct().name && d.at == request.time;
+}
+
+// お客様の承認（§8 に proposalRevision の一致と schemaVersion を追加）
+function approveOk(pid, aid) {
+  let b = proj(pid).requirements;
+  let r = get(reqPath(pid)).data;
+  let d = request.resource.data;
+  return actorOk(d) && d.action == 'approve' && d.side == 'client'
+    && b.status == 'analyzed' && getAfter(projPath(pid)).data.requirements.status == 'approved'
+    && d.revision == b.revision && aid == approvalId(b.revision, 'approve')
+    && r.proposalRevision == b.revision
+    && d.answers == r.answers && d.proposal == r.proposal
+    && d.keys().hasOnly(['schemaVersion','kind','action','revision','side','actorUid','actorName','actorEmail','at','answers','proposal']);
+}
+
+// M-3: 開発者が作れるのは submit / withdraw だけ、side は必ず 'afro'
+function submitOrWithdrawOk(pid, aid) {
+  let b = proj(pid).requirements;                       // 事前
+  let a = getAfter(projPath(pid)).data.requirements;    // 事後
+  let d = request.resource.data;
+  return actorOk(d) && d.side == 'afro' && (
+       (d.action == 'submit'
+          && b.status == 'draft' && a.status == 'analyzed' && a.revision == b.revision + 1
+          && d.revision == a.revision && aid == approvalId(a.revision, 'submit')
+          && d.answers == getAfter(reqPath(pid)).data.answers
+          && d.proposal == getAfter(reqPath(pid)).data.proposal
+          && d.keys().hasOnly(['schemaVersion','kind','action','revision','side','actorUid','actorName','actorEmail','at','answers','proposal']))
+    || (d.action == 'withdraw'
+          && b.status == 'analyzed' && a.status == 'draft'
+          && d.revision == b.revision && aid == approvalId(b.revision, 'withdraw')
+          && d.keys().hasOnly(['schemaVersion','kind','action','revision','side','actorUid','actorName','actorEmail','at','note'])
+          && (!d.keys().hasAny(['note']) || str(d.note, 0, 200)))
+  );
+}
+```
+
+- 3 つの書き込み（projects・requirements/current・approvals）の get / getAfter / exists の合計は、submit で約 10〜14 回 [INFERENCE]（`me()` の重複を 1 回と数えるかは §8 の UNKNOWN）。バッチ・トランザクションの上限 20 に収まるかを A2 で確かめる
+- 同じ ID の 2 回目は create にならない（既存文書への書き込みは update → `if false`）。§7.2 のとおり
+
+### 28.7 validProposal（M-11）
+
+`buildProposal.ts:16-27` の形（8 キー、`points` は最大 6 件。`:67`）を固定する。Rules にループが無いので `points` / `competitors` は添字ごとに書く（`||` の短絡評価で範囲外を読まない）。
+
+```
+function validPoint(p) {
+  return p is map
+    && p.keys().hasAll(['id','title','detail','priority','impact','area'])
+    && p.keys().hasOnly(['id','title','detail','priority','impact','area'])
+    && str(p.id, 1, 40) && str(p.title, 1, 80) && str(p.detail, 1, 600)
+    && p.priority in ['high','medium','low'] && str(p.impact, 1, 200) && str(p.area, 1, 40);
+}
+function validProposal(p) {
+  return p is map
+    && p.keys().hasAll(['hostname','issue','purposes','improves','competitors','currentScore','projectedScore','points'])
+    && p.keys().hasOnly(['hostname','issue','purposes','improves','competitors','currentScore','projectedScore','points'])
+    && str(p.hostname, 1, 253) && str(p.issue, 0, 600)
+    && p.purposes is list && p.purposes.hasOnly([/* GEN: PURPOSE_OPTIONS */])
+    && p.improves is list && p.improves.hasOnly([/* GEN: IMPROVE_OPTIONS */])
+    && p.competitors is list && p.competitors.size() <= 3
+    && (p.competitors.size() < 1 || str(p.competitors[0], 1, 253))
+    && (p.competitors.size() < 2 || str(p.competitors[1], 1, 253))
+    && (p.competitors.size() < 3 || str(p.competitors[2], 1, 253))
+    && p.currentScore is number && p.currentScore >= 0 && p.currentScore <= 100
+    && p.projectedScore is number && p.projectedScore >= 0 && p.projectedScore <= 100
+    && p.points is list && p.points.size() <= 6
+    && (p.points.size() < 1 || validPoint(p.points[0]))
+    && (p.points.size() < 2 || validPoint(p.points[1]))
+    && (p.points.size() < 3 || validPoint(p.points[2]))
+    && (p.points.size() < 4 || validPoint(p.points[3]))
+    && (p.points.size() < 5 || validPoint(p.points[4]))
+    && (p.points.size() < 6 || validPoint(p.points[5]));
+}
+```
+
+- 選択肢の一覧は §9.1 の生成スクリプトで `src/data/requirements.ts` から差し込む（手書きしない）
+- 長さの上限: 現行 `PROPOSAL_LIBRARY` の最大は title 18・detail 48・impact 17・area 8 文字（2026-11-10 にソースから計測）。`detail` は先頭にホスト名が付く（`buildProposal.ts:69`）ので余裕を持たせた。生成スクリプトで「ライブラリの値が上限内」も検査する
+- 数値は `is number`（int / float どちらでも通す。JS の整数がどちらで送られるかに依存しない）
+- 表示側（M-11 の残り: 保存値も `esc()`、`blob:` で開かない、CSP）は B の担当
+
+### 28.8 Auth の永続化（§13.4 の UNKNOWN → 決定案）
+
+| 方式 | 評価 |
+|---|---|
+| `indexedDBLocalPersistence`（`getAuth()` の既定） | ブラウザを閉じても refresh token が残る。**共用 PC に残さない（§13.4）に反する** |
+| **`browserSessionPersistence`（sessionStorage）** | **採用案**。タブを閉じると消え、再読み込みでは維持される。同じ origin の他アプリの問題（M-6）は Hosting で origin を分けて解消済み |
+| `inMemoryPersistence` | 再読み込みでログアウトする。入力途中の再読み込みでやり直しになり、UX の損失が大きい |
+
+- [DECISION 案] database-engineer（security-engineer のレビュー対象）。理由: §13.4 の「端末に個人情報・回答を残さない」と、再読み込みに耐える最低限の UX の両立。`initializeAuth(app, { persistence: browserSessionPersistence })` で初期化し、**`getAuth()` を先に呼ばない**（既定の IndexedDB で初期化されるため）。Firestore は `initializeFirestore` の既定（メモリキャッシュ）のままで、`persistentLocalCache` を使わない
+- 代償: 新しいタブ・ウィンドウでは再ログインが要る（要件定義書 HTML は download 保存なので影響しない。M-11）。ブラウザの「前回のタブを復元」で sessionStorage が戻る場合がある [INFERENCE] → 画面の「ログアウト」は `signOut()` で必ず消す
+- 確認方法（B2）: ログイン → タブを閉じて開き直す → 未ログイン、DevTools の IndexedDB `firebaseLocalStorageDb` に認証情報が無いこと

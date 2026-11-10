@@ -6,3 +6,7 @@ dist
 # Firebase の設定値（ローカル）。公開情報だがリポジトリに直書きしない（BACKEND_FIREBASE.md §15・§26 M-7）
 .env*
 !.env.example
+
+# Firebase: live ビルドの出力・CLI のキャッシュ（BACKEND_PLAN.md C2）
+dist-live
+.firebase/
