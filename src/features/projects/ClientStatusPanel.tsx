@@ -1,4 +1,4 @@
-import { Box, Button, ButtonBase, Stack, Typography } from '@mui/material';
+import { Box, ButtonBase, Stack, Typography } from '@mui/material';
 import { ArrowRight, CheckCircle2, Circle, Clock, UserRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useDemo } from '@/store/DemoStore';
@@ -18,9 +18,9 @@ const STATUS: Record<ClientApprovalRow['status'], { label: string; tone: PillTon
 /**
  * 管理者画面: お客様の対応状況（承認の有無・公開承認の待ち）。ヒアリングはアフロが入力するので出さない（2026-11-10 決定）。
  * デモのデータは MINAMO COFFEE の 1 案件分だけなので、その案件のときだけ出す。
- * compact はホームの右カラム用（見出しの下に詳細へのリンクを出す）
+ * プロジェクト詳細と開発者画面で使う（ホームからは 2026-11-10 に外した）
  */
-export function ClientStatusPanel({ compact = false }: { compact?: boolean }) {
+export function ClientStatusPanel() {
   const { state, dispatch } = useDemo();
   const navigate = useNavigate();
   const project = state.projects.find((p) => p.id === CLIENT_PROJECT_ID);
@@ -88,11 +88,6 @@ export function ClientStatusPanel({ compact = false }: { compact?: boolean }) {
           : <StatusPill tone="success">待ちなし</StatusPill>}
       </Stack>
 
-      {compact && (
-        <Button fullWidth variant="outlined" endIcon={<ArrowRight size={15} />} onClick={() => go(`/projects/${project.id}`)} sx={{ mt: 2 }}>
-          {project.siteName} の詳細を開く
-        </Button>
-      )}
     </Surface>
   );
 }
