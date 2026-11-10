@@ -364,23 +364,25 @@ service cloud.firestore {
 
     // ================= validProposal（§28.7・M-11・R-2） =================
     // 式の数を節約: hasAll+hasOnly の代わりに size()==N+hasOnly、長さは正規表現 1 回（. はコードポイント）
-    function sre(v, re)      { return v is string && v.matches(re); }
+    // 文字列項目は v.matches(re) を直接書く（is string と matches を包む補助関数を経由すると、提案 6 件・全項目上限の
+    // submit で requirements/current の更新 1 件の評価が 1000 式の上限を超えた。2026-11-10 エミュレータ計測。BACKEND_FIREBASE.md §23）。
+    // 文字列でない値への matches() は評価エラー＝拒否になるので、is string を省いても許可の範囲は変わらない
     function inOpts(v, opts) { return v is list && v.size() <= opts.size() && v.hasOnly(opts); }   // R-2: 重複で水増しできない
     function validPoint(p) {
       return p is map && p.size() == 6
         && p.keys().hasOnly(['id','title','detail','priority','impact','area'])
-        && sre(p.id, '(?s).{1,40}') && sre(p.title, '(?s).{1,80}') && sre(p.detail, '(?s).{1,600}')
-        && p.priority in ['high','medium','low'] && sre(p.impact, '(?s).{1,200}') && sre(p.area, '(?s).{1,40}');
+        && p.id.matches('(?s).{1,40}') && p.title.matches('(?s).{1,80}') && p.detail.matches('(?s).{1,600}')
+        && p.priority in ['high','medium','low'] && p.impact.matches('(?s).{1,200}') && p.area.matches('(?s).{1,40}');
     }
     function validProposal(p) {
       return p is map && p.size() == 8
         && p.keys().hasOnly(['hostname','issue','purposes','improves','competitors','currentScore','projectedScore','points'])
-        && sre(p.hostname, '(?s).{1,253}') && sre(p.issue, '(?s).{0,600}')
+        && p.hostname.matches('(?s).{1,253}') && p.issue.matches('(?s).{0,600}')
         && inOpts(p.purposes, purposeOptions()) && inOpts(p.improves, improveOptions())
         && p.competitors is list && p.competitors.size() <= maxCompetitors()
-        && (p.competitors.size() < 1 || sre(p.competitors[0], '(?s).{1,253}'))
-        && (p.competitors.size() < 2 || sre(p.competitors[1], '(?s).{1,253}'))
-        && (p.competitors.size() < 3 || sre(p.competitors[2], '(?s).{1,253}'))
+        && (p.competitors.size() < 1 || p.competitors[0].matches('(?s).{1,253}'))
+        && (p.competitors.size() < 2 || p.competitors[1].matches('(?s).{1,253}'))
+        && (p.competitors.size() < 3 || p.competitors[2].matches('(?s).{1,253}'))
         && p.currentScore is number && p.currentScore >= 0 && p.currentScore <= 100
         && p.projectedScore is number && p.projectedScore >= 0 && p.projectedScore <= 100
         && p.points is list && p.points.size() <= 6

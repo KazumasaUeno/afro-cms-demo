@@ -800,7 +800,10 @@ src/repositories/
 | 開発者の accounts の list に `assigned(resource.data.projectId)` を使う式 | **[FACT] 2026-11-10 エミュレータ**: `where(role==client)`＋`where(projectId==pid)` のクエリで評価でき、許可される（§28.3 の INFERENCE を確認） | — |
 | Spark のメール確認・パスワード再設定メールの 1 日上限 | [Firebase Auth limits](https://firebase.google.com/docs/auth/limits) | platform-engineer |
 | Rules の `string.size()` の数え方（文字 / バイト）と JS `length` との差 | エミュレータ（**未計測**。2026-11-10 A2 で probe 未作成。長さの判定は正規表現 `.`＝コードポイントに切り替えたため、JS の length 以下になり画面で通る値は落ちない [INFERENCE: RE2 の仕様]） | database-engineer / qa-engineer |
-| 全問回答時に Rules の式数上限に収まるか | **[FACT] 2026-11-10 エミュレータ**: 1 リクエスト 1000 式の上限あり。`trim().size()` の比較を 23 問並べた版は全問回答の 1 文書更新で上限超過 → 「trim 後 1〜N 文字」を生成した正規表現 1 回に変更して**全問回答の更新は通過**。**確認依頼（submit）の 3 文書バッチは依然として上限超過**（`tests/rules/approvals.test.mjs` 2 件失敗。トランザクション版は通過）→ 未解決（A2 の残課題） | 同上 |
+| 全問回答時に Rules の式数上限に収まるか | **[FACT] 2026-11-10 エミュレータ**: 1000 式の上限あり。`trim().size()` の比較を 23 問並べた版は全問回答の 1 文書更新で上限超過 → 「trim 後 1〜N 文字」を生成した正規表現 1 回に変更して全問回答の更新は通過。submit の 2 件失敗は**原因が 2 つ**だった: ①テストの誤り（協力会社 devB の submit に `uid` を渡さず、`updatedBy`・ログの actor が devA 名義＝正しく拒否されていた。拒否理由の表示に 1000 式が出ていたため上限超過に見えた）→ テストを修正 ②**本物の上限超過**: 提案ポイントの**件数**で決まり（短い文字列でも 6 件で超過、全項目上限なら 5 件で超過。文字列の長さ・回答の数・ログの写しの一致比較は無関係）、超えていたのは requirements/current の更新 1 件の評価（`validProposal`）。`is string && matches` を包む補助関数を `matches()` 直書きに変えて通過（§28.7）。余裕は `validPoint` 約 2 回分（同じ submit に `validPoint` を 3 回足すと超過） | — |
+| 1000 式の上限の数え方（本番） | **[UNKNOWN]** エミュレータでは「1 リクエスト」ではなく**書き込み 1 件ごとの評価**に掛かっているように見える [INFERENCE: 通る 3 文書バッチの式評価の合計（rule coverage の評価回数）が 2,672、単独の 1 件更新は約 1,300 で超過]。本番が同じ数え方か・同じ値かは未確認 → 初回デプロイ後に全項目上限の submit を 1 回だけ実データ外で試す（platform-engineer と合意してから） | database-engineer / platform-engineer |
+| 拒否テストの拒否理由 | **[FACT] 2026-11-10**: `npm run test:rules` 271 件中、拒否を確かめるテスト約 98 件のログに 1000 式の上限超過が出る（同じバッチの別の書き込みで上限に当たっている）。拒否は正しい方向だが「意図した条件で拒否された」ことの証明としては弱い。本番の上限がエミュレータより緩ければ別の評価になりうる → 拒否経路の式数を減らすか、拒否理由を検査するテストに改める（qa-engineer へ） | qa-engineer / database-engineer |
+| ログの写しの一致比較（submit・withdraw）を外せば軽くなるか | **[FACT] 2026-11-10 エミュレータ（一時 probe、削除済み）**: submit ログの `answers`/`proposal` 一致比較を外した版でも、提案 5〜6 件（全項目上限）の submit は同じく上限超過。`validProposal` を常に true にした版はすべて通過 → 一致比較は原因ではないため、§28.6 の式は変えない | — |
 | 同じ文書への重複 `get()` が上限で 1 回と数えられるか | **未計測**（probe 未作成）。submit の get/getAfter/exists の重複を除いた呼び出し先は accounts/me・projects/pid（get と getAfter）・requirements/current（getAfter）・approvals（existsAfter）の 5 文書・6 種類 [INFERENCE: firestore.rules を読んで数えた] | 同上 |
 | Rules に拒否されたクエリの読み取り課金 | 公式の料金資料 | platform-engineer |
 | Spark で managed export / TTL ポリシーが使えるか | 公式資料 | platform-engineer |
@@ -1182,6 +1185,7 @@ function validProposal(p) {
 - 選択肢の一覧は §9.1 の生成スクリプトで `src/data/requirements.ts` から差し込む（手書きしない）
 - 長さの上限: 現行 `PROPOSAL_LIBRARY` の最大は title 18・detail 48・impact 17・area 8 文字（2026-11-10 にソースから計測）。`detail` は先頭にホスト名が付く（`buildProposal.ts:69`）ので余裕を持たせた。生成スクリプトで「ライブラリの値が上限内」も検査する
 - 数値は `is number`（int / float どちらでも通す。JS の整数がどちらで送られるかに依存しない）
+- **実装上の差（2026-11-10、式数）**: 上の `str(...)` は firestore.rules では `p.id.matches('(?s).{1,40}')` のように正規表現 `matches()` を直接書く（長さは `.`＝コードポイント）。`is string` を包む補助関数を経由すると、提案 6 件の submit で 1 件の書き込みの評価が 1000 式を超えた（§23）。文字列以外への `matches()` は評価エラー＝拒否なので許可の範囲は同じ（数値・配列・map の拒否テストあり）。`hasAll`＋`hasOnly` は `size() == N`＋`hasOnly` で同じ意味にしている
 - 表示側（M-11 の残り: 保存値も `esc()`、`blob:` で開かない、CSP）は B の担当
 
 ### 28.8 Auth の永続化（§13.4 の UNKNOWN → 決定案）

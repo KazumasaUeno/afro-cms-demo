@@ -25,7 +25,7 @@ describe('確認依頼（submit: draft → analyzed）', () => {
     await seed(env);
     await assertSucceeds(submitBatch(dbAs(env, 'devA')));
     await seed(env);
-    await assertSucceeds(submitBatch(dbAs(env, 'devB')));
+    await assertSucceeds(submitBatch(dbAs(env, 'devB'), { uid: 'devB' })); // 名義（updatedBy・ログの actor）も本人
   });
   test('全 23 問・提案 6 件を上限ちょうどで submit できる（式数・get の上限に当たらない）', async () => {
     await seed(env);
@@ -91,6 +91,12 @@ describe('M-11 / SEC-7: validProposal', () => {
   deny('ポイントの detail が 601 文字 → 拒否', { ...PROPOSAL, points: [point(1), point(2, { detail: 'd'.repeat(601) })] });
   deny('6 件目のポイントだけ壊れている → 拒否', { ...PROPOSAL, points: [1, 2, 3, 4, 5].map((i) => point(i)).concat([point(6, { title: '' })]) });
   deny('points が配列でない → 拒否', { ...PROPOSAL, points: { 0: point(1) } });
+  // 文字列項目は matches() だけで判定する（is string を省いた。文字列以外は評価エラー＝拒否になることを固定する）
+  deny('hostname が数値 → 拒否', { ...PROPOSAL, hostname: 12345 });
+  deny('issue が配列 → 拒否', { ...PROPOSAL, issue: ['課題'] });
+  deny('競合の 1 件が数値 → 拒否', { ...PROPOSAL, competitors: [123] });
+  deny('ポイントの title が数値 → 拒否', { ...PROPOSAL, points: [point(1, { title: 1 })] });
+  deny('ポイントの detail が map → 拒否', { ...PROPOSAL, points: [point(1), point(2, { detail: { html: '<b>' } })] });
   test('提案ポイント 0 件・競合 0 件は許可', async () => {
     await seed(env);
     await assertSucceeds(submitBatch(dbAs(env, 'devA'), { proposal: { ...PROPOSAL, competitors: [], points: [] } }));
