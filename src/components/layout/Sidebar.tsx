@@ -1,4 +1,5 @@
 import { Box, ButtonBase, Stack, Tooltip, Typography } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { ExternalLink, Presentation } from 'lucide-react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { tokens } from '@/theme/tokens';
@@ -21,16 +22,15 @@ function NavRow({ item, color, onNavigate }: { item: NavItem; color: string; onN
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
       sx={{
-        position: 'relative', width: '100%', justifyContent: 'flex-start', gap: 1.5, px: 1.5, height: 40, borderRadius: '12px',
-        color: active ? tokens.color.ink : tokens.color.muted, fontWeight: active ? 650 : 550, fontSize: 14,
-        bgcolor: active ? tokens.color.surface : 'transparent',
-        boxShadow: active ? tokens.shadow.sm : 'none',
-        border: `1px solid ${active ? tokens.color.border : 'transparent'}`,
-        transition: `background-color .16s, color .16s, box-shadow .16s`,
-        '&:hover': { color: tokens.color.ink, bgcolor: active ? tokens.color.surface : 'rgba(15,23,42,0.04)' },
+        // M3 Navigation drawer item: 高さ 56・角丸 Full。選択中は secondaryContainer、ホバーは 8% の state layer
+        position: 'relative', width: '100%', justifyContent: 'flex-start', gap: 1.5, px: 2, height: 56, borderRadius: `${tokens.radius.full}px`,
+        color: active ? tokens.color.onSecondaryContainer : tokens.color.onSurfaceVariant, fontWeight: active ? 700 : 500, fontSize: 14,
+        bgcolor: active ? tokens.color.secondaryContainer : 'transparent',
+        transition: `background-color .2s ${tokens.motion.easeCss}, color .2s`,
+        '&:hover': { bgcolor: active ? alpha(tokens.color.onSecondaryContainer, 0.12) : alpha(tokens.color.onSurface, tokens.state.hover) },
       }}
     >
-      <Icon size={18} strokeWidth={active ? 2.2 : 1.9} color={active ? color : 'currentColor'} />
+      <Icon size={20} strokeWidth={active ? 2.2 : 1.9} color={active ? color : 'currentColor'} />
       <span>{item.label}</span>
     </ButtonBase>
   );
@@ -40,7 +40,7 @@ function NavRow({ item, color, onNavigate }: { item: NavItem; color: string; onN
 function AreaBadge({ area }: { area: AreaDef }) {
   const Icon = area.icon;
   return (
-    <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 1.25, py: 0.75, borderRadius: '10px', bgcolor: area.soft, color: area.color }}>
+    <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 1.5, py: 0.75, borderRadius: `${tokens.radius.sm}px`, bgcolor: area.soft, color: area.color }}>
       <Icon size={15} />
       <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: 'inherit' }} noWrap>{area.label}</Typography>
       <Typography sx={{ fontSize: 12, color: tokens.color.muted, ml: 'auto !important' }} noWrap>{area.audience}</Typography>
@@ -68,9 +68,9 @@ function AdminFooter({ onNavigate }: { onNavigate?: () => void }) {
           to="/present"
           onClick={onNavigate}
           sx={{
-            justifyContent: 'flex-start', gap: 1.5, px: 1.5, height: 44, borderRadius: '12px', color: '#fff', fontWeight: 650, fontSize: 14,
-            bgcolor: tokens.color.ink, transition: 'transform .16s, box-shadow .16s',
-            '&:hover': { boxShadow: tokens.shadow.md, transform: 'translateY(-1px)' },
+            justifyContent: 'flex-start', gap: 1.5, px: 2, height: 56, borderRadius: '16px', color: tokens.color.onPrimaryContainer, fontWeight: 500, fontSize: 14,
+            bgcolor: tokens.color.primaryContainer, boxShadow: tokens.shadow.sm, transition: 'box-shadow .2s', // M3 Extended FAB（tonal）
+            '&:hover': { boxShadow: tokens.shadow.md },
           }}
         >
           <Presentation size={18} />
@@ -151,7 +151,7 @@ export function Sidebar() {
       component="aside"
       sx={{
         display: { xs: 'none', lg: 'block' }, position: 'fixed', inset: '0 auto 0 0', width: tokens.layout.sidebar,
-        bgcolor: tokens.color.bg, borderRight: `1px solid ${tokens.color.border}`, zIndex: 20,
+        bgcolor: tokens.color.bg, zIndex: 20, // M3 Standard navigation drawer は罫線なし
       }}
     >
       <SidebarContent />

@@ -76,7 +76,7 @@ export function ProposalView() {
                   </Box>
                 </ProgressRing>
                 <ArrowRight size={20} color="rgba(255,255,255,.4)" />
-                <ProgressRing value={proposal.projectedScore} size={84} stroke={7} color="#8B9DFF" track="rgba(255,255,255,.12)" label="改善後の見込みスコア">
+                <ProgressRing value={proposal.projectedScore} size={84} stroke={7} color={tokens.color.inversePrimary} track="rgba(255,255,255,.12)" label="改善後の見込みスコア">
                   <Box sx={{ textAlign: 'center' }}>
                     <Box sx={{ fontSize: 22, fontWeight: 700 }}><CountUp value={proposal.projectedScore} duration={1400} /></Box>
                     <Box sx={{ fontSize: 12, opacity: 0.6, fontWeight: 600 }}>改善後</Box>
@@ -131,13 +131,13 @@ export function ProposalView() {
               <Typography variant="h4" component="h2">要件定義書の承認</Typography>
               <Typography variant="body2" color="text.secondary">承認されると、この内容をもとにサイトマップとデザイン案の作成に進みます。</Typography>
               {!approved && (
-                <Stack direction="row" spacing={0.75} alignItems="center" role="status" sx={{ mt: 1, color: '#0B6699' }}>
+                <Stack direction="row" spacing={0.75} alignItems="center" role="status" sx={{ mt: 1, color: tokens.color.infoInk }}>
                   <Send size={14} style={{ flexShrink: 0 }} />
                   <Typography variant="caption" sx={{ color: 'inherit', fontWeight: 650 }}>お客様ポータルの「確認・承認」で、お客様に承認を依頼しています</Typography>
                 </Stack>
               )}
               {!approved && pending > 0 && (
-                <Typography variant="caption" role="status" sx={{ display: 'block', mt: 0.5, color: '#8A5402', fontWeight: 650 }}>
+                <Typography variant="caption" role="status" sx={{ display: 'block', mt: 0.5, color: tokens.color.warningInk, fontWeight: 650 }}>
                   内容の確認が済んでいない回答が {pending} 問あります。「回答の一覧」で確認すると承認できます。
                 </Typography>
               )}
@@ -148,7 +148,7 @@ export function ProposalView() {
               {approved ? (
                 <Box
                   role="status"
-                  sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, minHeight: 40, borderRadius: 3, bgcolor: tokens.color.successSoft, color: '#08765A', fontWeight: 650, fontSize: 14 }}
+                  sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, minHeight: 40, borderRadius: 3, bgcolor: tokens.color.successSoft, color: tokens.color.successInk, fontWeight: 650, fontSize: 14 }}
                 >
                   <BadgeCheck size={18} /> 承認済み {formatDateTime(req.approvedAt)}
                 </Box>

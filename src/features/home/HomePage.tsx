@@ -73,15 +73,15 @@ export default function HomePage() {
         <Surface
           padding={{ xs: 2.5, md: 3.5 }}
           sx={{
-            mb: { xs: 2, md: 3 }, overflow: 'hidden', borderColor: '#DCD6FF',
-            background: `radial-gradient(120% 140% at 100% 0%, ${tokens.color.accentSoft} 0%, rgba(243,240,255,0) 55%), radial-gradient(90% 120% at 0% 100%, ${tokens.color.primarySoft} 0%, rgba(238,242,255,0) 60%), #fff`,
+            mb: { xs: 2, md: 3 }, overflow: 'hidden', borderColor: tokens.color.outlineVariant,
+            background: `radial-gradient(120% 140% at 100% 0%, ${tokens.color.accentSoft} 0%, rgba(255,216,228,0) 55%), radial-gradient(90% 120% at 0% 100%, ${tokens.color.primarySoft} 0%, rgba(234,221,255,0) 60%), #fff`,
           }}
         >
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 2, sm: 3 }} alignItems={{ sm: 'center' }}>
             <AiMark size={48} />
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1, flexWrap: 'wrap', rowGap: 1 }}>
-                <Typography variant="overline" sx={{ color: '#5B3FD6' }}>次の一手 — {project.siteName}</Typography>
+                <Typography variant="overline" sx={{ color: tokens.color.accentInk }}>次の一手 — {project.siteName}</Typography>
                 <AiBadge label="AIの提案" />
               </Stack>
               <Typography variant="h2" component="h2" sx={{ fontSize: { xs: 20, md: 24 } }}>{action.title}</Typography>

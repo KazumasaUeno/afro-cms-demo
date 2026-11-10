@@ -35,7 +35,7 @@ export function PreviewDialog({ page, open, onClose }: { page: CmsPage; open: bo
             transition: `width .34s ${tokens.motion.easeCss}, border-radius .34s`,
           }}
         >
-          <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2, height: 38, bgcolor: '#F1F3F7', borderBottom: `1px solid ${tokens.color.border}` }}>
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2, height: 38, bgcolor: tokens.color.surfaceContainer, borderBottom: `1px solid ${tokens.color.border}` }}>
             {['#FF5F57', '#FEBC2E', '#28C840'].map((c) => <Box key={c} sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: c, display: device === 'mobile' ? 'none' : 'block' }} />)}
             <Stack direction="row" alignItems="center" spacing={0.75} sx={{ flex: 1, mx: 1, px: 1.25, height: 24, borderRadius: 99, bgcolor: '#fff', fontSize: 12, color: tokens.color.muted, minWidth: 0 }}>
               <Lock size={11} />

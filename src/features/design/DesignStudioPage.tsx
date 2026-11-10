@@ -217,7 +217,7 @@ export default function DesignStudioPage() {
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
                 <Box sx={{ flex: 1 }}>
                   <Typography variant="h4" component="h2">{selectedVariant?.label}「{selectedVariant?.name}」を採用しました</Typography>
-                  <Box role="status" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, mt: 1, px: 1.25, py: 0.5, borderRadius: 2, bgcolor: tokens.color.successSoft, color: '#08765A', fontSize: 13, fontWeight: 650 }}>
+                  <Box role="status" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, mt: 1, px: 1.25, py: 0.5, borderRadius: 2, bgcolor: tokens.color.successSoft, color: tokens.color.successInk, fontSize: 13, fontWeight: 650 }}>
                     <BadgeCheck size={15} /> 承認済み {formatDateTime(design.approvedAt)}
                   </Box>
                 </Box>

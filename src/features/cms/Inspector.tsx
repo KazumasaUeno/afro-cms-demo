@@ -104,7 +104,7 @@ export function Inspector({ draft, onChange, slugError }: Props) {
             <Typography variant="caption">更新 {formatDateTime(draft.updatedAt)}</Typography>
           </Stack>
           {draft.status === 'scheduled' && draft.scheduledAt && (
-            <Typography variant="body2" sx={{ color: '#0B6699', fontWeight: 600 }}>{formatDateTime(draft.scheduledAt)} に公開予定</Typography>
+            <Typography variant="body2" sx={{ color: tokens.color.infoInk, fontWeight: 600 }}>{formatDateTime(draft.scheduledAt)} に公開予定</Typography>
           )}
           {draft.publishedAt && <Typography variant="caption">最終公開 {formatDateTime(draft.publishedAt)}</Typography>}
           {draft.status === 'review' && <Typography variant="caption">承認者（顧客）の確認を待っています</Typography>}

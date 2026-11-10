@@ -9,26 +9,26 @@ export interface SurfaceProps extends BoxProps {
   tone?: 'default' | 'muted' | 'ink';
 }
 
-/** すべてのカードの土台。罫線＋控えめな影＋18px 角丸 */
+/** すべてのカードの土台。M3 Outlined card（outlineVariant の罫線＋角丸 Medium 12px）。クリックできるカードはホバーで Level1 に上がる */
 export const Surface = forwardRef<HTMLDivElement, SurfaceProps>(function Surface(
   { interactive, padding = { xs: 2, md: 2.5 }, tone = 'default', sx, children, ...rest },
   ref,
 ) {
-  const bg = tone === 'muted' ? tokens.color.surfaceMuted : tone === 'ink' ? tokens.color.ink : tokens.color.surface;
+  const bg = tone === 'muted' ? tokens.color.surfaceContainerHighest : tone === 'ink' ? tokens.color.inverseSurface : tokens.color.surfaceContainerLowest;
   return (
     <Box
       ref={ref}
       sx={[
         {
-          position: 'relative', bgcolor: bg, color: tone === 'ink' ? '#fff' : undefined,
-          border: `1px solid ${tone === 'ink' ? 'transparent' : tokens.color.border}`,
+          position: 'relative', bgcolor: bg, color: tone === 'ink' ? tokens.color.inverseOnSurface : undefined,
+          border: `1px solid ${tone === 'default' ? tokens.color.outlineVariant : 'transparent'}`,
           borderRadius: `${tokens.radius.lg}px`, boxShadow: tokens.shadow.xs, p: padding, minWidth: 0,
         },
         !!interactive && {
           cursor: 'pointer',
-          transition: `transform .24s ${tokens.motion.easeCss}, box-shadow .24s ${tokens.motion.easeCss}, border-color .24s`,
-          '&:hover': { transform: 'translateY(-2px)', boxShadow: tokens.shadow.md, borderColor: tokens.color.borderStrong },
-          '&:active': { transform: 'translateY(0)' },
+          transition: `box-shadow .2s ${tokens.motion.easeCss}, background-color .2s`,
+          '&:hover': { boxShadow: tokens.shadow.sm },
+          '&:active': { boxShadow: 'none' },
         },
         ...(Array.isArray(sx) ? sx : [sx]),
       ]}

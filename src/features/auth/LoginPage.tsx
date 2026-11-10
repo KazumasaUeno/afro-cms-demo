@@ -128,7 +128,7 @@ export default function LoginPage({ area: areaId }: { area: AreaId }) {
       <Box component="header" sx={{ width: '100%', maxWidth: 1080, display: 'flex', alignItems: 'center', gap: 2, mb: { xs: 3, md: 6 } }}>
         <Logo />
         <Box sx={{ flex: 1 }} />
-        <Typography variant="caption" sx={{ display: { xs: 'none', sm: 'block' }, px: 1, py: 0.5, borderRadius: 2, bgcolor: tokens.color.warningSoft, color: '#8A5402', fontWeight: 600 }}>
+        <Typography variant="caption" sx={{ display: { xs: 'none', sm: 'block' }, px: 1, py: 0.5, borderRadius: 2, bgcolor: tokens.color.warningSoft, color: tokens.color.warningInk, fontWeight: 600 }}>
           デモ環境 — データはこのブラウザだけに保存
         </Typography>
       </Box>
@@ -164,7 +164,7 @@ export default function LoginPage({ area: areaId }: { area: AreaId }) {
                 <Box component="form" noValidate onSubmit={submitPassword} sx={{ mt: 2.5 }}>
                   <Stack spacing={2.25}>
                     {revoked && (
-                      <Stack direction="row" spacing={1.25} role="status" sx={{ p: 1.5, borderRadius: `${tokens.radius.sm}px`, bgcolor: tokens.color.warningSoft, color: '#8A5402' }}>
+                      <Stack direction="row" spacing={1.25} role="status" sx={{ p: 1.5, borderRadius: `${tokens.radius.sm}px`, bgcolor: tokens.color.warningSoft, color: tokens.color.warningInk }}>
                         <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
                         <Typography variant="body2" sx={{ color: 'inherit', fontWeight: 650 }}>
                           {areaId === 'portal' ? 'お客様アカウントが無効になったため、ログアウトしました。' : `${area.label}の権限が外れたため、ログアウトしました。`}

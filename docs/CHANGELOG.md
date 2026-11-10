@@ -275,3 +275,13 @@
 
 - 管理者画面のホームの右の列（お客様の対応状況・承認待ち・公開予定・AI 改善診断の予定・最近のアクティビティ）をすべて外し、進行中のプロジェクトを横幅いっぱいに表示（ホームは全体のポータル。案件ごとの状況はプロジェクト詳細と開発者画面で見る。上部の「承認待ち」「公開予定ページ」の件数は残す）
 - 開発者画面の「担当案件」も右の列（お客様の承認待ち・対応状況・承認の履歴、構築状況の環境・最近のエラー）を外し、横幅いっぱいに表示。承認の履歴は管理者画面のプロジェクト詳細で見る。環境は「環境・デプロイ」で見る
+
+## 0.21.0 — 2026-11-10
+
+- 見た目を **Material Design 3** に変更（ベースライン配色 #6750A4）。画面の構成・操作・データは変えていない
+  - 色: M3 の Color roles（primary / secondaryContainer / surfaceContainer* / outline …）。状態色の文字は `*Ink` トークンに統一
+  - 形: 角丸を M3 の段（4 / 8 / 12 / 16 / 28px）に。ボタンは高さ 40 の丸型（Filled / Outlined / Text）、ダイアログは 28px
+  - 部品: Outlined テキストフィールド（高さ 56）、Segmented button、M3 Switch、Primary tabs、Plain tooltip、Snackbar、押下時の波紋（ripple）を有効化
+  - レイアウト: サイドバーを M3 Navigation drawer（選択中は pill）、スマホ下部を M3 Navigation bar、上部バーをすりガラスなしの Top app bar に。営業プレゼンモードは Tonal の Extended FAB
+  - 書体: Roboto（端末にあれば）＋ Noto Sans JP。Inter の読み込みをやめた
+- 顧客サイトの見本（デザイン案のプレビュー）・サイネージ・Google 検索結果の見本・書き出す文書の色は変更していない

@@ -67,13 +67,13 @@ export function CompareDialog({ page, open, onClose }: { page: CmsPage; open: bo
                 sx={{
                   position: 'relative', p: 2, pl: 5, borderRadius: '12px', ...proseSx, fontSize: 15,
                   bgcolor: d.kind === 'added' ? tokens.color.successSoft : d.kind === 'removed' ? tokens.color.dangerSoft : tokens.color.surface,
-                  border: `1px solid ${d.kind === 'added' ? '#BFE8D8' : d.kind === 'removed' ? '#F6C9CE' : tokens.color.border}`,
+                  border: `1px solid ${d.kind === 'added' ? tokens.color.successLine : d.kind === 'removed' ? tokens.color.dangerLine : tokens.color.border}`,
                   opacity: d.kind === 'same' ? 0.7 : 1,
                   '& > div > *:first-of-type': { mt: 0 },
                   ...(d.kind === 'removed' && { '& > div': { textDecoration: 'line-through', textDecorationColor: 'rgba(180,35,47,.5)' } }),
                 }}
               >
-                <Box sx={{ position: 'absolute', left: 14, top: 18, color: d.kind === 'added' ? '#08765A' : d.kind === 'removed' ? '#B4232F' : tokens.color.faint }} aria-label={d.kind === 'added' ? '追加' : d.kind === 'removed' ? '削除' : '変更なし'}>
+                <Box sx={{ position: 'absolute', left: 14, top: 18, color: d.kind === 'added' ? tokens.color.successInk : d.kind === 'removed' ? tokens.color.dangerInk : tokens.color.faint }} aria-label={d.kind === 'added' ? '追加' : d.kind === 'removed' ? '削除' : '変更なし'}>
                   {d.kind === 'added' ? <Plus size={16} /> : d.kind === 'removed' ? <Minus size={16} /> : <Box sx={{ width: 16, textAlign: 'center' }}>·</Box>}
                 </Box>
                 <div dangerouslySetInnerHTML={{ __html: d.html }} />

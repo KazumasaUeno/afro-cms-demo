@@ -54,7 +54,7 @@ npm run preview    # → http://localhost:4173
 | 領域 | 採用 |
 |---|---|
 | 基盤 | React 18 / TypeScript / Vite / React Router 7 |
-| UI | MUI v5 + Emotion（独自テーマ `src/theme`）/ Lucide React / Inter + Noto Sans JP（同梱） |
+| UI | MUI v5 + Emotion（独自テーマ `src/theme`）/ Lucide React / Roboto（端末にあれば）+ Noto Sans JP（同梱）。Material Design 3 |
 | 動き | Motion for React（ページ・カード・モーダル）/ GSAP（ステップ演出・タイムライン） |
 | 機能 | React Flow（サイトマップ）/ Tiptap（リッチテキスト）/ Recharts（グラフ） |
 

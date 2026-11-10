@@ -94,7 +94,7 @@ export default function InsightsPage() {
         actions={<Button variant="contained" startIcon={<ScanSearch size={16} />} onClick={() => setDialog({ open: true, report: null })}>AIサイト診断を実行</Button>}
       />
 
-      <Stack direction="row" spacing={1.25} alignItems="center" role="note" sx={{ mb: 3, px: 2, py: 1.25, borderRadius: '14px', bgcolor: tokens.color.warningSoft, color: '#8A5402' }}>
+      <Stack direction="row" spacing={1.25} alignItems="center" role="note" sx={{ mb: 3, px: 2, py: 1.25, borderRadius: '14px', bgcolor: tokens.color.warningSoft, color: tokens.color.warningInk }}>
         <Info size={17} style={{ flexShrink: 0 }} />
         <Typography variant="body2" sx={{ fontWeight: 600 }}>この画面の数値・グラフ・診断結果はすべてデモデータです（実際の計測値ではありません）。</Typography>
       </Stack>
@@ -158,7 +158,7 @@ export default function InsightsPage() {
                   <Stack direction="row" alignItems="baseline" spacing={1} sx={{ mb: 0.5 }}>
                     <Typography variant="body2" sx={{ fontWeight: 650 }}>{p.page}</Typography>
                     <Typography sx={{ fontFamily: tokens.font.mono, fontSize: 12, color: tokens.color.muted, flex: 1 }} noWrap>{p.path}</Typography>
-                    <Typography variant="caption" sx={{ color: p.trend >= 0 ? '#08765A' : '#B4232F', fontWeight: 650 }}>{p.trend >= 0 ? '▲' : '▼'} {Math.abs(p.trend)}%</Typography>
+                    <Typography variant="caption" sx={{ color: p.trend >= 0 ? tokens.color.successInk : tokens.color.dangerInk, fontWeight: 650 }}>{p.trend >= 0 ? '▲' : '▼'} {Math.abs(p.trend)}%</Typography>
                   </Stack>
                   <Stack direction="row" alignItems="center" spacing={1.5}>
                     <Box sx={{ flex: 1, height: 10, borderRadius: 99, bgcolor: tokens.color.bgSubtle }}>

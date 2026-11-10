@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { CssBaseline, ThemeProvider } from '@mui/material';
-import '@fontsource-variable/inter';
+// Roboto は端末にあれば使い、無ければ Noto Sans JP の欧文で表示する（新しい依存を増やさない）
 import '@fontsource/noto-sans-jp/400.css';
 import '@fontsource/noto-sans-jp/500.css';
 import '@fontsource/noto-sans-jp/700.css';

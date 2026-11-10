@@ -7,11 +7,11 @@ export type PillTone = 'neutral' | 'primary' | 'accent' | 'success' | 'warning' 
 const TONES: Record<PillTone, { bg: string; fg: string }> = {
   neutral: { bg: tokens.color.bgSubtle, fg: tokens.color.inkSoft },
   primary: { bg: tokens.color.primarySoft, fg: tokens.color.primary },
-  accent: { bg: tokens.color.accentSoft, fg: '#5B3FD6' },
-  success: { bg: tokens.color.successSoft, fg: '#08765A' },
-  warning: { bg: tokens.color.warningSoft, fg: '#8A5402' },
-  danger: { bg: tokens.color.dangerSoft, fg: '#B4232F' },
-  info: { bg: tokens.color.infoSoft, fg: '#0B6699' },
+  accent: { bg: tokens.color.accentSoft, fg: tokens.color.accentInk },
+  success: { bg: tokens.color.successSoft, fg: tokens.color.successInk },
+  warning: { bg: tokens.color.warningSoft, fg: tokens.color.warningInk },
+  danger: { bg: tokens.color.dangerSoft, fg: tokens.color.dangerInk },
+  info: { bg: tokens.color.infoSoft, fg: tokens.color.infoInk },
 };
 
 /** 状態表示。色＋文字で伝える（色だけに頼らない） */

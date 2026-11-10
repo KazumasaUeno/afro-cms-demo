@@ -19,7 +19,7 @@ interface Props {
 
 const SIDE = {
   afro: { label: 'アフロ', color: tokens.color.primary, soft: tokens.color.primarySoft },
-  client: { label: '顧客', color: '#08765A', soft: tokens.color.successSoft },
+  client: { label: '顧客', color: tokens.color.successInk, soft: tokens.color.successSoft },
 } as const;
 
 /**

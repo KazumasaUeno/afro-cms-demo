@@ -22,8 +22,8 @@ import { sitemapMetrics, validateLabel } from './metrics';
 const nodeTypes = { page: PageNode };
 const defaultEdgeOptions = {
   type: 'smoothstep',
-  style: { stroke: '#A8B1C4', strokeWidth: 1.5 },
-  markerEnd: { type: MarkerType.ArrowClosed, color: '#A8B1C4', width: 16, height: 16 },
+  style: { stroke: tokens.color.outline, strokeWidth: 1.5 },
+  markerEnd: { type: MarkerType.ArrowClosed, color: tokens.color.outline, width: 16, height: 16 },
 };
 
 const toFlow = (n: SitemapNode): PageFlowNode => ({ id: n.id, type: 'page', position: n.position, data: n.data, deletable: n.data.kind !== 'home' });
@@ -150,7 +150,7 @@ function Editor({ variant, onVariant }: { variant: SitemapVariant; onVariant: (v
             maxZoom={2}
             aria-label={`${variant === 'after' ? '改善後' : '現在'}のサイトマップ`}
           >
-            <Background variant={BackgroundVariant.Dots} gap={20} size={1.4} color="#CDD3DF" />
+            <Background variant={BackgroundVariant.Dots} gap={20} size={1.4} color={tokens.color.outlineVariant} />
             <Controls showInteractive={false} position="bottom-left" />
             <MiniMap pannable zoomable position="bottom-right" nodeBorderRadius={6}
               nodeColor={(n) => (n.data as PageFlowNode['data']).kind === 'new' ? tokens.color.accent : (n.data as PageFlowNode['data']).kind === 'cta' ? tokens.color.primary : '#CBD2DE'}
@@ -177,7 +177,7 @@ function Editor({ variant, onVariant }: { variant: SitemapVariant; onVariant: (v
                 <TextField fullWidth size="small" multiline minRows={3} label="改善理由" value={selected.data.reason ?? ''} inputProps={{ maxLength: 140 }}
                   helperText={`${(selected.data.reason ?? '').length} / 140`} onChange={(e) => patchSelected({ reason: e.target.value || undefined })} sx={{ mt: 1 }} />
               ) : selected.data.reason ? (
-                <Box sx={{ mt: 1, p: 1.5, borderRadius: 2, bgcolor: tokens.color.warningSoft, fontSize: 13, color: '#8A5402' }}>課題：{selected.data.reason}</Box>
+                <Box sx={{ mt: 1, p: 1.5, borderRadius: 2, bgcolor: tokens.color.warningSoft, fontSize: 13, color: tokens.color.warningInk }}>課題：{selected.data.reason}</Box>
               ) : null}
               <Typography variant="caption" sx={{ display: 'block', mt: 1.5 }}>
                 つながり：親 {edges.filter((e) => e.target === selected.id).length} · 子 {edges.filter((e) => e.source === selected.id).length}
@@ -247,7 +247,7 @@ export default function SitemapPage() {
         actions={
           approvedAt ? (
             <>
-              <Box role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, minHeight: 40, borderRadius: 3, bgcolor: tokens.color.successSoft, color: '#08765A', fontWeight: 650, fontSize: 14 }}>
+              <Box role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, minHeight: 40, borderRadius: 3, bgcolor: tokens.color.successSoft, color: tokens.color.successInk, fontWeight: 650, fontSize: 14 }}>
                 <BadgeCheck size={18} /> 承認済み {formatDateTime(approvedAt)}
               </Box>
               <Button variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate('/ai-studio/design')}>デザインへ進む</Button>

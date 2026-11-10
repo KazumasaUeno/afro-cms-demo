@@ -96,7 +96,7 @@ export function CsvTools({ onApplied, dense = false }: { onApplied?: () => void;
                 {result.error ? `取り込めませんでした（${result.fileName}）` : `${result.fileName} を取り込みました`}
               </Typography>
               {result.error ? (
-                <Typography variant="caption" sx={{ display: 'block', color: '#B4232F' }}>{result.error}</Typography>
+                <Typography variant="caption" sx={{ display: 'block', color: tokens.color.dangerInk }}>{result.error}</Typography>
               ) : (
                 <Typography variant="caption" sx={{ display: 'block', color: tokens.color.ink }}>
                   反映 <b>{result.applied}</b> 問・変更なし {result.unchanged} 問・空欄 {result.blank} 問・反映しなかった行 <b>{result.skipped.length}</b>

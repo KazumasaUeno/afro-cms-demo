@@ -6,8 +6,8 @@ export function LogoMark({ size = 32 }: { size?: number }) {
     <Box component="svg" viewBox="0 0 32 32" sx={{ width: size, height: size, flexShrink: 0, display: 'block' }} aria-hidden>
       <rect width="32" height="32" rx="9" fill={tokens.color.navy} />
       <circle cx="16" cy="14" r="6.5" fill="none" stroke="#fff" strokeWidth="2.4" />
-      <circle cx="10.5" cy="9.5" r="3.2" fill="#8B7CF6" />
-      <circle cx="21.5" cy="9.5" r="3.2" fill="#4F7CFF" />
+      <circle cx="10.5" cy="9.5" r="3.2" fill={tokens.color.primaryContainer} />
+      <circle cx="21.5" cy="9.5" r="3.2" fill={tokens.color.tertiaryContainer} />
       <path d="M10.5 25h11" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" />
     </Box>
   );

@@ -14,8 +14,8 @@ export function AiBadge({ label = 'AIシミュレーション' }: { label?: stri
         tabIndex={0}
         sx={{
           display: 'inline-flex', alignItems: 'center', gap: 0.5, px: 1, height: 24, borderRadius: '8px',
-          bgcolor: tokens.color.accentSoft, color: '#5B3FD6', fontSize: 12, fontWeight: 650, whiteSpace: 'nowrap',
-          border: '1px solid #E4DCFF', flexShrink: 0,
+          bgcolor: tokens.color.accentSoft, color: tokens.color.accentInk, fontSize: 12, fontWeight: 650, whiteSpace: 'nowrap',
+          flexShrink: 0,
         }}
       >
         <Sparkles size={13} />

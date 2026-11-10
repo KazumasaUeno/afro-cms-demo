@@ -39,11 +39,11 @@ export function SaveAnswersButton({ beforeSave, disabled = false }: { beforeSave
         startIcon={isSaved && !failed ? <Check size={16} strokeWidth={3} /> : <Save size={16} />}
         disabled={disabled}
         onClick={() => { beforeSave?.(); setRequested(true); }}
-        sx={isSaved && !failed ? { color: '#08765A', borderColor: tokens.color.success, bgcolor: tokens.color.successSoft, '&:hover': { borderColor: tokens.color.success, bgcolor: tokens.color.successSoft } } : undefined}
+        sx={isSaved && !failed ? { color: tokens.color.successInk, borderColor: tokens.color.success, bgcolor: tokens.color.successSoft, '&:hover': { borderColor: tokens.color.success, bgcolor: tokens.color.successSoft } } : undefined}
       >
         {isSaved && !failed ? '保存済み' : '保存'}
       </Button>
-      <Box component="span" role="status" aria-live="polite" sx={{ fontSize: 12.5, fontWeight: 600, color: failed ? tokens.color.danger : '#08765A', minWidth: 0 }}>
+      <Box component="span" role="status" aria-live="polite" sx={{ fontSize: 12.5, fontWeight: 600, color: failed ? tokens.color.danger : tokens.color.successInk, minWidth: 0 }}>
         {isSaved ? (failed ? '保存できませんでした（ブラウザの保存領域を確認してください）' : `保存しました ${at}`) : ''}
       </Box>
     </Box>

@@ -125,7 +125,7 @@ export default function PortalApprovalsPage() {
           <StepCard step={byKey.requirements} action={approveBtn('requirements', pending.length > 0)} keepWhenLocked>
             {byKey.requirements.status === 'waiting' && pending.length > 0 && (
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }} role="status" sx={{ mb: 2, px: 1.5, py: 1, borderRadius: 2, bgcolor: tokens.color.warningSoft }}>
-                <Typography variant="caption" sx={{ flex: 1, color: '#8A5402', fontWeight: 650 }}>
+                <Typography variant="caption" sx={{ flex: 1, color: tokens.color.warningInk, fontWeight: 650 }}>
                   アフロが回答の内容を確認しています（{pending.length} 問）。確認が終わると承認できます。
                 </Typography>
               </Stack>

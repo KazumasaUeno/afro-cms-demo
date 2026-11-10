@@ -22,7 +22,7 @@ export function PriorityChip({ priority }: { priority: 'A' | 'B' }) {
         sx={{
           width: 24, height: 24, borderRadius: '7px', display: 'inline-grid', placeItems: 'center', flexShrink: 0,
           fontSize: 12, fontWeight: 750,
-          bgcolor: isA ? tokens.color.infoSoft : tokens.color.accentSoft, color: isA ? '#0B6699' : '#5B3FD6',
+          bgcolor: isA ? tokens.color.infoSoft : tokens.color.accentSoft, color: isA ? tokens.color.infoInk : tokens.color.accentInk,
         }}
       >
         {priority}
@@ -145,7 +145,7 @@ function DetailBody({ category, onClose }: { category: QualityCategory; onClose:
                 key={item.id}
                 sx={{
                   p: 1.5, borderRadius: '14px', bgcolor: tokens.color.surface,
-                  border: `1px solid ${done ? '#CDEDE1' : tokens.color.border}`,
+                  border: `1px solid ${done ? tokens.color.successLine : tokens.color.border}`,
                   transition: 'border-color .2s',
                 }}
               >

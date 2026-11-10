@@ -100,13 +100,13 @@ function DisplayCard({ display, slides, onEdit, onPreview, onDeliver }: { displa
       </Box>
 
       {changed && (
-        <Stack direction="row" spacing={1} alignItems="flex-start" role="status" sx={{ px: 1.5, py: 1, borderRadius: 2, bgcolor: tokens.color.warningSoft, color: '#8A5402' }}>
+        <Stack direction="row" spacing={1} alignItems="flex-start" role="status" sx={{ px: 1.5, py: 1, borderRadius: 2, bgcolor: tokens.color.warningSoft, color: tokens.color.warningInk }}>
           <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 2 }} />
           <Typography variant="caption" sx={{ color: 'inherit', fontWeight: 650 }}>未配信の変更があります。「配信する」を押すまで、店頭の画面は変わりません。</Typography>
         </Stack>
       )}
       {waiting && !changed && (
-        <Stack direction="row" spacing={1} alignItems="flex-start" role="status" sx={{ px: 1.5, py: 1, borderRadius: 2, bgcolor: tokens.color.infoSoft, color: '#0B6699' }}>
+        <Stack direction="row" spacing={1} alignItems="flex-start" role="status" sx={{ px: 1.5, py: 1, borderRadius: 2, bgcolor: tokens.color.infoSoft, color: tokens.color.infoInk }}>
           <WifiOff size={15} style={{ flexShrink: 0, marginTop: 2 }} />
           <Typography variant="caption" sx={{ color: 'inherit', fontWeight: 650 }}>配信済みです。端末がオンラインになったら反映されます。</Typography>
         </Stack>

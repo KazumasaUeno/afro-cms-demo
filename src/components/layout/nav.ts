@@ -1,3 +1,4 @@
+import { tokens } from '@/theme/tokens';
 import {
   BarChart3, Building2, ClipboardCheck, Code2, FileText, FolderKanban, House, LayoutDashboard, ListChecks, ListTodo, Monitor,
   Rocket, ScrollText, Settings, ShieldCheck, Sparkles, Stamp, UserRound, UsersRound, type LucideIcon,
@@ -79,19 +80,19 @@ export const AREAS: Record<AreaId, AreaDef> = {
   admin: {
     id: 'admin', label: '管理者画面', short: '管理者', audience: 'アフロ社内',
     description: '案件・要件・制作・品質・改善を進める', home: '/', icon: Building2,
-    color: '#3B5BDB', soft: '#EEF2FF',
+    color: tokens.color.primary, soft: tokens.color.primaryContainer,
     items: ADMIN_ITEMS, bottom: [ADMIN_ITEMS[0], ADMIN_ITEMS[1], ADMIN_ITEMS[2], ADMIN_ITEMS[3]], settings: SETTINGS_ITEM,
   },
   portal: {
     id: 'portal', label: 'お客様ポータル', short: 'ポータル', audience: 'お客様',
     description: '進み具合の確認・承認・ページ更新・レポート・サイネージ', home: '/portal', icon: UserRound,
-    color: '#0F9D74', soft: '#E7F7F1',
+    color: tokens.color.success, soft: tokens.color.successSoft,
     items: PORTAL_ITEMS, bottom: [PORTAL_ITEMS[0], PORTAL_ITEMS[1], PORTAL_ITEMS[3], PORTAL_ITEMS[5]],
   },
   dev: {
     id: 'dev', label: '開発者画面', short: '開発者', audience: '制作エンジニア',
     description: '担当案件・構築タスク・環境とデプロイ', home: '/dev', icon: Code2,
-    color: '#7C5CFA', soft: '#F3F0FF',
+    color: tokens.color.tertiary, soft: tokens.color.tertiaryContainer,
     items: DEV_ITEMS, bottom: [{ ...DEV_ITEMS[0], label: 'ホーム' }, DEV_ITEMS[1], DEV_ITEMS[2]],
   },
 };

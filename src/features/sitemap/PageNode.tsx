@@ -12,7 +12,7 @@ const KIND: Record<SitemapNodeData['kind'], { icon: LucideIcon; bg: string; fg: 
   section: { icon: FolderTree, bg: tokens.color.primarySoft, fg: tokens.color.primary, label: 'セクション' },
   page: { icon: FileText, bg: tokens.color.bgSubtle, fg: tokens.color.inkSoft, label: 'ページ' },
   cta: { icon: MousePointerClick, bg: tokens.color.primary, fg: '#fff', label: 'CTA' },
-  new: { icon: Sparkles, bg: tokens.color.accentSoft, fg: '#5B3FD6', label: '新設' },
+  new: { icon: Sparkles, bg: tokens.color.accentSoft, fg: tokens.color.accentInk, label: '新設' },
 };
 
 export const KIND_META = KIND;

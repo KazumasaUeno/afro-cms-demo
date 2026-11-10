@@ -24,8 +24,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         <Box
           role="status"
           sx={{
-            display: 'flex', alignItems: 'center', gap: 1.25, px: 2, py: 1.25, borderRadius: 3,
-            bgcolor: tokens.color.ink, color: '#fff', boxShadow: tokens.shadow.lg, fontSize: 14, fontWeight: 500, maxWidth: 'calc(100vw - 32px)',
+            display: 'flex', alignItems: 'center', gap: 1.25, px: 2, py: 1.5, minHeight: 48, borderRadius: 1, // M3 Snackbar
+            bgcolor: tokens.color.inverseSurface, color: tokens.color.inverseOnSurface, boxShadow: tokens.shadow.lg, fontSize: 14, fontWeight: 400, maxWidth: 'calc(100vw - 32px)',
           }}
         >
           <Icon size={18} color={color} style={{ flexShrink: 0 }} />

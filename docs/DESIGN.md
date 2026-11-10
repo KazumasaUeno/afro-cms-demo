@@ -1,35 +1,41 @@
 # デザインシステム（アフロCMS デモ）
 
-方向性: **Premium Creative SaaS** — 業務システムに見えない、余白と動きで理解させる画面。
+方向性: **Material Design 3**（2026-11-10 に Premium Creative SaaS から変更。ベースライン配色 #6750A4）。
 
 値の正は `src/theme/tokens.ts`。MUI テーマ（`src/theme/theme.ts`）と独自コンポーネントは、どちらもここを参照する。値をコンポーネントに直接書かない。
+旧キー（bg / surface / ink / primarySoft …）は既存画面の互換のため M3 の役割へ割り当ててある。**新しいコードは M3 名を使う。**
 
-## 色
+## 色（M3 Color roles）
 
-| 役割 | 値 | 用途 |
-|---|---|---|
-| bg / bgSubtle | `#FAFAFB` / `#F4F5F8` | 画面の地 / セグメント・トラック |
-| surface / border | `#FFFFFF` / `#E7E9EF` | カード・繊細な罫線 |
-| ink / muted | `#0F172A` / `#64748B` | 本文 / 補足（地に対して 4.5:1 以上） |
-| primary | `#3B5BDB` | 主要操作・アクティブ |
-| navy | `#1E3A8A` | ロゴ・落ち着いたブルー |
-| accent | `#7C5CFA` | AI 関連の印だけに使う |
-| success / warning / danger / info | 各 + Soft | 状態。**色だけで伝えず必ず文字を添える**（`StatusPill`） |
+| 役割 | 値 | 旧キー | 用途 |
+|---|---|---|---|
+| surfaceContainerLow / surfaceContainerLowest | `#F7F2FA` / `#FFFFFF` | bg / surface | 画面の地 / カード・入力欄 |
+| surfaceContainer / High / Highest | `#F3EDF7` / `#ECE6F0` / `#E6E0E9` | surfaceMuted / — / bgSubtle | 下部バー / Dialog の面 / トラック・Surface muted（Dialog の中でも見える段） |
+| successLine / dangerLine | `#8CCB9C` / `#E8A6A1` | — | Soft の面を囲む罫線 |
+| outlineVariant / outline | `#CAC4D0` / `#79747E` | border / borderStrong | カードの罫線 / 入力欄・Outlined ボタンの枠 |
+| onSurface / onSurfaceVariant | `#1D1B20` / `#49454F` | ink / inkSoft | 本文 / アイコン・補足 |
+| primary / primaryContainer | `#6750A4` / `#EADDFF` | primary / primarySoft | 主要操作・アクティブ |
+| secondaryContainer | `#E8DEF8` | — | ナビの選択中・Segmented の選択中・Chip |
+| tertiary / tertiaryContainer | `#7D5260` / `#FFD8E4` | accent / accentSoft | AI 関連の印だけに使う |
+| inverseSurface | `#322F35` | — | Tooltip・Snackbar |
+| success / warning / error / info | 各 + Soft + Ink | — | 状態。**色だけで伝えず必ず文字を添える**（`StatusPill`）。Soft の上の文字は `*Ink`（4.5:1 以上） |
 
-AI の印は `aiGradient`（ブルー→パープル）を小さな面積だけに使う。大面積のグラデーション・発光・ガラス風は使わない。
+AI の印は `aiGradient`（primary→tertiary）を小さな面積だけに使う。大面積のグラデーション・発光・ガラス風は使わない。
 
 ## 形・影・文字
 
-- 角丸: 10 / 14 / 18 / 24px（カードは 18px、ダイアログは 24px）
-- 影: `xs`（静止カード）→ `md`（ホバー）→ `lg`（モーダル）の 3 段だけ
-- 書体: Inter Variable ＋ Noto Sans JP（`@fontsource` で同梱。外部 CDN を使わない）
-- 見出しは字間を詰める（-0.01〜-0.025em）。数値は `tabular-nums`
+- 角丸（M3 Shape）: 4 / 8 / 12 / 16 / 28px / Full。`theme.shape.borderRadius = 4` なので sx の `borderRadius: 1/2/3/4/7` がそのまま M3 の段になる。カード 12px、ダイアログ 28px、ボタン・ナビ項目は Full
+- 影（M3 Elevation）: `xs`=Level0（面の色で区別）→ `sm`=Level1（ホバー・FAB）→ `md`=Level2（メニュー）→ `lg`=Level3（ダイアログ）
+- 状態: ホバー 8%・押下/フォーカス 10% の state layer（`tokens.state`）。押下時は ripple。フォーカスは 3px の輪郭線
+- 書体: Roboto（端末にあれば）＋ Noto Sans JP（`@fontsource` で同梱。外部 CDN を使わない）。字間は M3 Type scale の値。数値は `tabular-nums`
 
 ## 動き（役割分担）
 
+M3 の Emphasized easing（`cubic-bezier(0.2, 0, 0, 1)`）。時間は `tokens.motion`（150 / 300 / 400ms）。
+
 | 担当 | 対象 |
 |---|---|
-| **Motion for React** | ページ切り替え（240ms）、カード出現（`Reveal`）、モーダル・状態遷移 |
+| **Motion for React** | ページ切り替え（`motion.base`）、カード出現（`Reveal`）、モーダル・状態遷移 |
 | **GSAP** | ステップ演出・タイムライン（AI 分析、全ページ構築、サイト診断、プレゼン）。**内側の要素だけ** |
 | CSS transition | ホバー、進捗リング、ボタンの押下 |
 
@@ -39,6 +45,10 @@ AI の印は `aiGradient`（ブルー→パープル）を小さな面積だけ�
 
 ## 共通部品（`src/components/ui`）
 
-`Surface`（カード土台）／ `PageHeader` ／ `SectionTitle` ／ `CountUp` ／ `ProgressRing` ／ `StatusPill` ／ `AiBadge`・`AiMark` ／ `MemberAvatar` ／ `Reveal` ／ `StageTrack`（5段階）
+`Surface`（M3 Outlined card）／ `PageHeader` ／ `SectionTitle` ／ `CountUp` ／ `ProgressRing` ／ `StatusPill` ／ `AiBadge`・`AiMark` ／ `MemberAvatar` ／ `Reveal` ／ `StageTrack`（5段階）
 
-レイアウト（`src/components/layout`）: `AppShell`（サイドバー・上部バー・スマホ下部タブ）／ `BuildFlowNav`（要件定義→サイトマップ→デザイン）／ `ResetDemoDialog`
+レイアウト（`src/components/layout`）: `AppShell`（M3 Navigation drawer・Top app bar・スマホは Navigation bar）／ `BuildFlowNav`（要件定義→サイトマップ→デザイン）／ `ResetDemoDialog`
+
+## M3 にしていないもの（意図）
+
+- 顧客サイトの見本（`features/design/previews`）・サイネージ・Google 検索結果の見本・書き出す HTML 文書・案件の色の候補は、それぞれ見本先・印刷物の色を保つため M3 の配色にしていない

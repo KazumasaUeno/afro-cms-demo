@@ -147,8 +147,9 @@ function TopBar({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
       component="header"
       sx={{
         position: 'sticky', top: 0, zIndex: 15, height: tokens.layout.topbar, display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 1.5 },
-        px: { xs: 2, md: 4 }, bgcolor: 'rgba(250,250,251,0.82)', backdropFilter: 'saturate(1.4) blur(10px)',
-        borderBottom: `1px solid ${tokens.color.border}`,
+        // M3 Top app bar: 画面の地と同じ面。本文との境目は surfaceContainerHighest の細い線だけで示す
+        px: { xs: 2, md: 4 }, bgcolor: tokens.color.bg,
+        boxShadow: `inset 0 -1px 0 ${tokens.color.surfaceContainerHighest}`,
       }}
     >
       <IconButton onClick={onMenu} aria-label="メニューを開く" sx={{ display: { lg: 'none' }, ml: -1 }}>
@@ -158,13 +159,13 @@ function TopBar({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
       {area.id === 'admin' ? <ProjectSwitcher /> : area.id === 'dev' ? <DevProjectSwitcher /> : <ClientSiteBadge />}
       <AreaSwitcher area={area} />
       <Box sx={{ flex: 1 }} />
-      <Typography variant="caption" sx={{ display: { xs: 'none', md: 'block' }, px: 1, py: 0.5, borderRadius: 2, bgcolor: tokens.color.warningSoft, color: '#8A5402', fontWeight: 600 }}>
+      <Typography variant="caption" sx={{ display: { xs: 'none', md: 'block' }, px: 1.5, py: 0.5, borderRadius: 2, bgcolor: tokens.color.warningSoft, color: tokens.color.warningInk, fontWeight: 500 }}>
         デモ環境 — データはこのブラウザだけに保存
       </Typography>
       {area.id === 'admin' && <Tooltip title={`承認待ち ${pending}件`}>
         <IconButton aria-label={`承認待ち ${pending}件を見る`} onClick={() => navigate('/projects')} sx={{ position: 'relative', display: { xs: 'none', sm: 'inline-flex' } }}>
           <Bell size={19} />
-          {pending > 0 && <Box sx={{ position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: '50%', bgcolor: tokens.color.danger, border: '2px solid #fff' }} />}
+          {pending > 0 && <Box sx={{ position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: '50%', bgcolor: tokens.color.error, border: `2px solid ${tokens.color.bg}` }} />}
         </IconButton>
       </Tooltip>}
       <Tooltip title="デモを初期化">
@@ -202,7 +203,8 @@ function BottomTabs({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
       aria-label="クイックメニュー"
       sx={{
         display: { xs: 'flex', md: 'none' }, position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 25,
-        bgcolor: 'rgba(255,255,255,0.94)', backdropFilter: 'blur(12px)', borderTop: `1px solid ${tokens.color.border}`,
+        // M3 Navigation bar: surfaceContainer の面・罫線なし。選択中はアイコンの下に secondaryContainer の pill
+        bgcolor: tokens.color.surfaceContainer,
         pb: 'env(safe-area-inset-bottom)',
         // 横向きのスマホは高さが足りないので下部タブを隠す（メニューは上部バーから開ける）
         [LANDSCAPE_PHONE]: { display: 'none' },
@@ -215,15 +217,17 @@ function BottomTabs({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
           <ButtonBase
             // 選択中の判定は item.match で行う（NavLink だと aria-current が上書きされる）
             key={item.to} component={Link} to={item.to} aria-current={active ? 'page' : undefined}
-            sx={{ flex: 1, flexDirection: 'column', gap: 0.25, height: 58, fontSize: 12, lineHeight: 1.2, whiteSpace: 'nowrap', fontWeight: 600, color: active ? area.color : tokens.color.muted }}
+            sx={{ flex: 1, flexDirection: 'column', gap: 0.5, height: 64, fontSize: 12, lineHeight: 1.2, whiteSpace: 'nowrap', fontWeight: active ? 700 : 500, color: active ? tokens.color.onSurface : tokens.color.onSurfaceVariant }}
           >
-            <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
+            <Box component="span" sx={{ display: 'grid', placeItems: 'center', width: 56, height: 28, borderRadius: `${tokens.radius.full}px`, bgcolor: active ? tokens.color.secondaryContainer : 'transparent', color: active ? tokens.color.onSecondaryContainer : 'inherit', transition: `background-color .2s ${tokens.motion.easeCss}` }}>
+              <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
+            </Box>
             {item.label}
           </ButtonBase>
         );
       })}
-      <ButtonBase onClick={onMenu} aria-label="すべてのメニュー" sx={{ flex: 1, flexDirection: 'column', gap: 0.25, height: 58, fontSize: 12, lineHeight: 1.2, whiteSpace: 'nowrap', fontWeight: 600, color: tokens.color.muted }}>
-        <MenuIcon size={20} />
+      <ButtonBase onClick={onMenu} aria-label="すべてのメニュー" sx={{ flex: 1, flexDirection: 'column', gap: 0.5, height: 64, fontSize: 12, lineHeight: 1.2, whiteSpace: 'nowrap', fontWeight: 500, color: tokens.color.onSurfaceVariant }}>
+        <Box component="span" sx={{ display: 'grid', placeItems: 'center', width: 56, height: 28 }}><MenuIcon size={20} /></Box>
         メニュー
       </ButtonBase>
     </Box>
@@ -301,7 +305,7 @@ export function AppShell() {
         open={open}
         onClose={() => setOpen(false)}
         sx={{ display: { lg: 'none' } }}
-        PaperProps={{ sx: { width: 280, bgcolor: tokens.color.bg, borderRadius: '0 20px 20px 0' } }}
+        PaperProps={{ sx: { width: 280, bgcolor: tokens.color.bg, borderRadius: '0 16px 16px 0' } }}
       >
         <SidebarContent onNavigate={() => setOpen(false)} />
       </Drawer>

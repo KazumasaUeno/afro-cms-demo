@@ -117,7 +117,7 @@ export default function SettingsPage() {
           <SectionTitle title="このデモについて" icon={<Info size={18} color={tokens.color.muted} />} />
           <Stack spacing={2}>
             <Stack direction="row" spacing={1.5}>
-              <Sparkles size={18} color="#5B3FD6" style={{ flexShrink: 0, marginTop: 2 }} />
+              <Sparkles size={18} color={tokens.color.accentInk} style={{ flexShrink: 0, marginTop: 2 }} />
               <Typography variant="body2">
                 <b>AI機能はすべてシミュレーションです。</b>要件分析・デザイン生成・サイト診断の結果は事前に用意したデータで、実際のAI生成は行っていません。画面上の「AIシミュレーション」の表示が目印です。
               </Typography>
