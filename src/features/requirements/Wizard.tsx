@@ -1,41 +1,45 @@
 import { Box, Button, ButtonBase, IconButton, LinearProgress, Stack, TextField, Tooltip, Typography, InputAdornment } from '@mui/material';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, ArrowRight, CornerDownLeft, Globe, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, CornerDownLeft, Globe, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
+import { REQUIREMENT_CATEGORIES, REQUIREMENT_QUESTIONS } from '@/data/requirements';
 import { useDemo } from '@/store/DemoStore';
-import { AiMark, Surface } from '@/components/ui';
+import { Surface } from '@/components/ui';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { tokens } from '@/theme/tokens';
 import { TOUCH } from '@/theme/media';
-import type { AnswerValue } from '@/types';
+import type { AnswerValue, RequirementQuestion } from '@/types';
 import { AnswerInput } from './AnswerInput';
 import { hostnameOf } from './buildProposal';
-import { AnswerOwner, ConfirmAnswerButton } from './AnswerOwner';
-import { questionStatus } from './assignment';
-import { MAX_COMPETITORS, MAX_URL, validateAnswer, validateUrl } from './validation';
+import { ConfirmAnswerButton } from './AnswerStatus';
+import { SaveAnswersButton } from './SaveAnswersButton';
+import { MAX_COMPETITORS, MAX_URL, isAnswered, validateAnswer, validateUrl } from './validation';
 
+/**
+ * 要件ヒアリングの入力（管理者画面）。受託開発では、アフロの担当者がヒアリングで伺った内容を入力する。
+ * 主要な質問を 1 問ずつ出し、次へ・戻るで行き来する。入力は自動で保存され、「保存」ですぐ保存もできる。
+ */
 const STEPS = REQUIREMENT_QUESTIONS.filter((q) => q.featured);
 
-/** AI の語りかけ（質問の前置き）。回答内容を少しだけ拾う */
-function aiLead(stepId: string, answers: Record<string, AnswerValue>): string {
+/** 入力するアフロの担当者向けの補足（ヒアリングで伺った内容を入れる） */
+function hintOf(stepId: string, answers: Record<string, AnswerValue>): string {
   const url = typeof answers['q-url'] === 'string' ? answers['q-url'] : '';
   const host = url && !validateUrl(url) ? hostnameOf(url) : '';
   switch (stepId) {
-    case 'q-url': return 'こんにちは。リニューアルの要件を一緒に整理しましょう。まずは現在のサイトを教えてください。';
-    case 'q-purpose': return host ? `${host} を確認しました。今回リニューアルを考えたきっかけはどれですか？（複数選択できます）` : '今回リニューアルを考えたきっかけはどれですか？';
-    case 'q-issue': return 'ありがとうございます。いま一番困っていることを、そのままの言葉で教えてください。';
-    case 'q-competitor': return '比較の参考にする競合サイトがあれば教えてください。最大3つまで。無ければスキップできます。';
-    case 'q-improve': return '最後に、特に改善したいポイントを選んでください。提案の優先度に反映します。';
+    case 'q-url': return 'お客様の現在のサイトの URL。AI 分析でこのサイトを巡回します。';
+    case 'q-purpose': return `${host ? `${host} のリニューアルについて、` : ''}ヒアリングで伺ったきっかけを選びます（複数選択できます）。`;
+    case 'q-issue': return 'お客様が話した言葉のまま入れると、提案書の「ご回答いただいた課題」にそのまま載ります。';
+    case 'q-competitor': return `比較に使う競合サイトを最大 ${MAX_COMPETITORS} つまで。無ければスキップできます。`;
+    case 'q-improve': return '特に改善したいポイントを選びます。提案の優先度に反映します。';
     default: return '';
   }
 }
 
 const ISSUE_SUGGESTIONS = ['スマホで見づらい', '問い合わせが少ない', '更新が大変', 'デザインが古い', '表示が遅い'];
 
-function summarize(v: AnswerValue | undefined): string {
-  if (Array.isArray(v)) return v.length ? v.join('、') : 'スキップ';
-  return v && v.trim() ? v : 'スキップ';
+/** その質問を答え終えたか（競合サイトは任意なので、1 つでも入っていれば回答済み） */
+function isDone(q: RequirementQuestion, answers: Record<string, AnswerValue>): boolean {
+  return q.id === 'q-competitor' ? isAnswered(answers[q.id]) : !validateAnswer(q, answers[q.id]);
 }
 
 function CompetitorInput({ urls, onChange, errors, onSubmit }: { urls: string[]; onChange: (u: string[]) => void; errors: (string | null)[]; onSubmit: () => void }) {
@@ -94,10 +98,14 @@ export function Wizard({ onAnalyze }: { onAnalyze: () => void }) {
   const [dir, setDir] = useState(1);
 
   const q = STEPS[step];
-  const qs = questionStatus(q, state.requirements);
+  const category = REQUIREMENT_CATEGORIES.find((c) => c.id === q.categoryId);
   const isLast = step === STEPS.length - 1;
   const competitorErrors = competitors.map((u) => validateUrl(u, false));
   const error = q.id === 'q-competitor' ? (competitorErrors.some(Boolean) ? 'invalid' : null) : validateAnswer(q, answers[q.id]);
+  const doneCount = STEPS.filter((x) => isDone(x, answers)).length;
+  // 先へ飛べるのは、まだ答えていない最初の質問まで（必須の質問を飛ばして分析に進ませない）
+  const firstOpen = STEPS.findIndex((x) => x.id !== 'q-competitor' && validateAnswer(x, answers[x.id]));
+  const reachable = Math.max(step, firstOpen === -1 ? STEPS.length - 1 : firstOpen);
 
   const go = (to: number) => {
     setDir(to > step ? 1 : -1);
@@ -105,62 +113,74 @@ export function Wizard({ onAnalyze }: { onAnalyze: () => void }) {
     setStep(to);
   };
 
+  // 競合サイトの欄は入力途中の値を competitors に持つ。次へ・保存のときに回答として確定する
+  const commitCompetitors = () => {
+    if (q.id !== 'q-competitor') return;
+    const cleaned = competitors.map((u) => u.trim()).filter(Boolean);
+    // 形式が正しくない URL は回答として確定しない（次へと同じ扱い。欄にはエラーが出ている）
+    if (cleaned.some((u) => validateUrl(u, false))) return;
+    dispatch({ type: 'setCompetitors', urls: cleaned });
+    // 変えていないときは記録し直さない（入力日時が進まないように）
+    const prev = answers['q-competitor'];
+    const same = Array.isArray(prev) ? prev.join('\n') === cleaned.join('\n') : cleaned.length === 0 && !prev;
+    if (!same) dispatch({ type: 'setAnswer', questionId: 'q-competitor', value: cleaned });
+  };
+
   const next = () => {
     if (error) {
       setTouched(true);
       return;
     }
-    if (q.id === 'q-competitor') {
-      const cleaned = competitors.map((u) => u.trim()).filter(Boolean);
-      dispatch({ type: 'setCompetitors', urls: cleaned });
-      // 変えていないときは記録し直さない（お客様の回答を代理入力に変えてしまうため）
-      const prev = answers['q-competitor'];
-      const same = Array.isArray(prev) ? prev.join('\n') === cleaned.join('\n') : cleaned.length === 0 && !prev;
-      if (!same) dispatch({ type: 'setAnswer', questionId: 'q-competitor', value: cleaned });
-    }
+    commitCompetitors();
     if (isLast) onAnalyze();
     else go(step + 1);
   };
 
   const setValue = (v: AnswerValue) => dispatch({ type: 'setAnswer', questionId: q.id, value: v });
-  const progress = ((step + (error ? 0 : 1)) / STEPS.length) * 100;
 
   return (
     <Surface padding={0} sx={{ overflow: 'hidden' }}>
+      {/* 進み具合: 何問目か・答えた数・質問ごとの印（回答済みは緑のチェック） */}
       <Box sx={{ px: { xs: 2, md: 3.5 }, pt: { xs: 2, md: 3 } }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.25 }}>
-          <Typography variant="overline">ヒアリング {step + 1} / {STEPS.length}</Typography>
-          <Typography variant="caption">約 {Math.max(1, STEPS.length - step)} 分で完了</Typography>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} sx={{ mb: 1.25 }}>
+          <Typography variant="overline">質問 {step + 1} / {STEPS.length}</Typography>
+          <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums' }}>回答済み <b style={{ color: tokens.color.ink }}>{doneCount}</b> / {STEPS.length}</Typography>
         </Stack>
-        <LinearProgress variant="determinate" value={progress} aria-label="ヒアリングの進捗" />
+        <LinearProgress variant="determinate" value={(doneCount / STEPS.length) * 100} aria-label={`ヒアリングの進捗 ${doneCount} / ${STEPS.length} 問 回答済み`} />
+        <Stack component="ol" direction="row" spacing={0.75} aria-label="質問の一覧" sx={{ listStyle: 'none', m: 0, p: 0, mt: 1.5 }}>
+          {STEPS.map((x, i) => {
+            const done = isDone(x, answers);
+            const current = i === step;
+            return (
+              <Box component="li" key={x.id} sx={{ flex: 1, minWidth: 0 }}>
+                <ButtonBase
+                  onClick={() => go(i)}
+                  disabled={current || i > reachable}
+                  aria-current={current ? 'step' : undefined}
+                  aria-label={`質問 ${i + 1}: ${x.text}（${done ? '回答済み' : '未回答'}）`}
+                  sx={{
+                    width: '100%', gap: 0.75, px: 0.75, height: 36, [TOUCH]: { height: 44 }, borderRadius: '10px', justifyContent: 'center',
+                    border: `1px solid ${current ? tokens.color.primary : tokens.color.border}`,
+                    bgcolor: current ? tokens.color.primarySoft : tokens.color.surface,
+                    '&.Mui-disabled': { opacity: current ? 1 : 0.5 },
+                  }}
+                >
+                  <Box component="span" sx={{
+                    width: 20, height: 20, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700,
+                    bgcolor: done ? tokens.color.success : 'transparent', color: done ? '#fff' : current ? tokens.color.primary : tokens.color.muted,
+                    border: done ? 'none' : `1.5px solid ${current ? tokens.color.primary : tokens.color.borderStrong}`,
+                  }}>
+                    {done ? <Check size={12} strokeWidth={3} /> : i + 1}
+                  </Box>
+                </ButtonBase>
+              </Box>
+            );
+          })}
+        </Stack>
       </Box>
 
-      {/* これまでの回答（チャットの履歴） */}
-      {step > 0 && (
-        <Stack spacing={1} sx={{ px: { xs: 2, md: 3.5 }, pt: 2.5 }}>
-          {STEPS.slice(0, step).map((pq, i) => (
-            <Stack key={pq.id} direction="row" justifyContent="flex-end">
-              <ButtonBase
-                onClick={() => go(i)}
-                aria-label={`「${pq.text}」の回答を修正`}
-                sx={{
-                  maxWidth: '85%', gap: 1, px: 1.5, py: 0.75, borderRadius: '14px 14px 4px 14px', bgcolor: tokens.color.bgSubtle,
-                  color: tokens.color.inkSoft, fontSize: 13, textAlign: 'left', '&:hover': { bgcolor: tokens.color.primarySoft }, '&:hover svg': { opacity: 1 },
-                  // タッチでは hover が無いので、修正できることを常に見せる
-                  [TOUCH]: { minHeight: 44, '& svg': { opacity: '0.8 !important' } },
-                }}
-              >
-                <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {summarize(pq.id === 'q-competitor' ? competitors.filter(Boolean) : answers[pq.id])}
-                </Box>
-                <Pencil size={12} style={{ opacity: 0.4, flexShrink: 0 }} />
-              </ButtonBase>
-            </Stack>
-          ))}
-        </Stack>
-      )}
-
-      <Box sx={{ px: { xs: 2, md: 3.5 }, py: { xs: 2.5, md: 3.5 }, minHeight: { md: 360 } }}>
+      {/* いまの質問と入力欄 */}
+      <Box sx={{ px: { xs: 2, md: 3.5 }, py: { xs: 2.5, md: 3.5 }, minHeight: { md: 300 } }}>
         <AnimatePresence mode="wait" initial={false} custom={dir}>
           <motion.div
             key={q.id}
@@ -169,24 +189,12 @@ export function Wizard({ onAnalyze }: { onAnalyze: () => void }) {
             exit={reduced ? { opacity: 0 } : { opacity: 0, x: -16 * dir }}
             transition={{ duration: tokens.motion.base, ease: tokens.motion.ease }}
           >
-            <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ mb: 2.5 }}>
-              <AiMark size={34} />
-              <Box sx={{ px: 2, py: 1.5, borderRadius: '4px 16px 16px 16px', bgcolor: tokens.color.surfaceMuted, border: `1px solid ${tokens.color.border}`, maxWidth: 560 }}>
-                <Typography variant="body2" sx={{ color: tokens.color.inkSoft }}>{aiLead(q.id, answers)}</Typography>
-              </Box>
-            </Stack>
-            <Typography variant="h2" component="h2" sx={{ mb: 1.25 }} id={`wizard-q-${q.id}`}>
+            {category && <Typography variant="overline" sx={{ display: 'block', mb: 0.5, color: tokens.color.muted }}>{category.no}. {category.title}</Typography>}
+            <Typography variant="h2" component="h2" sx={{ mb: 1 }} id={`wizard-q-${q.id}`}>
               <label htmlFor={`answer-${q.id}`}>{q.text}</label>
             </Typography>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2.5, flexWrap: 'wrap', rowGap: 0.75 }}>
-              <AnswerOwner question={q} />
-              <ConfirmAnswerButton question={q} side="afro" />
-            </Stack>
-            {qs.assignee === 'client' && qs.state === 'unanswered' && (
-              <Typography variant="caption" component="p" sx={{ mt: -1.5, mb: 2 }}>
-                お客様がポータルで回答する質問です。ここで入力すると代理入力になり、お客様の確認が必要になります。
-              </Typography>
-            )}
+            <Typography variant="body2" sx={{ color: tokens.color.muted, mb: 2.5, maxWidth: 620 }}>{hintOf(q.id, answers)}</Typography>
+            <Box sx={{ mb: 1.5, '&:empty': { display: 'none' } }}><ConfirmAnswerButton question={q} /></Box>
 
             {q.id === 'q-competitor' ? (
               <CompetitorInput urls={competitors} onChange={(u) => dispatch({ type: 'setCompetitors', urls: u })} errors={touched ? competitorErrors : []} onSubmit={next} />
@@ -217,13 +225,13 @@ export function Wizard({ onAnalyze }: { onAnalyze: () => void }) {
       <Stack
         direction="row"
         alignItems="center"
-        spacing={1}
-        sx={{ px: { xs: 2, md: 3.5 }, py: 2, borderTop: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surfaceMuted }}
+        sx={{ px: { xs: 2, md: 3.5 }, py: 2, gap: 1, flexWrap: 'wrap', borderTop: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surfaceMuted }}
       >
         <Button variant="text" startIcon={<ArrowLeft size={16} />} onClick={() => go(step - 1)} disabled={step === 0}>戻る</Button>
+        <SaveAnswersButton beforeSave={commitCompetitors} />
         <Box sx={{ flex: 1 }} />
         <Tooltip title={q.kind === 'longtext' ? 'Ctrl / ⌘ + Enter でも進めます' : 'Enter でも進めます'}>
-          <Typography variant="caption" sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 0.5 }}>
+          <Typography variant="caption" sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 0.5 }}>
             <CornerDownLeft size={13} /> {q.kind === 'longtext' ? 'Ctrl+Enter' : 'Enter'}
           </Typography>
         </Tooltip>

@@ -2,7 +2,6 @@ import { Box, Button, ButtonBase, Stack, Typography } from '@mui/material';
 import { ArrowRight, MessageSquareText } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BuildFlowNav } from '@/components/layout/BuildFlowNav';
 import { PageHeader, Reveal, SectionTitle, StatusPill, Surface } from '@/components/ui';
 import { useDemo } from '@/store/DemoStore';
 import { REQUIREMENT_CATEGORIES, REQUIREMENT_QUESTIONS, TOTAL_REQUIREMENT_QUESTIONS } from '@/data/requirements';
@@ -11,27 +10,28 @@ import { tokens } from '@/theme/tokens';
 import { TOUCH } from '@/theme/media';
 import type { RequirementQuestion, RequirementSession } from '@/types';
 import { AnswerInput } from './AnswerInput';
-import { AnswerOwner, ConfirmAnswerButton } from './AnswerOwner';
+import { AnswerStatus, ConfirmAnswerButton } from './AnswerStatus';
 import { CompetitorField } from './CompetitorField';
-import { MODE_LABEL, SIDE_LABEL, modeOf, questionStatus } from './assignment';
+import { CsvTools } from './CsvTools';
+import { SaveAnswersButton } from './SaveAnswersButton';
+import { questionStatus } from './assignment';
 import { answerText, isAnswered, validateAnswer } from './validation';
 
 /**
  * 管理者画面: ヒアリングの回答の一覧（/ai-studio/hearing）。
- * お客様ポータルの回答・アフロの入力・代理入力の確認状態を 1 画面で見て、全問をその場で入力できる。
+ * 受託開発では、アフロの担当者がヒアリングで伺った内容を全問入力する（お客様は入力しない。2026-11-10 決定）。CSV でまとめて入力もできる。
  * 値は store の requirements から毎回導く（専用の状態は持たない）。
- * アフロは要件定義書の承認まで入力できる（AI 分析の後も。お客様ポータルは分析で締め切る）。承認後は reducer が変更を受け付けないため閲覧のみ。
- * 分析後に変えた回答は、提案書（回答から毎回作る）にすぐ反映される。ここでの入力はアフロの入力として記録し、
- * お客様の担当の質問ではお客様の確認が必要になる（ウィザードと同じ扱い）。
+ * 要件定義書の承認まで入力できる（AI 分析の後も）。承認後は reducer が変更を受け付けないため閲覧のみ。
+ * 分析後に変えた回答は、提案書（回答から毎回作る）にすぐ反映される。
  */
 
-type Filter = 'all' | 'client' | 'afro' | 'unanswered' | 'pending';
+type Filter = 'all' | 'unanswered' | 'answered' | 'pending';
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'すべて' },
-  { id: 'client', label: 'お客様の担当' },
-  { id: 'afro', label: 'アフロの担当' },
   { id: 'unanswered', label: '未回答' },
+  { id: 'answered', label: '回答済み' },
+  // 0.17 までの保存データでお客様が入力した回答だけが対象。無ければボタンを出さない
   { id: 'pending', label: '確認待ち' },
 ];
 
@@ -39,8 +39,7 @@ function matches(q: RequirementQuestion, req: RequirementSession, f: Filter): bo
   const s = questionStatus(q, req);
   switch (f) {
     case 'all': return true;
-    case 'client': return s.assignee === 'client';
-    case 'afro': return s.assignee === 'afro';
+    case 'answered': return s.state === 'answered' || s.state === 'confirmed';
     case 'unanswered': return s.state === 'unanswered';
     case 'pending': return s.state === 'proxy';
   }
@@ -59,14 +58,9 @@ function AnswerRow({ q, editable }: { q: RequirementQuestion; editable: boolean 
         <Typography variant="h6" component={editable ? 'label' : 'h3'} htmlFor={editable ? `answer-${q.id}` : undefined} sx={{ flex: 1, minWidth: 0 }}>{q.text}</Typography>
       </Stack>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.25, flexWrap: 'wrap', rowGap: 0.75 }}>
-        <AnswerOwner question={q} />
-        <ConfirmAnswerButton question={q} side="afro" />
+        <AnswerStatus question={q} />
+        <ConfirmAnswerButton question={q} />
       </Stack>
-      {editable && s.assignee === 'client' && s.state === 'unanswered' && (
-        <Typography variant="caption" component="p" sx={{ mt: -0.5, mb: 1 }}>
-          お客様がポータルで回答する質問です。ここで入力すると代理入力になり、お客様の確認が必要になります。
-        </Typography>
-      )}
       {editable && q.id === 'q-competitor' ? (
         <CompetitorField by="afro" />
       ) : editable ? (
@@ -86,8 +80,8 @@ function AnswerRow({ q, editable }: { q: RequirementQuestion; editable: boolean 
       )}
       {answered && s.meta && (
         <Typography variant="caption" sx={{ display: 'block', mt: 0.75 }}>
-          {SIDE_LABEL[s.meta.by]}が入力 {formatDateTime(s.meta.at)}
-          {s.meta.confirmedAt ? `・${SIDE_LABEL[s.assignee]}が確認 ${formatDateTime(s.meta.confirmedAt)}` : ''}
+          入力 {formatDateTime(s.meta.at)}
+          {s.meta.confirmedAt ? `・確認 ${formatDateTime(s.meta.confirmedAt)}` : ''}
         </Typography>
       )}
     </Box>
@@ -101,6 +95,8 @@ export default function HearingAnswersPage() {
   const [filter, setFilter] = useState<Filter>('all');
   // 絞り込みの結果は選んだ時点で固定する（「未回答」で入力した質問が、入力の途中で一覧から消えないように）
   const [picked, setPicked] = useState<string[]>([]);
+  // CSV を取り込んだら、入力途中の値を手元に持つ欄（競合サイト）を読み直す
+  const [csvVersion, setCsvVersion] = useState(0);
   const project = state.projects.find((p) => p.id === req.projectId);
 
   const all = REQUIREMENT_QUESTIONS;
@@ -111,24 +107,26 @@ export default function HearingAnswersPage() {
     setFilter(f);
     setPicked(all.filter((q) => matches(q, req, f)).map((q) => q.id));
   };
-  // open: お客様の回答の受付中（AI 分析前）。editable: アフロが入力できる（承認まで）
+  // open: AI 分析前。editable: 入力できる（承認まで）
   const open = req.status === 'draft';
   const editable = req.status !== 'approved';
 
   return (
     <Box>
-      <BuildFlowNav />
       <PageHeader
         eyebrow="① 要件定義"
         icon={<MessageSquareText size={14} />}
         title="ヒアリングの回答"
         description={editable
-          ? 'お客様がポータルで答えた内容とアフロが入力した内容を、全問まとめて確認・入力できます。入力は自動で保存され、お客様ポータルにもすぐ反映されます。'
-          : 'お客様がポータルで答えた内容とアフロが入力した内容を、全問まとめて確認できます。'}
+          ? 'ヒアリングで伺った内容を、全問まとめて確認・入力できます。入力は自動で保存されます（「保存」ですぐに保存することもできます）。'
+          : 'ヒアリングで伺った内容を、全問まとめて確認できます。'}
         actions={
-          <Button variant="outlined" endIcon={<ArrowRight size={16} />} onClick={() => navigate('/ai-studio')}>
-            {open ? 'AI Studio へ（AI 分析）' : '提案書を見る'}
-          </Button>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+            {editable && <SaveAnswersButton />}
+            <Button variant="outlined" endIcon={<ArrowRight size={16} />} onClick={() => navigate('/ai-studio')}>
+              {open ? 'AI Studio へ（AI 分析）' : '提案書を見る'}
+            </Button>
+          </Stack>
         }
       />
 
@@ -137,25 +135,29 @@ export default function HearingAnswersPage() {
           <Surface padding={{ xs: 2, md: 3 }}>
             <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 0.75, mb: 1.5 }}>
               {project && <StatusPill tone="neutral" dot={false}>{project.clientName}</StatusPill>}
-              <StatusPill tone="info" dot={false}>分担: {MODE_LABEL[modeOf(req)].label}</StatusPill>
               <StatusPill tone={open ? 'warning' : 'success'}>
-                {open ? '回答の受付中' : req.status === 'approved' ? `要件定義書 承認済み ${formatDateTime(req.approvedAt)}` : `お客様の回答は締め切り済み（AI 分析 ${formatDateTime(req.analyzedAt)}）`}
+                {open ? '入力中（AI 分析前）' : req.status === 'approved' ? `要件定義書 承認済み ${formatDateTime(req.approvedAt)}` : `AI 分析済み ${formatDateTime(req.analyzedAt)}・お客様の承認待ち`}
               </StatusPill>
             </Stack>
             <Typography variant="caption" component="p">
-              デモに収録した {all.length} 問のうち <b style={{ color: tokens.color.ink }}>{answeredCount} 問</b> 回答済み（資料上は 12 項目 {TOTAL_REQUIREMENT_QUESTIONS} 問）。
+              デモに収録した {all.length} 問のうち <b style={{ color: tokens.color.ink }}>{answeredCount} 問</b> 回答済み（資料の 12 項目 81 問に公開・ドメインの 3 問を加えた {REQUIREMENT_CATEGORIES.length} 項目 {TOTAL_REQUIREMENT_QUESTIONS} 問）。
               {open
-                ? ' ここで入力した内容はアフロの入力として記録します（お客様の担当の質問は、お客様の確認が必要になります）。'
+                ? ''
                 : editable
-                  ? ' AI 分析の後もアフロは要件定義書の承認まで入力できます。変えた内容は提案書にすぐ反映されます（お客様の担当の質問は代理入力になり、お客様のポータルでの確認が済むまで承認できません）。'
+                  ? ' AI 分析の後も、要件定義書の承認まで入力できます。変えた内容は提案書にすぐ反映されます。'
                   : ' 要件定義書を承認済みのため、ここでは閲覧だけできます。'}
             </Typography>
+            {editable && (
+              <Box sx={{ mt: 2, pt: 2, borderTop: `1px solid ${tokens.color.border}` }}>
+                <CsvTools onApplied={() => setCsvVersion((v) => v + 1)} />
+              </Box>
+            )}
           </Surface>
         </Reveal>
 
         <Reveal delay={0.04}>
           <Stack direction="row" role="group" aria-label="表示する質問" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
-            {FILTERS.map((f) => {
+            {FILTERS.filter((f) => f.id !== 'pending' || count('pending') > 0 || filter === 'pending').map((f) => {
               const on = f.id === filter;
               return (
                 <ButtonBase
@@ -195,7 +197,7 @@ export default function HearingAnswersPage() {
                   title={<span id={`hearing-cat-${c.id}`}>{c.no}. {c.title}</span>}
                   sub={<Typography variant="caption">{qs.length} 問</Typography>}
                 />
-                {qs.map((q) => <AnswerRow key={q.id} q={q} editable={editable} />)}
+                {qs.map((q) => <AnswerRow key={`${q.id}-${csvVersion}`} q={q} editable={editable} />)}
               </Surface>
             );
           })

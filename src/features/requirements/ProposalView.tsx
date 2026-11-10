@@ -1,5 +1,5 @@
 import { Box, Button, Dialog, DialogActions, DialogContent, Stack, Typography } from '@mui/material';
-import { ArrowRight, BadgeCheck, CheckCircle2, Globe, Quote, RotateCcw, Target, TrendingUp } from 'lucide-react';
+import { ArrowRight, BadgeCheck, CheckCircle2, Download, Globe, Quote, RotateCcw, Send, Target, TrendingUp } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { REQUIREMENT_QUESTIONS, TOTAL_REQUIREMENT_QUESTIONS } from '@/data/requirements';
@@ -12,6 +12,7 @@ import type { ProposalPoint } from '@/types';
 import { buildProposal } from './buildProposal';
 import { isAnswered } from './validation';
 import { pendingConfirmations } from './assignment';
+import { downloadRequirementsDoc } from './requirementsDoc';
 
 const PRIORITY: Record<ProposalPoint['priority'], { label: string; tone: PillTone; color: string }> = {
   high: { label: '優先度 高', tone: 'danger', color: tokens.color.danger },
@@ -28,7 +29,7 @@ export function ProposalView() {
   const proposal = useMemo(() => buildProposal(req.answers, req.competitors), [req.answers, req.competitors]);
   const answered = REQUIREMENT_QUESTIONS.filter((q) => isAnswered(req.answers[q.id])).length;
   const approved = req.status === 'approved';
-  // 代理入力の確認が残っている間は承認できない（どちらの側の確認待ちでも）
+  // 内容の確認待ちの回答（0.17 までの保存データでお客様が入力したもの）が残っている間は承認できない（reducer と同じ条件）
   const pending = pendingConfirmations(req).length;
 
   return (
@@ -127,15 +128,22 @@ export function ProposalView() {
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }}>
             <Box sx={{ flex: 1 }}>
               <Typography variant="h4" component="h2">要件定義書の承認</Typography>
-              <Typography variant="body2" color="text.secondary">承認すると、この内容をもとにサイトマップとデザイン案の作成に進みます。</Typography>
+              <Typography variant="body2" color="text.secondary">承認されると、この内容をもとにサイトマップとデザイン案の作成に進みます。</Typography>
+              {!approved && (
+                <Stack direction="row" spacing={0.75} alignItems="center" role="status" sx={{ mt: 1, color: '#0B6699' }}>
+                  <Send size={14} style={{ flexShrink: 0 }} />
+                  <Typography variant="caption" sx={{ color: 'inherit', fontWeight: 650 }}>お客様ポータルの「確認・承認」で、お客様に承認を依頼しています</Typography>
+                </Stack>
+              )}
               {!approved && pending > 0 && (
                 <Typography variant="caption" role="status" sx={{ display: 'block', mt: 0.5, color: '#8A5402', fontWeight: 650 }}>
-                  代理入力した回答のうち {pending} 問が確認待ちです。確認が終わると承認できます。
+                  内容の確認が済んでいない回答が {pending} 問あります。「回答の一覧」で確認すると承認できます。
                 </Typography>
               )}
             </Box>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ flexWrap: 'wrap' }}>
               {!approved && <Button variant="text" startIcon={<RotateCcw size={16} />} onClick={() => setConfirmReset(true)}>回答をやり直す</Button>}
+              <Button variant="outlined" startIcon={<Download size={16} />} onClick={() => { downloadRequirementsDoc(state); toast('要件定義書をダウンロードしました'); }}>要件定義書をダウンロード</Button>
               {approved ? (
                 <Box
                   role="status"
@@ -145,7 +153,7 @@ export function ProposalView() {
                 </Box>
               ) : (
                 <Button variant="outlined" startIcon={<CheckCircle2 size={16} />} disabled={pending > 0} onClick={() => { dispatch({ type: 'approveRequirements' }); toast('要件定義書を承認しました'); }}>
-                  要件定義書を承認
+                  アフロが代わりに承認
                 </Button>
               )}
               <Button variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate('/site')}>サイトマップへ進む</Button>

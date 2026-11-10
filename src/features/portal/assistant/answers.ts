@@ -3,7 +3,7 @@ import { currentProject, signageState } from '@/store/DemoStore';
 import { STAGES, stageIndex } from '@/data/projects';
 import { memberById } from '@/data/members';
 import { formatDate } from '@/services/time';
-import { approvalSteps, hearingTodo } from '../portalSteps';
+import { approvalSteps } from '../portalSteps';
 import { hasUndelivered } from '@/data/signage';
 
 /**
@@ -20,10 +20,7 @@ export interface AssistantReply {
 /** お客様にお願いしていること（ホームの「ご確認をお願いしたいこと」と同じ数え方） */
 export function clientTodos(state: DemoState): { label: string; to: string }[] {
   const out: { label: string; to: string }[] = [];
-  const h = hearingTodo(state);
-  // ヒアリングは 1 件として数える（ホームと同じ）
-  const hearing = [h.unanswered ? `未回答 ${h.unanswered} 問` : '', h.toConfirm ? `代理入力の確認 ${h.toConfirm} 問` : ''].filter(Boolean);
-  if (hearing.length) out.push({ label: `ヒアリング（${hearing.join('・')}）`, to: '/portal/requirements' });
+  // ヒアリングはアフロが入力するので、お客様へのお願いには入れない（2026-11-10 決定）
   approvalSteps(state).filter((s) => s.status === 'waiting').forEach((s) => {
     out.push({ label: s.progress ? `${s.title}（${s.progress.done} / ${s.progress.total}）` : `${s.title}の承認`, to: s.key === 'quality' ? '/portal/quality' : `/portal/approvals#${s.key}` });
   });
@@ -57,13 +54,7 @@ function signageGuide(state: DemoState): AssistantReply {
 /** いま開いている画面の案内（パネルの最初のあいさつ） */
 export function pageGuide(pathname: string, state: DemoState): AssistantReply {
   const project = currentProject(state);
-  const h = hearingTodo(state);
   switch (pathname) {
-    case '/portal/requirements':
-      if (state.requirements.status !== 'draft') return { text: '要件定義書ができあがったので、ヒアリングの回答は締め切りました。内容は「確認・承認」でご確認ください。', action: { label: '確認・承認へ', to: '/portal/approvals#requirements' } };
-      return { text: h.unanswered
-        ? `この画面では、要件を決めるための質問にお答えいただきます。未回答はあと ${h.unanswered} 問です。分からない質問は空欄のままで大丈夫です。`
-        : 'お客様の担当の質問はすべて回答済みです。ありがとうございます。アフロが内容をもとに要件定義書を作ります。' };
     case '/portal/approvals': {
       const waiting = approvalSteps(state).filter((s) => s.status === 'waiting' && s.key !== 'quality');
       return { text: waiting.length
@@ -139,10 +130,6 @@ export const TOPICS: Topic[] = [
       const days = Math.max(0, Math.ceil((new Date(p.launchDate).getTime() - Date.now()) / 86400000));
       return { text: `公開予定は ${formatDate(p.launchDate)}、あと ${days} 日です。承認が遅れると公開日も後ろにずれることがあるので、お願いしたいことは早めに進めていただけると助かります。` };
     },
-  },
-  {
-    id: 'proxy', label: '「代理入力」って何？', keywords: ['代理', '代わり', '確認待ち'],
-    answer: () => ({ text: 'お客様の担当の質問に、アフロが代わりに答えた回答のことです。内容が合っていれば「内容を確認しました」を押してください。違っていれば書き直すと、お客様の回答になります。確認が終わるまで要件定義書は承認できません。', action: { label: 'ヒアリングを開く', to: '/portal/requirements' } }),
   },
   {
     id: 'approve', label: '承認するとどうなる？', keywords: ['承認', '取り消', 'やり直'],

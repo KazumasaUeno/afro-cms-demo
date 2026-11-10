@@ -1,5 +1,5 @@
 import { Box, Button, ButtonBase, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography } from '@mui/material';
-import { ArrowRight, BadgeCheck, Check, CheckCircle2, ClipboardCheck, Lock, Sparkles } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Check, CheckCircle2, ClipboardCheck, Download, Lock, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { PageHeader, Reveal, StatusPill, Surface } from '@/components/ui';
@@ -14,6 +14,7 @@ import { DeviceFrame } from '@/features/design/DeviceFrame';
 import { buildProposal } from '@/features/requirements/buildProposal';
 import { approvalSteps, type ApprovalKey, type ApprovalStep } from './portalSteps';
 import { pendingConfirmations } from '@/features/requirements/assignment';
+import { downloadRequirementsDoc } from '@/features/requirements/requirementsDoc';
 
 const AREA = AREAS.portal;
 
@@ -122,14 +123,18 @@ export default function PortalApprovalsPage() {
             {byKey.requirements.status === 'waiting' && pending.length > 0 && (
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }} role="status" sx={{ mb: 2, px: 1.5, py: 1, borderRadius: 2, bgcolor: tokens.color.warningSoft }}>
                 <Typography variant="caption" sx={{ flex: 1, color: '#8A5402', fontWeight: 650 }}>
-                  代わりに入力された回答が {pending.length} 問、確認待ちです。確認が終わると承認できます。
+                  アフロが回答の内容を確認しています（{pending.length} 問）。確認が終わると承認できます。
                 </Typography>
-                <Button size="small" endIcon={<ArrowRight size={14} />} onClick={() => navigate('/portal/requirements')}>ヒアリングで確認</Button>
               </Stack>
+            )}
+            {req.status !== 'draft' && (
+              <Button size="small" variant="outlined" startIcon={<Download size={15} />} onClick={() => { downloadRequirementsDoc(state); toast('要件定義書をダウンロードしました'); }} sx={{ mb: 2 }}>
+                要件定義書をダウンロード
+              </Button>
             )}
             {req.status === 'draft' ? (
               <Typography variant="caption" component="p" sx={{ px: 1.5, py: 1, borderRadius: 2, bgcolor: tokens.color.bgSubtle }}>
-                デモ: 「ヒアリング」でお客様の担当の質問に答え、管理者画面の「AI Studio」で要件を分析すると、ここに要件定義書が届きます。
+                デモ: 管理者画面の「AI Studio」でヒアリングの内容を入力して AI 分析すると、ここに要件定義書が届きます。
               </Typography>
             ) : (
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '200px minmax(0,1fr)' }, gap: 2 }}>

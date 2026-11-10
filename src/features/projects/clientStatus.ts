@@ -1,8 +1,6 @@
 import type { DemoState, ISODate } from '@/types';
 import { ACTOR, APPROVE_TEXT } from '@/store/reducer';
-import { approvalSteps, hearingTodo, type ApprovalKey, type ApprovalStatus } from '@/features/portal/portalSteps';
-import { MODE_LABEL, modeOf, pendingConfirmations, questionsFor } from '@/features/requirements/assignment';
-import { isAnswered } from '@/features/requirements/validation';
+import { approvalSteps, type ApprovalKey, type ApprovalStatus } from '@/features/portal/portalSteps';
 import { clientTodos } from '@/features/portal/assistant/answers';
 
 /**
@@ -25,22 +23,10 @@ export interface ClientApprovalRow {
 }
 
 export interface ClientStatus {
-  hearing: {
-    modeLabel: string;
-    /** 回答の受付中か（AI 分析後は締め切り） */
-    open: boolean;
-    clientAnswered: number;
-    clientTotal: number;
-    unanswered: number;
-    /** アフロの代理入力をお客様が確認していない数 */
-    clientToConfirm: number;
-    /** お客様の代理入力をアフロが確認していない数 */
-    afroToConfirm: number;
-  };
   approvals: ClientApprovalRow[];
   /** お客様の公開承認を待っているページ・お知らせ */
   publishWaiting: number;
-  /** お客様にお願いしていて、まだのこと（ヒアリングは 1 件。ポータルのホームと同じ数え方） */
+  /** お客様にお願いしていて、まだのこと（ポータルのホームと同じ数え方。ヒアリングはアフロが入力するので含めない） */
   waitingCount: number;
   /** お客様が最後に操作した日時 */
   lastClientAt?: ISODate;
@@ -52,8 +38,6 @@ const ADMIN_ROUTE: Record<ApprovalKey, string> = {
 
 export function clientStatus(state: DemoState): ClientStatus {
   const req = state.requirements;
-  const clientQs = questionsFor(req, 'client');
-  const h = hearingTodo(state);
   const approvals = approvalSteps(state).map((s): ClientApprovalRow => {
     const text = s.key === 'quality' ? undefined : APPROVE_TEXT[s.key];
     // 新しい順なので、承認し直した場合も最新の承認が見つかる（記録が古くて残っていなければ承認した人は出さない）
@@ -69,15 +53,6 @@ export function clientStatus(state: DemoState): ClientStatus {
   const lastClient = state.activities.find((a) => a.actor === ACTOR.client)?.at;
   const lastLog = state.approvalLogs.find((l) => l.side === 'client' && l.actor === ACTOR.client)?.at;
   return {
-    hearing: {
-      modeLabel: MODE_LABEL[modeOf(req)].label,
-      open: req.status === 'draft',
-      clientAnswered: clientQs.filter((q) => isAnswered(req.answers[q.id])).length,
-      clientTotal: clientQs.length,
-      unanswered: h.unanswered,
-      clientToConfirm: h.toConfirm,
-      afroToConfirm: pendingConfirmations(req, 'afro').length,
-    },
     approvals,
     publishWaiting,
     waitingCount: clientTodos(state).length,

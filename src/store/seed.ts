@@ -38,7 +38,8 @@ export const createSeedState = (): DemoState => ({
     answers: {},
     competitors: [],
     status: 'draft',
-    mode: 'shared',
+    // 受託開発ではアフロ（ディレクター）がヒアリングして全問を入力する（2026-11-10 決定）
+    mode: 'afro',
     answerMeta: {},
   },
   sitemap: seedSitemap(),

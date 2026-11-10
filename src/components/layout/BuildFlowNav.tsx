@@ -11,6 +11,8 @@ import { tokens } from '@/theme/tokens';
 export function BuildFlowNav() {
   const { state } = useDemo();
   const { pathname } = useLocation();
+  // 要件定義の段階（/ai-studio・/ai-studio/hearing）では、サイトマップ・デザインの段階ナビを出さない（2026-11-10 決定）
+  if (pathname === '/ai-studio' || pathname === '/ai-studio/hearing') return null;
   const steps = [
     { to: '/ai-studio', label: 'AI要件定義', short: '要件', icon: FileSearch, done: state.requirements.status === 'approved' },
     { to: '/site', label: 'サイトマップ', short: 'サイトマップ', icon: Network, done: !!state.sitemap.approvedAt },
@@ -23,8 +25,7 @@ export function BuildFlowNav() {
       sx={{ display: 'inline-flex', p: 0.5, gap: 0.5, mb: 3, borderRadius: '14px', bgcolor: tokens.color.bgSubtle, maxWidth: '100%', overflowX: 'auto' }}
     >
       {steps.map((s, i) => {
-        // ヒアリングの回答の一覧（/ai-studio/hearing）は要件定義の段階に含める
-        const active = pathname === s.to || (s.to === '/ai-studio' && pathname === '/ai-studio/hearing');
+        const active = pathname === s.to;
         const Icon = s.icon;
         return (
           <ButtonBase

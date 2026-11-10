@@ -1,6 +1,9 @@
 import type { ProposalPoint, RequirementCategory, RequirementQuestion } from '@/types';
 
-/** 資料「12項目81問」のカテゴリ。questionCount は資料上の問数 */
+/**
+ * 資料「12項目81問」のカテゴリ＋アフロで追加した「公開・ドメイン（DNS）」（2026-11-10 のレビューで追加）。
+ * questionCount は資料上の問数（13 は追加分の問数）
+ */
 export const REQUIREMENT_CATEGORIES: RequirementCategory[] = [
   { id: 'rc1', no: 1, title: '現状とリニューアルの目的', questionCount: 8 },
   { id: 'rc2', no: 2, title: '事業・ターゲット', questionCount: 7 },
@@ -14,17 +17,18 @@ export const REQUIREMENT_CATEGORIES: RequirementCategory[] = [
   { id: 'rc10', no: 10, title: '技術・インフラ', questionCount: 6 },
   { id: 'rc11', no: 11, title: 'スケジュール・予算', questionCount: 7 },
   { id: 'rc12', no: 12, title: 'その他・要望', questionCount: 6 },
+  { id: 'rc13', no: 13, title: '公開・ドメイン（DNS）', questionCount: 3 },
 ];
 
-export const TOTAL_REQUIREMENT_QUESTIONS = REQUIREMENT_CATEGORIES.reduce((s, c) => s + c.questionCount, 0); // 81
+export const TOTAL_REQUIREMENT_QUESTIONS = REQUIREMENT_CATEGORIES.reduce((s, c) => s + c.questionCount, 0); // 81 + 3
 
 export const PURPOSE_OPTIONS = ['問い合わせを増やしたい', '採用を強化したい', 'ブランドを刷新したい', 'EC売上を伸ばしたい', '更新を楽にしたい', 'スマホ対応したい'];
 export const IMPROVE_OPTIONS = ['ファーストビュー', 'ナビゲーション', 'スマホ表示', '表示速度', '問い合わせ導線', '写真・ビジュアル', 'SEO', '更新のしやすさ'];
 
 /**
  * 代表質問。featured=true がウィザードで実際に聞く質問。
- * owner は共同モードの担当（事業・ターゲット・好みはお客様、URL・競合・機能・SEO・インフラはアフロ）。
- * それ以外は「カテゴリ一覧」画面で入力できるサンプル（全81問の一部）。
+ * owner は共同モード（将来の Web 版で使う予定。いまはアフロが全問を入力する）の担当。
+ * それ以外は「カテゴリ一覧」・「回答の一覧」・CSV で入力できるサンプル（全問の一部）。
  */
 export const REQUIREMENT_QUESTIONS: RequirementQuestion[] = [
   { id: 'q-url', categoryId: 'rc1', priority: 'A', kind: 'url', text: '現在のホームページのURLを教えてください', placeholder: 'https://example.co.jp', featured: true, owner: 'afro' },
@@ -47,6 +51,10 @@ export const REQUIREMENT_QUESTIONS: RequirementQuestion[] = [
   { id: 'q-infra', categoryId: 'rc10', priority: 'B', kind: 'text', text: '現在のサーバー・ドメインの管理状況を教えてください', owner: 'afro' },
   { id: 'q-schedule', categoryId: 'rc11', priority: 'A', kind: 'text', text: '公開希望時期はいつですか？', owner: 'client' },
   { id: 'q-other', categoryId: 'rc12', priority: 'B', kind: 'longtext', text: 'その他、ご要望があれば自由にご記入ください', owner: 'client' },
+  // 公開・ドメイン（DNS）: 公開日の切り替えで止まらないよう、管理者と切り替え方法を先に押さえる
+  { id: 'q-dns-owner', categoryId: 'rc13', priority: 'A', kind: 'single', text: 'ドメイン・DNS は誰が管理していますか？', options: ['お客様', '制作会社・他社', 'アフロ', '不明'], owner: 'afro' },
+  { id: 'q-dns-switch', categoryId: 'rc13', priority: 'A', kind: 'single', text: '公開時の切り替えはどのように行いますか？', options: ['アフロへ移管', 'お客様側で設定変更', '未定'], owner: 'afro' },
+  { id: 'q-dns-note', categoryId: 'rc13', priority: 'B', kind: 'longtext', text: '同じドメインで使っている他のシステム・サブドメインなど、切り替えで注意することはありますか？', placeholder: '例：メール（Google Workspace）と予約システム（reserve.example.co.jp）を同じドメインで使っている', owner: 'afro' },
 ];
 
 /** AI分析（シミュレーション）の工程 */

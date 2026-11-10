@@ -1,9 +1,8 @@
-import { Box, Button, Stack } from '@mui/material';
-import { ListChecks, Sparkles } from 'lucide-react';
+import { Box, Button, Stack, Typography } from '@mui/material';
+import { FileSpreadsheet, ListChecks, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import { BuildFlowNav } from '@/components/layout/BuildFlowNav';
-import { AiBadge, PageHeader, Reveal } from '@/components/ui';
+import { AiBadge, PageHeader, Reveal, Surface } from '@/components/ui';
 import { useDemo } from '@/store/DemoStore';
 import { useToast } from '@/hooks/useToast';
 import { tokens } from '@/theme/tokens';
@@ -12,7 +11,7 @@ import { AnalysisSequence } from './AnalysisSequence';
 import { ProposalView } from './ProposalView';
 import { CategoryPanel } from './CategoryPanel';
 import { hostnameOf } from './buildProposal';
-import { ModeSwitcher } from './AnswerOwner';
+import { CsvTools } from './CsvTools';
 
 type View = 'wizard' | 'analyzing' | 'result';
 
@@ -27,15 +26,15 @@ export default function RequirementsPage() {
 
   return (
     <Box>
-      <BuildFlowNav />
+      {/* 要件定義の段階では、サイトマップ・デザインの段階ナビを出さない（2026-11-10 決定。承認後は提案書の「サイトマップへ進む」から進む） */}
       <PageHeader
         eyebrow="① 要件定義"
         icon={<Sparkles size={14} />}
-        title={view === 'result' ? 'AIがまとめた改善提案' : 'AIと話しながら、要件を整理する'}
+        title={view === 'result' ? 'AIがまとめた改善提案' : 'ヒアリングの内容を入力する'}
         description={
           view === 'result'
-            ? 'ご回答と現行サイトの分析から、優先度つきの改善提案をまとめました。'
-            : '長いアンケートの代わりに、AIが1問ずつ質問します。5つの質問に答えるだけで、改善提案書ができあがります。'
+            ? 'ヒアリングの回答と現行サイトの分析から、優先度つきの改善提案（要件定義書）をまとめました。'
+            : 'お客様へのヒアリングで伺った内容を、1問ずつ入力します。主要な5問で改善提案書のたたき台ができます。残りの質問は「回答の一覧・入力」か CSV で入力できます。'
         }
         actions={
           <Stack direction="row" spacing={1} alignItems="center">
@@ -44,7 +43,6 @@ export default function RequirementsPage() {
           </Stack>
         }
       />
-      <ModeSwitcher />
 
       {view === 'result' ? (
         <ProposalView />
@@ -66,9 +64,23 @@ export default function RequirementsPage() {
             )}
           </Reveal>
           <Box sx={{ position: { lg: 'sticky' }, top: { lg: tokens.layout.topbar + 24 } }}>
-            <Reveal delay={0.08}>
-              <CategoryPanel />
-            </Reveal>
+            <Stack spacing={2.5}>
+              <Reveal delay={0.08}>
+                <CategoryPanel />
+              </Reveal>
+              {view === 'wizard' && (
+                <Reveal delay={0.12}>
+                  <Surface padding={{ xs: 2, md: 2.5 }}>
+                    <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 0.5 }}>
+                      <FileSpreadsheet size={18} color={tokens.color.primary} />
+                      <Typography variant="h4" component="h2">CSV でまとめて入力</Typography>
+                    </Stack>
+                    <Typography variant="caption" component="p" sx={{ mb: 1.5 }}>ヒアリングシートを Excel で作っている場合は、全問をまとめて取り込めます。</Typography>
+                    <CsvTools dense />
+                  </Surface>
+                </Reveal>
+              )}
+            </Stack>
           </Box>
         </Box>
       )}

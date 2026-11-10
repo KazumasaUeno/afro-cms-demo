@@ -1,5 +1,5 @@
 import { Box, Button, ButtonBase, Stack, Typography } from '@mui/material';
-import { ArrowRight, BadgeCheck, CalendarDays, Clock3, House, Lock, Megaphone, MessageSquare, MessageSquareText, PenLine, Stamp } from 'lucide-react';
+import { ArrowRight, BadgeCheck, CalendarDays, Clock3, House, Lock, Megaphone, MessageSquare, PenLine, Stamp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { MemberAvatar, PageHeader, ProgressRing, Reveal, SectionTitle, StageTrack, StatusPill, Surface } from '@/components/ui';
 import { useDemo, currentProject } from '@/store/DemoStore';
@@ -9,7 +9,7 @@ import { memberById } from '@/data/members';
 import { STAGES, stageIndex } from '@/data/projects';
 import { tokens } from '@/theme/tokens';
 import { AREAS } from '@/components/layout/nav';
-import { approvalSteps, hearingTodo } from './portalSteps';
+import { approvalSteps } from './portalSteps';
 import { clientTodos } from './assistant/answers';
 import type { PageStatus } from '@/types';
 import type { PillTone } from '@/components/ui';
@@ -32,8 +32,6 @@ export default function PortalHomePage() {
   const owner = memberById(project.ownerId);
   const steps = approvalSteps(state);
   const cmsReview = state.pages.filter((p) => p.status === 'review').length;
-  const hearing = hearingTodo(state);
-  const hearingOpen = hearing.unanswered + hearing.toConfirm > 0;
   // 数え方の正は clientTodos（AI アシスタントのボタンの件数と揃える）
   const todoCount = clientTodos(state).length;
   const stage = STAGES[stageIndex(project.stage)];
@@ -93,21 +91,6 @@ export default function PortalHomePage() {
               action={<Button size="small" onClick={() => navigate('/portal/approvals')}>確認・承認へ</Button>}
             />
             <Stack spacing={1}>
-              {hearingOpen && (
-                <ButtonBase
-                  onClick={() => navigate('/portal/requirements')}
-                  sx={{ justifyContent: 'flex-start', gap: 1.5, textAlign: 'left', borderRadius: 3, p: 1.5, border: `1px solid ${tokens.color.border}`, '&:hover': { borderColor: tokens.color.borderStrong } }}
-                >
-                  <Box sx={{ width: 34, height: 34, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center', bgcolor: tokens.color.warningSoft, color: tokens.color.warning }}><MessageSquareText size={16} /></Box>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 650 }}>ヒアリングへの回答</Typography>
-                    <Typography variant="caption" sx={{ display: 'block' }}>
-                      {[hearing.unanswered ? `未回答の質問が ${hearing.unanswered} 問` : '', hearing.toConfirm ? `代わりに入力された回答の確認が ${hearing.toConfirm} 問` : ''].filter(Boolean).join('・')}あります
-                    </Typography>
-                  </Box>
-                  <ArrowRight size={16} color={tokens.color.muted} />
-                </ButtonBase>
-              )}
               {steps.map((s) => {
                 const approved = s.status === 'approved';
                 const locked = s.status === 'locked';

@@ -9,13 +9,24 @@ interface StoreValue {
   state: DemoState;
   dispatch: React.Dispatch<Action>;
   resetDemo: () => void;
+  /** いまの状態をすぐに保存する（「保存」ボタン用）。保存できたら true（プライベートモード・容量超過では false） */
+  flush: () => boolean;
 }
 
 const StoreContext = createContext<StoreValue | null>(null);
 
+/**
+ * 受託開発ではアフロがヒアリングして全問を入力する（2026-11-10 決定）。
+ * 0.17 までの保存データには「共同」「お客様が入力」が残っているので、読み込み時にアフロの入力にそろえる。
+ * 分担の仕組み（features/requirements/assignment.ts）は将来の Web 版のために残し、画面からは切り替えない
+ */
+function withAfroMode(state: DemoState): DemoState {
+  return state.requirements.mode === 'afro' ? state : { ...state, requirements: { ...state.requirements, mode: 'afro' } };
+}
+
 function init(): DemoState {
   // 保存済みのデータに古い進捗が残っていても、デモのデータに合わせ直す
-  return syncDemoProject(loadJson(STORAGE_KEY, isDemoState) ?? createSeedState());
+  return syncDemoProject(withAfroMode(loadJson(STORAGE_KEY, isDemoState) ?? createSeedState()));
 }
 
 export function DemoStoreProvider({ children }: { children: ReactNode }) {
@@ -46,6 +57,7 @@ export function DemoStoreProvider({ children }: { children: ReactNode }) {
         removeKey(STORAGE_KEY);
         dispatch({ type: 'reset' });
       },
+      flush: () => saveJson(STORAGE_KEY, latest.current),
     }),
     [state],
   );

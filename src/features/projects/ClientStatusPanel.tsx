@@ -1,4 +1,4 @@
-import { Box, Button, ButtonBase, LinearProgress, Stack, Typography } from '@mui/material';
+import { Box, Button, ButtonBase, Stack, Typography } from '@mui/material';
 import { ArrowRight, CheckCircle2, Circle, Clock, UserRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useDemo } from '@/store/DemoStore';
@@ -16,7 +16,7 @@ const STATUS: Record<ClientApprovalRow['status'], { label: string; tone: PillTon
 };
 
 /**
- * 管理者画面: お客様の対応状況（ヒアリングの回答・承認の有無・公開承認の待ち）。
+ * 管理者画面: お客様の対応状況（承認の有無・公開承認の待ち）。ヒアリングはアフロが入力するので出さない（2026-11-10 決定）。
  * デモのデータは MINAMO COFFEE の 1 案件分だけなので、その案件のときだけ出す。
  * compact はホームの右カラム用（見出しの下に詳細へのリンクを出す）
  */
@@ -27,7 +27,6 @@ export function ClientStatusPanel({ compact = false }: { compact?: boolean }) {
 
   if (!project) return null;
   const s = clientStatus(state);
-  const h = s.hearing;
 
   const go = (to: string) => {
     dispatch({ type: 'setCurrentProject', id: project.id });
@@ -47,40 +46,8 @@ export function ClientStatusPanel({ compact = false }: { compact?: boolean }) {
         {project.clientName}・最後の操作 {s.lastClientAt ? relativeTime(s.lastClientAt) : 'まだありません'}
       </Typography>
 
-      {/* ヒアリング */}
-      <Box sx={{ pb: 2, borderBottom: `1px solid ${tokens.color.border}` }}>
-        <Stack direction="row" spacing={1} alignItems="baseline" sx={{ mb: 0.75 }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, flex: 1 }}>ヒアリング</Typography>
-          <Typography variant="caption">{h.open ? `回答の受付中・分担「${h.modeLabel}」` : '締め切り済み'}</Typography>
-        </Stack>
-        {h.clientTotal > 0 ? (
-          <>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <LinearProgress
-                variant="determinate" value={(h.clientAnswered / h.clientTotal) * 100}
-                aria-label={`お客様の担当の回答 ${h.clientAnswered} / ${h.clientTotal} 問`}
-                sx={{ flex: 1, height: 6, borderRadius: 3 }}
-              />
-              <Typography variant="caption" sx={{ fontWeight: 700, color: tokens.color.ink, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
-                {h.clientAnswered} / {h.clientTotal} 問
-              </Typography>
-            </Stack>
-            <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>お客様の担当の回答</Typography>
-          </>
-        ) : (
-          <Typography variant="caption" sx={{ display: 'block' }}>お客様の担当の質問はありません（アフロがすべて入力）</Typography>
-        )}
-        <Stack direction="row" sx={{ mt: 1, flexWrap: 'wrap', gap: 0.75 }}>
-          {h.open && h.unanswered > 0 && <StatusPill tone="warning">未回答 {h.unanswered} 問</StatusPill>}
-          {h.clientToConfirm > 0 && <StatusPill tone="warning">代理入力・お客様の確認待ち {h.clientToConfirm}</StatusPill>}
-          {h.afroToConfirm > 0 && <StatusPill tone="info">お客様の代理入力・アフロの確認待ち {h.afroToConfirm}</StatusPill>}
-          {!h.unanswered && !h.clientToConfirm && !h.afroToConfirm && <StatusPill tone="success">お客様の対応は完了</StatusPill>}
-        </Stack>
-        <Button size="small" endIcon={<ArrowRight size={14} />} onClick={() => go('/ai-studio/hearing')} sx={{ mt: 1, ml: -1 }}>回答を見る</Button>
-      </Box>
-
       {/* 承認 */}
-      <Box component="ul" aria-label="お客様の承認" sx={{ listStyle: 'none', m: 0, p: 0, pt: 1 }}>
+      <Box component="ul" aria-label="お客様の承認" sx={{ listStyle: 'none', m: 0, p: 0 }}>
         {s.approvals.map((a) => {
           const st = STATUS[a.status];
           const Icon = a.status === 'approved' ? CheckCircle2 : a.status === 'waiting' ? Clock : Circle;

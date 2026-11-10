@@ -178,7 +178,7 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       if (st.state !== 'proxy' || st.assignee !== action.by || !st.meta) return state;
       const meta = { ...state.requirements.answerMeta, [q.id]: { ...st.meta, confirmedAt: nowIso() } };
       const s = { ...state, requirements: { ...state.requirements, answerMeta: meta } };
-      return log(s, `代理入力された回答「${q.text}」を確認しました`, 'approve', ACTOR[action.by], state.requirements.projectId);
+      return log(s, `回答「${q.text}」の内容を確認しました`, 'approve', ACTOR[action.by], state.requirements.projectId);
     }
 
     case 'setCompetitors':

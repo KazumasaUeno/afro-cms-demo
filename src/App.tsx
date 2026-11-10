@@ -26,7 +26,6 @@ const DevTasksPage = lazy(() => import('@/features/dev/DevTasksPage'));
 const DevChecksPage = lazy(() => import('@/features/dev/DevChecksPage'));
 const DevDeploysPage = lazy(() => import('@/features/dev/DevDeploysPage'));
 const PortalHomePage = lazy(() => import('@/features/portal/PortalHomePage'));
-const PortalRequirementsPage = lazy(() => import('@/features/portal/PortalRequirementsPage'));
 const PortalApprovalsPage = lazy(() => import('@/features/portal/PortalApprovalsPage'));
 const PortalQualityPage = lazy(() => import('@/features/portal/PortalQualityPage'));
 const PortalReportsPage = lazy(() => import('@/features/portal/PortalReportsPage'));
@@ -68,7 +67,8 @@ const router = createBrowserRouter([
       { path: 'dev/checks', element: <DevChecksPage /> },
       { path: 'dev/deploys', element: <DevDeploysPage /> },
       { path: 'portal', element: <PortalHomePage /> },
-      { path: 'portal/requirements', element: <PortalRequirementsPage /> },
+      // お客様ポータルのヒアリングは 0.18.0 で廃止（アフロが入力する）。古いリンク・ブックマークは確認・承認へ
+      { path: 'portal/requirements', element: <Navigate to="/portal/approvals" replace /> },
       { path: 'portal/approvals', element: <PortalApprovalsPage /> },
       { path: 'portal/quality', element: <PortalQualityPage /> },
       { path: 'portal/reports', element: <PortalReportsPage /> },
