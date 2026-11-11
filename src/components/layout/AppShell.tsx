@@ -1,12 +1,14 @@
 import { Box, ButtonBase, Drawer, IconButton, Menu, MenuItem, Tooltip, Typography, ListItemIcon } from '@mui/material';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeftRight, Check, ChevronDown, LogOut, Menu as MenuIcon, Presentation, RotateCcw, Bell } from 'lucide-react';
+import { ArrowLeftRight, Check, ChevronDown, LogOut, Menu as MenuIcon, Moon, Presentation, RotateCcw, Bell, Sun } from 'lucide-react';
 import { Suspense, lazy, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useOutlet } from 'react-router-dom';
 import { tokens } from '@/theme/tokens';
 import { LANDSCAPE_PHONE } from '@/theme/media';
 import { useDemo, currentProject } from '@/store/DemoStore';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useThemeMode } from '@/theme/ThemeMode';
+import { navIndicatorSx } from './navIndicator';
 import { Sidebar, SidebarContent } from './Sidebar';
 import { LogoMark } from './Logo';
 import { AREA_ORDER, AREAS, areaOf, CLIENT_PROJECT_ID, isActive, SETTINGS_ITEM, type AreaDef } from './nav';
@@ -137,6 +139,38 @@ function DevProjectSwitcher() {
   return <ProjectSwitcher projects={projects} emptyText="担当プロジェクトがありません" />;
 }
 
+/** 配色の切替（ライト ⇄ ダーク）。押した位置から新しい配色が広がる。細かい設定（システムに従う）は設定画面 */
+function ThemeToggle() {
+  const { mode, setPref } = useThemeMode();
+  const reduced = useReducedMotion();
+  const next = mode === 'dark' ? 'light' : 'dark';
+  const label = next === 'dark' ? 'ダークモードに切り替える' : 'ライトモードに切り替える';
+  return (
+    <Tooltip title={label}>
+      <IconButton
+        aria-label={label}
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          setPref(next, { x: r.left + r.width / 2, y: r.top + r.height / 2 });
+        }}
+      >
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.span
+            key={mode}
+            style={{ display: 'grid', placeItems: 'center' }}
+            initial={reduced ? false : { rotate: -90, scale: 0.4, opacity: 0 }}
+            animate={{ rotate: 0, scale: 1, opacity: 1 }}
+            exit={reduced ? { opacity: 0 } : { rotate: 90, scale: 0.4, opacity: 0 }}
+            transition={reduced ? { duration: 0 } : tokens.motion.spring.default}
+          >
+            {mode === 'dark' ? <Moon size={19} /> : <Sun size={19} />}
+          </motion.span>
+        </AnimatePresence>
+      </IconButton>
+    </Tooltip>
+  );
+}
+
 function TopBar({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
   const [resetOpen, setResetOpen] = useState(false);
   const navigate = useNavigate();
@@ -168,6 +202,7 @@ function TopBar({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
           {pending > 0 && <Box sx={{ position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: '50%', bgcolor: tokens.color.error, border: `2px solid ${tokens.color.bg}` }} />}
         </IconButton>
       </Tooltip>}
+      <ThemeToggle />
       <Tooltip title="デモを初期化">
         <IconButton aria-label="デモを初期化" onClick={() => setResetOpen(true)}><RotateCcw size={18} /></IconButton>
       </Tooltip>
@@ -217,17 +252,17 @@ function BottomTabs({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
           <ButtonBase
             // 選択中の判定は item.match で行う（NavLink だと aria-current が上書きされる）
             key={item.to} component={Link} to={item.to} aria-current={active ? 'page' : undefined}
-            sx={{ flex: 1, flexDirection: 'column', gap: 0.5, height: 64, fontSize: 12, lineHeight: 1.2, whiteSpace: 'nowrap', fontWeight: active ? 700 : 500, color: active ? tokens.color.onSurface : tokens.color.onSurfaceVariant }}
+            sx={{ flex: 1, flexDirection: 'column', gap: 0.5, height: 64, fontSize: 12, lineHeight: 1.2, whiteSpace: 'nowrap', fontWeight: active ? 700 : 500, color: active ? tokens.color.onSurface : tokens.color.onSurfaceVariant, ...navIndicatorSx(active) }}
           >
-            <Box component="span" sx={{ display: 'grid', placeItems: 'center', width: 56, height: 28, borderRadius: `${tokens.radius.full}px`, bgcolor: active ? tokens.color.secondaryContainer : 'transparent', color: active ? tokens.color.onSecondaryContainer : 'inherit', transition: `background-color .2s ${tokens.motion.easeCss}` }}>
+            <Box component="span" className="nav-ind" sx={{ display: 'grid', placeItems: 'center', width: 56, height: 28, color: active ? tokens.color.onSecondaryContainer : 'inherit' }}>
               <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
             </Box>
             {item.label}
           </ButtonBase>
         );
       })}
-      <ButtonBase onClick={onMenu} aria-label="すべてのメニュー" sx={{ flex: 1, flexDirection: 'column', gap: 0.5, height: 64, fontSize: 12, lineHeight: 1.2, whiteSpace: 'nowrap', fontWeight: 500, color: tokens.color.onSurfaceVariant }}>
-        <Box component="span" sx={{ display: 'grid', placeItems: 'center', width: 56, height: 28 }}><MenuIcon size={20} /></Box>
+      <ButtonBase onClick={onMenu} aria-label="すべてのメニュー" sx={{ flex: 1, flexDirection: 'column', gap: 0.5, height: 64, fontSize: 12, lineHeight: 1.2, whiteSpace: 'nowrap', fontWeight: 500, color: tokens.color.onSurfaceVariant, ...navIndicatorSx(false) }}>
+        <Box component="span" className="nav-ind" sx={{ display: 'grid', placeItems: 'center', width: 56, height: 28 }}><MenuIcon size={20} /></Box>
         メニュー
       </ButtonBase>
     </Box>
@@ -247,7 +282,7 @@ function routeLabel(pathname: string): string {
   return area.id === 'admin' ? item.label : `${area.label}・${item.label}`;
 }
 
-/** ページ切り替え: ローディング画面（約0.5秒）→ ページ（Motion。240ms） */
+/** ページ切り替え: ローディング画面（約0.5秒）→ ページ（Motion。位置は M3 Expressive の spring、不透明度は 300ms） */
 function AnimatedOutlet({ dev }: { dev: boolean }) {
   const outlet = useOutlet();
   const { pathname } = useLocation();
@@ -270,10 +305,13 @@ function AnimatedOutlet({ dev }: { dev: boolean }) {
     <AnimatePresence mode="wait" initial={false}>
       <motion.div
         key={loading ? `loading:${key}` : key}
-        initial={reduced ? false : { opacity: 0, y: loading ? 0 : 8 }}
+        initial={reduced ? false : { opacity: 0, y: loading ? 0 : 16 }}
         animate={{ opacity: 1, y: 0 }}
         exit={reduced ? { opacity: 1 } : { opacity: 0, y: loading ? 0 : -4 }}
-        transition={{ duration: reduced ? 0 : loading ? tokens.motion.fast : tokens.motion.base, ease: tokens.motion.ease }}
+        transition={reduced ? { duration: 0 } : {
+          opacity: { duration: loading ? tokens.motion.fast : tokens.motion.base, ease: tokens.motion.ease },
+          y: tokens.motion.spring.default,
+        }}
         style={{ minWidth: 0 }}
       >
         {/* 遅延読み込み（画面のコード取得）が長引いた場合も同じローディング画面を出す */}
