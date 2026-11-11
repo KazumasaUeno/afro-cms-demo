@@ -52,6 +52,16 @@ export function ThemeModeProvider({ children }: { children: ReactNode }) {
     return () => mq.removeEventListener('change', on);
   }, []);
 
+  // 別のタブで配色を変えたら、このタブも追従する（storage イベントは変更したタブ以外にだけ届く）
+  useEffect(() => {
+    const on = (e: StorageEvent) => {
+      if (e.key !== THEME_STORAGE_KEY) return;
+      setPrefState(loadJson(THEME_STORAGE_KEY, isPref) ?? 'system');
+    };
+    window.addEventListener('storage', on);
+    return () => window.removeEventListener('storage', on);
+  }, []);
+
   // 描画前に <html> へ反映する（CSS 変数とブラウザのアドレスバーの色）
   useLayoutEffect(() => {
     const root = document.documentElement;
