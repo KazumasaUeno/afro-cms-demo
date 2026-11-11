@@ -6,7 +6,7 @@ import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { useDemo, devState } from '@/store/DemoStore';
 import { formatDateTime, relativeTime } from '@/services/time';
 import { DEV_TASK_STATUSES } from '@/data/dev';
-import { nextBestAction } from '@/features/projects/projectHelpers';
+import { devNextWork } from '@/features/projects/projectRoutes';
 import { tokens } from '@/theme/tokens';
 import type { DevTaskStatus, Project } from '@/types';
 import { ENV_TONE, TASK_TONE, envDef, nextDevAction, taskLabel } from './devUi';
@@ -19,7 +19,7 @@ const MINE_ORDER: Record<DevTaskStatus, number> = { doing: 0, review: 1, todo: 2
 
 /**
  * 開発者画面のダッシュボード（11/10 レビュー）。
- * 1. 担当している案件（進捗・段階・次の作業・公開予定日。押すとその案件の作業画面を開く）
+ * 1. 担当している案件（進捗・段階・次の作業・公開予定日。押すとその案件のプロジェクト詳細 /dev/projects/:id を開く。0.26.0）
  * 2. お客様の承認待ち・対応状況
  * 3. 構築状況（タスク・環境・デプロイ・エラー。開発データはデモの案件の分だけ）
  * このページは DevProjectGate を通さない（表示中の案件が担当外でも、担当案件の一覧は出す）
@@ -32,23 +32,12 @@ export default function DevDashboardPage() {
   const navigate = useNavigate();
   // 開発データ・お客様の承認のデータがあるのはデモの案件（MINAMO COFFEE）だけ
   const demo = projects.find((p) => p.id === CLIENT_PROJECT_ID);
-  const flow = nextBestAction(state);
 
   // 作業画面（ヒアリング・構築タスクなど）は表示中の案件で動くので、案件を切り替えてから開く
   const open = (id: string, to: string) => {
     dispatch({ type: 'setCurrentProject', id });
     navigate(to);
   };
-  // 行き先は開発者画面の中だけ（0.25.0。管理者画面の URL へ送ると、開発者だけのログインでは /login へ戻される）。
-  // ヒアリング・要件定義の段階 → ヒアリング（/dev/hearing）、それ以降 → 構築タスク。
-  // デモの案件は制作フローの「次の一手」で判定し、ヒアリング・要件定義以外の一手（サイトマップ・デザインの承認など）は管理者の作業なので構築タスクを出す
-  const work = (p: Project): { next: string; to: string } => {
-    if (p.id === CLIENT_PROJECT_ID) {
-      return state.requirements.status !== 'approved' ? { next: flow.cta, to: '/dev/hearing' } : { next: '構築タスクを進める', to: '/dev/tasks' };
-    }
-    return { next: p.nextAction, to: p.stage === 'hearing' || p.stage === 'requirements' ? '/dev/hearing' : '/dev/tasks' };
-  };
-
   return (
     <>
       <PageHeader
@@ -56,7 +45,7 @@ export default function DevDashboardPage() {
         icon={<LayoutDashboard size={15} />}
         title="担当案件"
         description={projects.length
-          ? `担当している案件は ${projects.length} 件です。案件を押すと、その案件の作業画面を開きます。`
+          ? `担当している案件は ${projects.length} 件です。案件を押すと、その案件のプロジェクト詳細（制作の6段階）を開きます。`
           : '担当している案件はまだありません。'}
       />
 
@@ -81,8 +70,8 @@ export default function DevDashboardPage() {
             />
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0,1fr)', sm: 'repeat(2, minmax(0,1fr))' }, gap: 2 }}>
               {projects.map((p) => {
-                const w = work(p);
-                return <DevProjectCard key={p.id} p={p} next={w.next} onOpen={() => open(p.id, w.to)} />;
+                // カードはプロジェクト詳細（管理者画面と同じ 6 段階。0.26.0）を開く。次の作業の行き先は詳細の「次に必要な作業」から
+                return <DevProjectCard key={p.id} p={p} next={devNextWork(p, state).next} onOpen={() => open(p.id, `/dev/projects/${p.id}`)} />;
               })}
             </Box>
           </Box>

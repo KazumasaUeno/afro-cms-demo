@@ -18,8 +18,7 @@ export interface ClientApprovalRow {
   progress?: { done: number; total: number };
   /** locked のときの理由 */
   lockedReason?: string;
-  /** 管理者画面で開く先 */
-  to: string;
+  // 開く先はエリアで変わるので持たない（ClientStatusPanel が useProjectRoutes().approval で決める。0.26.0）
 }
 
 export interface ClientStatus {
@@ -32,10 +31,6 @@ export interface ClientStatus {
   lastClientAt?: ISODate;
 }
 
-const ADMIN_ROUTE: Record<ApprovalKey, string> = {
-  requirements: '/ai-studio', sitemap: '/site', design: '/ai-studio/design', quality: '/quality',
-};
-
 export function clientStatus(state: DemoState): ClientStatus {
   const req = state.requirements;
   const approvals = approvalSteps(state).map((s): ClientApprovalRow => {
@@ -45,7 +40,7 @@ export function clientStatus(state: DemoState): ClientStatus {
       ? state.activities.find((a) => a.kind === 'approve' && a.text === text && a.projectId === req.projectId)
       : undefined;
     return {
-      key: s.key, title: s.title, status: s.status, approvedAt: s.approvedAt, progress: s.progress, lockedReason: s.lockedReason, to: ADMIN_ROUTE[s.key],
+      key: s.key, title: s.title, status: s.status, approvedAt: s.approvedAt, progress: s.progress, lockedReason: s.lockedReason,
       byAfro: act ? act.actor !== ACTOR.client : undefined,
     };
   });

@@ -9,7 +9,7 @@ import { stageLabel } from '@/features/projects/projectHelpers';
 
 /**
  * 開発者画面: 担当している案件のカード（進捗・いまの段階・次の作業・公開予定日）。
- * カード全体を押すと、その案件の作業画面（開発者画面の中。ヒアリング・構築タスク）を開く。見た目は管理者ホームの「進行中のプロジェクト」に合わせる
+ * カード全体を押すと、その案件のプロジェクト詳細（開発者画面の中の /dev/projects/:id。0.26.0）を開く。見た目は管理者ホームの「進行中のプロジェクト」に合わせる
  */
 export function DevProjectCard({ p, next, onOpen }: { p: Project; next: string; onOpen: () => void }) {
   const stage = STAGES.find((s) => s.id === p.stage);
@@ -19,7 +19,7 @@ export function DevProjectCard({ p, next, onOpen }: { p: Project; next: string; 
       role="button"
       tabIndex={0}
       data-testid="dev-project-card"
-      aria-label={`${p.siteName}（${stageLabel(p.stage)}・進捗 ${p.progress}%）の作業を開く。次の作業: ${next}`}
+      aria-label={`${p.siteName}（${stageLabel(p.stage)}・進捗 ${p.progress}%）のプロジェクト詳細を開く。次の作業: ${next}`}
       onClick={onOpen}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -58,7 +58,7 @@ export function DevProjectCard({ p, next, onOpen }: { p: Project; next: string; 
           <Typography variant="caption" noWrap>公開予定 {p.launchDate ? formatDate(p.launchDate) : '未定'}</Typography>
         </Stack>
         <Stack direction="row" spacing={0.5} alignItems="center" sx={{ color: tokens.color.primary, flexShrink: 0 }} aria-hidden>
-          <Typography variant="body2" sx={{ fontWeight: 650, color: 'inherit' }}>作業を開く</Typography>
+          <Typography variant="body2" sx={{ fontWeight: 650, color: 'inherit' }}>詳細を開く</Typography>
           <ArrowRight size={15} />
         </Stack>
       </Stack>

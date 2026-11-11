@@ -1,5 +1,5 @@
 import { Box, Button, ButtonBase, Dialog, IconButton, Stack, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
-import { ArrowRight, BadgeCheck, Check, Columns3, Expand, LayoutTemplate, Monitor, ShieldCheck, Smartphone, Square, Tablet, Wand2, X, PenLine } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Check, Columns3, Expand, LayoutTemplate, Monitor, ShieldCheck, Smartphone, Square, Tablet, Wand2, X, PenLine, ListTodo } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BuildFlowNav } from '@/components/layout/BuildFlowNav';
@@ -14,6 +14,7 @@ import type { DesignId, DesignVariant } from '@/types';
 import { DeviceFrame } from './DeviceFrame';
 import { BuildSequence } from './BuildSequence';
 import type { Device } from './previews/shared';
+import { useProjectRoutes } from '@/features/projects/projectRoutes';
 
 const DEVICES: { id: Device; label: string; icon: typeof Monitor }[] = [
   { id: 'pc', label: 'PC', icon: Monitor },
@@ -93,8 +94,14 @@ function VariantCard({ v, selected, adopted, locked, onSelect }: { v: DesignVari
   );
 }
 
+/**
+ * デザインスタジオ。管理者画面（/ai-studio/design）と開発者画面（/dev/design。0.26.0）で同じ画面。
+ * 開発者画面では案の比較・プレビューだけ。採用・承認、全ページ構築、CMS・品質チェックへの移動は管理者の作業なので出さず、
+ * 案を選んでも見るだけ（選択中の案＝管理者の選択を変えない）。表示の出し分けだけで、実体はルール
+ */
 export default function DesignStudioPage() {
   const { state, dispatch } = useDemo();
+  const { dev } = useProjectRoutes();
   const navigate = useNavigate();
   const toast = useToast();
   const design = state.design;
@@ -116,7 +123,7 @@ export default function DesignStudioPage() {
 
   const choose = (id: DesignId) => {
     setFocus(id);
-    if (!locked) dispatch({ type: 'selectDesign', id });
+    if (!locked && !dev) dispatch({ type: 'selectDesign', id });
   };
 
   return (
@@ -203,10 +210,14 @@ export default function DesignStudioPage() {
                   <Typography variant="h4" component="h2">全 {BUILD_PAGES.length} ページの構築が完了しました</Typography>
                   <Typography variant="body2" color="text.secondary">{selectedVariant?.name}デザインで構築 · {formatDateTime(design.buildCompletedAt)}（シミュレーション）。次は品質チェックとページ編集へ。</Typography>
                 </Box>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                  <Button variant="outlined" startIcon={<PenLine size={16} />} onClick={() => navigate('/portal/pages')}>CMSで編集</Button>
-                  <Button variant="contained" startIcon={<ShieldCheck size={16} />} onClick={() => navigate('/quality')}>品質チェックへ</Button>
-                </Stack>
+                {dev ? (
+                  <Button variant="contained" startIcon={<ListTodo size={16} />} onClick={() => navigate('/dev/tasks')}>構築タスクへ</Button>
+                ) : (
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                    <Button variant="outlined" startIcon={<PenLine size={16} />} onClick={() => navigate('/portal/pages')}>CMSで編集</Button>
+                    <Button variant="contained" startIcon={<ShieldCheck size={16} />} onClick={() => navigate('/quality')}>品質チェックへ</Button>
+                  </Stack>
+                )}
               </Stack>
             ) : building ? (
               <BuildSequence
@@ -221,14 +232,24 @@ export default function DesignStudioPage() {
                     <BadgeCheck size={15} /> 承認済み {formatDateTime(design.approvedAt)}
                   </Box>
                 </Box>
+                {dev ? (
+                  <Typography variant="body2" color="text.secondary" role="status">全ページ構築は管理者画面で行います</Typography>
+                ) : (
                 <Button size="large" variant="contained" endIcon={<ArrowRight size={18} />} onClick={() => { dispatch({ type: 'startBuild' }); setBuilding(true); }}
                   sx={{ background: tokens.aiGradient, '&:hover': { background: tokens.aiGradient, filter: 'brightness(1.06)' } }}>
                   全ページ構築へ進む
                 </Button>
+                )}
               </Stack>
             )}
           </Surface>
         </Reveal>
+      ) : dev ? (
+        <Surface role="status" padding={{ xs: 2, md: 2.5 }}>
+          <Typography variant="body2" color="text.secondary">
+            デザイン案はまだ採用されていません。採用・承認は管理者画面で行います（ここでは案の比較だけできます）。
+          </Typography>
+        </Surface>
       ) : (
         // 採用の帯は画面下に固定（出現アニメーションなし）。390 は下部タブの上
         <Surface

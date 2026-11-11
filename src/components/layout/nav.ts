@@ -19,7 +19,7 @@ export interface NavItem {
  * 立場ごとの画面（エリア）。
  * - admin: アフロ社内の管理者画面（制作の全工程を進める）
  * - portal: お客様の画面（進み具合の確認・承認・ページ更新・レポート）
- * - dev: アフロの制作エンジニアの画面（担当案件・ヒアリング・構築タスク・環境とデプロイ）
+ * - dev: アフロの制作エンジニアの画面（担当案件・プロジェクト・ヒアリング・構築タスク・環境とデプロイ）
  * エリアごとにログイン画面（/login・/dev/login・/portal/login）がある。デモのため実際の認証・権限制御は行わない。
  */
 export type AreaId = 'admin' | 'portal' | 'dev';
@@ -66,10 +66,13 @@ const PORTAL_ITEMS: NavItem[] = [
 
 const DEV_ITEMS: NavItem[] = [
   { to: '/dev', label: 'ダッシュボード', icon: LayoutDashboard, match: ['/dev'], exact: true, hint: '担当案件と構築状況' },
+  // プロジェクト（0.26.0）: 管理者画面と同じ一覧・詳細（担当案件だけ）。サイトマップ・デザインは詳細の段階ごとのボタンから開き、開いている間は「プロジェクト」を選択中にする
+  { to: '/dev/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/dev/projects', '/dev/sitemap', '/dev/design'], hint: '担当案件の6段階' },
   // ヒアリング（0.25.0）: 担当案件のヒアリング入力・AI分析・要件定義書の確認。管理者画面の /ai-studio と同じ画面を開発者画面の中で開く
   { to: '/dev/hearing', label: 'ヒアリング', icon: MessageSquareText, match: ['/dev/hearing'], hint: '入力・AI分析・要件定義書' },
   { to: '/dev/tasks', label: '構築タスク', icon: ListTodo, match: ['/dev/tasks'], hint: 'ページごとの実装状況' },
   // 自動チェック（/dev/checks）は 0.19.0 でメニューから外した（11/10 レビュー）。URL はダッシュボードへ転送する
+  // 下部タブは添字 [0,1,2,3]（ホーム・プロジェクト・ヒアリング・構築タスク）。環境・デプロイはメニューから開く（0.26.0）
   { to: '/dev/deploys', label: '環境・デプロイ', icon: Rocket, match: ['/dev/deploys'], hint: '開発・検証・本番' },
 ];
 
@@ -90,7 +93,7 @@ export const AREAS: Record<AreaId, AreaDef> = {
   },
   dev: {
     id: 'dev', label: '開発者画面', short: '開発者', audience: '制作エンジニア',
-    description: '担当案件・ヒアリング・構築タスク・環境とデプロイ', home: '/dev', icon: Code2,
+    description: '担当案件・プロジェクト・ヒアリング・構築タスク・環境とデプロイ', home: '/dev', icon: Code2,
     color: tokens.color.tertiary, soft: tokens.color.tertiaryContainer,
     items: DEV_ITEMS, bottom: [{ ...DEV_ITEMS[0], label: 'ホーム' }, DEV_ITEMS[1], DEV_ITEMS[2], DEV_ITEMS[3]],
   },

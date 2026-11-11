@@ -62,6 +62,12 @@ const router = createBrowserRouter([
       { path: 'portal/pages', element: <CmsEditorPage /> },
       { path: 'portal/publish', element: <PublishApprovalsPage /> },
       { path: 'dev', element: <DevDashboardPage /> },
+      // 開発者画面のプロジェクト（0.26.0）。管理者画面の /projects・/projects/:id と同じ画面（担当案件だけ。詳細は URL の案件が担当かを画面の中で確かめる）
+      { path: 'dev/projects', element: <ProjectsPage /> },
+      { path: 'dev/projects/:projectId', element: <ProjectDetailPage /> },
+      // 構築の段階のサイトマップ・デザイン（0.26.0）。管理者画面の /site・/ai-studio/design と同じ画面（担当案件だけ。DevProjectGate）
+      { path: 'dev/sitemap', element: <SitemapPage /> },
+      { path: 'dev/design', element: <DesignStudioPage /> },
       // 開発者画面のヒアリング（0.25.0）。管理者画面の /ai-studio・/ai-studio/hearing と同じ画面を開発者画面の中で開く（担当案件だけ。DevProjectGate）
       { path: 'dev/hearing', element: <RequirementsPage /> },
       { path: 'dev/hearing/answers', element: <HearingAnswersPage /> },

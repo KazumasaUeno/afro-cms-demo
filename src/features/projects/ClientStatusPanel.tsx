@@ -9,6 +9,7 @@ import { formatDateTime, relativeTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
 import { TOUCH } from '@/theme/media';
 import { clientStatus, type ClientApprovalRow } from './clientStatus';
+import { useProjectRoutes } from './projectRoutes';
 
 const STATUS: Record<ClientApprovalRow['status'], { label: string; tone: PillTone }> = {
   approved: { label: '承認済み', tone: 'success' },
@@ -19,12 +20,14 @@ const STATUS: Record<ClientApprovalRow['status'], { label: string; tone: PillTon
 /**
  * 管理者画面: お客様の対応状況（承認の有無・公開承認の待ち）。ヒアリングはアフロが入力するので出さない（2026-11-10 決定）。
  * デモのデータは MINAMO COFFEE の 1 案件分だけなので、その案件のときだけ出す。
- * プロジェクト詳細と開発者画面で使う（ホームからは 2026-11-10 に外した）
+ * プロジェクト詳細（管理者画面・開発者画面の両方）で使う（ホームからは 2026-11-10 に外した）
  */
 export function ClientStatusPanel() {
   const { state } = useDemo();
   const { projects } = useRepositories();
   const navigate = useNavigate();
+  // 行き先はいまのエリアの中（開発者画面に無い画面の行は押せない表示にする。0.26.0）
+  const routes = useProjectRoutes();
   const project = state.projects.find((p) => p.id === CLIENT_PROJECT_ID);
 
   if (!project) return null;
@@ -57,26 +60,34 @@ export function ClientStatusPanel() {
           const detail = a.status === 'approved'
             ? `${formatDateTime(a.approvedAt)}${a.byAfro === true ? '・アフロが代わりに承認' : a.byAfro === false ? '・お客様が承認' : ''}`
             : a.status === 'locked' ? (a.lockedReason ?? '') : a.progress ? `お客様のチェック ${a.progress.done} / ${a.progress.total} 項目` : '';
+          const to = routes.approval[a.key];
+          const body = (
+            <>
+              <Icon size={18} color={color} style={{ flexShrink: 0 }} />
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 650 }}>{a.title}</Typography>
+                  <StatusPill tone={st.tone} dot={false}>{st.label}</StatusPill>
+                </Stack>
+                {detail && <Typography variant="caption" sx={{ display: 'block', mt: 0.25 }}>{detail}</Typography>}
+              </Box>
+            </>
+          );
+          const row = { width: '100%', justifyContent: 'flex-start', textAlign: 'left', gap: 1.25, py: 1, px: 1, mx: -1, borderRadius: 2, minHeight: 44 } as const;
           return (
             <Box component="li" key={a.key}>
-              <ButtonBase
-                onClick={() => go(a.to)}
-                aria-label={`${a.title}: ${st.label}${detail ? `（${detail}）` : ''}。開く`}
-                sx={{
-                  width: '100%', justifyContent: 'flex-start', textAlign: 'left', gap: 1.25, py: 1, px: 1, mx: -1, borderRadius: 2,
-                  minHeight: 44, '&:hover': { bgcolor: tokens.color.surfaceMuted }, '&:hover .go': { opacity: 1 },
-                }}
-              >
-                <Icon size={18} color={color} style={{ flexShrink: 0 }} />
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 650 }}>{a.title}</Typography>
-                    <StatusPill tone={st.tone} dot={false}>{st.label}</StatusPill>
-                  </Stack>
-                  {detail && <Typography variant="caption" sx={{ display: 'block', mt: 0.25 }}>{detail}</Typography>}
-                </Box>
-                <Box className="go" sx={{ display: 'flex', opacity: 0.4, color: tokens.color.muted, flexShrink: 0, [TOUCH]: { opacity: 0.8 } }}><ArrowRight size={16} /></Box>
-              </ButtonBase>
+              {to ? (
+                <ButtonBase
+                  onClick={() => go(to)}
+                  aria-label={`${a.title}: ${st.label}${detail ? `（${detail}）` : ''}。開く`}
+                  sx={{ ...row, '&:hover': { bgcolor: tokens.color.surfaceMuted }, '&:hover .go': { opacity: 1 } }}
+                >
+                  {body}
+                  <Box className="go" sx={{ display: 'flex', opacity: 0.4, color: tokens.color.muted, flexShrink: 0, [TOUCH]: { opacity: 0.8 } }}><ArrowRight size={16} /></Box>
+                </ButtonBase>
+              ) : (
+                <Box sx={{ ...row, display: 'flex', alignItems: 'center' }}>{body}</Box>
+              )}
             </Box>
           );
         })}

@@ -3,20 +3,25 @@ import { CheckCircle2, Circle, FileSearch, LayoutTemplate, Network } from 'lucid
 import { NavLink, useLocation } from 'react-router-dom';
 import { useDemo } from '@/store/DemoStore';
 import { tokens } from '@/theme/tokens';
+import { useProjectRoutes } from '@/features/projects/projectRoutes';
+import { useHearingRoutes } from '@/features/requirements/hearingRoutes';
 
 /**
  * 「要件定義 → サイトマップ → デザイン」の制作フロー。
  * AI Studio の各画面（要件・サイトマップ・デザイン）の上部に置き、どこまで承認済みかを示す。
+ * 行き先はいまのエリアの中（管理者画面 /ai-studio・/site・/ai-studio/design、開発者画面 /dev/hearing・/dev/sitemap・/dev/design。0.26.0）
  */
 export function BuildFlowNav() {
   const { state } = useDemo();
   const { pathname } = useLocation();
-  // 要件定義の段階（/ai-studio・/ai-studio/hearing）では、サイトマップ・デザインの段階ナビを出さない（2026-11-10 決定）
-  if (pathname === '/ai-studio' || pathname === '/ai-studio/hearing') return null;
+  const routes = useProjectRoutes();
+  const hearing = useHearingRoutes();
+  // 要件定義の段階（ヒアリングの入力・回答）では、サイトマップ・デザインの段階ナビを出さない（2026-11-10 決定）
+  if (pathname === hearing.input || pathname === hearing.answers) return null;
   const steps = [
-    { to: '/ai-studio', label: 'AI要件定義', short: '要件', icon: FileSearch, done: state.requirements.status === 'approved' },
-    { to: '/site', label: 'サイトマップ', short: 'サイトマップ', icon: Network, done: !!state.sitemap.approvedAt },
-    { to: '/ai-studio/design', label: 'デザイン・構築', short: 'デザイン', icon: LayoutTemplate, done: !!state.design.approvedAt },
+    { to: routes.requirements, label: 'AI要件定義', short: '要件', icon: FileSearch, done: state.requirements.status === 'approved' },
+    { to: routes.sitemap, label: 'サイトマップ', short: 'サイトマップ', icon: Network, done: !!state.sitemap.approvedAt },
+    { to: routes.design, label: 'デザイン・構築', short: 'デザイン', icon: LayoutTemplate, done: !!state.design.approvedAt },
   ];
   return (
     <Box

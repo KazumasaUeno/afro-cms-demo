@@ -101,8 +101,9 @@ export default function DevDeploysPage() {
                             <Typography sx={{ fontSize: 13, color: tokens.color.inkSoft }}>{gate.reason}</Typography>
                           </Stack>
                           {gate.kind === 'needsApproval' && (
-                            <Button size="small" endIcon={<ArrowRight size={14} />} sx={{ mt: 1, minHeight: 44 }} onClick={() => navigate('/portal/approvals')}>
-                              お客様ポータルで承認状況を見る
+                            <Button size="small" endIcon={<ArrowRight size={14} />} sx={{ mt: 1, minHeight: 44 }} onClick={() => navigate(`/dev/projects/${state.currentProjectId}`)}>
+                              {/* 開発者画面の中のプロジェクト詳細（お客様の対応状況）へ。ポータルへ送ると開発者だけのログインでは /portal/login へ戻される（0.26.0） */}
+                              お客様の承認状況を見る
                             </Button>
                           )}
                         </Box>

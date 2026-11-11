@@ -2,7 +2,7 @@ import { Box, Button, Stack, Typography } from '@mui/material';
 import { ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Clock, Code2, FolderSearch, Globe, User } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
-import type { Stage } from '@/types';
+import type { Project, Stage } from '@/types';
 import { useDemo } from '@/store/DemoStore';
 import { useRepositories } from '@/repositories';
 import { STAGES, stageIndex } from '@/data/projects';
@@ -14,7 +14,9 @@ import { MemberAvatar, ProgressRing, Reveal, StatusPill, Surface } from '@/compo
 import { formatDate, formatDateTime, relativeTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
-import { nextBestAction, qualityCompletion, STAGE_LINKS, stagePrimaryRoute } from './projectHelpers';
+import { DevProjectGate } from '@/features/dev/DevProjectGate';
+import { nextBestAction, qualityCompletion } from './projectHelpers';
+import { devNextWork, useProjectRoutes } from './projectRoutes';
 import { ClientStatusPanel } from './ClientStatusPanel';
 import { ApprovalHistory } from './ApprovalHistory';
 
@@ -30,14 +32,14 @@ function Fact({ label, value, ok }: { label: string; value: ReactNode; ok?: bool
   );
 }
 
-function NotFound() {
+function NotFound({ list }: { list: string }) {
   return (
     <Surface sx={{ textAlign: 'center', py: 8, maxWidth: 560, mx: 'auto' }}>
       <Stack alignItems="center" spacing={1.5}>
         <FolderSearch size={36} color={tokens.color.faint} />
         <Typography variant="h3" component="h1">プロジェクトが見つかりません</Typography>
         <Typography variant="body2" color="text.secondary">URLが間違っているか、デモの初期化で削除された可能性があります。</Typography>
-        <Button component={RouterLink} to="/projects" variant="contained" startIcon={<ArrowLeft size={16} />} sx={{ mt: 1 }}>
+        <Button component={RouterLink} to={list} variant="contained" startIcon={<ArrowLeft size={16} />} sx={{ mt: 1 }}>
           プロジェクト一覧へ戻る
         </Button>
       </Stack>
@@ -45,19 +47,38 @@ function NotFound() {
   );
 }
 
-/** プロジェクト詳細（ヘッダーの直下に6段階のパイプライン、その下にお客様の対応状況） */
+/**
+ * プロジェクト詳細（ヘッダーの直下に6段階のパイプライン、その下にお客様の対応状況）。
+ * 管理者画面（/projects/:id）と開発者画面（/dev/projects/:id。0.26.0）で同じ画面。開発者画面では
+ * URL の案件が担当かを確かめ（担当外は DevProjectGate の案内。転送はしない）、行き先は開発者画面の中だけにする（useProjectRoutes）
+ */
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
+  const routes = useProjectRoutes();
+  const { projects } = useRepositories();
+  const { data: list } = projects.useList();
+  const navigate = useNavigate();
+  const p = list.find((x) => x.id === projectId);
+  if (!p) return <NotFound list={routes.list} />;
+  if (routes.dev) {
+    return (
+      <DevProjectGate project={p} onOpen={(id) => { projects.select(id); navigate(routes.detail(id)); }}>
+        <Detail p={p} />
+      </DevProjectGate>
+    );
+  }
+  return <Detail p={p} />;
+}
+
+function Detail({ p }: { p: Project }) {
+  const routes = useProjectRoutes();
   // サイトマップ・デザイン・品質・CMS・診断は repository の範囲外（live では隠す。§14）なので DemoStore から読む
   const { state } = useDemo();
   const { projects, requirements, accounts } = useRepositories();
-  const { data: list } = projects.useList();
   const { data: req } = requirements.useCurrent();
   const { data: devAll } = accounts.useDevProjects();
   const { data: people } = accounts.useDevPeople();
   const navigate = useNavigate();
-  const p = list.find((x) => x.id === projectId);
-  if (!p) return <NotFound />;
 
   const cur = stageIndex(p.stage);
   const owner = memberById(p.ownerId);
@@ -72,7 +93,11 @@ export default function ProjectDetailPage() {
   /** デモの数値（state）は MINAMO COFFEE の 1 案件分だけ。他の案件では出さない */
   const isDemo = p.id === CLIENT_PROJECT_ID;
   const demoAction = nextBestAction(state);
-  const next = isDemo ? { label: demoAction.cta, to: demoAction.to } : { label: p.nextAction, to: stagePrimaryRoute(p.stage) };
+  // 開発者画面はダッシュボードのカードと同じ「次の作業」（行き先は開発者画面の中だけ）
+  const devWork = routes.dev ? devNextWork(p, state) : null;
+  const next = devWork
+    ? { label: devWork.next, to: devWork.to }
+    : isDemo ? { label: demoAction.cta, to: demoAction.to } : { label: p.nextAction, to: routes.stageLinks[p.stage][0].to };
 
   const facts: Record<Stage, ReactNode> = {
     hearing: (
@@ -124,7 +149,7 @@ export default function ProjectDetailPage() {
 
   return (
     <Box>
-      <Button component={RouterLink} to="/projects" size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>
+      <Button component={RouterLink} to={routes.list} size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>
         プロジェクト一覧
       </Button>
 
@@ -218,7 +243,7 @@ export default function ProjectDetailPage() {
                     </Typography>
                   )}
                   <Stack spacing={0.75} sx={{ mt: 'auto' }}>
-                    {STAGE_LINKS[s.id].map((l) => (
+                    {routes.stageLinks[s.id].map((l) => (
                       <Button
                         key={l.to}
                         size="small"

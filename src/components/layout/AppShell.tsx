@@ -20,7 +20,7 @@ import { DevProjectGate } from '@/features/dev/DevProjectGate';
 import { useDevProjects } from '@/features/dev/useDevUser';
 
 /** プロジェクトの切替。projects を渡すとその中だけを出す（開発者画面: 担当のプロジェクトだけ） */
-function ProjectSwitcher({ projects, emptyText }: { projects?: Project[]; emptyText?: string }) {
+function ProjectSwitcher({ projects, emptyText, onSelect }: { projects?: Project[]; emptyText?: string; onSelect?: (id: string) => void }) {
   const { state, dispatch } = useDemo();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const project = currentProject(state);
@@ -48,6 +48,7 @@ function ProjectSwitcher({ projects, emptyText }: { projects?: Project[]; emptyT
             selected={p.id === project.id}
             onClick={() => {
               dispatch({ type: 'setCurrentProject', id: p.id });
+              onSelect?.(p.id);
               setAnchor(null);
             }}
           >
@@ -125,7 +126,11 @@ function AreaSwitcher({ area }: { area: AreaDef }) {
 /** 開発者画面: ログイン中のメンバーの担当プロジェクトだけを切り替えられる */
 function DevProjectSwitcher() {
   const projects = useDevProjects();
-  return <ProjectSwitcher projects={projects} emptyText="担当プロジェクトがありません" />;
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  // プロジェクト詳細（/dev/projects/:id。0.26.0）を開いているときは、切り替えた案件の詳細へ移る（URL の案件と表示中の案件をずらさない）
+  const onDetail = /^\/dev\/projects\/[^/]+/.test(pathname);
+  return <ProjectSwitcher projects={projects} emptyText="担当プロジェクトがありません" onSelect={onDetail ? (id) => navigate(`/dev/projects/${id}`) : undefined} />;
 }
 
 /** 配色の切替（ライト ⇄ ダーク）。押した位置から新しい配色が広がる。細かい設定（システムに従う）は設定画面 */
@@ -267,10 +272,19 @@ function routeLabel(pathname: string): string {
   if (pathname === '/site') return 'サイトマップ';
   if (pathname === '/projects/new') return '新しいプロジェクト';
   if (/^\/projects\/[^/]+/.test(pathname)) return 'プロジェクト詳細';
+  if (pathname === '/dev/sitemap') return '開発者画面・サイトマップ';
+  if (pathname === '/dev/design') return '開発者画面・AIデザインスタジオ';
+  if (/^\/dev\/projects\/[^/]+/.test(pathname)) return '開発者画面・プロジェクト詳細';
   const area = AREAS[areaOf(pathname)];
   const item = [...area.items, SETTINGS_ITEM].find((i) => isActive(i, pathname));
   if (!item) return 'アフロCMS';
   return area.id === 'admin' ? item.label : `${area.label}・${item.label}`;
+}
+
+/** 開発者画面で DevProjectGate（表示中の案件で確かめる）を通さないページ */
+function devGateFree(pathname: string): boolean {
+  const p = pathname.replace(/\/+$/, '');
+  return p === '/dev' || p === '/dev/projects' || p.startsWith('/dev/projects/');
 }
 
 /** ページ切り替え: ローディング画面（約0.5秒）→ ページ（Motion。位置は M3 Expressive の spring、不透明度は 300ms） */
@@ -306,8 +320,9 @@ function AnimatedOutlet({ dev }: { dev: boolean }) {
         style={{ minWidth: 0 }}
       >
         {/* 遅延読み込み（画面のコード取得）が長引いた場合も同じローディング画面を出す */}
-        {/* 開発者画面は、担当のプロジェクトのときだけ中身を出す。ダッシュボード（/dev）は担当案件の一覧を先に出すので、ページの中で分ける */}
-        {loading ? loader : <Suspense fallback={loader}>{dev && pathname.replace(/\/+$/, '') !== '/dev' ? <DevProjectGate>{outlet}</DevProjectGate> : outlet}</Suspense>}
+        {/* 開発者画面は、担当のプロジェクトのときだけ中身を出す。ダッシュボード（/dev）・プロジェクト一覧（/dev/projects）は担当案件の一覧を先に出し、
+            プロジェクト詳細（/dev/projects/:id）は表示中の案件ではなく URL の案件で確かめるので、ページの中で分ける（0.26.0） */}
+        {loading ? loader : <Suspense fallback={loader}>{dev && !devGateFree(pathname) ? <DevProjectGate>{outlet}</DevProjectGate> : outlet}</Suspense>}
       </motion.div>
     </AnimatePresence>
   );

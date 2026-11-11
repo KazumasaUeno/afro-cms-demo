@@ -19,6 +19,7 @@ import type { SitemapEdge, SitemapNode, SitemapVariant } from '@/types';
 import { PageNode, KIND_META, type PageFlowNode } from './PageNode';
 import { AddPageDialog, type NewPageInput } from './AddPageDialog';
 import { sitemapMetrics, validateLabel } from './metrics';
+import { useProjectRoutes } from '@/features/projects/projectRoutes';
 
 const nodeTypes = { page: PageNode };
 const defaultEdgeOptions = {
@@ -230,8 +231,13 @@ function Editor({ variant, onVariant }: { variant: SitemapVariant; onVariant: (v
   );
 }
 
+/**
+ * サイトマップ。管理者画面（/site）と開発者画面（/dev/sitemap。0.26.0）で同じ画面。
+ * 開発者画面では構造の確認・編集はできるが、承認（アフロがお客様の代わりに承認する操作）は出さない（表示の出し分けだけ。実体はルール）
+ */
 export default function SitemapPage() {
   const { state, dispatch } = useDemo();
+  const routes = useProjectRoutes();
   const navigate = useNavigate();
   const toast = useToast();
   const [variant, setVariant] = useState<SitemapVariant>('after');
@@ -253,8 +259,12 @@ export default function SitemapPage() {
               <Box role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, minHeight: 40, borderRadius: 3, bgcolor: tokens.color.successSoft, color: tokens.color.successInk, fontWeight: 650, fontSize: 14 }}>
                 <BadgeCheck size={18} /> 承認済み {formatDateTime(approvedAt)}
               </Box>
-              <Button variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate('/ai-studio/design')}>デザインへ進む</Button>
+              <Button variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate(routes.design)}>デザインへ進む</Button>
             </>
+          ) : routes.dev ? (
+            <Box role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, minHeight: 40, borderRadius: 3, bgcolor: tokens.color.surfaceMuted, color: tokens.color.inkSoft, fontWeight: 600, fontSize: 14 }}>
+              未承認（承認は管理者画面で行います）
+            </Box>
           ) : (
             <Stack alignItems={{ xs: 'stretch', sm: 'flex-end' }} spacing={0.5}>
               <Button variant="contained" startIcon={<CheckCircle2 size={16} />} disabled={!reqApproved} onClick={() => { dispatch({ type: 'approveSitemap' }); toast('改善後のサイトマップを承認しました'); }}>
