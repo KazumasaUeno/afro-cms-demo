@@ -1,7 +1,7 @@
 import { tokens } from '@/theme/tokens';
 import {
-  BarChart3, Building2, ClipboardCheck, Code2, FileText, FolderKanban, House, LayoutDashboard, ListChecks, ListTodo, Monitor,
-  Rocket, ScrollText, Settings, ShieldCheck, Sparkles, Stamp, UserRound, UsersRound, type LucideIcon,
+  Building2, ClipboardCheck, Code2, FileText, FolderKanban, House, LayoutDashboard, ListChecks, ListTodo, Monitor,
+  Rocket, ScrollText, Settings, Stamp, UserRound, UsersRound, type LucideIcon,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -46,12 +46,9 @@ export interface AreaDef {
 
 const ADMIN_ITEMS: NavItem[] = [
   { to: '/', label: 'ホーム', icon: House, match: ['/'], exact: true, hint: '今日の状況' },
-  { to: '/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/projects'], hint: '制作案件の一覧' },
-  // サイトマップ（/site）は AI Studio の流れ（要件 → サイトマップ → デザイン）の 2 段階目なので、AI Studio の中として扱う（段階ナビから移動する）
-  { to: '/ai-studio', label: 'AI Studio', icon: Sparkles, match: ['/ai-studio', '/site'], hint: 'AI要件定義・サイトマップ・デザイン' },
-  { to: '/quality', label: '品質チェック', icon: ShieldCheck, match: ['/quality'], hint: '12項目110問' },
-  { to: '/insights', label: 'インサイト', icon: BarChart3, match: ['/insights'], hint: '解析と改善提案' },
-  // 下部タブは添字 [0,1,2,3] で選んでいるため、新しい項目は末尾に足す
+  // AI Studio（要件・サイトマップ・デザイン）・品質チェック・インサイトはプロジェクトの中の画面なので、メニューには出さず
+  // プロジェクト詳細の段階ごとのボタンから開く。開いている間は「プロジェクト」を選択中にする
+  { to: '/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/projects', '/ai-studio', '/site', '/quality', '/insights'], hint: '制作案件の一覧' },
   { to: '/users', label: 'ユーザー管理', icon: UsersRound, match: ['/users'], hint: 'お客様の登録・開発者画面の権限' },
 ];
 
@@ -81,7 +78,7 @@ export const AREAS: Record<AreaId, AreaDef> = {
     id: 'admin', label: '管理者画面', short: '管理者', audience: 'アフロ社内',
     description: '案件・要件・制作・品質・改善を進める', home: '/', icon: Building2,
     color: tokens.color.primary, soft: tokens.color.primaryContainer,
-    items: ADMIN_ITEMS, bottom: [ADMIN_ITEMS[0], ADMIN_ITEMS[1], ADMIN_ITEMS[2], ADMIN_ITEMS[3]], settings: SETTINGS_ITEM,
+    items: ADMIN_ITEMS, bottom: [ADMIN_ITEMS[0], ADMIN_ITEMS[1], ADMIN_ITEMS[2]], settings: SETTINGS_ITEM,
   },
   portal: {
     id: 'portal', label: 'お客様ポータル', short: 'ポータル', audience: 'お客様',
