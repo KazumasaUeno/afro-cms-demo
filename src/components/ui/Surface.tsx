@@ -9,12 +9,12 @@ export interface SurfaceProps extends BoxProps {
   tone?: 'default' | 'muted' | 'ink';
 }
 
-/** すべてのカードの土台。M3 Outlined card（outlineVariant の罫線＋角丸 Medium 12px）。クリックできるカードはホバーで Level1 に上がる */
+/** すべてのカードの土台。M3 Outlined card（outlineVariant の罫線＋角丸 Large 16px）。クリックできるカードはホバーで Level1 に上がり、押すと角が締まる */
 export const Surface = forwardRef<HTMLDivElement, SurfaceProps>(function Surface(
   { interactive, padding = { xs: 2, md: 2.5 }, tone = 'default', sx, children, ...rest },
   ref,
 ) {
-  const bg = tone === 'muted' ? tokens.color.surfaceContainerHighest : tone === 'ink' ? tokens.color.inverseSurface : tokens.color.surfaceContainerLowest;
+  const bg = tone === 'muted' ? tokens.color.surfaceContainerHighest : tone === 'ink' ? tokens.color.inverseSurface : tokens.color.surface; // カードの面（ダークは地より一段明るい）
   return (
     <Box
       ref={ref}
@@ -26,9 +26,9 @@ export const Surface = forwardRef<HTMLDivElement, SurfaceProps>(function Surface
         },
         !!interactive && {
           cursor: 'pointer',
-          transition: `box-shadow .2s ${tokens.motion.easeCss}, background-color .2s`,
+          transition: `box-shadow .2s ${tokens.motion.easeCss}, background-color .2s, border-radius .35s ${tokens.motion.easeSpringCss}`,
           '&:hover': { boxShadow: tokens.shadow.sm },
-          '&:active': { boxShadow: 'none' },
+          '&:active': { boxShadow: 'none', borderRadius: `${tokens.radius.md}px` },
         },
         ...(Array.isArray(sx) ? sx : [sx]),
       ]}

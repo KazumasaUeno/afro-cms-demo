@@ -7,7 +7,7 @@ import { useRepositories } from '@/repositories';
 import { AiBadge, CountUp, ProgressRing, Reveal, StatusPill, Surface, type PillTone } from '@/components/ui';
 import { useToast } from '@/hooks/useToast';
 import { formatDateTime } from '@/services/time';
-import { tokens } from '@/theme/tokens';
+import { palette, tokens } from '@/theme/tokens';
 import type { ProposalPoint } from '@/types';
 import { buildProposal } from './buildProposal';
 import { isAnswered } from './validation';
@@ -66,7 +66,7 @@ export function ProposalView() {
                 ))}
               </Stack>
             </Box>
-            <Box sx={{ p: { xs: 2.5, md: 4 }, bgcolor: tokens.color.ink, color: '#fff', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2.5 }}>
+            <Box sx={{ p: { xs: 2.5, md: 4 }, bgcolor: tokens.color.scoreboardBg, color: '#fff', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2.5 }}>
               <Typography variant="overline" sx={{ color: 'rgba(255,255,255,.6)' }}>サイトスコア（AI推定）</Typography>
               <Stack direction="row" spacing={3} alignItems="center">
                 <ProgressRing value={proposal.currentScore} size={84} stroke={7} color="#94A3B8" track="rgba(255,255,255,.12)" label="現状スコア">
@@ -76,7 +76,7 @@ export function ProposalView() {
                   </Box>
                 </ProgressRing>
                 <ArrowRight size={20} color="rgba(255,255,255,.4)" />
-                <ProgressRing value={proposal.projectedScore} size={84} stroke={7} color={tokens.color.inversePrimary} track="rgba(255,255,255,.12)" label="改善後の見込みスコア">
+                <ProgressRing value={proposal.projectedScore} size={84} stroke={7} color={palette.light.inversePrimary} track="rgba(255,255,255,.12)" label="改善後の見込みスコア">
                   <Box sx={{ textAlign: 'center' }}>
                     <Box sx={{ fontSize: 22, fontWeight: 700 }}><CountUp value={proposal.projectedScore} duration={1400} /></Box>
                     <Box sx={{ fontSize: 12, opacity: 0.6, fontWeight: 600 }}>改善後</Box>

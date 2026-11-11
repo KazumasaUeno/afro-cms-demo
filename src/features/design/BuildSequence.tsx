@@ -75,7 +75,7 @@ export function BuildSequence({ accent, onDone }: { accent: string; onDone: () =
               </Box>
             ))}
             <Typography sx={{ fontSize: 12.5, fontWeight: 650, mt: 1 }} noWrap>{p}</Typography>
-            <Box className="bt-check" sx={{ position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderRadius: '50%', bgcolor: tokens.color.success, color: '#fff', display: 'grid', placeItems: 'center' }}>
+            <Box className="bt-check" sx={{ position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderRadius: '50%', bgcolor: tokens.color.success, color: tokens.color.onSuccess, display: 'grid', placeItems: 'center' }}>
               <Check size={12} strokeWidth={3.5} />
             </Box>
           </Box>

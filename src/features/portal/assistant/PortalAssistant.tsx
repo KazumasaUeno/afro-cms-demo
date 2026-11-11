@@ -211,7 +211,7 @@ export function PortalAssistant() {
       >
         {open ? <X size={22} /> : <AssistantFace size={44} />}
         {!open && todoCount > 0 && (
-          <Box component="span" aria-hidden sx={{ position: 'absolute', top: -4, right: -4, minWidth: 20, height: 20, px: 0.5, borderRadius: '10px', bgcolor: tokens.color.danger, color: '#fff', fontSize: 11.5, fontWeight: 700, display: 'grid', placeItems: 'center', border: `2px solid ${tokens.color.surface}` }}>
+          <Box component="span" aria-hidden sx={{ position: 'absolute', top: -4, right: -4, minWidth: 20, height: 20, px: 0.5, borderRadius: '10px', bgcolor: tokens.color.danger, color: tokens.color.onDanger, fontSize: 11.5, fontWeight: 700, display: 'grid', placeItems: 'center', border: `2px solid ${tokens.color.surface}` }}>
             {todoCount}
           </Box>
         )}

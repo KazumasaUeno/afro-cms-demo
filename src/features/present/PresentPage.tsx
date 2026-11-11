@@ -1,4 +1,5 @@
 import { Box, Button, ButtonBase, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import { useForceLightMode } from '@/theme/ThemeMode';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowRight, Check, ChevronLeft, ChevronRight, Maximize2, Minimize2, Play, RotateCcw, X } from 'lucide-react';
 import gsap from 'gsap';
@@ -314,6 +315,8 @@ const TITLES = ['はじめに', '全体の流れ', 'AI要件定義', 'デザイ�
 
 /** 営業プレゼンモード（全画面のスライド） */
 export default function PresentPage() {
+  // プレゼンモードはライト固定（プロジェクター・顧客に見せる画面。白いカードを前提にした配色のため）
+  useForceLightMode();
   const navigate = useNavigate();
   const reduced = useReducedMotion();
   const [index, setIndex] = useState(0);

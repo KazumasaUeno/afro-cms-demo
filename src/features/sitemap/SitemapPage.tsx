@@ -13,6 +13,7 @@ import { useDemo } from '@/store/DemoStore';
 import { useToast } from '@/hooks/useToast';
 import { formatDateTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
+import { useThemeMode } from '@/theme/ThemeMode';
 import { LANDSCAPE_PHONE, TOUCH } from '@/theme/media';
 import type { SitemapEdge, SitemapNode, SitemapVariant } from '@/types';
 import { PageNode, KIND_META, type PageFlowNode } from './PageNode';
@@ -34,6 +35,7 @@ const sig = (n: SitemapNode[], e: SitemapEdge[]) => JSON.stringify([n, e]);
 
 function Editor({ variant, onVariant }: { variant: SitemapVariant; onVariant: (v: SitemapVariant) => void }) {
   const { state, dispatch } = useDemo();
+  const { mode } = useThemeMode();
   const stored = state.sitemap[variant];
   const flow = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState<PageFlowNode>(stored.nodes.map(toFlow));
@@ -134,6 +136,7 @@ function Editor({ variant, onVariant }: { variant: SitemapVariant; onVariant: (v
           '& .react-flow__controls': { boxShadow: tokens.shadow.sm, borderRadius: '10px', overflow: 'hidden', border: `1px solid ${tokens.color.border}` },
           '& .react-flow__minimap': { borderRadius: '12px', overflow: 'hidden', border: `1px solid ${tokens.color.border}`, display: { xs: 'none', md: 'block' } } }}>
           <ReactFlow
+            colorMode={mode}
             nodes={nodes}
             edges={edges}
             nodeTypes={nodeTypes}
@@ -153,10 +156,10 @@ function Editor({ variant, onVariant }: { variant: SitemapVariant; onVariant: (v
             <Background variant={BackgroundVariant.Dots} gap={20} size={1.4} color={tokens.color.outlineVariant} />
             <Controls showInteractive={false} position="bottom-left" />
             <MiniMap pannable zoomable position="bottom-right" nodeBorderRadius={6}
-              nodeColor={(n) => (n.data as PageFlowNode['data']).kind === 'new' ? tokens.color.accent : (n.data as PageFlowNode['data']).kind === 'cta' ? tokens.color.primary : '#CBD2DE'}
+              nodeColor={(n) => (n.data as PageFlowNode['data']).kind === 'new' ? tokens.color.accent : (n.data as PageFlowNode['data']).kind === 'cta' ? tokens.color.primary : tokens.color.outlineVariant}
               style={{ width: 140, height: 96 }} />
             <Panel position="top-left">
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 1.25, py: 0.75, borderRadius: '10px', bgcolor: 'rgba(255,255,255,.9)', border: `1px solid ${tokens.color.border}`, fontSize: 12, color: tokens.color.muted }}>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 1.25, py: 0.75, borderRadius: '10px', bgcolor: `color-mix(in srgb, ${tokens.color.surface} 90%, transparent)`, border: `1px solid ${tokens.color.border}`, fontSize: 12, color: tokens.color.muted }}>
                 <StatusPill tone={variant === 'after' ? 'accent' : 'neutral'}>{variant === 'after' ? '改善後' : '現在'}</StatusPill>
                 <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>ドラッグで移動 · 下の点から引っぱって接続</Box>
               </Stack>

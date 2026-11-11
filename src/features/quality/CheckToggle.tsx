@@ -63,7 +63,7 @@ export function CheckToggle({ side, check, itemText, onToggle, label }: Props) {
         >
           {checked ? (
             <>
-              <Box component="span" sx={{ width: 18, height: 18, borderRadius: '6px', bgcolor: s.color, color: '#fff', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+              <Box component="span" sx={{ width: 18, height: 18, borderRadius: '6px', bgcolor: s.color, color: s.soft, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
                 <Check size={12} strokeWidth={3} />
               </Box>
               <Box component="span" sx={{ fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis' }}>

@@ -17,7 +17,7 @@ function Pane({ label, sub, html, tone }: { label: string; sub: string; html: st
         <StatusPill tone={tone === 'before' ? 'neutral' : 'primary'}>{label}</StatusPill>
         <Typography variant="caption" noWrap>{sub}</Typography>
       </Stack>
-      <Box sx={{ p: { xs: 2, md: 3 }, ...proseSx, fontSize: 15 }}>
+      <Box sx={{ p: { xs: 2, md: 3 }, ...proseSx, fontSize: 15, color: tokens.color.ink }}>
         {html ? <div dangerouslySetInnerHTML={{ __html: html }} /> : <Typography variant="body2" color="text.secondary">まだ公開されていません（新規ページ）</Typography>}
       </Box>
     </Box>
@@ -65,12 +65,12 @@ export function CompareDialog({ page, open, onClose }: { page: CmsPage; open: bo
               <Box
                 key={i}
                 sx={{
-                  position: 'relative', p: 2, pl: 5, borderRadius: '12px', ...proseSx, fontSize: 15,
+                  position: 'relative', p: 2, pl: 5, borderRadius: '12px', ...proseSx, fontSize: 15, color: tokens.color.ink,
                   bgcolor: d.kind === 'added' ? tokens.color.successSoft : d.kind === 'removed' ? tokens.color.dangerSoft : tokens.color.surface,
                   border: `1px solid ${d.kind === 'added' ? tokens.color.successLine : d.kind === 'removed' ? tokens.color.dangerLine : tokens.color.border}`,
                   opacity: d.kind === 'same' ? 0.7 : 1,
                   '& > div > *:first-of-type': { mt: 0 },
-                  ...(d.kind === 'removed' && { '& > div': { textDecoration: 'line-through', textDecorationColor: 'rgba(180,35,47,.5)' } }),
+                  ...(d.kind === 'removed' && { '& > div': { textDecoration: 'line-through', textDecorationColor: `color-mix(in srgb, ${tokens.color.danger} 50%, transparent)` } }),
                 }}
               >
                 <Box sx={{ position: 'absolute', left: 14, top: 18, color: d.kind === 'added' ? tokens.color.successInk : d.kind === 'removed' ? tokens.color.dangerInk : tokens.color.faint }} aria-label={d.kind === 'added' ? '追加' : d.kind === 'removed' ? '削除' : '変更なし'}>

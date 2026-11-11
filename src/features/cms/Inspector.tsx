@@ -145,7 +145,7 @@ export function Inspector({ draft, onChange, slugError }: Props) {
             {typing ? '本文から生成中…' : 'AIで本文から生成'}
           </Button>
 
-          <Box aria-label="検索結果のプレビュー" sx={{ p: 1.75, borderRadius: '12px', bgcolor: tokens.color.surfaceMuted, border: `1px dashed ${tokens.color.borderStrong}` }}>
+          <Box aria-label="検索結果のプレビュー" data-theme="light" sx={{ color: tokens.color.onSurface, p: 1.75, borderRadius: '12px', bgcolor: tokens.color.surfaceMuted, border: `1px dashed ${tokens.color.borderStrong}` }}>
             <Typography sx={{ fontSize: 12, fontWeight: 650, color: tokens.color.muted, letterSpacing: '0.06em', mb: 1 }}>検索結果のプレビュー</Typography>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
               <Box sx={{ width: 18, height: 18, borderRadius: '50%', bgcolor: project.accent, flexShrink: 0 }} />

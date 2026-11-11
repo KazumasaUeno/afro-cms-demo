@@ -63,7 +63,7 @@ function Toolbar({ editor, onImage }: { editor: Editor; onImage: () => void }) {
       sx={{
         // 外枠は overflow: clip（hidden だとスクロールコンテナになり sticky が効かない）。上部バーの下に貼り付く
         position: 'sticky', top: tokens.layout.topbar, zIndex: 2, alignItems: 'center', gap: 0.25, p: 0.75, flexWrap: 'wrap',
-        bgcolor: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(8px)', borderBottom: `1px solid ${tokens.color.border}`,
+        bgcolor: `color-mix(in srgb, ${tokens.color.surface} 92%, transparent)`, backdropFilter: 'blur(8px)', borderBottom: `1px solid ${tokens.color.border}`,
       }}
     >
       <ToolButton icon={Heading2} label="見出し（大）" active={s.h2} onClick={() => chain().toggleHeading({ level: 2 }).run()} />

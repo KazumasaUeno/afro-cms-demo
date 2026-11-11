@@ -37,7 +37,7 @@ export function ProjectCard({ p, onOpen }: { p: Project; onOpen?: () => void }) 
     >
       {/* ブランド色の帯＋サイトのミニプレビュー */}
       <Box sx={{ position: 'relative', height: 96, background: `linear-gradient(135deg, ${p.accent} 0%, ${p.accent}B3 100%)`, overflow: 'hidden' }} aria-hidden>
-        <Box sx={{ position: 'absolute', left: 20, right: 20, bottom: -18, height: 82, borderRadius: '12px 12px 0 0', bgcolor: 'rgba(255,255,255,0.94)', boxShadow: tokens.shadow.md, p: 1.25 }}>
+        <Box sx={{ position: 'absolute', left: 20, right: 20, bottom: -18, height: 82, borderRadius: '12px 12px 0 0', bgcolor: `color-mix(in srgb, ${tokens.color.surface} 94%, transparent)`, boxShadow: tokens.shadow.md, p: 1.25 }}>
           <Stack direction="row" spacing={0.5} sx={{ mb: 1 }}>
             {[0, 1, 2].map((i) => <Box key={i} sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: tokens.color.borderStrong }} />)}
           </Stack>

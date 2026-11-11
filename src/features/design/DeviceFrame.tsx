@@ -1,4 +1,5 @@
 import { Box } from '@mui/material';
+import { LightThemeOnly } from '@/theme/ThemeMode';
 import { useLayoutEffect, useRef, useState, type ComponentType } from 'react';
 import type { DesignId } from '@/types';
 import { tokens } from '@/theme/tokens';
@@ -49,7 +50,9 @@ export function DeviceFrame({ design, device, thumbnail, viewportHeight, label }
   const barH = chrome ? 34 : 0;
 
   return (
-    <Box ref={ref} sx={{ width: '100%' }}>
+    // 顧客サイトの見本なので、アプリの配色（ダーク）に関わらずライトで描く
+    <LightThemeOnly>
+    <Box ref={ref} data-theme="light" sx={{ width: '100%' }}>
       <Box
         sx={{
           width: w * scale, height: h * scale + barH, mx: 'auto', overflow: 'hidden', bgcolor: '#fff',
@@ -82,5 +85,6 @@ export function DeviceFrame({ design, device, thumbnail, viewportHeight, label }
         )}
       </Box>
     </Box>
+    </LightThemeOnly>
   );
 }

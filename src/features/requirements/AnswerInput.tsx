@@ -37,7 +37,7 @@ export function ChipSelect({ options, value, multiple, onChange, label }: ChipSe
               component="span"
               sx={{
                 width: 18, height: 18, borderRadius: multiple ? '6px' : '50%', display: 'grid', placeItems: 'center', flexShrink: 0,
-                border: `1.5px solid ${on ? tokens.color.primary : tokens.color.borderStrong}`, bgcolor: on ? tokens.color.primary : 'transparent', color: '#fff',
+                border: `1.5px solid ${on ? tokens.color.primary : tokens.color.borderStrong}`, bgcolor: on ? tokens.color.primary : 'transparent', color: tokens.color.onPrimary,
               }}
             >
               {on && <Check size={12} strokeWidth={3} />}

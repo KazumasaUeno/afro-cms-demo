@@ -65,7 +65,7 @@ function VariantCard({ v, selected, adopted, locked, onSelect }: { v: DesignVari
         <DeviceFrame design={v.id} device="pc" thumbnail viewportHeight={760} />
         {/* チェック印は採用済みの案だけ（表示中の案は青枠のみ） */}
         {adopted && (
-          <Box sx={{ position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: '50%', bgcolor: tokens.color.primary, color: '#fff', display: 'grid', placeItems: 'center', boxShadow: tokens.shadow.sm }}>
+          <Box sx={{ position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: '50%', bgcolor: tokens.color.primary, color: tokens.color.onPrimary, display: 'grid', placeItems: 'center', boxShadow: tokens.shadow.sm }}>
             <Check size={15} strokeWidth={3} />
           </Box>
         )}

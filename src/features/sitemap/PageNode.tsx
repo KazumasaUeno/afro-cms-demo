@@ -8,16 +8,16 @@ import { tokens } from '@/theme/tokens';
 export type PageFlowNode = Node<SitemapNodeData, 'page'>;
 
 const KIND: Record<SitemapNodeData['kind'], { icon: LucideIcon; bg: string; fg: string; label: string }> = {
-  home: { icon: House, bg: tokens.color.ink, fg: '#fff', label: 'トップ' },
+  home: { icon: House, bg: tokens.color.inverseSurface, fg: tokens.color.inverseOnSurface, label: 'トップ' },
   section: { icon: FolderTree, bg: tokens.color.primarySoft, fg: tokens.color.primary, label: 'セクション' },
   page: { icon: FileText, bg: tokens.color.bgSubtle, fg: tokens.color.inkSoft, label: 'ページ' },
-  cta: { icon: MousePointerClick, bg: tokens.color.primary, fg: '#fff', label: 'CTA' },
+  cta: { icon: MousePointerClick, bg: tokens.color.primary, fg: tokens.color.onPrimary, label: 'CTA' },
   new: { icon: Sparkles, bg: tokens.color.accentSoft, fg: tokens.color.accentInk, label: '新設' },
 };
 
 export const KIND_META = KIND;
 
-const handleSx = { width: 9, height: 9, background: '#fff', border: `2px solid ${tokens.color.borderStrong}` };
+const handleSx = { width: 9, height: 9, background: tokens.color.surface, border: `2px solid ${tokens.color.borderStrong}` };
 
 /** サイトマップのページカード */
 export const PageNode = memo(function PageNode({ data, selected }: NodeProps<PageFlowNode>) {
@@ -54,7 +54,7 @@ export const PageNode = memo(function PageNode({ data, selected }: NodeProps<Pag
         <Box
           sx={{
             position: 'absolute', top: -10, right: 10, px: 0.75, height: 18, borderRadius: '6px', fontSize: 12, fontWeight: 750, letterSpacing: '.04em',
-            display: 'flex', alignItems: 'center', bgcolor: data.kind === 'new' ? tokens.color.accent : tokens.color.primary, color: '#fff',
+            display: 'flex', alignItems: 'center', bgcolor: data.kind === 'new' ? tokens.color.accent : tokens.color.primary, color: data.kind === 'new' ? tokens.color.onTertiary : tokens.color.onPrimary,
           }}
         >
           {data.kind === 'new' ? 'NEW' : 'CTA'}

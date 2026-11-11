@@ -168,7 +168,7 @@ export function Wizard({ onAnalyze }: { onAnalyze: () => void }) {
                 >
                   <Box component="span" sx={{
                     width: 20, height: 20, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700,
-                    bgcolor: done ? tokens.color.success : 'transparent', color: done ? '#fff' : current ? tokens.color.primary : tokens.color.muted,
+                    bgcolor: done ? tokens.color.success : 'transparent', color: done ? tokens.color.onSuccess : current ? tokens.color.primary : tokens.color.muted,
                     border: done ? 'none' : `1.5px solid ${current ? tokens.color.primary : tokens.color.borderStrong}`,
                   }}>
                     {done ? <Check size={12} strokeWidth={3} /> : i + 1}

@@ -90,7 +90,7 @@ export function CategoryPanel() {
             >
               <Box sx={{ position: 'relative', width: 22, height: 22, flexShrink: 0 }}>
                 {pct === 1 ? (
-                  <Box component="span" sx={{ width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center', bgcolor: tokens.color.success, color: '#fff' }}>
+                  <Box component="span" sx={{ width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center', bgcolor: tokens.color.success, color: tokens.color.onSuccess }}>
                     <Check size={13} strokeWidth={3} />
                   </Box>
                 ) : (

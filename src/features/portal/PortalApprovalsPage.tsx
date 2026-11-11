@@ -220,7 +220,7 @@ export default function PortalApprovalsPage() {
                     <Box sx={{ position: 'relative', borderRadius: '10px', overflow: 'hidden', bgcolor: tokens.color.bgSubtle }}>
                       <DeviceFrame design={v.id} device="pc" thumbnail viewportHeight={720} />
                       {selected && (
-                        <Box sx={{ position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: '50%', bgcolor: AREA.color, color: '#fff', display: 'grid', placeItems: 'center' }}>
+                        <Box sx={{ position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: '50%', bgcolor: AREA.color, color: tokens.color.onSuccess, display: 'grid', placeItems: 'center' }}>
                           <Check size={14} strokeWidth={3} />
                         </Box>
                       )}

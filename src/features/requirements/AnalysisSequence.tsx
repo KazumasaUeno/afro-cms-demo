@@ -113,7 +113,7 @@ export function AnalysisSequence({ hostname, onDone }: { hostname: string; onDon
               >
                 <Box sx={{ position: 'relative', width: 44, height: 44, borderRadius: 3, bgcolor: tokens.color.primarySoft, color: tokens.color.primary, display: 'grid', placeItems: 'center' }}>
                   <Icon size={20} />
-                  <Box className="an-check" sx={{ position: 'absolute', right: -5, bottom: -5, width: 20, height: 20, borderRadius: '50%', bgcolor: tokens.color.success, color: '#fff', display: 'grid', placeItems: 'center', border: '2px solid #fff' }}>
+                  <Box className="an-check" sx={{ position: 'absolute', right: -5, bottom: -5, width: 20, height: 20, borderRadius: '50%', bgcolor: tokens.color.success, color: tokens.color.onSuccess, display: 'grid', placeItems: 'center', border: '2px solid #fff' }}>
                     <Check size={11} strokeWidth={3.5} />
                   </Box>
                 </Box>

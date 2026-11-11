@@ -1,5 +1,5 @@
 import { Box, Button, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
-import { Building2, Database, Info, RotateCcw, ShieldCheck, Sparkles, Wind } from 'lucide-react';
+import { Building2, Database, Info, RotateCcw, ShieldCheck, Sparkles, SunMoon, Wind } from 'lucide-react';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import type { DemoState } from '@/types';
 import { useDemo } from '@/store/DemoStore';
@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/useToast';
 import { PageHeader, Reveal, SectionTitle, Surface } from '@/components/ui';
 import { ResetDemoDialog } from '@/components/layout/ResetDemoDialog';
 import { tokens } from '@/theme/tokens';
+import { useThemeMode, type ThemePref } from '@/theme/ThemeMode';
 
 const MAX_COMPANY = 40;
 
@@ -37,6 +38,7 @@ function Row({ icon, title, description, children }: { icon: ReactNode; title: s
 export default function SettingsPage() {
   const { state, dispatch } = useDemo();
   const toast = useToast();
+  const theme = useThemeMode();
   const [company, setCompany] = useState(state.settings.companyName);
   const [touched, setTouched] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
@@ -75,6 +77,23 @@ export default function SettingsPage() {
                 <Button type="submit" variant="contained" disabled={!dirty} sx={{ flexShrink: 0 }}>保存</Button>
               </Stack>
             </Box>
+          </Row>
+          <Row icon={<SunMoon size={18} />} title="配色" description="ライト / ダークを切り替えます。「システム」は端末の設定に従います。この設定はデモの初期化では戻りません。">
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              value={theme.pref}
+              onChange={(e, v: ThemePref | null) => {
+                if (!v) return;
+                const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                theme.setPref(v, { x: r.left + r.width / 2, y: r.top + r.height / 2 });
+              }}
+              aria-label="配色"
+            >
+              <ToggleButton value="system">システム</ToggleButton>
+              <ToggleButton value="light">ライト</ToggleButton>
+              <ToggleButton value="dark">ダーク</ToggleButton>
+            </ToggleButtonGroup>
           </Row>
           <Row icon={<Wind size={18} />} title="動きを減らす" description="画面の切り替えやAI演出のアニメーションを控えめにします。「システム」は端末の設定に従います。">
             <ToggleButtonGroup

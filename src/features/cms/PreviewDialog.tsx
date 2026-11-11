@@ -1,4 +1,5 @@
 import { Box, Dialog, IconButton, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { LightThemeOnly } from '@/theme/ThemeMode';
 import { Monitor, Smartphone, Tablet, X, Lock } from 'lucide-react';
 import { useState } from 'react';
 import type { CmsPage } from '@/types';
@@ -28,7 +29,10 @@ export function PreviewDialog({ page, open, onClose }: { page: CmsPage; open: bo
         <IconButton onClick={onClose} aria-label="プレビューを閉じる"><X size={20} /></IconButton>
       </Stack>
       <Box sx={{ flex: 1, overflow: 'auto', p: { xs: 1.5, md: 4 } }}>
+        {/* 公開サイトの見本なので、アプリの配色（ダーク）に関わらずライトで描く */}
+        <LightThemeOnly>
         <Box
+          data-theme="light"
           sx={{
             width: WIDTH[device], maxWidth: '100%', mx: 'auto', borderRadius: device === 'mobile' ? '28px' : '16px', overflow: 'hidden',
             bgcolor: '#fff', boxShadow: tokens.shadow.lg, border: `1px solid ${tokens.color.border}`,
@@ -46,6 +50,7 @@ export function PreviewDialog({ page, open, onClose }: { page: CmsPage; open: bo
           </Stack>
           <SitePreview page={page} compact={device !== 'pc'} />
         </Box>
+        </LightThemeOnly>
       </Box>
     </Dialog>
   );

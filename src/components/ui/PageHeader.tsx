@@ -26,7 +26,8 @@ export function PageHeader({ eyebrow, title, description, actions, icon }: Props
             <Typography variant="overline" sx={{ color: 'inherit' }}>{eyebrow}</Typography>
           </Stack>
         )}
-        <Typography variant="h1" component="h1">{title}</Typography>
+        {/* M3 Expressive: 画面の見出しは md 以上で Display small（36/44） */}
+        <Typography variant="h1" component="h1" sx={{ fontSize: { md: '2.25rem' }, lineHeight: { md: 1.22 } }}>{title}</Typography>
         {description && <Typography variant="subtitle1" sx={{ mt: 1, maxWidth: 680 }}>{description}</Typography>}
       </Box>
       {actions && (

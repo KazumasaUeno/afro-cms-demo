@@ -57,7 +57,7 @@ function TrendChart({ dataKey, name, color, gradientId, latest, unit, showXAxis,
             <CartesianGrid stroke={tokens.color.border} strokeDasharray="0" vertical={false} />
             <XAxis dataKey="month" hide={!showXAxis} tickFormatter={(m: string) => m.slice(5) + '月'} tick={{ fontSize: 12, fill: tokens.color.muted }} axisLine={false} tickLine={false} />
             <YAxis width={CHART_Y_WIDTH} tick={{ fontSize: 12, fill: tokens.color.muted }} axisLine={false} tickLine={false} tickFormatter={tickFormatter} />
-            <Tooltip contentStyle={{ borderRadius: 12, border: `1px solid ${tokens.color.border}`, boxShadow: tokens.shadow.md, fontSize: 12 }} formatter={(v) => [Number(v).toLocaleString('ja-JP'), name]} />
+            <Tooltip contentStyle={{ borderRadius: 12, border: `1px solid ${tokens.color.border}`, backgroundColor: tokens.color.surfaceContainerHigh, color: tokens.color.ink, boxShadow: tokens.shadow.md, fontSize: 12 }} formatter={(v) => [Number(v).toLocaleString('ja-JP'), name]} />
             <ReferenceLine x={RENEWAL_MONTH} stroke={tokens.color.ink} strokeDasharray="4 4" label={{ value: 'リニューアル', position: 'top', fontSize: 12, fill: tokens.color.ink }} />
             <Area type="monotone" dataKey={dataKey} stroke={color} strokeWidth={2} fill={`url(#${gradientId})`} isAnimationActive={anim} />
           </AreaChart>
