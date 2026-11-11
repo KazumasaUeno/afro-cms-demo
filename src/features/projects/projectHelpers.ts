@@ -16,7 +16,6 @@ export const STAGE_LINKS: Record<Stage, { label: string; to: string }[]> = {
   improvement: [{ label: 'インサイト・改善提案', to: '/insights' }],
 };
 
-export const stagePrimaryRoute = (s: Stage): string => STAGE_LINKS[s][0].to;
 export const stageLabel = (s: Stage): string => STAGES.find((x) => x.id === s)?.label ?? s;
 
 /** アフロ・顧客の両方が確認した項目の割合（0-100） */

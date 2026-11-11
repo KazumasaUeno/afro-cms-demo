@@ -1,10 +1,10 @@
 import { Box, Button, IconButton, Stack, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography, ButtonBase } from '@mui/material';
 import {
   addEdge, Background, BackgroundVariant, Controls, MarkerType, MiniMap, Panel, ReactFlow, ReactFlowProvider,
-  useEdgesState, useNodesState, useReactFlow, type Connection, type Edge,
+  useEdgesState, useNodesState, useReactFlow, type Connection, type Edge, type EdgeChange, type NodeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { ArrowRight, BadgeCheck, CheckCircle2, Lightbulb, Maximize2, Network, Plus, Trash2 } from 'lucide-react';
+import { ArrowRight, BadgeCheck, CheckCircle2, Lightbulb, Lock, Maximize2, Network, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BuildFlowNav } from '@/components/layout/BuildFlowNav';
@@ -43,6 +43,12 @@ function Editor({ variant, onVariant }: { variant: SitemapVariant; onVariant: (v
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(stored.edges);
   const [adding, setAdding] = useState(false);
   const lastSig = useRef(sig(stored.nodes, stored.edges));
+  // お客様の承認後は閲覧だけ（管理者・開発者とも。選択して内容を読むことはできる）。ストア側（setSitemap）でも止めている
+  const locked = !!state.sitemap.approvedAt;
+  // 承認後に届く変更は、選択と大きさの計測だけ通す（移動・削除・追加をキャンバス上でも起こさない）
+  const onNodesChangeGuarded = (cs: NodeChange<PageFlowNode>[]) =>
+    onNodesChange(locked ? cs.filter((c) => c.type === 'select' || c.type === 'dimensions') : cs);
+  const onEdgesChangeGuarded = (cs: EdgeChange<Edge>[]) => onEdgesChange(locked ? cs.filter((c) => c.type === 'select') : cs);
 
   // 外部（デモ初期化など）でストアが変わったら取り込む
   useEffect(() => {
@@ -55,7 +61,7 @@ function Editor({ variant, onVariant }: { variant: SitemapVariant; onVariant: (v
 
   // 編集をストアへ保存（ドラッグ中は保存しない・まとめて書く）
   useEffect(() => {
-    if (nodes.some((n) => n.dragging)) return;
+    if (locked || nodes.some((n) => n.dragging)) return;
     const t = window.setTimeout(() => {
       const sn = toStoreNodes(nodes);
       const se = toStoreEdges(edges);
@@ -65,7 +71,7 @@ function Editor({ variant, onVariant }: { variant: SitemapVariant; onVariant: (v
       dispatch({ type: 'setSitemap', variant, nodes: sn, edges: se });
     }, 300);
     return () => window.clearTimeout(t);
-  }, [nodes, edges, variant, dispatch]);
+  }, [nodes, edges, variant, dispatch, locked]);
 
   const selected = nodes.find((n) => n.selected);
   const storeNodes = useMemo(() => toStoreNodes(nodes), [nodes]);
@@ -79,11 +85,12 @@ function Editor({ variant, onVariant }: { variant: SitemapVariant; onVariant: (v
     if (n) flow.setCenter(n.position.x + 92, n.position.y + 30, { zoom: 1.1, duration: 400 });
   };
   const patchSelected = (patch: Partial<PageFlowNode['data']>) =>
-    setNodes((ns) => ns.map((n) => (n.id === selected?.id ? { ...n, data: { ...n.data, ...patch } } : n)));
+    !locked && setNodes((ns) => ns.map((n) => (n.id === selected?.id ? { ...n, data: { ...n.data, ...patch } } : n)));
 
-  const onConnect = (c: Connection) => setEdges((es) => addEdge({ ...c, id: `${c.source}-${c.target}` }, es));
+  const onConnect = (c: Connection) => !locked && setEdges((es) => addEdge({ ...c, id: `${c.source}-${c.target}` }, es));
 
   const addPage = (input: NewPageInput) => {
+    if (locked) return;
     const id = `${variant === 'after' ? 'a' : 'b'}-${Date.now().toString(36)}`;
     const parent = nodes.find((n) => n.id === input.parentId);
     const siblings = parent ? edges.filter((e) => e.source === parent.id).length : 0;
@@ -111,20 +118,26 @@ function Editor({ variant, onVariant }: { variant: SitemapVariant; onVariant: (v
           <span>問い合わせまで <b style={{ color: tokens.color.ink }}>{metrics.contactClicks ?? '—'}</b> クリック</span>
         </Stack>
         <Stack direction="row" spacing={1}>
-          <Button variant="outlined" size="small" startIcon={<Plus size={16} />} onClick={() => setAdding(true)}>ページを追加</Button>
-          <Tooltip title={selected?.deletable === false ? 'トップページは削除できません' : '選択したページを削除（Delete キー）'}>
+          {!locked && <Button variant="outlined" size="small" startIcon={<Plus size={16} />} onClick={() => setAdding(true)}>ページを追加</Button>}
+          {!locked && <Tooltip title={selected?.deletable === false ? 'トップページは削除できません' : '選択したページを削除（Delete キー）'}>
             <span>
               <IconButton aria-label="選択したページを削除" disabled={!selected || selected.deletable === false}
                 onClick={() => selected && flow.deleteElements({ nodes: [{ id: selected.id }] })}>
                 <Trash2 size={17} />
               </IconButton>
             </span>
-          </Tooltip>
+          </Tooltip>}
           <Tooltip title="全体を表示">
             <IconButton aria-label="全体を表示" onClick={() => flow.fitView({ padding: 0.2, duration: 400 })}><Maximize2 size={17} /></IconButton>
           </Tooltip>
         </Stack>
       </Stack>
+
+      {locked && (
+        <Box role="note" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, px: 1.5, py: 1, borderRadius: 2, bgcolor: tokens.color.surfaceMuted, color: tokens.color.inkSoft, fontSize: 13.5 }}>
+          <Lock size={15} aria-hidden /> お客様が承認済みのため編集できません
+        </Box>
+      )}
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0,1fr) 320px' }, gap: 2.5, alignItems: 'start' }}>
         <Surface padding={0} sx={{ overflow: 'hidden',
@@ -141,12 +154,14 @@ function Editor({ variant, onVariant }: { variant: SitemapVariant; onVariant: (v
             nodes={nodes}
             edges={edges}
             nodeTypes={nodeTypes}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
+            onNodesChange={onNodesChangeGuarded}
+            onEdgesChange={onEdgesChangeGuarded}
             onConnect={onConnect}
+            nodesDraggable={!locked}
+            nodesConnectable={!locked}
             isValidConnection={(c) => c.source !== c.target}
             defaultEdgeOptions={defaultEdgeOptions}
-            deleteKeyCode={['Delete', 'Backspace']}
+            deleteKeyCode={locked ? null : ['Delete', 'Backspace']}
             fitView
             // 初期表示はページ名が読める倍率を優先（はみ出す分はパン。全体は右上「全体を表示」で）
             fitViewOptions={{ padding: 0.08, minZoom: 0.85 }}
@@ -162,7 +177,7 @@ function Editor({ variant, onVariant }: { variant: SitemapVariant; onVariant: (v
             <Panel position="top-left">
               <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 1.25, py: 0.75, borderRadius: '10px', bgcolor: `color-mix(in srgb, ${tokens.color.surface} 90%, transparent)`, border: `1px solid ${tokens.color.border}`, fontSize: 12, color: tokens.color.muted }}>
                 <StatusPill tone={variant === 'after' ? 'accent' : 'neutral'}>{variant === 'after' ? '改善後' : '現在'}</StatusPill>
-                <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>ドラッグで移動 · 下の点から引っぱって接続</Box>
+                <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>{locked ? '閲覧のみ · ページを選ぶと内容を確認できます' : 'ドラッグで移動 · 下の点から引っぱって接続'}</Box>
               </Stack>
             </Panel>
           </ReactFlow>
@@ -176,9 +191,9 @@ function Editor({ variant, onVariant }: { variant: SitemapVariant; onVariant: (v
                 <Typography variant="caption" sx={{ fontFamily: tokens.font.mono }}>{selected.data.path}</Typography>
               </Stack>
               <TextField fullWidth size="small" label="ページ名" value={selected.data.label} error={!!labelErr} helperText={labelErr ?? ' '}
-                inputProps={{ maxLength: 30 }} onChange={(e) => patchSelected({ label: e.target.value })} />
+                inputProps={{ maxLength: 30, readOnly: locked }} onChange={(e) => patchSelected({ label: e.target.value })} />
               {variant === 'after' ? (
-                <TextField fullWidth size="small" multiline minRows={3} label="改善理由" value={selected.data.reason ?? ''} inputProps={{ maxLength: 140 }}
+                <TextField fullWidth size="small" multiline minRows={3} label="改善理由" value={selected.data.reason ?? ''} inputProps={{ maxLength: 140, readOnly: locked }}
                   helperText={`${(selected.data.reason ?? '').length} / 140`} onChange={(e) => patchSelected({ reason: e.target.value || undefined })} sx={{ mt: 1 }} />
               ) : selected.data.reason ? (
                 <Box sx={{ mt: 1, p: 1.5, borderRadius: 2, bgcolor: tokens.color.warningSoft, fontSize: 13, color: tokens.color.warningInk }}>課題：{selected.data.reason}</Box>
@@ -203,7 +218,7 @@ function Editor({ variant, onVariant }: { variant: SitemapVariant; onVariant: (v
                   <Box sx={{ width: 28, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{a}</Box>
                 </Stack>
               ))}
-              <Typography variant="caption" sx={{ display: 'block', mt: 1.5 }}>ページを選ぶと詳細と改善理由を編集できます。</Typography>
+              <Typography variant="caption" sx={{ display: 'block', mt: 1.5 }}>{locked ? 'ページを選ぶと詳細と改善理由を確認できます。' : 'ページを選ぶと詳細と改善理由を編集できます。'}</Typography>
             </Surface>
           )}
 
@@ -226,13 +241,14 @@ function Editor({ variant, onVariant }: { variant: SitemapVariant; onVariant: (v
         </Stack>
       </Box>
 
-      <AddPageDialog open={adding} variant={variant} nodes={storeNodes} defaultParentId={selected?.id} onClose={() => setAdding(false)} onAdd={addPage} />
+      <AddPageDialog open={adding && !locked} variant={variant} nodes={storeNodes} defaultParentId={selected?.id} onClose={() => setAdding(false)} onAdd={addPage} />
     </>
   );
 }
 
 /**
  * サイトマップ。管理者画面（/site）と開発者画面（/dev/sitemap。0.26.0）で同じ画面。
+ * 構造の編集はお客様の承認前だけ（管理者・開発者とも。承認後は閲覧のみ。2026-11-11 ユーザー判断）。
  * 開発者画面では構造の確認・編集はできるが、承認（アフロがお客様の代わりに承認する操作）は出さない（表示の出し分けだけ。実体はルール）
  */
 export default function SitemapPage() {
@@ -252,7 +268,9 @@ export default function SitemapPage() {
         eyebrow="③ 制作"
         icon={<Network size={14} />}
         title="サイトの構造を、見ながら組み替える"
-        description="現在のサイトと、要件定義から導いた改善後の構造を切り替えて比較できます。ページの追加・移動・接続はそのまま保存されます。"
+        description={approvedAt
+          ? '現在のサイトと、要件定義から導いた改善後の構造を切り替えて比較できます。お客様の承認後は閲覧だけできます。'
+          : '現在のサイトと、要件定義から導いた改善後の構造を切り替えて比較できます。ページの追加・移動・接続はそのまま保存されます。'}
         actions={
           approvedAt ? (
             <>

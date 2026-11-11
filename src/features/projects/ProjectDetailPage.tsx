@@ -1,6 +1,6 @@
 import { Box, Button, Stack, Typography } from '@mui/material';
 import { ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Clock, Code2, FolderSearch, Globe, User } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import type { Project, Stage } from '@/types';
 import { useDemo } from '@/store/DemoStore';
@@ -15,6 +15,7 @@ import { formatDate, formatDateTime, relativeTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { DevProjectGate } from '@/features/dev/DevProjectGate';
+import { useDevProjects } from '@/features/dev/useDevUser';
 import { nextBestAction, qualityCompletion } from './projectHelpers';
 import { devNextWork, useProjectRoutes } from './projectRoutes';
 import { ClientStatusPanel } from './ClientStatusPanel';
@@ -59,6 +60,15 @@ export default function ProjectDetailPage() {
   const { data: list } = projects.useList();
   const navigate = useNavigate();
   const p = list.find((x) => x.id === projectId);
+  const currentId = projects.useCurrentId();
+  const mine = useDevProjects();
+  // 開発者画面: URL で開いた案件が担当なら、上部の表示中の案件をそれに揃える（ブラウザの戻る・URL 直打ちでも上部と本文を食い違わせない）。
+  // 揃えた後は currentId が一致して syncId が null になるので繰り返さない（上部の切替は詳細へ移動するので URL も変わる）。担当外・存在しない id は選ばない。
+  // 管理者画面は従来どおり開いただけでは選ばない（routes.dev の時だけ）
+  const syncId = routes.dev && p && p.id !== currentId && mine.some((m) => m.id === p.id) ? p.id : null;
+  useEffect(() => {
+    if (syncId) projects.select(syncId);
+  }, [syncId]);
   if (!p) return <NotFound list={routes.list} />;
   if (routes.dev) {
     return (

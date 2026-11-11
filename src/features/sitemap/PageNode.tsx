@@ -20,7 +20,7 @@ export const KIND_META = KIND;
 const handleSx = { width: 9, height: 9, background: tokens.color.surface, border: `2px solid ${tokens.color.borderStrong}` };
 
 /** サイトマップのページカード */
-export const PageNode = memo(function PageNode({ data, selected }: NodeProps<PageFlowNode>) {
+export const PageNode = memo(function PageNode({ data, selected, isConnectable }: NodeProps<PageFlowNode>) {
   const k = KIND[data.kind];
   const Icon = k.icon;
   const accent = data.kind === 'cta' ? tokens.color.primary : data.kind === 'new' ? tokens.color.accent : data.kind === 'home' ? tokens.color.ink : tokens.color.border;
@@ -35,7 +35,8 @@ export const PageNode = memo(function PageNode({ data, selected }: NodeProps<Pag
         '&:hover': { boxShadow: selected ? undefined : tokens.shadow.md },
       }}
     >
-      <Handle type="target" position={Position.Top} style={handleSx} />
+      {/* 接続できないとき（お客様の承認後など）は接続の点を掴めないようにする */}
+      <Handle type="target" position={Position.Top} style={handleSx} isConnectable={isConnectable} />
       <Stack direction="row" spacing={1.25} alignItems="center">
         <Box sx={{ width: 32, height: 32, borderRadius: '9px', bgcolor: k.bg, color: k.fg, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
           <Icon size={16} />
@@ -60,7 +61,7 @@ export const PageNode = memo(function PageNode({ data, selected }: NodeProps<Pag
           {data.kind === 'new' ? 'NEW' : 'CTA'}
         </Box>
       )}
-      <Handle type="source" position={Position.Bottom} style={handleSx} />
+      <Handle type="source" position={Position.Bottom} style={handleSx} isConnectable={isConnectable} />
     </Box>
   );
 });

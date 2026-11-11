@@ -26,10 +26,13 @@ export default function ProjectsPage() {
   const { data: all } = repo.useList();
   const routes = useProjectRoutes();
   const mine = useDevProjects();
-  const projects = useMemo(
-    () => (routes.dev ? all.filter((p) => mine.some((m) => m.id === p.id)) : all),
-    [all, mine, routes.dev],
-  );
+  // useDevProjects は描画のたびに新しい配列を返すので、担当の id を文字列にして依存を安定させる
+  const mineKey = mine.map((m) => m.id).join('\n');
+  const projects = useMemo(() => {
+    if (!routes.dev) return all;
+    const ids = new Set(mineKey.split('\n'));
+    return all.filter((p) => ids.has(p.id));
+  }, [all, mineKey, routes.dev]);
   const navigate = useNavigate();
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');

@@ -189,7 +189,8 @@ export default function DesignStudioPage() {
                   <Typography variant="h6">{v.label} · {v.name}</Typography>
                   {/* 採用後は「採用した案」を基準に表示する（見ている案と取り違えない） */}
                   <Button size="small" variant={(locked ? design.selected : focus) === v.id ? 'contained' : 'outlined'} disabled={locked && design.selected !== v.id} onClick={() => choose(v.id)}>
-                    {locked ? (design.selected === v.id ? '採用済み' : '不採用') : focus === v.id ? '選択中' : 'この案を選ぶ'}
+                    {/* 開発者画面では選んでも保存しない（見るだけ）ので「表示」と書く */}
+                    {locked ? (design.selected === v.id ? '採用済み' : '不採用') : focus === v.id ? (dev ? '表示中' : '選択中') : dev ? 'この案を表示' : 'この案を選ぶ'}
                   </Button>
                 </Stack>
                 <DeviceFrame design={v.id} device={device} viewportHeight={device === 'pc' ? 900 : undefined} label={`${v.name}のプレビュー`} />

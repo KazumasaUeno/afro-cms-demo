@@ -207,6 +207,8 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       return { ...state, requirements: { ...createSeedState().requirements, mode: state.requirements.mode } };
 
     case 'setSitemap':
+      // お客様の承認後は構造を変えない（管理者・開発者とも。2026-11-11 ユーザー判断。ページの追加・削除・移動・接続・名前の変更はすべてこの action を通る）
+      if (state.sitemap.approvedAt) return state;
       return { ...state, sitemap: { ...state.sitemap, [action.variant]: { nodes: action.nodes, edges: action.edges } } };
 
     case 'approveSitemap': {
