@@ -4,7 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#F7F2FA" />
-    <!-- 配色（ライト / ダーク）を最初の描画前に決める（ちらつき防止）。キーと既定は src/theme/ThemeMode.tsx と同じ -->
+    <!-- 配色（ライト / ダーク）を最初の描画前に決める（ちらつき防止）。キーと既定は src/theme/ThemeMode.tsx と同じ。
+         #F7F2FA / #141218 は src/theme/tokens.ts の palette.light.bg / palette.dark の地（surface）と同じ値（正は tokens.ts） -->
     <script>
       (function () {
         var mode = 'light';
@@ -12,7 +13,10 @@
           var pref = JSON.parse(localStorage.getItem('afro-cms-demo:theme') || '"system"');
           var dark = pref === 'dark' || (pref !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
           mode = dark ? 'dark' : 'light';
-        } catch (e) { /* 保存できない環境はライト */ }
+        } catch (e) {
+          // 保存値が読めない環境は「システム」扱い（ThemeMode.tsx の loadJson が null を返すときと同じ判定）
+          mode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
         document.documentElement.setAttribute('data-theme', mode);
         if (mode === 'dark') document.querySelector('meta[name="theme-color"]').setAttribute('content', '#141218');
       })();

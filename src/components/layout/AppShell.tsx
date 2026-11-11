@@ -202,12 +202,13 @@ function TopBar({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
           {pending > 0 && <Box sx={{ position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: '50%', bgcolor: tokens.color.error, border: `2px solid ${tokens.color.bg}` }} />}
         </IconButton>
       </Tooltip>}
-      <ThemeToggle />
+      {/* スマホは上部バーが狭いので、配色の切替は設定画面から行う */}
+      <Box sx={{ display: { xs: 'none', sm: 'contents' } }}><ThemeToggle /></Box>
       <Tooltip title="デモを初期化">
         <IconButton aria-label="デモを初期化" onClick={() => setResetOpen(true)}><RotateCcw size={18} /></IconButton>
       </Tooltip>
       {area.id === 'admin' && <Tooltip title="営業プレゼンモード">
-        <IconButton aria-label="営業プレゼンモードを開く" onClick={() => navigate('/present')} sx={{ display: { lg: 'none' } }}>
+        <IconButton aria-label="営業プレゼンモードを開く" onClick={() => navigate('/present')} sx={{ display: { xs: 'none', sm: 'inline-flex', lg: 'none' } }}>
           <Presentation size={19} />
         </IconButton>
       </Tooltip>}

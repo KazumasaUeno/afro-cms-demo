@@ -4,7 +4,7 @@ import { flushSync } from 'react-dom';
 import { loadJson, saveJson } from '@/services/storage';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { lightTheme, makeTheme } from './theme';
-import { palette, tokens, type ColorKey, type ThemeMode } from './tokens';
+import { palette, tokens, type ThemeMode } from './tokens';
 
 /**
  * 配色（ライト / ダーク）の切替。
@@ -112,26 +112,11 @@ export function useThemeMode(): ThemeModeValue {
 }
 
 /**
- * 生の色（hex）を返す。CSS 変数を解釈できない所（Recharts の色計算・React Flow の MiniMap など）用。
- * ライト固定の部分（LightZone）の中では light を返す。
- */
-export function useRawColor(): (key: ColorKey) => string {
-  const { mode } = useThemeMode();
-  const forced = useContext(ForcedLightCtx);
-  const m = forced ? 'light' : mode;
-  return useCallback((key: ColorKey) => palette[m][key], [m]);
-}
-
-const ForcedLightCtx = createContext(false);
-
-/**
  * ライトに固定する部分（顧客サイトの見本・端末の枠・公開プレビュー）。中の MUI 部品をライトのテーマで描く。
  * CSS 変数は呼び出し側の要素に data-theme="light" を付けて上書きする（囲みの要素を増やさないため）。
  */
 export function LightThemeOnly({ children }: { children: ReactNode }) {
   return (
-    <ForcedLightCtx.Provider value>
-      <ThemeProvider theme={lightTheme}>{children}</ThemeProvider>
-    </ForcedLightCtx.Provider>
+    <ThemeProvider theme={lightTheme}>{children}</ThemeProvider>
   );
 }

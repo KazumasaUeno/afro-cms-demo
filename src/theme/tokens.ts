@@ -116,7 +116,7 @@ function build(m: typeof m3Light, mode: 'light' | 'dark') {
     infoSoft: light ? '#CEE5FF' : '#004A77',
     infoInk: light ? '#004A77' : '#CEE5FF',
     /** 両モードとも暗い面（提案書のスコア表示。上の文字は白） */
-    scoreboardBg: '#1D1B20',
+    scoreboardBg: '#322F35', // 両モードで暗い面。ダークのカード（#1D1B20）とも区別できる段
   };
 }
 

@@ -48,7 +48,8 @@ function RailItem({ to, label, icon: Icon, active, color, hint }: { to: string; 
         sx={{
           width: '100%', flexDirection: 'column', gap: 0.5, py: 0.5, minHeight: 56, borderRadius: `${tokens.radius.md}px`,
           color: active ? tokens.color.onSurface : tokens.color.onSurfaceVariant,
-          fontSize: 12, lineHeight: '16px', fontWeight: active ? 700 : 500, letterSpacing: 0, textAlign: 'center',
+          // 96px のレールで語の途中で折れないよう、M3 Label small（11px）で 1 行に収める
+          fontSize: 11, lineHeight: '16px', fontWeight: active ? 700 : 500, letterSpacing: 0, textAlign: 'center', whiteSpace: 'nowrap',
           transition: 'color .2s',
           ...navIndicatorSx(active),
           // キーボードのフォーカスは印の外側に輪郭線を出す（ButtonBase は outline を消すので明示する）
@@ -204,7 +205,7 @@ function AccountButton({ area }: { area: AreaDef }) {
         onClose={() => setAnchor(null)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-        slotProps={{ paper: { sx: { ml: 1.5, width: 300, p: 2, bgcolor: tokens.color.surfaceContainer, display: 'flex', flexDirection: 'column', gap: 1.5 } } }}
+        slotProps={{ paper: { role: 'dialog', 'aria-label': 'ログイン中の情報', sx: { ml: 1.5, width: 300, p: 2, bgcolor: tokens.color.surfaceContainer, display: 'flex', flexDirection: 'column', gap: 1.5 } } }}
       >
         <AreaBadge area={area} />
         {area.id === 'admin' ? <AdminFooter showPresent={false} /> : <AreaFooter area={area} />}
