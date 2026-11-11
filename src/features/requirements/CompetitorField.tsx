@@ -5,8 +5,8 @@ import type { AnswerSide } from '@/types';
 import { MAX_COMPETITORS } from './validation';
 
 /**
- * 競合サイトの回答欄（一覧形式の画面用。お客様ポータルのヒアリング・管理者画面の回答一覧）。
- * 競合サイトは URL の配列で持つ（ウィザード・提案書と同じ形）。1 行に 1 つ入力してもらう。
+ * 競合サイトの回答欄（ヒアリングの入力画面用）。
+ * 競合サイトは URL の配列で持つ（提案書と同じ形）。1 行に 1 つ入力してもらう。
  * 入力中の改行が消えないよう、入力欄の文字列は手元に持ち、確定した URL の配列だけを保存する。by は入力した側
  */
 export function CompetitorField({ by }: { by: AnswerSide }) {

@@ -54,7 +54,7 @@ export interface RequirementQuestion {
   kind: QuestionKind;
   options?: string[];
   placeholder?: string;
-  /** デモのウィザードで実際に聞く代表質問か */
+  /** AI 分析に使う主要な質問か（入力画面で「AI分析に必要」と表示） */
   featured?: boolean;
   /** 共同モードでこの質問に答える側（事業・好みはお客様、技術・分析はアフロ） */
   owner: AnswerSide;

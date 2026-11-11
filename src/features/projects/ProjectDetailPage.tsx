@@ -7,7 +7,8 @@ import { useDemo } from '@/store/DemoStore';
 import { useRepositories } from '@/repositories';
 import { STAGES, stageIndex } from '@/data/projects';
 import { memberById } from '@/data/members';
-import { TOTAL_REQUIREMENT_QUESTIONS } from '@/data/requirements';
+import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
+import { isAnswered } from '@/features/requirements/validation';
 import { TOTAL_QUALITY_QUESTIONS } from '@/data/quality';
 import { MemberAvatar, ProgressRing, Reveal, StatusPill, Surface } from '@/components/ui';
 import { formatDate, formatDateTime, relativeTime } from '@/services/time';
@@ -63,7 +64,7 @@ export default function ProjectDetailPage() {
   // 開発担当（ユーザー管理で決める。開発者画面の権限の有無は問わない。登録した開発者も含め、無効にした人は除く）
   const devNames = people.filter((m) => !m.disabled).filter((m) => devAll[m.id]?.includes(p.id)).map((m) => m.name);
   const q = qualityCompletion(state.qualityChecks);
-  const answered = Object.values(req.answers).filter((v) => (Array.isArray(v) ? v.length > 0 : v.trim() !== '')).length;
+  const remainingQuestions = REQUIREMENT_QUESTIONS.filter((q) => !isAnswered(req.answers[q.id])).length;
   const published = state.pages.filter((x) => x.status === 'published').length;
   const scheduled = state.pages.filter((x) => x.status === 'scheduled').length;
   const latest = state.diagnoses[0];
@@ -76,7 +77,7 @@ export default function ProjectDetailPage() {
   const facts: Record<Stage, ReactNode> = {
     hearing: (
       <>
-        <Fact label="回答" value={`${answered} / ${TOTAL_REQUIREMENT_QUESTIONS}問`} ok={req.status !== 'draft'} />
+        <Fact label="回答" value={remainingQuestions === 0 ? 'すべて回答済み' : `残り ${remainingQuestions} 問`} ok={req.status !== 'draft'} />
         <Fact label="状態" value={req.status === 'draft' ? '入力中' : '回答済み'} ok={req.status !== 'draft'} />
       </>
     ),

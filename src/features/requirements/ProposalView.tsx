@@ -2,7 +2,7 @@ import { Box, Button, Dialog, DialogActions, DialogContent, Stack, Typography } 
 import { ArrowRight, BadgeCheck, CheckCircle2, Download, Globe, Quote, RotateCcw, Send, Target, TrendingUp } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { REQUIREMENT_QUESTIONS, TOTAL_REQUIREMENT_QUESTIONS } from '@/data/requirements';
+import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
 import { useRepositories } from '@/repositories';
 import { AiBadge, CountUp, ProgressRing, Reveal, StatusPill, Surface, type PillTone } from '@/components/ui';
 import { useToast } from '@/hooks/useToast';
@@ -90,7 +90,7 @@ export function ProposalView() {
                 </Typography>
               </Stack>
               <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.55)' }}>
-                要件 {TOTAL_REQUIREMENT_QUESTIONS}問のうち {answered}問の回答から作成。デモ用の推定値です。
+                ヒアリングの回答 {answered}問から作成。デモ用の推定値です。
               </Typography>
             </Box>
           </Box>

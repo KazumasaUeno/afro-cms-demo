@@ -1,20 +1,21 @@
-import { Box, Button, Stack, Typography } from '@mui/material';
-import { FileSpreadsheet, ListChecks, Sparkles } from 'lucide-react';
+import { Box, Button, Stack, useMediaQuery, useTheme } from '@mui/material';
+import { ListChecks, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import { AiBadge, PageHeader, Reveal, Surface } from '@/components/ui';
+import { AiBadge, PageHeader, Reveal } from '@/components/ui';
 import { useRepositories } from '@/repositories';
 import { useToast } from '@/hooks/useToast';
-import { tokens } from '@/theme/tokens';
-import { Wizard } from './Wizard';
 import { AnalysisSequence } from './AnalysisSequence';
 import { ProposalView } from './ProposalView';
-import { CategoryPanel } from './CategoryPanel';
+import { HearingEditor } from './HearingEditor';
 import { hostnameOf } from './buildProposal';
-import { CsvTools } from './CsvTools';
 
-type View = 'wizard' | 'analyzing' | 'result';
+type View = 'input' | 'analyzing' | 'result';
 
+/**
+ * AI要件定義（/ai-studio）。AI 分析の前はヒアリングの入力画面（1 画面。HearingEditor）、分析後は改善提案書。
+ * ヒアリングの入力の正の画面はここ（AI 分析の前）。/ai-studio/hearing は分析前ならここへ転送する。
+ */
 export default function RequirementsPage() {
   const { requirements } = useRepositories();
   const { data: req } = requirements.useCurrent();
@@ -22,8 +23,10 @@ export default function RequirementsPage() {
   const navigate = useNavigate();
   const status = req.status;
   const [analyzing, setAnalyzing] = useState(false);
-  const view: View = analyzing ? 'analyzing' : status === 'draft' ? 'wizard' : 'result';
+  const view: View = analyzing ? 'analyzing' : status === 'draft' ? 'input' : 'result';
   const url = req.answers['q-url'];
+  // スマホの入力画面は説明・バッジを出さず、質問までの距離を縮める（保存の状態は下のバーに出る）
+  const compact = !useMediaQuery(useTheme().breakpoints.up('md')) && view !== 'result';
 
   return (
     <Box>
@@ -35,55 +38,45 @@ export default function RequirementsPage() {
         description={
           view === 'result'
             ? 'ヒアリングの回答と現行サイトの分析から、優先度つきの改善提案（要件定義書）をまとめました。'
-            : 'お客様へのヒアリングで伺った内容を、1問ずつ入力します。主要な5問で改善提案書のたたき台ができます。残りの質問は「回答の一覧・入力」か CSV で入力できます。'
+            : compact ? undefined
+              : 'お客様へのヒアリングで伺った内容を、カテゴリごとに入力します。入力は自動で保存されます。「AI分析に必要」の質問がそろうと AI分析を実行できます。'
         }
-        actions={
+        actions={compact ? undefined : (
           <Stack direction="row" spacing={1} alignItems="center">
-            <Button variant="outlined" size="small" startIcon={<ListChecks size={15} />} onClick={() => navigate('/ai-studio/hearing')}>{status !== 'approved' ? '回答の一覧・入力' : '回答の一覧'}</Button>
+            {view === 'result' && (
+              <Button variant="outlined" size="small" startIcon={<ListChecks size={15} />} onClick={() => navigate('/ai-studio/hearing')}>
+                {status !== 'approved' ? '回答を見直す' : 'ヒアリングの回答'}
+              </Button>
+            )}
             <AiBadge />
           </Stack>
-        }
+        )}
       />
 
       {view === 'result' ? (
         <ProposalView />
+      ) : view === 'analyzing' ? (
+        <Reveal>
+          <AnalysisSequence
+            hostname={hostnameOf(typeof url === 'string' ? url : '')}
+            onDone={() => {
+              void requirements.completeAnalysis(req.projectId);
+              setAnalyzing(false);
+              toast('改善提案書ができました', 'ai');
+              window.scrollTo({ top: 0 });
+            }}
+          />
+        </Reveal>
       ) : (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1fr) 320px' }, gap: 2.5, alignItems: 'start' }}>
-          <Reveal>
-            {view === 'analyzing' ? (
-              <AnalysisSequence
-                hostname={hostnameOf(typeof url === 'string' ? url : '')}
-                onDone={() => {
-                  void requirements.completeAnalysis(req.projectId);
-                  setAnalyzing(false);
-                  toast('改善提案書ができました', 'ai');
-                  window.scrollTo({ top: 0 });
-                }}
-              />
-            ) : (
-              <Wizard onAnalyze={() => setAnalyzing(true)} />
-            )}
-          </Reveal>
-          <Box sx={{ position: { lg: 'sticky' }, top: { lg: tokens.layout.topbar + 24 } }}>
-            <Stack spacing={2.5}>
-              <Reveal delay={0.08}>
-                <CategoryPanel />
-              </Reveal>
-              {view === 'wizard' && (
-                <Reveal delay={0.12}>
-                  <Surface padding={{ xs: 2, md: 2.5 }}>
-                    <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 0.5 }}>
-                      <FileSpreadsheet size={18} color={tokens.color.primary} />
-                      <Typography variant="h4" component="h2">CSV でまとめて入力</Typography>
-                    </Stack>
-                    <Typography variant="caption" component="p" sx={{ mb: 1.5 }}>ヒアリングシートを Excel で作っている場合は、全問をまとめて取り込めます。</Typography>
-                    <CsvTools dense />
-                  </Surface>
-                </Reveal>
-              )}
-            </Stack>
-          </Box>
-        </Box>
+        <Reveal>
+          <HearingEditor
+            editable
+            onAnalyze={() => {
+              setAnalyzing(true);
+              window.scrollTo({ top: 0 });
+            }}
+          />
+        </Reveal>
       )}
     </Box>
   );

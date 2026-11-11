@@ -96,7 +96,7 @@ function AnalysisSlide({ reduced }: { reduced: boolean }) {
   }, [reduced, run]);
 
   return (
-    <SlideFrame eyebrow="① ヒアリング → ② 要件定義" title="URLを入れるだけで、AIが課題を整理" lead="13項目84問のヒアリングを 1 問ずつ入力（CSV で一括も可）。現行サイトと競合を分析し、改善提案書のたたき台を数分で作ります。">
+    <SlideFrame eyebrow="① ヒアリング → ② 要件定義" title="URLを入れるだけで、AIが課題を整理" lead="ヒアリングの内容をカテゴリごとに 1 画面で入力（CSV で一括も可）。現行サイトと競合を分析し、改善提案書のたたき台を数分で作ります。">
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1.2fr' }, gap: 3 }}>
         <Box ref={root} sx={{ p: 3, borderRadius: 4, bgcolor: '#fff', border: `1px solid ${c.border}`, boxShadow: tokens.shadow.sm }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>

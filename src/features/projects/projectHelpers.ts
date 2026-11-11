@@ -4,10 +4,8 @@ import { STAGES } from '@/data/projects';
 
 /** 各段階から開ける関連画面 */
 export const STAGE_LINKS: Record<Stage, { label: string; to: string }[]> = {
-  hearing: [
-    { label: 'ヒアリングを入力', to: '/ai-studio' },
-    { label: '回答一覧', to: '/ai-studio/hearing' },
-  ],
+  // 入力する場所は 1 画面（0.24.0）。/ai-studio/hearing は AI 分析の前なら入力画面（/ai-studio）へ転送し、分析後は回答の見直しを開く
+  hearing: [{ label: 'ヒアリングを入力', to: '/ai-studio/hearing' }],
   requirements: [{ label: 'AI要件定義を開く', to: '/ai-studio' }],
   build: [
     { label: 'サイトマップ', to: '/site' },

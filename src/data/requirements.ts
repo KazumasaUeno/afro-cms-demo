@@ -26,9 +26,10 @@ export const PURPOSE_OPTIONS = ['問い合わせを増やしたい', '採用を�
 export const IMPROVE_OPTIONS = ['ファーストビュー', 'ナビゲーション', 'スマホ表示', '表示速度', '問い合わせ導線', '写真・ビジュアル', 'SEO', '更新のしやすさ'];
 
 /**
- * 代表質問。featured=true がウィザードで実際に聞く質問。
+ * 代表質問。featured=true は AI 分析に使う主要な質問（入力画面で「AI分析に必要」と表示。競合サイトは任意）。
  * owner は共同モード（将来の Web 版で使う予定。いまはアフロが全問を入力する）の担当。
- * それ以外は「カテゴリ一覧」・「回答の一覧」・CSV で入力できるサンプル（全問の一部）。
+ * 入力はヒアリングの入力画面（features/requirements/HearingEditor.tsx。1 画面）と CSV で行う。
+ * placeholder は入力欄に出す記入例（選択式の質問には使わない）。
  */
 export const REQUIREMENT_QUESTIONS: RequirementQuestion[] = [
   { id: 'q-url', categoryId: 'rc1', priority: 'A', kind: 'url', text: '現在のホームページのURLを教えてください', placeholder: 'https://example.co.jp', featured: true, owner: 'afro' },
@@ -36,21 +37,21 @@ export const REQUIREMENT_QUESTIONS: RequirementQuestion[] = [
   { id: 'q-issue', categoryId: 'rc1', priority: 'A', kind: 'longtext', text: '現在のHPで最も大きな課題は何ですか？', placeholder: '例：スマホで見づらく、問い合わせがほとんど来ない', featured: true, owner: 'client' },
   { id: 'q-competitor', categoryId: 'rc3', priority: 'A', kind: 'url', text: '意識している競合サイトはありますか？', placeholder: 'https://competitor.example.jp', featured: true, owner: 'afro' },
   { id: 'q-improve', categoryId: 'rc1', priority: 'A', kind: 'multi', text: 'リニューアルによって最も改善したいことは何ですか？', options: IMPROVE_OPTIONS, featured: true, owner: 'client' },
-  { id: 'q-keep', categoryId: 'rc1', priority: 'B', kind: 'longtext', text: '現在のHPで評価している点・残したい点はありますか？', owner: 'client' },
-  { id: 'q-target', categoryId: 'rc2', priority: 'A', kind: 'text', text: '主なターゲットは誰ですか？', owner: 'client' },
-  { id: 'q-strength', categoryId: 'rc2', priority: 'A', kind: 'longtext', text: '競合と比べた強み・選ばれる理由は何ですか？', owner: 'client' },
-  { id: 'q-market', categoryId: 'rc3', priority: 'B', kind: 'text', text: '競合サイトで良いと感じる点はどこですか？', owner: 'afro' },
-  { id: 'q-content', categoryId: 'rc4', priority: 'A', kind: 'text', text: '必ず掲載したいコンテンツは何ですか？', owner: 'client' },
-  { id: 'q-feature', categoryId: 'rc5', priority: 'B', kind: 'text', text: '必要な機能（予約・EC・会員など）はありますか？', owner: 'afro' },
+  { id: 'q-keep', categoryId: 'rc1', priority: 'B', kind: 'longtext', text: '現在のHPで評価している点・残したい点はありますか？', placeholder: '例：お店の写真はお客様の評判が良いので残したい', owner: 'client' },
+  { id: 'q-target', categoryId: 'rc2', priority: 'A', kind: 'text', text: '主なターゲットは誰ですか？', placeholder: '例：近隣に住む・働く 30〜40 代', owner: 'client' },
+  { id: 'q-strength', categoryId: 'rc2', priority: 'A', kind: 'longtext', text: '競合と比べた強み・選ばれる理由は何ですか？', placeholder: '例：創業 20 年の自家焙煎。豆の種類が地域でいちばん多い', owner: 'client' },
+  { id: 'q-market', categoryId: 'rc3', priority: 'B', kind: 'text', text: '競合サイトで良いと感じる点はどこですか？', placeholder: '例：メニューと料金が分かりやすく、写真が多い', owner: 'afro' },
+  { id: 'q-content', categoryId: 'rc4', priority: 'A', kind: 'text', text: '必ず掲載したいコンテンツは何ですか？', placeholder: '例：メニュー・店舗情報・アクセス・採用情報', owner: 'client' },
+  { id: 'q-feature', categoryId: 'rc5', priority: 'B', kind: 'text', text: '必要な機能（予約・EC・会員など）はありますか？', placeholder: '例：来店予約のフォーム、お知らせの更新', owner: 'afro' },
   { id: 'q-cv', categoryId: 'rc6', priority: 'A', kind: 'single', text: '最も重要なコンバージョンは何ですか？', options: ['問い合わせ', '資料請求', '来店予約', '購入', '採用応募'], owner: 'client' },
-  { id: 'q-seo', categoryId: 'rc7', priority: 'B', kind: 'text', text: '上位表示したいキーワードはありますか？', owner: 'afro' },
-  { id: 'q-design-dislike', categoryId: 'rc8', priority: 'A', kind: 'longtext', text: '現在のHPのデザインで不満な点は何ですか？', owner: 'client' },
-  { id: 'q-image', categoryId: 'rc8', priority: 'A', kind: 'text', text: 'ユーザーにどのような企業イメージを持ってほしいですか？', owner: 'client' },
-  { id: 'q-brand', categoryId: 'rc8', priority: 'B', kind: 'text', text: 'コーポレートカラーやブランドガイドラインはありますか？', owner: 'client' },
+  { id: 'q-seo', categoryId: 'rc7', priority: 'B', kind: 'text', text: '上位表示したいキーワードはありますか？', placeholder: '例：地域名＋カフェ、地域名＋コーヒー豆', owner: 'afro' },
+  { id: 'q-design-dislike', categoryId: 'rc8', priority: 'A', kind: 'longtext', text: '現在のHPのデザインで不満な点は何ですか？', placeholder: '例：写真が暗く、文字が小さくて読みにくい', owner: 'client' },
+  { id: 'q-image', categoryId: 'rc8', priority: 'A', kind: 'text', text: 'ユーザーにどのような企業イメージを持ってほしいですか？', placeholder: '例：誠実で相談しやすい、地元に根ざした会社', owner: 'client' },
+  { id: 'q-brand', categoryId: 'rc8', priority: 'B', kind: 'text', text: 'コーポレートカラーやブランドガイドラインはありますか？', placeholder: '例：ロゴの緑色。ガイドラインは無し', owner: 'client' },
   { id: 'q-ops', categoryId: 'rc9', priority: 'A', kind: 'single', text: '公開後の更新は誰が行いますか？', options: ['社内担当者', 'アフロに依頼', '両方'], owner: 'client' },
-  { id: 'q-infra', categoryId: 'rc10', priority: 'B', kind: 'text', text: '現在のサーバー・ドメインの管理状況を教えてください', owner: 'afro' },
-  { id: 'q-schedule', categoryId: 'rc11', priority: 'A', kind: 'text', text: '公開希望時期はいつですか？', owner: 'client' },
-  { id: 'q-other', categoryId: 'rc12', priority: 'B', kind: 'longtext', text: 'その他、ご要望があれば自由にご記入ください', owner: 'client' },
+  { id: 'q-infra', categoryId: 'rc10', priority: 'B', kind: 'text', text: '現在のサーバー・ドメインの管理状況を教えてください', placeholder: '例：レンタルサーバーを自社で契約。ドメインは制作会社が管理', owner: 'afro' },
+  { id: 'q-schedule', categoryId: 'rc11', priority: 'A', kind: 'text', text: '公開希望時期はいつですか？', placeholder: '例：2027 年 3 月末（決算前）', owner: 'client' },
+  { id: 'q-other', categoryId: 'rc12', priority: 'B', kind: 'longtext', text: 'その他、ご要望があれば自由にご記入ください', placeholder: '例：ブログを社員が交代で書けるようにしたい', owner: 'client' },
   // 公開・ドメイン（DNS）: 公開日の切り替えで止まらないよう、管理者と切り替え方法を先に押さえる
   { id: 'q-dns-owner', categoryId: 'rc13', priority: 'A', kind: 'single', text: 'ドメイン・DNS は誰が管理していますか？', options: ['お客様', '制作会社・他社', 'アフロ', '不明'], owner: 'afro' },
   { id: 'q-dns-switch', categoryId: 'rc13', priority: 'A', kind: 'single', text: '公開時の切り替えはどのように行いますか？', options: ['アフロへ移管', 'お客様側で設定変更', '未定'], owner: 'afro' },
