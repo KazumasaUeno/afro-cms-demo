@@ -380,6 +380,20 @@ export function HearingEditor({ editable, onAnalyze }: Props) {
       <Button variant={nextCat ? 'contained' : 'outlined'} endIcon={<ArrowRight size={16} />} onClick={() => nextCat && go(nextCat)} disabled={!nextCat} aria-label={nextCat ? `次のカテゴリ: ${nextCat.title}` : '次のカテゴリ'}>
         {wide ? '次のカテゴリ' : '次へ'}
       </Button>
+      {/* 「次のカテゴリ」の隣にも AI分析を置く（2026-11-11 ユーザー指示）。足りない質問の一覧は右の AI分析の欄に出す */}
+      {onAnalyze && (
+        <Button
+          variant="contained"
+          size={wide ? 'medium' : 'small'}
+          onClick={analyze}
+          disabled={!canAnalyze}
+          endIcon={<Sparkles size={16} />}
+          aria-label={canAnalyze ? 'AI分析を実行' : `AI分析を実行（必要な質問があと ${blockers.length} 問）`}
+          sx={[{ ml: 1, flexShrink: 0 }, canAnalyze && { background: tokens.aiGradient, color: '#fff', '&:hover': { background: tokens.aiGradient, filter: 'brightness(1.06)' } }]}
+        >
+          {wide ? 'AI分析を実行' : 'AI分析'}
+        </Button>
+      )}
     </>
   );
 
