@@ -62,6 +62,9 @@ const router = createBrowserRouter([
       { path: 'portal/pages', element: <CmsEditorPage /> },
       { path: 'portal/publish', element: <PublishApprovalsPage /> },
       { path: 'dev', element: <DevDashboardPage /> },
+      // 開発者画面のヒアリング（0.25.0）。管理者画面の /ai-studio・/ai-studio/hearing と同じ画面を開発者画面の中で開く（担当案件だけ。DevProjectGate）
+      { path: 'dev/hearing', element: <RequirementsPage /> },
+      { path: 'dev/hearing/answers', element: <HearingAnswersPage /> },
       { path: 'dev/tasks', element: <DevTasksPage /> },
       // 自動チェックは 0.19.0 で開発者画面から外した（11/10 レビュー）。古いリンク・ブックマークはダッシュボードへ
       { path: 'dev/checks', element: <Navigate to="/dev" replace /> },

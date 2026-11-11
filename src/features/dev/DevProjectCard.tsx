@@ -9,7 +9,7 @@ import { stageLabel } from '@/features/projects/projectHelpers';
 
 /**
  * 開発者画面: 担当している案件のカード（進捗・いまの段階・次の作業・公開予定日）。
- * カード全体を押すと、その案件の作業画面（管理者画面）を開く。見た目は管理者ホームの「進行中のプロジェクト」に合わせる
+ * カード全体を押すと、その案件の作業画面（開発者画面の中。ヒアリング・構築タスク）を開く。見た目は管理者ホームの「進行中のプロジェクト」に合わせる
  */
 export function DevProjectCard({ p, next, onOpen }: { p: Project; next: string; onOpen: () => void }) {
   const stage = STAGES.find((s) => s.id === p.stage);

@@ -9,18 +9,21 @@ import { AnalysisSequence } from './AnalysisSequence';
 import { ProposalView } from './ProposalView';
 import { HearingEditor } from './HearingEditor';
 import { hostnameOf } from './buildProposal';
+import { useHearingRoutes } from './hearingRoutes';
 
 type View = 'input' | 'analyzing' | 'result';
 
 /**
  * AI要件定義（/ai-studio）。AI 分析の前はヒアリングの入力画面（1 画面。HearingEditor）、分析後は改善提案書。
  * ヒアリングの入力の正の画面はここ（AI 分析の前）。/ai-studio/hearing は分析前ならここへ転送する。
+ * 開発者画面の /dev/hearing（0.25.0）も同じ画面。行き先は useHearingRoutes でいまのエリアの中に保つ。
  */
 export default function RequirementsPage() {
   const { requirements } = useRepositories();
   const { data: req } = requirements.useCurrent();
   const toast = useToast();
   const navigate = useNavigate();
+  const routes = useHearingRoutes();
   const status = req.status;
   const [analyzing, setAnalyzing] = useState(false);
   const view: View = analyzing ? 'analyzing' : status === 'draft' ? 'input' : 'result';
@@ -44,7 +47,7 @@ export default function RequirementsPage() {
         actions={compact ? undefined : (
           <Stack direction="row" spacing={1} alignItems="center">
             {view === 'result' && (
-              <Button variant="outlined" size="small" startIcon={<ListChecks size={15} />} onClick={() => navigate('/ai-studio/hearing')}>
+              <Button variant="outlined" size="small" startIcon={<ListChecks size={15} />} onClick={() => navigate(routes.answers)}>
                 {status !== 'approved' ? '回答を見直す' : 'ヒアリングの回答'}
               </Button>
             )}

@@ -13,6 +13,7 @@ import { buildProposal } from './buildProposal';
 import { isAnswered } from './validation';
 import { pendingConfirmations } from './assignment';
 import { downloadRequirementsDoc } from './requirementsDoc';
+import { useHearingRoutes } from './hearingRoutes';
 
 const PRIORITY: Record<ProposalPoint['priority'], { label: string; tone: PillTone; color: string }> = {
   high: { label: '優先度 高', tone: 'danger', color: tokens.color.danger },
@@ -25,6 +26,8 @@ export function ProposalView() {
   const { data: req } = requirements.useCurrent();
   const { data: projectList } = projects.useList();
   const navigate = useNavigate();
+  // 開発者画面（/dev/hearing）では要件定義書を見るだけ。やり直し・代理承認・サイトマップへ進むは管理者画面だけに出す（0.25.0）
+  const { dev } = useHearingRoutes();
   const toast = useToast();
   const [confirmReset, setConfirmReset] = useState(false);
   const proposal = useMemo(() => buildProposal(req.answers, req.competitors), [req.answers, req.competitors]);
@@ -143,7 +146,7 @@ export function ProposalView() {
               )}
             </Box>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ flexWrap: 'wrap' }}>
-              {!approved && <Button variant="text" startIcon={<RotateCcw size={16} />} onClick={() => setConfirmReset(true)}>回答をやり直す</Button>}
+              {!approved && !dev && <Button variant="text" startIcon={<RotateCcw size={16} />} onClick={() => setConfirmReset(true)}>回答をやり直す</Button>}
               <Button variant="outlined" startIcon={<Download size={16} />} onClick={() => { downloadRequirementsDoc({ requirements: req, projects: projectList }); toast('要件定義書をダウンロードしました'); }}>要件定義書をダウンロード</Button>
               {approved ? (
                 <Box
@@ -152,12 +155,12 @@ export function ProposalView() {
                 >
                   <BadgeCheck size={18} /> 承認済み {formatDateTime(req.approvedAt)}
                 </Box>
-              ) : (
+              ) : !dev && (
                 <Button variant="outlined" startIcon={<CheckCircle2 size={16} />} disabled={pending > 0} onClick={() => { void approvals.approveRequirements(req.projectId); toast('要件定義書を承認しました'); }}>
                   アフロが代わりに承認
                 </Button>
               )}
-              <Button variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate('/site')}>サイトマップへ進む</Button>
+              {!dev && <Button variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate('/site')}>サイトマップへ進む</Button>}
             </Stack>
           </Stack>
         </Surface>

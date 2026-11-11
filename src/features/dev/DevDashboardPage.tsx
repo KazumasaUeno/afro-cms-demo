@@ -6,7 +6,7 @@ import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { useDemo, devState } from '@/store/DemoStore';
 import { formatDateTime, relativeTime } from '@/services/time';
 import { DEV_TASK_STATUSES } from '@/data/dev';
-import { nextBestAction, stagePrimaryRoute } from '@/features/projects/projectHelpers';
+import { nextBestAction } from '@/features/projects/projectHelpers';
 import { tokens } from '@/theme/tokens';
 import type { DevTaskStatus, Project } from '@/types';
 import { ENV_TONE, TASK_TONE, envDef, nextDevAction, taskLabel } from './devUi';
@@ -34,14 +34,20 @@ export default function DevDashboardPage() {
   const demo = projects.find((p) => p.id === CLIENT_PROJECT_ID);
   const flow = nextBestAction(state);
 
-  // 作業画面（管理者画面・構築タスクなど）は表示中の案件で動くので、案件を切り替えてから開く
+  // 作業画面（ヒアリング・構築タスクなど）は表示中の案件で動くので、案件を切り替えてから開く
   const open = (id: string, to: string) => {
     dispatch({ type: 'setCurrentProject', id });
     navigate(to);
   };
-  // デモの案件は制作フローの「次の一手」、ほかの案件はいまの段階の画面
-  const work = (p: Project) =>
-    p.id === CLIENT_PROJECT_ID ? { next: flow.cta, to: flow.to } : { next: p.nextAction, to: stagePrimaryRoute(p.stage) };
+  // 行き先は開発者画面の中だけ（0.25.0。管理者画面の URL へ送ると、開発者だけのログインでは /login へ戻される）。
+  // ヒアリング・要件定義の段階 → ヒアリング（/dev/hearing）、それ以降 → 構築タスク。
+  // デモの案件は制作フローの「次の一手」で判定し、ヒアリング・要件定義以外の一手（サイトマップ・デザインの承認など）は管理者の作業なので構築タスクを出す
+  const work = (p: Project): { next: string; to: string } => {
+    if (p.id === CLIENT_PROJECT_ID) {
+      return state.requirements.status !== 'approved' ? { next: flow.cta, to: '/dev/hearing' } : { next: '構築タスクを進める', to: '/dev/tasks' };
+    }
+    return { next: p.nextAction, to: p.stage === 'hearing' || p.stage === 'requirements' ? '/dev/hearing' : '/dev/tasks' };
+  };
 
   return (
     <>
