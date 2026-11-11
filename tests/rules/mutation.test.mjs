@@ -102,7 +102,7 @@ const M = {
     "return (r == 'client' && a.projectId == pid && approveOk(pid, aid, a))",
     "return (((r == 'client' && a.projectId == pid) || r == 'developer') && approveOk(pid, aid, a))"),
   m5: () => mutate(BASE, "&& resource.data.role != 'admin'", ''),
-  m4: () => mutate(BASE, "(before.requirements.status == 'draft' && after.requirements.status == 'draft'", "(before.requirements.status == 'draft'"),
+  m4: () => mutate(BASE, "&& before.requirements.status == 'draft' && after.requirements.status == 'draft'", "&& before.requirements.status == 'draft'"),
 };
 
 describe('C-1: 変異テスト（元＝拒否／1 条件を外した変異＝許可）', () => {

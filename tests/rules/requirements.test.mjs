@@ -39,10 +39,28 @@ describe('requirements/current: 回答の更新（draft のとき）', () => {
   test('お客様は回答を書けない（2026-11-10 決定でアフロが全問入力）', async () => {
     await assertFails(answer('client1', 'q-target', 'x'));
   });
-  test('admin・アサイン外の開発者・無効化された開発者は書けない', async () => {
-    await assertFails(answer('admin1', 'q-target', 'x'));
+  test('admin は回答を書ける・消せる（2026-11-11 決定。アサイン不要）', async () => {
+    await assertSucceeds(answer('admin1', 'q-target', '30〜40代の経営者'));
+    await assertSucceeds(answer('admin2', 'q-cv', '資料請求'));
+    await assertSucceeds(updateDoc(doc(dbAs(env, 'admin1'), REQ), { 'answers.q-issue': deleteField(), 'answerMeta.q-issue': deleteField(), ...stamp('admin1') }));
+  });
+  test('admin も全 23 問を上限ちょうどで書ける（式数の上限に当たらない）', async () => {
+    await assertSucceeds(updateDoc(doc(dbAs(env, 'admin1'), REQ), { answers: FULL_ANSWERS, answerMeta: answerMetaFor(FULL_ANSWERS), ...stamp('admin1') }));
+  });
+  test('admin でも不正な回答・meta だけのキー・updatedBy が他人 → 拒否', async () => {
+    await assertFails(answer('admin1', 'q-cv', '電話'));
+    await assertFails(updateDoc(doc(dbAs(env, 'admin1'), REQ), { 'answerMeta.q-target': { by: 'afro', at: T0 }, ...stamp('admin1') }));
+    await assertFails(updateDoc(doc(dbAs(env, 'admin1'), REQ), { 'answers.q-target': 'x', 'answerMeta.q-target': { by: 'afro', at: T0 }, ...stamp('devA') }));
+  });
+  test('admin は draft のまま proposal / proposalRevision を書けない（提案は開発者の submit だけ）', async () => {
+    await assertFails(updateDoc(doc(dbAs(env, 'admin1'), REQ), { proposalRevision: 1, ...stamp('admin1') }));
+    await assertFails(updateDoc(doc(dbAs(env, 'admin1'), REQ), { proposal: { hostname: 'x' }, ...stamp('admin1') }));
+  });
+  test('アサイン外の開発者・無効化された開発者・他案件のお客様・無効化されたお客様は書けない', async () => {
     await assertFails(answer('devC', 'q-target', 'x'));
     await assertFails(answer('devOff', 'q-target', 'x'));
+    await assertFails(answer('client2', 'q-target', 'x'));
+    await assertFails(answer('clientOff', 'q-target', 'x'));
   });
   test('answerMeta だけのキー（回答の無い meta）→ 拒否', async () => {
     await assertFails(updateDoc(doc(dbAs(env, 'devA'), REQ), { 'answerMeta.q-target': { by: 'client', at: T0 }, ...stamp('devA') }));
@@ -68,6 +86,16 @@ describe('requirements/current: analyzed・approved では回答を変えられ�
   test('analyzed で回答変更 → 拒否', async () => {
     await seed(env, { reqState: 'analyzed' });
     await assertFails(answer('devA', 'q-target', '変更'));
+  });
+  test('admin も analyzed では回答を変えられない', async () => {
+    await seed(env, { reqState: 'analyzed' });
+    await assertFails(answer('admin1', 'q-target', '変更'));
+  });
+  test('admin・お客様も approved では回答を変えられない（承認後はロック）', async () => {
+    await seed(env, { reqState: 'approved' });
+    await assertFails(answer('admin1', 'q-target', '変更'));
+    await assertFails(answer('client1', 'q-target', '変更'));
+    await assertFails(updateDoc(doc(dbAs(env, 'admin1'), REQ), { 'proposal.currentScore': 99, ...stamp('admin1') }));
   });
   test('approved で回答変更・提案変更 → 拒否', async () => {
     await seed(env, { reqState: 'approved' });

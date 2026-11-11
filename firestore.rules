@@ -258,17 +258,23 @@ service cloud.firestore {
     }
 
     // §28.5 の allow update（回答: 事前も事後も draft＝M-4 ／ 提案: submit と同じバッチでだけ）
+    // 回答の入力は アサインされた開発者 と admin（2026-11-11 ユーザー決定。admin はアサイン不要）。
+    // 提案（draft → analyzed の submit）は従来どおり アサインされた開発者だけ
     function reqUpdateOk(pid, a, ch, before, after) {
       let d = request.resource.data;
-      return roleOf(a) == 'developer' && request.auth.uid in before.memberUids && (
-           (before.requirements.status == 'draft' && after.requirements.status == 'draft'
+      let r = roleOf(a);
+      let mine = r == 'developer' && request.auth.uid in before.memberUids;
+      return
+           ((mine || r == 'admin')
+              && before.requirements.status == 'draft' && after.requirements.status == 'draft'
               && ch.hasOnly(['answers','answerMeta','updatedAt','updatedBy'])
               && validAnswers(d.answers)
               && d.answerMeta is map && d.answerMeta.keys().hasOnly(d.answers.keys()))
-        || (before.requirements.status == 'draft' && after.requirements.status == 'analyzed'
+        || (mine
+              && before.requirements.status == 'draft' && after.requirements.status == 'analyzed'
               && ch.hasOnly(['proposal','proposalRevision','updatedAt','updatedBy'])
               && d.proposalRevision == after.requirements.revision
-              && validProposal(d.proposal)));
+              && validProposal(d.proposal));
     }
 
     // §28.6 の allow create（お客様の承認 ／ 開発者の submit・withdraw）

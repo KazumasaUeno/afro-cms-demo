@@ -829,7 +829,7 @@ src/repositories/
 
 | # | 論点 | 決定 | 決めた人 |
 |---|---|---|---|
-| 1 | 管理者（PMO）の権限 | 全案件の閲覧＋メンバーの招待・無効化・案件への割り当てだけ。プロジェクト作成・ヒアリング入力などの作業は開発者 | ユーザー |
+| 1 | 管理者（PMO）の権限 | 全案件の閲覧＋メンバーの招待・無効化・案件への割り当て＋**ヒアリング回答の入力**（2026-11-11 変更: `requirements/current` の `answers`/`answerMeta` を draft の間だけ。アサイン不要）。プロジェクト作成・AI 分析（確認依頼 submit）・差し戻しなどの作業は開発者 | ユーザー |
 | 2 | 代理承認 | 本番（live）では**お客様本人のみ**承認できる。アフロの代理承認は不可 | ユーザー |
 | 4 | 承認依頼後の回答 | **承認依頼（analyzed）後は固定**。直すときは差し戻し → 再分析 → 再依頼 | ユーザー |
 | 10 | Firestore のロケーション | `asia-northeast1`（東京） | ユーザー |
@@ -1076,15 +1076,18 @@ match /requirements/current {
   allow create: if isDev() && request.auth.uid in getAfter(projPath(pid)).data.memberUids
                 && getAfter(projPath(pid)).data.requirements.status == 'draft'
                 && validReq(request.resource.data) && stamped();
-  allow update: if assigned(pid) && stamped() && (
+  allow update: if stamped() && (
        // 回答: 事前も事後も draft（M-4: 同じバッチで analyzed へ進めながら回答を変えられない）
-       (proj(pid).requirements.status == 'draft'
+       // 書けるのは アサインされた開発者 と admin（2026-11-11 §25 #1 の変更。admin はアサイン不要）
+       ((assigned(pid) || isAdmin())
+          && proj(pid).requirements.status == 'draft'
           && getAfter(projPath(pid)).data.requirements.status == 'draft'
           && changed().hasOnly(['answers','answerMeta','updatedAt','updatedBy'])
           && validAnswers(request.resource.data.answers)                       // §9.1 生成
           && request.resource.data.answerMeta.keys().hasOnly(request.resource.data.answers.keys()))
-       // 提案: submit と同じバッチ（draft → analyzed）でだけ書ける
-    || (proj(pid).requirements.status == 'draft'
+       // 提案: submit と同じバッチ（draft → analyzed）でだけ書ける。アサインされた開発者だけ（admin は不可）
+    || (assigned(pid)
+          && proj(pid).requirements.status == 'draft'
           && getAfter(projPath(pid)).data.requirements.status == 'analyzed'
           && changed().hasOnly(['proposal','proposalRevision','updatedAt','updatedBy'])
           && request.resource.data.proposalRevision == getAfter(projPath(pid)).data.requirements.revision
