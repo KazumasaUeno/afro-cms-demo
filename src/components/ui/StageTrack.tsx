@@ -4,7 +4,7 @@ import type { Stage } from '@/types';
 import { STAGES, stageIndex } from '@/data/projects';
 import { tokens } from '@/theme/tokens';
 
-/** 5段階（要件定義→制作→品質管理→運用→改善）の横並び表示 */
+/** 6段階（ヒアリング→要件定義→制作→品質管理→運用→改善）の横並び表示 */
 export function StageTrack({ stage, compact, onSelect }: { stage: Stage; compact?: boolean; onSelect?: (s: Stage) => void }) {
   const cur = stageIndex(stage);
   return (

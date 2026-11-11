@@ -40,7 +40,7 @@ export function DevProjectCard({ p, next, onOpen }: { p: Project; next: string; 
       </Stack>
       <StageTrack stage={p.stage} compact />
       <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1} sx={{ mt: 2, mb: 0.75 }}>
-        <StatusPill tone={p.stage === 'improvement' ? 'success' : p.stage === 'requirements' ? 'accent' : 'primary'}>
+        <StatusPill tone={p.stage === 'improvement' ? 'success' : p.stage === 'hearing' || p.stage === 'requirements' ? 'accent' : 'primary'}>
           {stage?.no}. {stageLabel(p.stage)}
         </StatusPill>
         <Typography variant="body2" sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{p.progress}%</Typography>

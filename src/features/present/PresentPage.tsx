@@ -47,12 +47,12 @@ function TitleSlide() {
   );
 }
 
-/* 2. 5段階 */
+/* 2. 6段階 */
 function FlowSlide() {
-  const groups = ['まえ', 'なか', 'なか', 'あと', 'あと'];
+  const groups = ['まえ', 'まえ', 'なか', 'なか', 'あと', 'あと'];
   return (
-    <SlideFrame eyebrow="全体の流れ" title="5つの段階を、ひとつのプラットフォームで" lead="段階ごとに「承認」を挟むので、顧客と制作者の認識がずれません。">
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' }, gap: 2 }}>
+    <SlideFrame eyebrow="全体の流れ" title="6つの段階を、ひとつのプラットフォームで" lead="段階ごとに「承認」を挟むので、顧客と制作者の認識がずれません。">
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(6, 1fr)' }, gap: 2 }}>
         {STAGES.map((s, i) => (
           <motion.div key={s.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.1, duration: 0.4, ease: tokens.motion.ease }}>
             <Box sx={{ p: 2.5, borderRadius: 4, bgcolor: '#fff', border: `1px solid ${c.border}`, boxShadow: tokens.shadow.sm, height: '100%' }}>
@@ -96,7 +96,7 @@ function AnalysisSlide({ reduced }: { reduced: boolean }) {
   }, [reduced, run]);
 
   return (
-    <SlideFrame eyebrow="① 要件定義" title="URLを入れるだけで、AIが課題を整理" lead="13項目84問のヒアリングを 1 問ずつ入力（CSV で一括も可）。現行サイトと競合を分析し、改善提案書のたたき台を数分で作ります。">
+    <SlideFrame eyebrow="① ヒアリング → ② 要件定義" title="URLを入れるだけで、AIが課題を整理" lead="13項目84問のヒアリングを 1 問ずつ入力（CSV で一括も可）。現行サイトと競合を分析し、改善提案書のたたき台を数分で作ります。">
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1.2fr' }, gap: 3 }}>
         <Box ref={root} sx={{ p: 3, borderRadius: 4, bgcolor: '#fff', border: `1px solid ${c.border}`, boxShadow: tokens.shadow.sm }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
@@ -179,7 +179,7 @@ function MiniSite({ id }: { id: DesignId }) {
 function DesignSlide() {
   const [sel, setSel] = useState<DesignId>('creative');
   return (
-    <SlideFrame eyebrow="② 制作" title="要件から、3つのデザイン案を生成" lead="色違いではなく、レイアウト・書体・構成まで異なる3案。顧客と並べて比べ、その場で採用できます。（クリックで選択）">
+    <SlideFrame eyebrow="③ 制作" title="要件から、3つのデザイン案を生成" lead="色違いではなく、レイアウト・書体・構成まで異なる3案。顧客と並べて比べ、その場で採用できます。（クリックで選択）">
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2.5 }}>
         {DESIGN_VARIANTS.map((d) => {
           const on = sel === d.id;
@@ -259,7 +259,7 @@ function ImproveSlide() {
   const latest = state.diagnoses[0];
   const cycles = ['リニューアル', '4か月後', '8か月後', '12か月後'];
   return (
-    <SlideFrame eyebrow="⑤ 改善" title="4か月ごとに、AIが自動で改善提案" lead="8カテゴリー60問でサイトを診断し、改善レポートを自動でお届け。実数値を含む詳しい分析もご相談いただけます。">
+    <SlideFrame eyebrow="⑥ 改善" title="4か月ごとに、AIが自動で改善提案" lead="8カテゴリー60問でサイトを診断し、改善レポートを自動でお届け。実数値を含む詳しい分析もご相談いただけます。">
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '280px 1fr' }, gap: 3, alignItems: 'center' }}>
         <Stack alignItems="center" spacing={1.5} sx={{ p: 3, borderRadius: 4, bgcolor: '#fff', border: `1px solid ${c.border}` }}>
           <ProgressRing value={latest?.score ?? 0} size={160} stroke={12} color={c.accent} label="AI診断スコア">

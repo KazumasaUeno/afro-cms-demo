@@ -8,7 +8,7 @@ export type ISODate = string;
 
 /* ---------- 共通 ---------- */
 
-export type Stage = 'requirements' | 'build' | 'quality' | 'operation' | 'improvement';
+export type Stage = 'hearing' | 'requirements' | 'build' | 'quality' | 'operation' | 'improvement';
 
 export interface Member {
   id: string;

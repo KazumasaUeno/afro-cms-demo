@@ -2,11 +2,12 @@ import type { Activity, Project, Stage } from '@/types';
 import { daysAgo, daysFromNow, hoursAgo } from '@/services/time';
 
 export const STAGES: { id: Stage; no: number; label: string; en: string; description: string }[] = [
-  { id: 'requirements', no: 1, label: '要件定義', en: 'Discover', description: '現状と目的をAIと一緒に整理し、要件定義書をつくる' },
-  { id: 'build', no: 2, label: '制作', en: 'Build', description: 'サイトマップ・デザイン案・全ページ構築を承認しながら進める' },
-  { id: 'quality', no: 3, label: '品質管理', en: 'Assure', description: '12項目110問をアフロと顧客の双方で確認する' },
-  { id: 'operation', no: 4, label: '運用', en: 'Operate', description: 'ページ更新・お知らせ・公開ワークフローを回す' },
-  { id: 'improvement', no: 5, label: '改善', en: 'Improve', description: '4か月ごとにAIがサイトを診断し、改善を提案する' },
+  { id: 'hearing', no: 1, label: 'ヒアリング', en: 'Listen', description: '現状・目的・競合をお客様から聞き取り、回答をそろえる' },
+  { id: 'requirements', no: 2, label: '要件定義', en: 'Discover', description: 'ヒアリングの回答を AI が分析し、要件定義書をつくってお客様の承認を得る' },
+  { id: 'build', no: 3, label: '制作', en: 'Build', description: 'サイトマップ・デザイン案・全ページ構築を承認しながら進める' },
+  { id: 'quality', no: 4, label: '品質管理', en: 'Assure', description: '12項目110問をアフロと顧客の双方で確認する' },
+  { id: 'operation', no: 5, label: '運用', en: 'Operate', description: 'ページ更新・お知らせ・公開ワークフローを回す' },
+  { id: 'improvement', no: 6, label: '改善', en: 'Improve', description: '4か月ごとにAIがサイトを診断し、改善を提案する' },
 ];
 
 export const stageIndex = (s: Stage) => STAGES.findIndex((x) => x.id === s);
@@ -15,7 +16,7 @@ export const stageIndex = (s: Stage) => STAGES.findIndex((x) => x.id === s);
 export const seedProjects = (): Project[] => [
   {
     id: 'p1', clientName: '株式会社ミナモ珈琲', siteName: 'MINAMO COFFEE', siteUrl: 'https://minamo-coffee.example.jp',
-    industry: '飲食・EC', stage: 'requirements', progress: 2, ownerId: 'm1', updatedAt: hoursAgo(1.5),
+    industry: '飲食・EC', stage: 'hearing', progress: 2, ownerId: 'm1', updatedAt: hoursAgo(1.5),
     // 段階・進捗・次の作業・承認待ちの数は、読み込み時と操作のたびにデモのデータから導き直す（store/demoProject.ts）
     nextAction: 'ヒアリングを入力する', accent: '#B45309', launchDate: daysFromNow(38), pendingApprovals: 0,
   },
@@ -26,7 +27,7 @@ export const seedProjects = (): Project[] => [
   },
   {
     id: 'p3', clientName: 'ひだまり歯科クリニック', siteName: 'Hidamari Dental', siteUrl: 'https://hidamari-dental.example.jp',
-    industry: '医療', stage: 'requirements', progress: 18, ownerId: 'm2', updatedAt: daysAgo(1),
+    industry: '医療', stage: 'hearing', progress: 10, ownerId: 'm2', updatedAt: daysAgo(1),
     nextAction: '要件ヒアリング（競合サイトの入力）', accent: '#0D9488', pendingApprovals: 0,
   },
   {

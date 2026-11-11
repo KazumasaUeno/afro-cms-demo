@@ -49,7 +49,7 @@ export default function ProjectsPage() {
     <Box>
       <PageHeader
         title="プロジェクト"
-        description="顧客ごとのWebサイト制作を、要件定義から改善まで5つの段階で管理します。カードを開くと各段階の作業に進めます。"
+        description="顧客ごとのWebサイト制作を、ヒアリングから改善まで6つの段階で管理します。カードを開くと各段階の作業に進めます。"
         actions={<Button variant="contained" startIcon={<Plus size={16} />} component={RouterLink} to="/projects/new">新しいプロジェクト</Button>}
       />
 

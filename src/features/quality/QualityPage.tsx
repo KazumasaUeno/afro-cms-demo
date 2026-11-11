@@ -97,7 +97,7 @@ export default function QualityPage() {
   return (
     <>
       <PageHeader
-        eyebrow="③ 品質管理"
+        eyebrow="④ 品質管理"
         icon={<ShieldCheck size={15} />}
         title="品質チェック"
         description={`12項目${TOTAL_QUALITY_QUESTIONS}問の品質基準を、アフロと顧客の双方で確認します（デモでは代表${QUALITY_ITEMS.length}問を収録）。`}

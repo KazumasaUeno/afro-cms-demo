@@ -62,7 +62,7 @@ export function ProjectCard({ p, onOpen }: { p: Project; onOpen?: () => void }) 
 
         <Box>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-            <StatusPill tone={p.stage === 'improvement' ? 'success' : p.stage === 'requirements' ? 'accent' : 'primary'}>
+            <StatusPill tone={p.stage === 'improvement' ? 'success' : p.stage === 'hearing' || p.stage === 'requirements' ? 'accent' : 'primary'}>
               {STAGES.find((s) => s.id === p.stage)?.no}. {stageLabel(p.stage)}
             </StatusPill>
             <Typography variant="body2" sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{p.progress}%</Typography>

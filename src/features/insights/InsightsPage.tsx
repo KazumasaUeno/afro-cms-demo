@@ -87,7 +87,7 @@ export default function InsightsPage() {
   return (
     <>
       <PageHeader
-        eyebrow="⑤ 改善"
+        eyebrow="⑥ 改善"
         icon={<BarChart3 size={15} />}
         title="インサイト"
         description="アクセスと問い合わせの推移を見ながら、4か月ごとのAI診断で次の改善を決めます。"

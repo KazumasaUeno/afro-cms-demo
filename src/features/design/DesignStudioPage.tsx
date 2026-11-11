@@ -123,7 +123,7 @@ export default function DesignStudioPage() {
     <Box>
       <BuildFlowNav />
       <PageHeader
-        eyebrow="② 制作"
+        eyebrow="③ 制作"
         icon={<Wand2 size={14} />}
         title="3つの方向性から、トップページを選ぶ"
         description="要件定義の回答と承認済みサイトマップから、レイアウト・タイポグラフィ・構成の異なる3案を生成しました。実際のHTML/CSSで描画しているので、端末ごとの見え方まで確認できます。"

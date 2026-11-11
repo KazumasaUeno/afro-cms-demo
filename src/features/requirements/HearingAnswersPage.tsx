@@ -115,7 +115,7 @@ export default function HearingAnswersPage() {
   return (
     <Box>
       <PageHeader
-        eyebrow="① 要件定義"
+        eyebrow="① ヒアリング"
         icon={<MessageSquareText size={14} />}
         title="ヒアリングの回答"
         description={editable

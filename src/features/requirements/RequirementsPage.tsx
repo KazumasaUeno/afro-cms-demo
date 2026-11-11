@@ -29,7 +29,7 @@ export default function RequirementsPage() {
     <Box>
       {/* 要件定義の段階では、サイトマップ・デザインの段階ナビを出さない（2026-11-10 決定。承認後は提案書の「サイトマップへ進む」から進む） */}
       <PageHeader
-        eyebrow="① 要件定義"
+        eyebrow={view === 'result' ? '② 要件定義' : '① ヒアリング'}
         icon={<Sparkles size={14} />}
         title={view === 'result' ? 'AIがまとめた改善提案' : 'ヒアリングの内容を入力する'}
         description={

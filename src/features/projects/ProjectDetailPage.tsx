@@ -44,7 +44,7 @@ function NotFound() {
   );
 }
 
-/** プロジェクト詳細（ヘッダーの直下に5段階のパイプライン、その下にお客様の対応状況） */
+/** プロジェクト詳細（ヘッダーの直下に6段階のパイプライン、その下にお客様の対応状況） */
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
   // サイトマップ・デザイン・品質・CMS・診断は repository の範囲外（live では隠す。§14）なので DemoStore から読む
@@ -74,10 +74,15 @@ export default function ProjectDetailPage() {
   const next = isDemo ? { label: demoAction.cta, to: demoAction.to } : { label: p.nextAction, to: stagePrimaryRoute(p.stage) };
 
   const facts: Record<Stage, ReactNode> = {
+    hearing: (
+      <>
+        <Fact label="回答" value={`${answered} / ${TOTAL_REQUIREMENT_QUESTIONS}問`} ok={req.status !== 'draft'} />
+        <Fact label="状態" value={req.status === 'draft' ? '入力中' : '回答済み'} ok={req.status !== 'draft'} />
+      </>
+    ),
     requirements: (
       <>
         <Fact label="状態" value={reqStatus} ok={req.status === 'approved'} />
-        <Fact label="回答" value={`${answered} / ${TOTAL_REQUIREMENT_QUESTIONS}問`} />
         <Fact label="承認日時" value={formatDateTime(req.approvedAt)} />
       </>
     ),
@@ -163,13 +168,13 @@ export default function ProjectDetailPage() {
         </Surface>
       </Reveal>
 
-      <Typography variant="h3" component="h2" sx={{ mb: 0.5 }}>制作の5段階</Typography>
+      <Typography variant="h3" component="h2" sx={{ mb: 0.5 }}>制作の6段階</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
         作る「まえ」「なか」「あと」をひとつの流れで管理します。各段階から関連する作業画面を開けます。
       </Typography>
 
       {/* パイプライン */}
-      <Box component="ol" sx={{ listStyle: 'none', m: 0, p: 0, display: 'grid', gridTemplateColumns: { xs: 'minmax(0,1fr)', sm: 'repeat(2, minmax(0,1fr))', lg: 'repeat(5, minmax(0,1fr))' }, gap: { xs: 1.5, md: 2 } }}>
+      <Box component="ol" sx={{ listStyle: 'none', m: 0, p: 0, display: 'grid', gridTemplateColumns: { xs: 'minmax(0,1fr)', sm: 'repeat(2, minmax(0,1fr))', lg: 'repeat(6, minmax(0,1fr))' }, gap: { xs: 1.5, md: 2 } }}>
         {STAGES.map((s, i) => {
           const done = i < cur;
           const active = i === cur;

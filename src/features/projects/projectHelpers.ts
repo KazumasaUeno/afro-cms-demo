@@ -4,6 +4,10 @@ import { STAGES } from '@/data/projects';
 
 /** 各段階から開ける関連画面 */
 export const STAGE_LINKS: Record<Stage, { label: string; to: string }[]> = {
+  hearing: [
+    { label: 'ヒアリングを入力', to: '/ai-studio' },
+    { label: '回答一覧', to: '/ai-studio/hearing' },
+  ],
   requirements: [{ label: 'AI要件定義を開く', to: '/ai-studio' }],
   build: [
     { label: 'サイトマップ', to: '/site' },

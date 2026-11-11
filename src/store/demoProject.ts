@@ -16,7 +16,7 @@ export function derivedDemoProject(state: DemoState): Pick<Project, 'stage' | 'p
   const base = { pendingApprovals };
   if (req.status === 'draft') {
     const answered = REQUIREMENT_QUESTIONS.filter((q) => isAnswered(req.answers[q.id])).length;
-    return { ...base, stage: 'requirements', progress: 2 + Math.round((10 * answered) / REQUIREMENT_QUESTIONS.length), nextAction: 'ヒアリングを入力する' };
+    return { ...base, stage: 'hearing', progress: 2 + Math.round((10 * answered) / REQUIREMENT_QUESTIONS.length), nextAction: 'ヒアリングを入力する' };
   }
   if (req.status === 'analyzed') return { ...base, stage: 'requirements', progress: 18, nextAction: '要件定義書の承認をもらう' };
   if (!state.sitemap.approvedAt) return { ...base, stage: 'build', progress: 25, nextAction: 'サイトマップを承認する' };

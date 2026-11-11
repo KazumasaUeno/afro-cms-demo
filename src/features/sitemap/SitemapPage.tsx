@@ -243,7 +243,7 @@ export default function SitemapPage() {
     <Box>
       <BuildFlowNav />
       <PageHeader
-        eyebrow="② 制作"
+        eyebrow="③ 制作"
         icon={<Network size={14} />}
         title="サイトの構造を、見ながら組み替える"
         description="現在のサイトと、要件定義から導いた改善後の構造を切り替えて比較できます。ページの追加・移動・接続はそのまま保存されます。"

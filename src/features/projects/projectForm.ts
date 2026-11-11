@@ -108,7 +108,7 @@ export function projectFromDraft(d: ProjectDraft): Omit<Project, 'id' | 'updated
     siteName: d.siteName.trim(),
     siteUrl: d.siteUrl.trim(),
     industry: d.industry.trim(),
-    stage: 'requirements',
+    stage: 'hearing',
     progress: 0,
     ownerId: d.ownerId,
     nextAction: d.nextAction.trim() || DEFAULT_NEXT_ACTION,
