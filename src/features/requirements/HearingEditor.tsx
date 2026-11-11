@@ -70,7 +70,8 @@ function CategoryMark({ done, total }: { done: number; total: number }) {
   );
 }
 
-function QuestionBlock({ q, editable }: { q: RequirementQuestion; editable: boolean }) {
+/** missing: AI分析を押したのに足りない「AI分析に必要」の質問。入力されると外れる */
+function QuestionBlock({ q, editable, missing }: { q: RequirementQuestion; editable: boolean; missing?: boolean }) {
   const { requirements } = useRepositories();
   const { data: req } = requirements.useCurrent();
   const value = req.answers[q.id];
@@ -81,7 +82,15 @@ function QuestionBlock({ q, editable }: { q: RequirementQuestion; editable: bool
   const compErr = q.id === 'q-competitor' ? competitorError(value) : null;
 
   return (
-    <Box component="li" sx={{ py: { xs: 2, md: 2.5 }, borderTop: `1px solid ${tokens.color.border}`, '&:first-of-type': { borderTop: 'none', pt: 0.5 } }}>
+    <Box
+      component="li"
+      data-missing={missing ? 'true' : undefined}
+      sx={[
+        { py: { xs: 2, md: 2.5 }, borderTop: `1px solid ${tokens.color.border}`, '&:first-of-type': { borderTop: 'none', pt: 0.5 } },
+        // 足りない質問は赤い枠と面で示す（色だけに頼らず下に文言も出す）
+        !!missing && { px: 1.5, my: 0.5, border: `2px solid ${tokens.color.danger}`, borderRadius: `${tokens.radius.md}px`, bgcolor: tokens.color.dangerSoft, '&:first-of-type': { pt: 1.5, borderTop: `2px solid ${tokens.color.danger}` } },
+      ]}
+    >
       <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.75, flexWrap: 'wrap', rowGap: 0.75 }}>
         <StatusPill tone={q.priority === 'A' ? 'primary' : 'neutral'} dot={false}>{q.priority === 'A' ? 'A 必須' : 'B 任意'}</StatusPill>
         {q.featured && <StatusPill tone="accent" dot={false} icon={<Sparkles size={12} />}>{q.id === 'q-competitor' ? 'AI分析で使用' : 'AI分析に必要'}</StatusPill>}
@@ -91,6 +100,11 @@ function QuestionBlock({ q, editable }: { q: RequirementQuestion; editable: bool
       <Typography variant="h6" component={editable ? 'label' : 'h3'} htmlFor={editable ? `answer-${q.id}` : undefined} sx={{ display: 'block', mb: hint ? 0.5 : 1.25 }}>
         {q.text}
       </Typography>
+      {missing && (
+        <Typography role="alert" variant="body2" sx={{ color: tokens.color.dangerInk, fontWeight: 700, mb: 1 }}>
+          AI分析に必要です。入力してください
+        </Typography>
+      )}
       {hint && <Typography variant="body2" sx={{ color: tokens.color.muted, mb: 1.25, maxWidth: 640 }}>{hint}</Typography>}
 
       {!editable ? (
@@ -221,9 +235,16 @@ export function HearingEditor({ editable, onAnalyze }: Props) {
     if (first && first.categoryId !== category.id) setCatId(first.categoryId);
   };
 
+  // AI分析は常に押せる。足りない質問があれば実行せず、赤く示して最初の足りない質問のカテゴリへ移る（2026-11-11 ユーザー指示）
+  const [attempted, setAttempted] = useState(false);
   const analyze = () => {
-    if (canAnalyze) onAnalyze?.();
+    if (canAnalyze) { onAnalyze?.(); return; }
+    setAttempted(true);
+    const first = blockers[0];
+    const c = first && REQUIREMENT_CATEGORIES.find((x) => x.id === first.categoryId);
+    if (c) { if (unansweredOnly && !picked.includes(first.id)) setUnansweredOnly(false); go(c); }
   };
+  const missingIds = attempted ? new Set(blockers.map((b) => b.id)) : new Set<string>();
 
   const progress = (
     <Box>
@@ -326,15 +347,14 @@ export function HearingEditor({ editable, onAnalyze }: Props) {
         fullWidth
         variant="contained"
         onClick={analyze}
-        disabled={!canAnalyze}
         endIcon={<Sparkles size={16} />}
-        sx={canAnalyze ? { background: tokens.aiGradient, color: '#fff', '&:hover': { background: tokens.aiGradient, filter: 'brightness(1.06)' } } : undefined}
+        sx={{ background: tokens.aiGradient, color: '#fff', '&:hover': { background: tokens.aiGradient, filter: 'brightness(1.06)' } }}
       >
         AI分析を実行
       </Button>
       {!canAnalyze && (
         <Box sx={{ mt: 1.25 }}>
-          <Typography variant="caption" component="p" sx={{ color: tokens.color.ink, fontWeight: 600 }}>
+          <Typography variant="caption" component="p" sx={{ color: attempted ? tokens.color.dangerInk : tokens.color.ink, fontWeight: 600 }}>
             AI分析に必要な質問が {blockers.length} 問残っています
           </Typography>
           <Stack component="ul" sx={{ listStyle: 'none', m: 0, p: 0, mt: 0.5 }}>
@@ -386,10 +406,9 @@ export function HearingEditor({ editable, onAnalyze }: Props) {
           variant="contained"
           size={wide ? 'medium' : 'small'}
           onClick={analyze}
-          disabled={!canAnalyze}
           endIcon={<Sparkles size={16} />}
-          aria-label={canAnalyze ? 'AI分析を実行' : `AI分析を実行（必要な質問があと ${blockers.length} 問）`}
-          sx={[{ ml: 1, flexShrink: 0 }, canAnalyze && { background: tokens.aiGradient, color: '#fff', '&:hover': { background: tokens.aiGradient, filter: 'brightness(1.06)' } }]}
+          aria-label={canAnalyze ? 'AI分析を実行' : `AI分析を実行（必要な質問があと ${blockers.length} 問。押すと足りない質問を赤く示します）`}
+          sx={{ ml: 1, flexShrink: 0, background: tokens.aiGradient, color: '#fff', '&:hover': { background: tokens.aiGradient, filter: 'brightness(1.06)' } }}
         >
           {wide ? 'AI分析を実行' : 'AI分析'}
         </Button>
@@ -430,7 +449,7 @@ export function HearingEditor({ editable, onAnalyze }: Props) {
             </Typography>
           ) : (
             <Box component="ol" sx={{ listStyle: 'none', m: 0, p: 0 }}>
-              {shownQs.map((q) => <QuestionBlock key={q.id} q={q} editable={editable} />)}
+              {shownQs.map((q) => <QuestionBlock key={q.id} q={q} editable={editable} missing={missingIds.has(q.id)} />)}
             </Box>
           )}
         </Box>
