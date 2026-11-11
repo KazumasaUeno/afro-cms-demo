@@ -1,6 +1,6 @@
 import { Box, Button, Stack, Typography } from '@mui/material';
 import { ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Clock, Code2, FolderSearch, Globe, User } from 'lucide-react';
-import { useEffect, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import type { Stage } from '@/types';
 import { useDemo } from '@/store/DemoStore';
@@ -56,11 +56,6 @@ export default function ProjectDetailPage() {
   const { data: people } = accounts.useDevPeople();
   const navigate = useNavigate();
   const p = list.find((x) => x.id === projectId);
-  const currentId = projects.useCurrentId();
-  // 詳細を開いた案件を作業中にする（左上のプロジェクト切替の代わり。メニューの AI Studio・品質チェック・インサイトはこの案件を開く）
-  useEffect(() => {
-    if (p && p.id !== currentId) projects.select(p.id);
-  }, [p, currentId, projects]);
   if (!p) return <NotFound />;
 
   const cur = stageIndex(p.stage);
