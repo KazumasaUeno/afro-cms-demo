@@ -121,17 +121,6 @@ function AreaSwitcher({ area }: { area: AreaDef }) {
   );
 }
 
-/** お客様側の画面: 案件は固定（切り替えない） */
-function ClientSiteBadge() {
-  const { state } = useDemo();
-  const project = currentProject(state);
-  return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.25, height: { xs: 44, md: 36 }, minWidth: 0, borderRadius: '10px', border: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface, maxWidth: { xs: 150, sm: 260 } }}>
-      <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: project.accent, flexShrink: 0 }} />
-      <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>{project.siteName}</Typography>
-    </Box>
-  );
-}
 
 /** 開発者画面: ログイン中のメンバーの担当プロジェクトだけを切り替えられる */
 function DevProjectSwitcher() {
@@ -190,8 +179,8 @@ function TopBar({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
         <MenuIcon size={20} />
       </IconButton>
       <Box sx={{ display: { xs: 'none', sm: 'block', lg: 'none' } }}><LogoMark size={28} /></Box>
-      {/* 管理者画面は案件をプロジェクト一覧・詳細で選ぶので、上部バーに切替を置かない */}
-      {area.id === 'admin' ? null : area.id === 'dev' ? <DevProjectSwitcher /> : <ClientSiteBadge />}
+      {/* 管理者画面は案件をプロジェクト一覧・詳細で選び、お客様ポータルは案件が固定なので、上部バーに案件名を置かない（開発者画面だけ担当案件を切り替える） */}
+      {area.id === 'dev' && <DevProjectSwitcher />}
       <AreaSwitcher area={area} />
       <Box sx={{ flex: 1 }} />
       <Typography variant="caption" sx={{ display: { xs: 'none', md: 'block' }, px: 1.5, py: 0.5, borderRadius: 2, bgcolor: tokens.color.warningSoft, color: tokens.color.warningInk, fontWeight: 500 }}>
