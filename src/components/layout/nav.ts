@@ -1,7 +1,7 @@
 import { tokens } from '@/theme/tokens';
 import {
-  Building2, ClipboardCheck, Code2, FileText, FolderKanban, House, LayoutDashboard, ListChecks, ListTodo, Monitor,
-  Rocket, ScrollText, Settings, Stamp, UserRound, UsersRound, type LucideIcon,
+  BarChart3, Building2, ClipboardCheck, Code2, FileText, FolderKanban, House, LayoutDashboard, ListChecks, ListTodo, Monitor,
+  Rocket, ScrollText, Settings, ShieldCheck, Sparkles, Stamp, UserRound, UsersRound, type LucideIcon,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -46,11 +46,25 @@ export interface AreaDef {
 
 const ADMIN_ITEMS: NavItem[] = [
   { to: '/', label: 'ホーム', icon: House, match: ['/'], exact: true, hint: '今日の状況' },
-  // AI Studio（要件・サイトマップ・デザイン）・品質チェック・インサイトはプロジェクトの中の画面なので、メニューには出さず
-  // プロジェクト詳細の段階ごとのボタンから開く。開いている間は「プロジェクト」を選択中にする
-  { to: '/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/projects', '/ai-studio', '/site', '/quality', '/insights'], hint: '制作案件の一覧' },
+  { to: '/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/projects'], hint: '制作案件の一覧' },
   { to: '/users', label: 'ユーザー管理', icon: UsersRound, match: ['/users'], hint: 'お客様の登録・開発者画面の権限' },
 ];
+
+/**
+ * 管理者画面: プロジェクトの中の画面。プロジェクト関連の画面にいる間だけ、メニューの「プロジェクト」の下に作業中の案件名つきで出す
+ * （左上のプロジェクト切替は置かない。案件はプロジェクト一覧・詳細で選ぶ）
+ */
+export const ADMIN_PROJECT_ITEMS: NavItem[] = [
+  // サイトマップ（/site）は AI Studio の流れ（要件 → サイトマップ → デザイン）の 2 段階目なので、AI Studio の中として扱う
+  { to: '/ai-studio', label: 'AI Studio', icon: Sparkles, match: ['/ai-studio', '/site'], hint: 'AI要件定義・サイトマップ・デザイン' },
+  { to: '/quality', label: '品質チェック', icon: ShieldCheck, match: ['/quality'], hint: '12項目110問' },
+  { to: '/insights', label: 'インサイト', icon: BarChart3, match: ['/insights'], hint: '解析と改善提案' },
+];
+
+/** 管理者画面で ADMIN_PROJECT_ITEMS を出す画面（プロジェクト一覧・詳細と、プロジェクトの中の画面） */
+export function inAdminProjectScope(pathname: string): boolean {
+  return [{ match: ['/projects'] } as NavItem, ...ADMIN_PROJECT_ITEMS].some((i) => isActive(i, pathname));
+}
 
 const PORTAL_ITEMS: NavItem[] = [
   { to: '/portal', label: 'ホーム', icon: House, match: ['/portal'], exact: true, hint: '制作の進み具合' },

@@ -190,7 +190,8 @@ function TopBar({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
         <MenuIcon size={20} />
       </IconButton>
       <Box sx={{ display: { xs: 'none', sm: 'block', lg: 'none' } }}><LogoMark size={28} /></Box>
-      {area.id === 'admin' ? <ProjectSwitcher /> : area.id === 'dev' ? <DevProjectSwitcher /> : <ClientSiteBadge />}
+      {/* 管理者画面は案件をプロジェクト一覧・詳細で選ぶので、上部バーに切替を置かない */}
+      {area.id === 'admin' ? null : area.id === 'dev' ? <DevProjectSwitcher /> : <ClientSiteBadge />}
       <AreaSwitcher area={area} />
       <Box sx={{ flex: 1 }} />
       <Typography variant="caption" sx={{ display: { xs: 'none', md: 'block' }, px: 1.5, py: 0.5, borderRadius: 2, bgcolor: tokens.color.warningSoft, color: tokens.color.warningInk, fontWeight: 500 }}>

@@ -1,15 +1,27 @@
 import { Box, ButtonBase, Popover, Stack, Tooltip, Typography } from '@mui/material';
 import { ExternalLink, Presentation, type LucideIcon } from 'lucide-react';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { tokens } from '@/theme/tokens';
-import { AREAS, areaOf, isActive, type AreaDef, type NavItem } from './nav';
+import { ADMIN_PROJECT_ITEMS, AREAS, areaOf, inAdminProjectScope, isActive, type AreaDef, type NavItem } from './nav';
 import { Logo, LogoMark } from './Logo';
 import { navIndicatorSx } from './navIndicator';
 import { MemberAvatar } from '@/components/ui';
 import { memberById } from '@/data/members';
 import { useDevProjects, useDevUser } from '@/features/dev/useDevUser';
 import { useDemo, currentProject } from '@/store/DemoStore';
+
+/** プロジェクトの中の画面の見出し（作業中の案件名）。左上の切替をなくしたので、どの案件の画面かをここで示す */
+function ProjectCaption({ compact }: { compact?: boolean }) {
+  const { state } = useDemo();
+  const project = currentProject(state);
+  return (
+    <Stack direction="row" spacing={0.75} alignItems="center" justifyContent={compact ? 'center' : 'flex-start'} sx={{ px: compact ? 0.5 : 2, py: 0.5, minWidth: 0 }} title={project.siteName}>
+      <Box sx={{ width: 8, height: 8, borderRadius: '2px', bgcolor: project.accent, flexShrink: 0 }} />
+      <Typography noWrap sx={{ fontSize: 11, fontWeight: 600, color: tokens.color.onSurfaceVariant, minWidth: 0 }}>{project.siteName}</Typography>
+    </Stack>
+  );
+}
 
 /** ドロワー（lg 未満）の行。M3 Navigation drawer item: 高さ 56・角丸 Full。選択中の印は中心から広がる */
 function NavRow({ item, color, onNavigate }: { item: NavItem; color: string; onNavigate?: () => void }) {
@@ -163,7 +175,19 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       <Box component="nav" aria-label={`${area.label}のメニュー`}>
         <Stack spacing={0.5}>
-          {area.items.map((item) => <NavRow key={item.to} item={item} color={area.color} onNavigate={onNavigate} />)}
+          {area.items.map((item) => (
+            <Fragment key={item.to}>
+              <NavRow item={item} color={area.color} onNavigate={onNavigate} />
+              {area.id === 'admin' && item.to === '/projects' && inAdminProjectScope(pathname) && (
+                <Box sx={{ pl: 2 }}>
+                  <ProjectCaption />
+                  <Stack spacing={0.5}>
+                    {ADMIN_PROJECT_ITEMS.map((sub) => <NavRow key={sub.to} item={sub} color={area.color} onNavigate={onNavigate} />)}
+                  </Stack>
+                </Box>
+              )}
+            </Fragment>
+          ))}
         </Stack>
       </Box>
 
@@ -242,7 +266,17 @@ export function Sidebar() {
       <Box component="nav" aria-label={`${area.label}のメニュー`} sx={{ width: '100%' }}>
         <Stack spacing={1.5}>
           {area.items.map((item) => (
-            <RailItem key={item.to} to={item.to} label={item.label} icon={item.icon} hint={item.hint} active={isActive(item, pathname)} color={area.color} />
+            <Fragment key={item.to}>
+              <RailItem to={item.to} label={item.label} icon={item.icon} hint={item.hint} active={isActive(item, pathname)} color={area.color} />
+              {area.id === 'admin' && item.to === '/projects' && inAdminProjectScope(pathname) && (
+                <Stack spacing={1.5} sx={{ py: 1, borderTop: `1px solid ${tokens.color.outlineVariant}`, borderBottom: `1px solid ${tokens.color.outlineVariant}` }}>
+                  <ProjectCaption compact />
+                  {ADMIN_PROJECT_ITEMS.map((sub) => (
+                    <RailItem key={sub.to} to={sub.to} label={sub.label} icon={sub.icon} hint={sub.hint} active={isActive(sub, pathname)} color={area.color} />
+                  ))}
+                </Stack>
+              )}
+            </Fragment>
           ))}
         </Stack>
       </Box>
