@@ -17,10 +17,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
   const Icon = item?.tone === 'ai' ? Sparkles : item?.tone === 'info' ? Info : CheckCircle2;
   const color = item?.tone === 'ai' ? tokens.color.accent : item?.tone === 'info' ? tokens.color.info : tokens.color.success;
+  // スマホ: 下部タブの上。画面の下部に固定のバーがある間は、その画面が --toast-bottom でバーの上へ上げる（HearingEditor）
   return (
     <ToastContext.Provider value={show}>
       {children}
-      <Snackbar key={item?.id} open={open} sx={{ bottom: { xs: 'calc(74px + env(safe-area-inset-bottom))', md: 24 } }} autoHideDuration={3200} onClose={(_, r) => r !== 'clickaway' && setOpen(false)}>
+      <Snackbar key={item?.id} open={open} sx={{ bottom: { xs: 'var(--toast-bottom, calc(74px + env(safe-area-inset-bottom)))', md: 24 } }} autoHideDuration={3200} onClose={(_, r) => r !== 'clickaway' && setOpen(false)}>
         <Box
           role="status"
           sx={{

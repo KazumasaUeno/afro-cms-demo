@@ -17,7 +17,7 @@ import { CsvTools } from './CsvTools';
 import { SaveAnswersButton } from './SaveAnswersButton';
 import { questionStatus } from './assignment';
 import { hostnameOf } from './buildProposal';
-import { answerText, isAnswered, validateAnswer, validateUrl } from './validation';
+import { REQUIRED_FOR_ANALYSIS, analysisBlockers, answerText, isAnswered, validateAnswer, validateUrl } from './validation';
 
 /**
  * ヒアリングの入力画面（1 画面。2026-11-11 決定 B）。
@@ -26,11 +26,6 @@ import { answerText, isAnswered, validateAnswer, validateUrl } from './validatio
  * 値は store の requirements から毎回導く（専用の状態はカテゴリの選択と絞り込みだけ）。
  * editable=false（要件定義書の承認後）は閲覧のみ。
  */
-
-/** AI 分析に使う主要な質問（旧ウィザードの 5 問） */
-const KEY_QUESTIONS = REQUIREMENT_QUESTIONS.filter((q) => q.featured);
-/** AI 分析の前に必ず答える質問（競合サイトは任意。旧ウィザードと同じ判定） */
-const REQUIRED_FOR_ANALYSIS = KEY_QUESTIONS.filter((q) => q.id !== 'q-competitor');
 
 const questionsOf = (c: RequirementCategory) => REQUIREMENT_QUESTIONS.filter((q) => q.categoryId === c.id);
 
@@ -48,14 +43,6 @@ function hintOf(id: string, answers: Record<string, AnswerValue>): string {
     case 'q-improve': return '特に改善したいポイントを選びます。提案の優先度に反映します。';
     default: return '';
   }
-}
-
-/** AI 分析を実行できるか（必須の主要な質問がそろい、競合サイトの URL に誤りが無い） */
-export function analysisBlockers(answers: Record<string, AnswerValue>): RequirementQuestion[] {
-  const missing = REQUIRED_FOR_ANALYSIS.filter((q) => validateAnswer(q, answers[q.id]));
-  const comp = answers['q-competitor'];
-  const compBad = Array.isArray(comp) && comp.some((u) => validateUrl(u, false));
-  return compBad ? [...missing, ...KEY_QUESTIONS.filter((q) => q.id === 'q-competitor')] : missing;
 }
 
 function competitorError(value: AnswerValue | undefined): string | null {
@@ -96,7 +83,7 @@ function QuestionBlock({ q, editable }: { q: RequirementQuestion; editable: bool
   return (
     <Box component="li" sx={{ py: { xs: 2, md: 2.5 }, borderTop: `1px solid ${tokens.color.border}`, '&:first-of-type': { borderTop: 'none', pt: 0.5 } }}>
       <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.75, flexWrap: 'wrap', rowGap: 0.75 }}>
-        <StatusPill tone={q.priority === 'A' ? 'primary' : 'neutral'} dot={false}>{q.priority === 'A' ? '必須' : '任意'}</StatusPill>
+        <StatusPill tone={q.priority === 'A' ? 'primary' : 'neutral'} dot={false}>{q.priority === 'A' ? 'A 必須' : 'B 任意'}</StatusPill>
         {q.featured && <StatusPill tone="accent" dot={false} icon={<Sparkles size={12} />}>{q.id === 'q-competitor' ? 'AI分析で使用' : 'AI分析に必要'}</StatusPill>}
         <AnswerStatus question={q} />
         <ConfirmAnswerButton question={q} />
@@ -160,6 +147,8 @@ export function HearingEditor({ editable, onAnalyze }: Props) {
   const wide = useMediaQuery(theme.breakpoints.up('md'));
   const panelRef = useRef<HTMLHeadingElement>(null);
   const tabsRef = useRef<HTMLDivElement>(null);
+  // 下部固定バー（Portal の中身は 1 回あとの描画で付くため、ref ではなく state で受け取る）
+  const [bar, setBar] = useState<HTMLDivElement | null>(null);
 
   // 初めは、まだ答えていない質問がある最初のカテゴリ（AI 分析に必要な質問を優先）
   const [catId, setCatId] = useState(() => {
@@ -205,6 +194,23 @@ export function HearingEditor({ editable, onAnalyze }: Props) {
     el?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: reduced ? 'auto' : 'smooth' });
   }, [category.id, reduced]);
 
+  // スマホの下部固定バーがある間は、トースト（useToast）をバーの上に出す（CSV 取り込みの通知がバーを隠さないように）。
+  // バーの上端から画面下端までの距離を --toast-bottom に入れ、バーが消えたら戻す（他の画面の位置は変えない）
+  useEffect(() => {
+    if (wide || !bar) return;
+    const root = document.documentElement;
+    const update = () => root.style.setProperty('--toast-bottom', `${Math.max(0, window.innerHeight - bar.getBoundingClientRect().top) + 10}px`);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(bar);
+    window.addEventListener('resize', update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', update);
+      root.style.removeProperty('--toast-bottom');
+    };
+  }, [wide, bar]);
+
   const toggleUnanswered = (on: boolean) => {
     setUnansweredOnly(on);
     if (!on) return;
@@ -227,7 +233,7 @@ export function HearingEditor({ editable, onAnalyze }: Props) {
         </Typography>
         <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums' }}>回答済み {total - remaining}</Typography>
       </Stack>
-      <LinearProgress variant="determinate" value={((total - remaining) / total) * 100} aria-label={`ヒアリングの進み具合: 残り ${remaining} 問`} />
+      <LinearProgress variant="determinate" value={((total - remaining) / total) * 100} aria-label="ヒアリングの進み具合" aria-valuetext={remaining === 0 ? 'すべて回答済み' : `残り ${remaining} 問`} />
     </Box>
   );
 
@@ -333,7 +339,8 @@ export function HearingEditor({ editable, onAnalyze }: Props) {
           </Typography>
           <Stack component="ul" sx={{ listStyle: 'none', m: 0, p: 0, mt: 0.5 }}>
             {blockers.map((q) => {
-              const c = REQUIREMENT_CATEGORIES.find((x) => x.id === q.categoryId)!;
+              const c = REQUIREMENT_CATEGORIES.find((x) => x.id === q.categoryId);
+              if (!c) return null; // データの不整合でカテゴリが無い質問は一覧に出さない（開く先が無いため）
               return (
                 <Box component="li" key={q.id}>
                   <ButtonBase
@@ -387,10 +394,12 @@ export function HearingEditor({ editable, onAnalyze }: Props) {
           {category.title}
         </Typography>
         {/* 凡例（バッジの意味） */}
-        <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mt: 1, flexWrap: 'wrap', rowGap: 0.5 }} aria-label="バッジの意味">
-          <Stack direction="row" spacing={0.5} alignItems="center"><StatusPill tone="primary" dot={false}>必須</StatusPill><Typography variant="caption">資料の優先度 A</Typography></Stack>
-          <Stack direction="row" spacing={0.5} alignItems="center"><StatusPill tone="neutral" dot={false}>任意</StatusPill><Typography variant="caption">優先度 B</Typography></Stack>
-          {onAnalyze && <Stack direction="row" spacing={0.5} alignItems="center"><StatusPill tone="accent" dot={false} icon={<Sparkles size={12} />}>AI分析に必要</StatusPill><Typography variant="caption">答えると AI分析を実行できます</Typography></Stack>}
+        {/* A/B はヒアリングで聞く優先度（資料の A/B）。AI分析の条件とは別の印なので、凡例で分けて書く */}
+        <Stack direction="row" spacing={1.25} alignItems="center" role="group" aria-label="バッジの意味" sx={{ mt: 1, flexWrap: 'wrap', rowGap: 0.5 }}>
+          <Stack direction="row" spacing={0.5} alignItems="center"><StatusPill tone="primary" dot={false}>A 必須</StatusPill><Typography variant="caption">ヒアリングで必ず聞く</Typography></Stack>
+          <Stack direction="row" spacing={0.5} alignItems="center"><StatusPill tone="neutral" dot={false}>B 任意</StatusPill><Typography variant="caption">聞けたら入力</Typography></Stack>
+          {onAnalyze && <Stack direction="row" spacing={0.5} alignItems="center"><StatusPill tone="accent" dot={false} icon={<Sparkles size={12} />}>AI分析に必要</StatusPill><Typography variant="caption">そろうと AI分析を実行できる（A/B とは別）</Typography></Stack>}
+          {onAnalyze && <Stack direction="row" spacing={0.5} alignItems="center"><StatusPill tone="accent" dot={false} icon={<Sparkles size={12} />}>AI分析で使用</StatusPill><Typography variant="caption">空欄でも実行できる。入れると分析に使う</Typography></Stack>}
         </Stack>
       </Box>
 
@@ -470,6 +479,7 @@ export function HearingEditor({ editable, onAnalyze }: Props) {
       {/* 親の Reveal・ページ切り替え（transform）の影響を受けないよう body 直下に出す */}
       <Portal>
       <Stack
+        ref={setBar}
         direction="row"
         alignItems="center"
         sx={{

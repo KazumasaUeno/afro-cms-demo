@@ -1,4 +1,5 @@
 import type { AnswerValue, RequirementQuestion } from '@/types';
+import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
 
 export const MAX_URL = 200;
 export const MAX_TEXT = 120;
@@ -51,4 +52,17 @@ export function isAnswered(value: AnswerValue | undefined): boolean {
 export function answerText(v: AnswerValue | undefined): string {
   if (Array.isArray(v)) return v.join('、');
   return v ?? '';
+}
+
+/** AI 分析に使う主要な質問（旧ウィザードの 5 問） */
+export const KEY_QUESTIONS = REQUIREMENT_QUESTIONS.filter((q) => q.featured);
+/** AI 分析の前に必ず答える質問（競合サイトは任意。旧ウィザードと同じ判定） */
+export const REQUIRED_FOR_ANALYSIS = KEY_QUESTIONS.filter((q) => q.id !== 'q-competitor');
+
+/** AI 分析を実行できるか（必須の主要な質問がそろい、競合サイトの URL に誤りが無い）。足りない質問を返す */
+export function analysisBlockers(answers: Record<string, AnswerValue>): RequirementQuestion[] {
+  const missing = REQUIRED_FOR_ANALYSIS.filter((q) => validateAnswer(q, answers[q.id]));
+  const comp = answers['q-competitor'];
+  const compBad = Array.isArray(comp) && comp.some((u) => validateUrl(u, false));
+  return compBad ? [...missing, ...KEY_QUESTIONS.filter((q) => q.id === 'q-competitor')] : missing;
 }

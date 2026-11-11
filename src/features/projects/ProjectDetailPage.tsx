@@ -64,7 +64,7 @@ export default function ProjectDetailPage() {
   // 開発担当（ユーザー管理で決める。開発者画面の権限の有無は問わない。登録した開発者も含め、無効にした人は除く）
   const devNames = people.filter((m) => !m.disabled).filter((m) => devAll[m.id]?.includes(p.id)).map((m) => m.name);
   const q = qualityCompletion(state.qualityChecks);
-  const remainingQuestions = REQUIREMENT_QUESTIONS.filter((q) => !isAnswered(req.answers[q.id])).length;
+  const remainingQuestions = REQUIREMENT_QUESTIONS.filter((question) => !isAnswered(req.answers[question.id])).length;
   const published = state.pages.filter((x) => x.status === 'published').length;
   const scheduled = state.pages.filter((x) => x.status === 'scheduled').length;
   const latest = state.diagnoses[0];
