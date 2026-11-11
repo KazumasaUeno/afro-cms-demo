@@ -274,6 +274,9 @@ function routeLabel(pathname: string): string {
   if (/^\/projects\/[^/]+/.test(pathname)) return 'プロジェクト詳細';
   if (pathname === '/dev/sitemap') return '開発者画面・サイトマップ';
   if (pathname === '/dev/design') return '開発者画面・AIデザインスタジオ';
+  if (pathname === '/dev/quality') return '開発者画面・品質チェック';
+  if (pathname === '/dev/cms') return '開発者画面・ページ・お知らせ';
+  if (pathname === '/dev/insights') return '開発者画面・インサイト';
   if (/^\/dev\/projects\/[^/]+/.test(pathname)) return '開発者画面・プロジェクト詳細';
   const area = AREAS[areaOf(pathname)];
   const item = [...area.items, SETTINGS_ITEM].find((i) => isActive(i, pathname));

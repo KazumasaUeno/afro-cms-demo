@@ -69,8 +69,9 @@ const DEV_ITEMS: NavItem[] = [
   // プロジェクト（0.26.0）: 管理者画面と同じ一覧・詳細（担当案件だけ）。
   // 選択中の規則: URL が属するメニュー項目を選択中にし、どこから開いたかでは変えない。
   //   メニューに項目がある画面（/dev/hearing* など）は、プロジェクト詳細から開いてもその項目（ヒアリング）を選択中にする。
-  //   メニューに項目が無いサイトマップ（/dev/sitemap）・デザイン（/dev/design）は、常に「プロジェクト」を選択中にする（下の match）
-  { to: '/dev/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/dev/projects', '/dev/sitemap', '/dev/design'], hint: '担当案件の6段階' },
+  //   メニューに項目が無いサイトマップ（/dev/sitemap）・デザイン（/dev/design）・品質（/dev/quality）・ページ編集（/dev/cms）・改善（/dev/insights。0.27.0）は、
+  //   常に「プロジェクト」を選択中にする（下の match）
+  { to: '/dev/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/dev/projects', '/dev/sitemap', '/dev/design', '/dev/quality', '/dev/cms', '/dev/insights'], hint: '担当案件の6段階' },
   // ヒアリング（0.25.0）: 担当案件のヒアリング入力・AI分析・要件定義書の確認。管理者画面の /ai-studio と同じ画面を開発者画面の中で開く
   { to: '/dev/hearing', label: 'ヒアリング', icon: MessageSquareText, match: ['/dev/hearing'], hint: '入力・AI分析・要件定義書' },
   { to: '/dev/tasks', label: '構築タスク', icon: ListTodo, match: ['/dev/tasks'], hint: 'ページごとの実装状況' },

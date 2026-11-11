@@ -44,10 +44,12 @@ export type Action =
   | { type: 'approveDesign'; by?: Side }
   | { type: 'startBuild' }
   | { type: 'completeBuild' }
-  | { type: 'toggleQuality'; itemId: string; side: 'afro' | 'client' }
-  | { type: 'bulkQuality'; side: 'afro' | 'client'; priority: QuestionPriority | 'all'; categoryId?: string }
-  | { type: 'savePage'; page: CmsPage; by?: Side }
-  | { type: 'setPageStatus'; id: string; status: PageStatus; scheduledAt?: string; by?: Side }
+  // devBy: 開発者画面（0.27.0）で操作したメンバーの id。アフロ側の確認者をその人の名前で残す（省略時は従来どおり ACTOR）
+  | { type: 'toggleQuality'; itemId: string; side: 'afro' | 'client'; devBy?: string }
+  | { type: 'bulkQuality'; side: 'afro' | 'client'; priority: QuestionPriority | 'all'; categoryId?: string; devBy?: string }
+  // devBy: 開発者画面（/dev/cms。0.27.0）で操作したメンバーの id（操作者の名前に使う。by より優先）
+  | { type: 'savePage'; page: CmsPage; by?: Side; devBy?: string }
+  | { type: 'setPageStatus'; id: string; status: PageStatus; scheduledAt?: string; by?: Side; devBy?: string }
   /** 承認ワークフロー: 承認依頼中のページを承認して公開する / コメントを付けて差し戻す */
   | { type: 'reviewPage'; id: string; decision: 'approve' | 'reject'; comment?: string; by?: Side }
   | { type: 'addDiagnosis'; report: Omit<DiagnosisReport, 'id' | 'at' | 'cycle'> }
@@ -83,6 +85,8 @@ export const APPROVE_TEXT = {
 } as const;
 /** 開発者画面の操作者の名前（ログイン中の人。登録した開発者も含む。省略時・見つからないときは DEV_USER_ID） */
 const devActor = (state: DemoState, by?: string) => (personById(state, by) ?? memberById(DEV_USER_ID)).name;
+/** 品質チェックの確認者。開発者画面のアフロ側の確認はログイン中の開発者、それ以外は従来どおり ACTOR（顧客側は開発者画面から操作しない） */
+const qualityActor = (state: DemoState, side: 'afro' | 'client', devBy?: string) => (side === 'afro' && devBy ? devActor(state, devBy) : ACTOR[side]);
 
 let seq = 0;
 const uid = (p: string) => `${p}-${Date.now().toString(36)}-${(seq++).toString(36)}`;
@@ -241,12 +245,13 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       const prev = state.qualityChecks[action.itemId] ?? {};
       const atKey = action.side === 'afro' ? 'afroAt' : 'clientAt';
       const byKey = action.side === 'afro' ? 'afroBy' : 'clientBy';
+      const actor = qualityActor(state, action.side, action.devBy);
       const next = prev[atKey]
         ? { ...prev, [atKey]: undefined, [byKey]: undefined }
-        : { ...prev, [atKey]: nowIso(), [byKey]: ACTOR[action.side] };
+        : { ...prev, [atKey]: nowIso(), [byKey]: actor };
       const item = QUALITY_ITEMS.find((i) => i.id === action.itemId);
       const s = { ...state, qualityChecks: { ...state.qualityChecks, [action.itemId]: next } };
-      return item ? approval(s, action.side, prev[atKey] ? 'チェックを取り消し' : 'チェック', item.text) : s;
+      return item ? approval(s, action.side, prev[atKey] ? 'チェックを取り消し' : 'チェック', item.text, actor) : s;
     }
 
     case 'bulkQuality': {
@@ -256,34 +261,37 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       const targets = QUALITY_ITEMS.filter(
         (i) => (action.priority === 'all' || i.priority === action.priority) && (!action.categoryId || i.categoryId === action.categoryId),
       );
+      const actor = qualityActor(state, action.side, action.devBy);
       const checks = { ...state.qualityChecks };
       let count = 0;
       for (const t of targets) {
         if (checks[t.id]?.[atKey]) continue;
-        checks[t.id] = { ...checks[t.id], [atKey]: at, [byKey]: ACTOR[action.side] };
+        checks[t.id] = { ...checks[t.id], [atKey]: at, [byKey]: actor };
         count++;
       }
       if (count === 0) return state;
       const cat = QUALITY_CATEGORIES.find((c) => c.id === action.categoryId);
       const label = action.priority === 'all' ? '全項目' : `${action.priority}区分`;
-      const s = approval({ ...state, qualityChecks: checks }, action.side, `${label}を一括チェック（${count}件）`, cat ? `${cat.no}. ${cat.title}` : '全カテゴリ');
-      return log(s, `品質チェック ${label} ${count}件を一括チェック`, 'check', ACTOR[action.side]);
+      const s = approval({ ...state, qualityChecks: checks }, action.side, `${label}を一括チェック（${count}件）`, cat ? `${cat.no}. ${cat.title}` : '全カテゴリ', actor);
+      return log(s, `品質チェック ${label} ${count}件を一括チェック`, 'check', actor);
     }
 
     case 'savePage': {
       const exists = state.pages.some((p) => p.id === action.page.id);
       const page = { ...action.page, updatedAt: nowIso() };
       const pages = exists ? state.pages.map((p) => (p.id === page.id ? page : p)) : [page, ...state.pages];
-      return log({ ...state, pages }, `「${page.title}」を${exists ? '保存' : '作成'}しました`, 'edit', ACTOR[action.by ?? 'afro']);
+      return log({ ...state, pages }, `「${page.title}」を${exists ? '保存' : '作成'}しました`, 'edit', action.devBy ? devActor(state, action.devBy) : ACTOR[action.by ?? 'afro']);
     }
 
     case 'setPageStatus': {
       const page = state.pages.find((p) => p.id === action.id);
       if (!page) return state;
+      // 公開・予約公開はお客様の操作。開発者画面からは下書き・承認依頼だけ（画面でも出さない。0.27.0）
+      if (action.devBy && (action.status === 'published' || action.status === 'scheduled')) return state;
       const updated = withStatus(page, action.status, action.scheduledAt);
       const s = { ...state, pages: state.pages.map((p) => (p.id === page.id ? updated : p)) };
       const kind: Activity['kind'] = action.status === 'published' || action.status === 'scheduled' ? 'publish' : 'edit';
-      return log(s, `「${page.title}」を${STATUS_LABEL[action.status]}しました`, kind, ACTOR[action.by ?? 'afro']);
+      return log(s, `「${page.title}」を${STATUS_LABEL[action.status]}しました`, kind, action.devBy ? devActor(state, action.devBy) : ACTOR[action.by ?? 'afro']);
     }
 
     case 'reviewPage': {

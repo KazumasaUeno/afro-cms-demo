@@ -68,6 +68,11 @@ const router = createBrowserRouter([
       // 構築の段階のサイトマップ・デザイン（0.26.0）。管理者画面の /site・/ai-studio/design と同じ画面（担当案件だけ。DevProjectGate）
       { path: 'dev/sitemap', element: <SitemapPage /> },
       { path: 'dev/design', element: <DesignStudioPage /> },
+      // 品質管理・運用・改善の段階（0.27.0）。管理者画面の /quality・/insights、お客様ポータルの /portal/pages と同じ画面（担当案件だけ。DevProjectGate）。
+      // お客様側の操作（顧客の品質承認・ページの公開）は開発者画面では出さない
+      { path: 'dev/quality', element: <QualityPage /> },
+      { path: 'dev/cms', element: <CmsEditorPage /> },
+      { path: 'dev/insights', element: <InsightsPage /> },
       // 開発者画面のヒアリング（0.25.0）。管理者画面の /ai-studio・/ai-studio/hearing と同じ画面を開発者画面の中で開く（担当案件だけ。DevProjectGate）
       { path: 'dev/hearing', element: <RequirementsPage /> },
       { path: 'dev/hearing/answers', element: <HearingAnswersPage /> },

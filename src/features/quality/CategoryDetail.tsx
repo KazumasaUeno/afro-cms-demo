@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/useToast';
 import { tokens } from '@/theme/tokens';
 import { LANDSCAPE_PHONE } from '@/theme/media';
 import { CheckToggle } from './CheckToggle';
+import { useQualityDevBy } from './useQualityDevBy';
 import { computeStats, isComplete } from './qualityStats';
 
 export function PriorityChip({ priority }: { priority: 'A' | 'B' }) {
@@ -69,6 +70,9 @@ export function CategoryDetail({ category, onClose }: Props) {
 function DetailBody({ category, onClose }: { category: QualityCategory; onClose: () => void }) {
   const { state, dispatch } = useDemo();
   const toast = useToast();
+  // 開発者画面（0.27.0）: アフロ側だけ操作できる。顧客側は表示のみ（お客様がポータルで承認する）
+  const devBy = useQualityDevBy();
+  const dev = !!devBy;
   const [openOnly, setOpenOnly] = useState(false);
   const items = QUALITY_ITEMS.filter((i) => i.categoryId === category.id);
   const stats = computeStats(items, state.qualityChecks);
@@ -80,7 +84,7 @@ function DetailBody({ category, onClose }: { category: QualityCategory; onClose:
       toast(`${priority}区分はすべて${side === 'afro' ? 'アフロ確認' : '顧客承認'}済みです`, 'info');
       return;
     }
-    dispatch({ type: 'bulkQuality', side, priority, categoryId: category.id });
+    dispatch({ type: 'bulkQuality', side, priority, categoryId: category.id, devBy });
     toast(`${priority}区分 ${targets.length}件を${side === 'afro' ? 'アフロ確認' : '顧客承認'}しました`);
   };
 
@@ -102,8 +106,8 @@ function DetailBody({ category, onClose }: { category: QualityCategory; onClose:
           <SideBar label="アフロ確認" value={stats.afroRate} color={tokens.color.primary} />
           <SideBar label="顧客承認" value={stats.clientRate} color={tokens.color.success} />
         </Stack>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1, mt: 2 }}>
-          {(['afro', 'client'] as const).map((side) => (
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: dev ? '1fr' : '1fr 1fr' }, gap: 1, mt: 2 }}>
+          {(dev ? (['afro'] as const) : (['afro', 'client'] as const)).map((side) => (
             <Stack key={side} direction="row" spacing={0.75} sx={{ p: 0.75, borderRadius: '12px', bgcolor: tokens.color.bgSubtle }}>
               {(['A', 'B'] as const).map((p) => (
                 <Button
@@ -155,8 +159,8 @@ function DetailBody({ category, onClose }: { category: QualityCategory; onClose:
                 </Stack>
                 {/* スマホは2者のチェックを縦に並べ、日時と担当者を省略させない */}
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                  <CheckToggle side="afro" check={check} itemText={item.text} onToggle={() => dispatch({ type: 'toggleQuality', itemId: item.id, side: 'afro' })} />
-                  <CheckToggle side="client" check={check} itemText={item.text} onToggle={() => dispatch({ type: 'toggleQuality', itemId: item.id, side: 'client' })} />
+                  <CheckToggle side="afro" check={check} itemText={item.text} onToggle={() => dispatch({ type: 'toggleQuality', itemId: item.id, side: 'afro', devBy })} />
+                  <CheckToggle side="client" check={check} itemText={item.text} readOnly={dev} onToggle={() => dispatch({ type: 'toggleQuality', itemId: item.id, side: 'client' })} />
                 </Stack>
               </Box>
             );

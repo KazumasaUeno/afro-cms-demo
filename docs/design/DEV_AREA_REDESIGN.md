@@ -3,6 +3,7 @@
 > 0.19.0（2026-11-10）で「自動チェック」（`/dev/checks`・DevChecksPage）は廃止し、ダッシュボードは「担当案件」中心に変えた。以下の該当箇所は当時の記録。
 > 0.25.0（2026-11-11）でメニュー「ヒアリング」（`/dev/hearing`・`/dev/hearing/answers`）を追加した。管理者画面の `RequirementsPage` / `HearingAnswersPage` / `ProposalView` をそのまま使い、行き先は `useHearingRoutes`（`src/features/requirements/hearingRoutes.ts`）でエリアの中に保つ。開発者画面では「回答をやり直す」「アフロが代わりに承認」「サイトマップへ進む」を出さない。ダッシュボードの案件カードは開発者画面の中だけを開く（ヒアリング・要件定義の段階 → `/dev/hearing`、それ以降 → `/dev/tasks`）。下部タブは 4 件（ホーム・ヒアリング・構築タスク・環境・デプロイ）＋メニュー。390px は同一オリジンの iframe で横はみ出しなしを確認。
 > 0.26.0（2026-11-11）でメニュー「プロジェクト」（`/dev/projects`・`/dev/projects/:id`）と、構築の段階の `/dev/sitemap`・`/dev/design` を追加した。管理者画面の `ProjectsPage` / `ProjectDetailPage` / `SitemapPage` / `DesignStudioPage` をそのまま使い、行き先は `useProjectRoutes`（`src/features/projects/projectRoutes.ts`）でエリアの中に保つ。担当案件だけ（詳細は URL の案件を `DevProjectGate project=` で確かめる）。開発者画面では「新しいプロジェクト」・品質/運用/改善の段階ボタン・サイトマップの承認・デザインの採用・全ページ構築・CMS/品質チェックへの移動を出さない。ダッシュボードの案件カードはプロジェクト詳細を開く。下部タブは 4 件（ホーム・プロジェクト・ヒアリング・構築タスク）＋メニュー（環境・デプロイはメニュー）。上の 0.25.0 の下部タブ・カードの行き先の記述は当時の記録。
+> 0.27.0（2026-11-11）で、品質管理・運用・改善の段階ボタンも開発者画面の中で開くようにした（ユーザー判断。上の 0.26.0 の「出さない」は当時の記録）: `/dev/quality`（`QualityPage`。アフロ側の確認だけ、顧客側は表示のみ）・`/dev/cms`（`CmsEditorPage`。作成・下書き保存・承認依頼まで、公開・予約公開はお客様）・`/dev/insights`（`InsightsPage`。管理者画面と同じ）。行き先は `useProjectRoutes` の `quality` / `cms` / `insights`。メニュー・下部タブは変えない。
 
 - 作成: 2026-11-06 ui-ux-designer ／ 実装: frontend-engineer
 - 対象: `src/features/dev/*.tsx`・`devUi.ts`（必要最小限で `src/data/dev.ts` の関数戻り値のみ）

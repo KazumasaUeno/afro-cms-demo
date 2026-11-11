@@ -10,6 +10,8 @@ import { tokens } from '@/theme/tokens';
 import { relativeTime } from '@/services/time';
 import { memberById } from '@/data/members';
 import { PageHeader, StatusPill } from '@/components/ui';
+import { useProjectRoutes } from '@/features/projects/projectRoutes';
+import { useDevUser } from '@/features/dev/useDevUser';
 import { RichEditor } from './RichEditor';
 import { Inspector } from './Inspector';
 import { NewPageDialog } from './NewPageDialog';
@@ -92,6 +94,11 @@ export default function CmsEditorPage() {
   const { state, dispatch } = useDemo();
   const toast = useToast();
   const { isDesktop, isMobile } = useBreakpoints();
+  // 開発者画面（/dev/cms。0.27.0）: 下書きの編集・作成・承認依頼まで。公開・予約公開はお客様の操作なので出さない（承認はポータルの公開承認）。
+  // 操作者はログイン中の開発者として記録する（by: 'client' はポータルのとき）
+  const { dev } = useProjectRoutes();
+  const me = useDevUser();
+  const actor = dev ? { devBy: me.id } : { by: 'client' as const };
   const pages = state.pages;
   // ダッシュボード・承認画面から ?page=<id>（そのページを開く）/ ?new=page|news（新規作成）で来る
   const [params, setParams] = useSearchParams();
@@ -148,14 +155,14 @@ export default function CmsEditorPage() {
       toast(titleErr ?? slugErr ?? '入力内容を確認してください', 'info');
       return false;
     }
-    if (dirty) dispatch({ type: 'savePage', page: draft, by: 'client' });
+    if (dirty) dispatch({ type: 'savePage', page: draft, ...actor });
     if (!silent) toast('下書きを保存しました');
     return true;
   };
   const setStatus = (status: CmsPage['status'], scheduledAt?: string) => {
     if (!draft || !save(true)) return;
-    dispatch({ type: 'setPageStatus', id: draft.id, status, scheduledAt, by: 'client' });
-    toast(status === 'published' ? '公開しました（シミュレーション）' : status === 'review' ? '承認を依頼しました' : '予約公開を設定しました', status === 'review' ? 'info' : 'success');
+    dispatch({ type: 'setPageStatus', id: draft.id, status, scheduledAt, ...actor });
+    toast(status === 'published' ? '公開しました（シミュレーション）' : status === 'review' ? (dev ? 'お客様に承認を依頼しました' : '承認を依頼しました') : '予約公開を設定しました', status === 'review' ? 'info' : 'success');
   };
 
   if (!draft) return <PageHeader title="ページ・お知らせ" description="ページがありません" />;
@@ -165,10 +172,12 @@ export default function CmsEditorPage() {
   return (
     <>
       <PageHeader
-        eyebrow="お客様ポータル"
+        eyebrow={dev ? '⑤ 運用' : 'お客様ポータル'}
         icon={<LayoutTemplate size={15} />}
         title="ページ・お知らせ"
-        description="ページとお知らせを編集し、承認を経て公開します。公開はデモ上の状態変更のみで、実際のサーバーには反映されません。"
+        description={dev
+          ? 'お客様サイトのページとお知らせの下書きを編集し、お客様に承認を依頼します。公開はお客様がポータルの「公開承認」で行います。'
+          : 'ページとお知らせを編集し、承認を経て公開します。公開はデモ上の状態変更のみで、実際のサーバーには反映されません。'}
       />
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '240px minmax(0,1fr)', lg: '260px minmax(0,1fr) 320px' }, gap: { xs: 2, md: 3 }, alignItems: 'start' }}>
         {showList && (
@@ -199,7 +208,7 @@ export default function CmsEditorPage() {
                 <IconButton onClick={() => setCompare(true)} aria-label="変更前後の比較" sx={{ border: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface }}><GitCompare size={17} /></IconButton>
                 <Button variant="outlined" startIcon={<Save size={16} />} onClick={() => save()} disabled={!dirty}>下書き保存</Button>
                 <Button variant="outlined" startIcon={<Send size={16} />} onClick={() => setStatus('review')} disabled={draft.status === 'review' && !dirty}>承認依頼</Button>
-                <Button variant="contained" endIcon={<ChevronDown size={16} />} startIcon={<Rocket size={16} />} onClick={(e) => setPublishAnchor(e.currentTarget)} aria-haspopup="menu">公開</Button>
+                {!dev && <Button variant="contained" endIcon={<ChevronDown size={16} />} startIcon={<Rocket size={16} />} onClick={(e) => setPublishAnchor(e.currentTarget)} aria-haspopup="menu">公開</Button>}
                 <Menu anchorEl={publishAnchor} open={!!publishAnchor} onClose={() => setPublishAnchor(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
                   <MenuItem onClick={() => { setPublishAnchor(null); setStatus('published'); }}>
                     <Rocket size={16} style={{ marginRight: 12 }} />
@@ -250,7 +259,7 @@ export default function CmsEditorPage() {
         parentOptions={parentOptions}
         onClose={() => setNewType(null)}
         onCreate={(page) => {
-          dispatch({ type: 'savePage', page, by: 'client' });
+          dispatch({ type: 'savePage', page, ...actor });
           setNewType(null);
           setSelectedId(page.id);
           setDraft(page);

@@ -20,6 +20,10 @@ export interface ProjectRoutes {
   requirements: string;
   sitemap: string;
   design: string;
+  /** 品質チェック・ページ編集（CMS）・改善（インサイト） */
+  quality: string;
+  cms: string;
+  insights: string;
   /** お客様の対応状況の行から開く先（開発者画面に無い画面は null = 押せない行） */
   approval: Record<ApprovalKey, string | null>;
 }
@@ -32,34 +36,44 @@ const ADMIN: ProjectRoutes = {
   requirements: '/ai-studio',
   sitemap: '/site',
   design: '/ai-studio/design',
+  quality: '/quality',
+  cms: '/portal/pages',
+  insights: '/insights',
   approval: { requirements: '/ai-studio', sitemap: '/site', design: '/ai-studio/design', quality: '/quality' },
 };
 
 function devRoutes(h: HearingRoutes): ProjectRoutes {
   const sitemap = '/dev/sitemap';
   const design = '/dev/design';
+  const quality = '/dev/quality';
+  const cms = '/dev/cms';
+  const insights = '/dev/insights';
   return {
     dev: true,
     list: '/dev/projects',
     detail: (id) => `/dev/projects/${id}`,
-    // 品質・運用・改善の画面は開発者画面に無い（2026-11-11 決定: 開発者画面では出さない）
+    // 品質・運用・改善も開発者画面の中で開く（2026-11-11 ユーザー決定。0.27.0）
     stageLinks: {
       hearing: [{ label: 'ヒアリングを入力', to: h.answers }],
       requirements: [{ label: 'AI要件定義を開く', to: h.input }],
       build: [{ label: 'サイトマップ', to: sitemap }, { label: 'デザインスタジオ', to: design }],
-      quality: [],
-      operation: [],
-      improvement: [],
+      quality: [{ label: '品質チェック', to: quality }],
+      operation: [{ label: 'ページ・お知らせを編集', to: cms }],
+      improvement: [{ label: 'インサイト・改善提案', to: insights }],
     },
     requirements: h.input,
     sitemap,
     design,
-    approval: { requirements: h.input, sitemap, design, quality: null },
+    quality,
+    cms,
+    insights,
+    approval: { requirements: h.input, sitemap, design, quality },
   };
 }
 
 /**
  * プロジェクト一覧・詳細・サイトマップ・デザインは、管理者画面と開発者画面（/dev/projects・/dev/sitemap・/dev/design。0.26.0）で同じ部品を使う。
+ * 品質チェック・ページ編集・改善も同じ（/dev/quality・/dev/cms・/dev/insights。0.27.0）。
  * 行き先をいまのエリアの中に保つ（開発者だけのログインで管理者画面の URL へ飛ぶと /login へ戻される）。hearingRoutes.ts と同じ方式。
  * 表示の出し分けだけで、セキュリティ境界ではない（担当案件の制限は DevProjectGate、実体はルール）。
  */

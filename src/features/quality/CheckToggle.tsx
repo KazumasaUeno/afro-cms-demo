@@ -15,6 +15,8 @@ interface Props {
   onToggle: () => void;
   /** 表示名（省略時は「アフロ」「顧客」）。お客様ポータルでは「お客様」と出す */
   label?: string;
+  /** 表示だけ（押せない）。開発者画面の顧客側（お客様がポータルで承認する。0.27.0） */
+  readOnly?: boolean;
 }
 
 const SIDE = {
@@ -26,7 +28,7 @@ const SIDE = {
  * 確認ボタン。チェックするとタイムスタンプ表示に変わる（資料: 入力後はタイムスタンプにかわる）。
  * もう一度押すと取り消し。
  */
-export function CheckToggle({ side, check, itemText, onToggle, label }: Props) {
+export function CheckToggle({ side, check, itemText, onToggle, label, readOnly }: Props) {
   const reduced = useReducedMotion();
   const at = side === 'afro' ? check?.afroAt : check?.clientAt;
   const by = side === 'afro' ? check?.afroBy : check?.clientBy;
@@ -34,18 +36,21 @@ export function CheckToggle({ side, check, itemText, onToggle, label }: Props) {
   const checked = !!at;
   return (
     <ButtonBase
-      onClick={onToggle}
-      aria-pressed={checked}
+      onClick={readOnly ? undefined : onToggle}
+      disabled={readOnly}
+      aria-pressed={readOnly ? undefined : checked}
       aria-label={
-        checked
-          ? `${s.label}確認済み（${formatDateTime(at)} ${by ?? ''}）。押すと取り消し: ${itemText}`
-          : `${s.label}として確認する: ${itemText}`
+        readOnly
+          ? `${s.label}${checked ? `確認済み（${formatDateTime(at)} ${by ?? ''}）` : '未確認'}。お客様がポータルで確認します: ${itemText}`
+          : checked
+            ? `${s.label}確認済み（${formatDateTime(at)} ${by ?? ''}）。押すと取り消し: ${itemText}`
+            : `${s.label}として確認する: ${itemText}`
       }
-      title={checked ? `${formatDateTime(at)} ${by ?? ''}（クリックで取り消し）` : undefined}
+      title={readOnly ? 'お客様がポータルで確認します' : checked ? `${formatDateTime(at)} ${by ?? ''}（クリックで取り消し）` : undefined}
       sx={{
         position: 'relative', overflow: 'hidden', height: 34, [TOUCH]: { height: 44 }, minWidth: { xs: 0, sm: 132 }, flex: '0 0 auto',
         px: 1.25, borderRadius: '10px', justifyContent: 'flex-start', gap: 0.75, fontSize: 12.5, fontWeight: 600,
-        border: `1px solid ${checked ? 'transparent' : tokens.color.border}`,
+        border: `1px ${readOnly && !checked ? 'dashed' : 'solid'} ${checked ? 'transparent' : tokens.color.border}`,
         bgcolor: checked ? s.soft : tokens.color.surface,
         color: checked ? s.color : tokens.color.muted,
         transition: `background-color .2s ${tokens.motion.easeCss}, border-color .2s, color .2s`,
@@ -73,7 +78,7 @@ export function CheckToggle({ side, check, itemText, onToggle, label }: Props) {
           ) : (
             <>
               <Circle size={16} />
-              {s.label}確認
+              {s.label}{readOnly ? '未確認' : '確認'}
             </>
           )}
         </motion.span>

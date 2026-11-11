@@ -8,8 +8,10 @@ import { useToast } from '@/hooks/useToast';
 import { tokens } from '@/theme/tokens';
 import { formatDateTime, relativeTime } from '@/services/time';
 import { CountUp, PageHeader, ProgressRing, Reveal, SectionTitle, StatusPill, Surface } from '@/components/ui';
+import { useProjectRoutes } from '@/features/projects/projectRoutes';
 import { CategoryDetail, PriorityChip } from './CategoryDetail';
 import { computeStats, isComplete } from './qualityStats';
+import { useQualityDevBy } from './useQualityDevBy';
 
 function MiniBar({ value, color, label }: { value: number; color: string; label: string }) {
   return (
@@ -29,6 +31,7 @@ function MiniBar({ value, color, label }: { value: number; color: string; label:
 function BulkMenu({ side }: { side: 'afro' | 'client' }) {
   const { state, dispatch } = useDemo();
   const toast = useToast();
+  const devBy = useQualityDevBy();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const label = side === 'afro' ? 'アフロ側' : '顧客側';
   const run = (priority: 'A' | 'B') => {
@@ -39,7 +42,7 @@ function BulkMenu({ side }: { side: 'afro' | 'client' }) {
       toast(`${label}の${priority}区分はすべてチェック済みです`, 'info');
       return;
     }
-    dispatch({ type: 'bulkQuality', side, priority });
+    dispatch({ type: 'bulkQuality', side, priority, devBy });
     toast(`${label}で${priority}区分 ${n}件を一括チェックしました`);
   };
   return (
@@ -73,6 +76,8 @@ function BulkMenu({ side }: { side: 'afro' | 'client' }) {
 
 export default function QualityPage() {
   const { state } = useDemo();
+  // 開発者画面ではアフロ側の確認だけを行う。顧客側の承認（デモの再現操作を含む）はお客様ポータルで行うので出さない（0.27.0）
+  const { dev } = useProjectRoutes();
   const [selected, setSelected] = useState<QualityCategory | null>(null);
   const overall = computeStats(QUALITY_ITEMS, state.qualityChecks);
 
@@ -100,7 +105,9 @@ export default function QualityPage() {
         eyebrow="④ 品質管理"
         icon={<ShieldCheck size={15} />}
         title="品質チェック"
-        description={`12項目${TOTAL_QUALITY_QUESTIONS}問の品質基準を、アフロと顧客の双方で確認します（デモでは代表${QUALITY_ITEMS.length}問を収録）。`}
+        description={dev
+          ? `12項目${TOTAL_QUALITY_QUESTIONS}問の品質基準のうち、アフロ側の確認を行います。顧客の承認はお客様がポータルで行います（デモでは代表${QUALITY_ITEMS.length}問を収録）。`
+          : `12項目${TOTAL_QUALITY_QUESTIONS}問の品質基準を、アフロと顧客の双方で確認します（デモでは代表${QUALITY_ITEMS.length}問を収録）。`}
         actions={<BulkMenu side="afro" />}
       />
 
@@ -141,9 +148,11 @@ export default function QualityPage() {
               ))}
             </Box>
           </Box>
-          <Stack direction="row" justifyContent="flex-end" sx={{ mt: 1.5, mr: -1, mb: -1 }}>
-            <BulkMenu side="client" />
-          </Stack>
+          {!dev && (
+            <Stack direction="row" justifyContent="flex-end" sx={{ mt: 1.5, mr: -1, mb: -1 }}>
+              <BulkMenu side="client" />
+            </Stack>
+          )}
         </Surface>
       </Reveal>
 

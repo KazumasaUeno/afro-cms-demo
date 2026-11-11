@@ -101,7 +101,7 @@ function VariantCard({ v, selected, adopted, locked, onSelect }: { v: DesignVari
  */
 export default function DesignStudioPage() {
   const { state, dispatch } = useDemo();
-  const { dev } = useProjectRoutes();
+  const { dev, quality: qualityRoute, cms: cmsRoute } = useProjectRoutes();
   const navigate = useNavigate();
   const toast = useToast();
   const design = state.design;
@@ -211,14 +211,15 @@ export default function DesignStudioPage() {
                   <Typography variant="h4" component="h2">全 {BUILD_PAGES.length} ページの構築が完了しました</Typography>
                   <Typography variant="body2" color="text.secondary">{selectedVariant?.name}デザインで構築 · {formatDateTime(design.buildCompletedAt)}（シミュレーション）。次は品質チェックとページ編集へ。</Typography>
                 </Box>
-                {dev ? (
-                  <Button variant="contained" startIcon={<ListTodo size={16} />} onClick={() => navigate('/dev/tasks')}>構築タスクへ</Button>
-                ) : (
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                    <Button variant="outlined" startIcon={<PenLine size={16} />} onClick={() => navigate('/portal/pages')}>CMSで編集</Button>
-                    <Button variant="contained" startIcon={<ShieldCheck size={16} />} onClick={() => navigate('/quality')}>品質チェックへ</Button>
-                  </Stack>
-                )}
+                {/* 行き先はいまのエリアの中（開発者画面は /dev/tasks・/dev/quality。0.27.0） */}
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                  {dev ? (
+                    <Button variant="outlined" startIcon={<ListTodo size={16} />} onClick={() => navigate('/dev/tasks')}>構築タスクへ</Button>
+                  ) : (
+                    <Button variant="outlined" startIcon={<PenLine size={16} />} onClick={() => navigate(cmsRoute)}>CMSで編集</Button>
+                  )}
+                  <Button variant="contained" startIcon={<ShieldCheck size={16} />} onClick={() => navigate(qualityRoute)}>品質チェックへ</Button>
+                </Stack>
               </Stack>
             ) : building ? (
               <BuildSequence
