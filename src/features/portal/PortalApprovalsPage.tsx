@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { PageHeader, Reveal, StatusPill, Surface } from '@/components/ui';
 import { useDemo } from '@/store/DemoStore';
-import { useRepositories } from '@/repositories';
+import { useCurrentRequirements, useRepositories } from '@/repositories';
+import { useWrite } from '@/hooks/useWrite';
 import { useToast } from '@/hooks/useToast';
 import { formatDateTime } from '@/services/time';
 import { DESIGN_VARIANTS } from '@/data/designs';
@@ -72,16 +73,18 @@ const CONFIRM: Record<Exclude<ApprovalKey, 'quality'>, { title: string; body: st
 export default function PortalApprovalsPage() {
   // サイトマップ・デザインの承認は repository の範囲外（live では隠す。§14）なので DemoStore のまま
   const { state, dispatch } = useDemo();
-  const { requirements, approvals } = useRepositories();
-  const { data: req } = requirements.useCurrent();
+  const { approvals } = useRepositories();
+  const { data: req } = useCurrentRequirements();
   const toast = useToast();
+  const write = useWrite();
   const navigate = useNavigate();
   const { hash } = useLocation();
   const [confirm, setConfirm] = useState<Exclude<ApprovalKey, 'quality'> | null>(null);
   // 閉じるアニメーションの間も文言を残す（null にすると一瞬空になる）
   const lastConfirm = useRef<Exclude<ApprovalKey, 'quality'>>('requirements');
   if (confirm) lastConfirm.current = confirm;
-  const steps = approvalSteps(state);
+  // 要件定義書の段階は repository の値から導く（B0 レビュー Minor。サイトマップ・デザイン・品質は DemoStore のまま）
+  const steps = approvalSteps({ ...state, requirements: req });
   const byKey = Object.fromEntries(steps.map((s) => [s.key, s])) as Record<ApprovalKey, ApprovalStep>;
   const pending = pendingConfirmations(req);
   const proposal = useMemo(() => buildProposal(req.answers, req.competitors), [req.answers, req.competitors]);
@@ -97,10 +100,12 @@ export default function PortalApprovalsPage() {
 
   const approve = () => {
     if (!confirm) return;
-    if (confirm === 'requirements') void approvals.approveRequirements(req.projectId, 'client');
-    if (confirm === 'sitemap') dispatch({ type: 'approveSitemap', by: 'client' });
-    if (confirm === 'design') dispatch({ type: 'approveDesign', by: 'client' });
-    toast(CONFIRM[confirm].done);
+    if (confirm === 'requirements') void write(approvals.approveRequirements(req.projectId, 'client'), CONFIRM.requirements.done);
+    else {
+      if (confirm === 'sitemap') dispatch({ type: 'approveSitemap', by: 'client' });
+      if (confirm === 'design') dispatch({ type: 'approveDesign', by: 'client' });
+      toast(CONFIRM[confirm].done);
+    }
     setConfirm(null);
   };
 

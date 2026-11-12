@@ -1,6 +1,7 @@
 import { TextField } from '@mui/material';
 import { useState } from 'react';
-import { useRepositories } from '@/repositories';
+import { useCurrentRequirements, useRepositories } from '@/repositories';
+import { useWrite } from '@/hooks/useWrite';
 import type { AnswerSide } from '@/types';
 import { MAX_COMPETITORS } from './validation';
 
@@ -11,7 +12,8 @@ import { MAX_COMPETITORS } from './validation';
  */
 export function CompetitorField({ by }: { by: AnswerSide }) {
   const { requirements } = useRepositories();
-  const { data: req } = requirements.useCurrent();
+  const { data: req } = useCurrentRequirements();
+  const write = useWrite();
   const saved = req.answers['q-competitor'];
   const [raw, setRaw] = useState(() => (Array.isArray(saved) ? saved.join('\n') : ''));
   return (
@@ -28,7 +30,7 @@ export function CompetitorField({ by }: { by: AnswerSide }) {
         const v = e.target.value.slice(0, 700);
         setRaw(v);
         const urls = v.split(/\s+/).map((x) => x.trim()).filter(Boolean).slice(0, MAX_COMPETITORS);
-        void requirements.setAnswer(req.projectId, 'q-competitor', urls, by);
+        void write(requirements.setAnswer(req.projectId, 'q-competitor', urls, by));
       }}
       sx={{ '& .MuiOutlinedInput-root': { fontSize: 16 } }}
     />

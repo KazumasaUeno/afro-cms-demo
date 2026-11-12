@@ -1,7 +1,7 @@
 import { Box, Button } from '@mui/material';
 import { Save } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { useRepositories } from '@/repositories';
+import { useCurrentRequirements, useRepositories } from '@/repositories';
 import { tokens } from '@/theme/tokens';
 
 /**
@@ -40,7 +40,7 @@ function lastAnsweredAt(meta: Record<string, { at: string }> | undefined): Date 
 
 export function SaveAnswersButton({ beforeSave, disabled = false, compact = false }: { beforeSave?: () => void; disabled?: boolean; compact?: boolean }) {
   const { requirements } = useRepositories();
-  const { data: req } = requirements.useCurrent();
+  const { data: req } = useCurrentRequirements();
   const current = JSON.stringify([req.answers, req.competitors]);
   // 画面を開いた時点の回答は保存済み（localStorage から読んだもの）
   const savedSnapshot = useRef(current);
@@ -61,7 +61,7 @@ export function SaveAnswersButton({ beforeSave, disabled = false, compact = fals
   // save は currentRef を読むので、effect の依存に入れなくてよい
   const save = () => {
     const snapshot = currentRef.current;
-    void requirements.saveNow().then((ok) => {
+    void requirements.saveNow().catch(() => false).then((ok) => {
       if (!mounted.current) return;
       // 保存を待つ間にさらに入力されていたら、次の保存を待つ（表示は「保存中…」のまま）
       if (snapshot !== currentRef.current) return;

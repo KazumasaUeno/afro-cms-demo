@@ -3,7 +3,8 @@ import { motion } from 'motion/react';
 import { ArrowLeft, ArrowRight, Check, FileSpreadsheet, Sparkles } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { REQUIREMENT_CATEGORIES, REQUIREMENT_QUESTIONS } from '@/data/requirements';
-import { useRepositories } from '@/repositories';
+import { useCurrentRequirements, useRepositories } from '@/repositories';
+import { useWrite } from '@/hooks/useWrite';
 import { StatusPill, Surface } from '@/components/ui';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { formatDateTime } from '@/services/time';
@@ -73,12 +74,13 @@ function CategoryMark({ done, total }: { done: number; total: number }) {
 /** missing: AI分析を押したのに足りない「AI分析に必要」の質問。入力されると外れる */
 function QuestionBlock({ q, editable, missing }: { q: RequirementQuestion; editable: boolean; missing?: boolean }) {
   const { requirements } = useRepositories();
-  const { data: req } = requirements.useCurrent();
+  const { data: req } = useCurrentRequirements();
   const value = req.answers[q.id];
   const answered = isAnswered(value);
   const s = questionStatus(q, req);
   const hint = hintOf(q.id, req.answers);
-  const setValue = (v: AnswerValue) => void requirements.setAnswer(req.projectId, q.id, v, 'afro');
+  const write = useWrite();
+  const setValue = (v: AnswerValue) => void write(requirements.setAnswer(req.projectId, q.id, v, 'afro'));
   const compErr = q.id === 'q-competitor' ? competitorError(value) : null;
 
   return (
@@ -154,7 +156,7 @@ interface Props {
 }
 
 export function HearingEditor({ editable, onAnalyze }: Props) {
-  const { data: req } = useRepositories().requirements.useCurrent();
+  const { data: req } = useCurrentRequirements();
   const answers = req.answers;
   const reduced = useReducedMotion();
   const theme = useTheme();

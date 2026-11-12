@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import type { ClientAccount } from '@/types';
 import { MemberAvatar, PageHeader, Reveal, StatusPill, Surface } from '@/components/ui';
 import { useRepositories } from '@/repositories';
-import { useToast } from '@/hooks/useToast';
+import { useWrite } from '@/hooks/useWrite';
 import { useSessions } from '@/services/session';
 import { formatDate } from '@/services/time';
 import type { DevPerson } from '@/data/people';
@@ -74,7 +74,7 @@ function ClientRow({ account, siteName, accent, onEdit, onToggle }: {
 /** 管理者画面: お客様（お客様ポータルにログインできる人）の登録と、開発者画面を開けるメンバーの指定（デモ: 実際の招待・認証は行わない） */
 export default function UsersPage() {
   const { accounts: repo, projects: projectsRepo } = useRepositories();
-  const toast = useToast();
+  const write = useWrite();
   const sessions = useSessions();
   const [params, setParams] = useSearchParams();
   const tab: TabId = params.get('tab') === 'dev' ? 'dev' : 'clients';
@@ -105,40 +105,35 @@ export default function UsersPage() {
   const projectOf = (id: string) => projects.find((p) => p.id === id);
 
   const openNew = () => {
+    // 案件が 1 件も無い（live の作成直後など）ときも落ちない。担当案件は登録画面で選ぶ
     const p = projects.find((x) => x.id === currentProjectId) ?? projects[0];
-    setEditing({ company: p.clientName, name: '', email: '', projectId: p.id });
+    setEditing({ company: p?.clientName ?? '', name: '', email: '', projectId: p?.id ?? '' });
   };
 
   const save = (d: ClientAccountDraft) => {
     const prev = d.id ? accounts.find((a) => a.id === d.id) : undefined;
-    void repo.saveClientAccount(d);
+    const msg = !prev ? '招待メールを送信しました（デモ: 実際には送信されません）'
+      : prev.company !== d.company.trim() || prev.name !== d.name.trim() || prev.email !== normalizeEmail(d.email) || prev.projectId !== d.projectId ? '登録内容を保存しました'
+        : undefined;
+    void write(repo.saveClientAccount(d), msg);
     setEditing(null);
-    if (!prev) toast('招待メールを送信しました（デモ: 実際には送信されません）');
-    else if (prev.company !== d.company.trim() || prev.name !== d.name.trim() || prev.email !== normalizeEmail(d.email) || prev.projectId !== d.projectId) toast('登録内容を保存しました');
   };
 
   const enable = (a: ClientAccount) => {
-    void repo.setClientAccountStatus(a.id, true);
-    toast(`${a.company} ${a.name}を有効に戻しました`);
+    void write(repo.setClientAccountStatus(a.id, true), `${a.company} ${a.name}を有効に戻しました`);
   };
 
   const setDev = (memberId: string, name: string, enabled: boolean) => {
-    void repo.setDevAccess(memberId, enabled);
-    toast(enabled ? `${name}に開発者画面の権限を追加しました` : `${name}の開発者画面の権限を外しました`, enabled ? 'success' : 'info');
+    void write(repo.setDevAccess(memberId, enabled), enabled ? `${name}に開発者画面の権限を追加しました` : `${name}の開発者画面の権限を外しました`, enabled ? 'success' : 'info');
   };
 
   const saveDevUser = (d: DevUserDraft) => {
     const prev = d.id ? devUsers.find((u) => u.id === d.id) : undefined;
-    void repo.saveDevUser(d);
     setDevEditing(null);
     const name = d.name.trim();
-    if (!prev) {
-      toast(`${name}を開発者として登録しました（開発者画面の権限: オン）`);
-      return;
-    }
     const company = d.affiliation === 'partner' ? d.partnerCompany.trim() : undefined;
-    const changed = prev.name !== name || prev.role !== d.role.trim() || prev.email !== normalizeEmail(d.email) || prev.affiliation !== d.affiliation || prev.partnerCompany !== company;
-    if (changed) toast('登録内容を保存しました');
+    const changed = !!prev && (prev.name !== name || prev.role !== d.role.trim() || prev.email !== normalizeEmail(d.email) || prev.affiliation !== d.affiliation || prev.partnerCompany !== company);
+    void write(repo.saveDevUser(d), !prev ? `${name}を開発者として登録しました（開発者画面の権限: オン）` : changed ? '登録内容を保存しました' : undefined);
   };
 
   const editDevUser = (m: DevPerson) => {
@@ -147,17 +142,19 @@ export default function UsersPage() {
   };
 
   const enableDevUser = (m: DevPerson) => {
-    void repo.setDevUserStatus(m.id, true);
-    toast(`${m.name}を有効に戻しました`);
+    void write(repo.setDevUserStatus(m.id, true), `${m.name}を有効に戻しました`);
   };
 
   const saveDevProjects = (m: DevPerson, projectIds: string[]) => {
     const prev = devProjects[m.id] ?? [];
     const next = projects.filter((p) => projectIds.includes(p.id)).map((p) => p.id);
-    void repo.setDevProjects(m.id, projectIds);
     setAssigning(null);
-    if (prev.length === next.length && prev.every((id, i) => id === next[i])) return;
-    toast(next.length ? `${m.name}の担当プロジェクトを保存しました（${next.length}件）` : `${m.name}の担当プロジェクトをすべて外しました`, next.length ? 'success' : 'info');
+    const same = prev.length === next.length && prev.every((id, i) => id === next[i]);
+    void write(
+      repo.setDevProjects(m.id, projectIds),
+      same ? undefined : next.length ? `${m.name}の担当プロジェクトを保存しました（${next.length}件）` : `${m.name}の担当プロジェクトをすべて外しました`,
+      next.length ? 'success' : 'info',
+    );
   };
 
   return (
@@ -362,8 +359,7 @@ export default function UsersPage() {
             variant="contained" color="error"
             onClick={() => {
               if (devDisabling) {
-                void repo.setDevUserStatus(devDisabling.id, false);
-                toast(`${devDisabling.name}を無効にしました`, 'info');
+                void write(repo.setDevUserStatus(devDisabling.id, false), `${devDisabling.name}を無効にしました`, 'info');
               }
               setDevDisabling(null);
             }}
@@ -388,8 +384,7 @@ export default function UsersPage() {
             variant="contained" color="error"
             onClick={() => {
               if (disabling) {
-                void repo.setClientAccountStatus(disabling.id, false);
-                toast(`${disabling.company} ${disabling.name}を無効にしました`, 'info');
+                void write(repo.setClientAccountStatus(disabling.id, false), `${disabling.company} ${disabling.name}を無効にしました`, 'info');
               }
               setDisabling(null);
             }}

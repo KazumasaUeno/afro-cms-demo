@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import type { Project } from '@/types';
 import { Surface } from '@/components/ui';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
+import { useRepositories } from '@/repositories';
 import { currentProject, useDemo } from '@/store/DemoStore';
 import { TOUCH } from '@/theme/media';
 import { tokens } from '@/theme/tokens';
@@ -24,12 +25,13 @@ export function DevProjectGate({ children, project: target, onOpen }: {
   /** 候補の案件を開く（省略時は表示中の案件を切り替える） */
   onOpen?: (id: string) => void;
 }) {
-  const { state, dispatch } = useDemo();
+  const { state } = useDemo();
+  const { projects } = useRepositories();
   const project = target ?? currentProject(state);
   const mine = useDevProjects();
   const assigned = mine.some((p) => p.id === project.id);
   if (assigned && (target || project.id === CLIENT_PROJECT_ID)) return <>{children}</>;
-  const open = onOpen ?? ((id: string) => dispatch({ type: 'setCurrentProject', id }));
+  const open = onOpen ?? ((id: string) => projects.select(id));
 
   const title = !mine.length
     ? '担当プロジェクトがありません'

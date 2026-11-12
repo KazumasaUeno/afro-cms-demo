@@ -12,3 +12,9 @@ function useLiveRepositories(): Repositories {
 
 /** 画面はこれだけを使う（DemoStore の dispatch を直接呼ばない）。モードはビルド時に決まるので、フックの呼び出し順は変わらない */
 export const useRepositories: () => Repositories = DATA_MODE === 'live' ? useLiveRepositories : useDemoRepositories;
+
+/** いま選んでいる案件の要件（画面の多くはこれを使う。projects.useCurrentId と requirements.useCurrent の組み合わせ） */
+export function useCurrentRequirements() {
+  const { projects, requirements } = useRepositories();
+  return requirements.useCurrent(projects.useCurrentId());
+}

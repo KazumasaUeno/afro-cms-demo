@@ -1,4 +1,4 @@
-import type { Project } from '@/types';
+import type { Project, ProjectDraft } from '@/types';
 import { MEMBERS } from '@/data/members';
 import { validateUrl } from '@/features/requirements/validation';
 
@@ -6,18 +6,8 @@ import { validateUrl } from '@/features/requirements/validation';
  * 新しいプロジェクトの入力（画面と reducer の両方で使う）。
  * 段階・進捗は入力させない（作成時は必ず要件定義・0%から始める）
  */
-export interface ProjectDraft {
-  clientName: string;
-  siteName: string;
-  siteUrl: string;
-  industry: string;
-  ownerId: string;
-  accent: string;
-  /** yyyy-mm-dd（空なら未定） */
-  launchDate: string;
-  /** 空なら DEFAULT_NEXT_ACTION */
-  nextAction: string;
-}
+// 型は repositories からも使うので @/types に置く（repositories → features の依存を作らない。B0 レビュー Minor）
+export type { ProjectDraft } from '@/types';
 export type ProjectField = keyof ProjectDraft;
 
 export const PROJECT_LIMITS = { clientName: 40, siteName: 40, industry: 20, nextAction: 40 } as const;

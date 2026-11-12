@@ -31,14 +31,13 @@ export function useDemoRepositories(): Repositories {
         create: (project) => run({ type: 'createProject', project }),
       },
       requirements: {
-        useCurrent: () => ready(useDemo().state.requirements),
+        useCurrent: (_projectId) => ready(useDemo().state.requirements),
         setAnswer: (_projectId, questionId, value, by) => run({ type: 'setAnswer', questionId, value, by }),
         setAnswers: (_projectId, entries, by) => {
           entries.forEach((e) => dispatch({ type: 'setAnswer', questionId: e.questionId, value: e.value, by }));
           return Promise.resolve();
         },
         confirmAnswer: (_projectId, questionId, by) => run({ type: 'confirmAnswer', questionId, by }),
-        setCompetitors: (_projectId, urls) => run({ type: 'setCompetitors', urls }),
         completeAnalysis: () => run({ type: 'completeAnalysis' }),
         reset: () => run({ type: 'resetRequirements' }),
         saveNow: () => Promise.resolve(flush()),

@@ -2,7 +2,8 @@ import { Box, Button, IconButton, Stack, Typography } from '@mui/material';
 import { CheckCircle2, Download, FileUp, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
-import { useRepositories } from '@/repositories';
+import { useCurrentRequirements, useRepositories } from '@/repositories';
+import { useWrite } from '@/hooks/useWrite';
 import { useToast } from '@/hooks/useToast';
 import { downloadText } from '@/services/download';
 import { tokens } from '@/theme/tokens';
@@ -17,8 +18,9 @@ interface Result extends CsvPlan { fileName: string; applied: number }
  */
 export function CsvTools({ onApplied, dense = false }: { onApplied?: () => void; dense?: boolean }) {
   const { requirements } = useRepositories();
-  const { data: req } = requirements.useCurrent();
+  const { data: req } = useCurrentRequirements();
   const toast = useToast();
+  const write = useWrite();
   const input = useRef<HTMLInputElement>(null);
   const [result, setResult] = useState<Result | null>(null);
   const locked = req.status === 'approved';
@@ -47,9 +49,10 @@ export function CsvTools({ onApplied, dense = false }: { onApplied?: () => void;
     const plan = planCsvImport(parseCsv(decodeCsv(buf)), req);
     // 承認後は reducer が受け付けないので、反映したことにしない
     const applied = !plan.error && !locked ? plan.apply.length : 0;
-    if (applied) void requirements.setAnswers(req.projectId, plan.apply, 'afro');
-    setResult({ ...plan, fileName: file.name, applied });
-    if (applied) {
+    // 保存に失敗したら反映したことにしない（エラーは useWrite が表示する）
+    const ok = applied ? await write(requirements.setAnswers(req.projectId, plan.apply, 'afro')) : true;
+    setResult({ ...plan, fileName: file.name, applied: ok ? applied : 0 });
+    if (applied && ok) {
       onApplied?.();
       toast(`CSV から ${applied} 問の回答を反映しました`);
     }

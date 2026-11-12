@@ -3,8 +3,9 @@ import { ListChecks, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { AiBadge, PageHeader, Reveal } from '@/components/ui';
-import { useRepositories } from '@/repositories';
-import { useToast } from '@/hooks/useToast';
+import { RouteLoader } from '@/components/layout/RouteLoader';
+import { useCurrentRequirements, useRepositories } from '@/repositories';
+import { useWrite } from '@/hooks/useWrite';
 import { AnalysisSequence } from './AnalysisSequence';
 import { ProposalView } from './ProposalView';
 import { HearingEditor } from './HearingEditor';
@@ -20,8 +21,8 @@ type View = 'input' | 'analyzing' | 'result';
  */
 export default function RequirementsPage() {
   const { requirements } = useRepositories();
-  const { data: req } = requirements.useCurrent();
-  const toast = useToast();
+  const { data: req, loading } = useCurrentRequirements();
+  const write = useWrite();
   const navigate = useNavigate();
   const routes = useHearingRoutes();
   const status = req.status;
@@ -30,6 +31,9 @@ export default function RequirementsPage() {
   const url = req.answers['q-url'];
   // スマホの入力画面は説明・バッジを出さず、質問までの距離を縮める（保存の状態は下のバーに出る）
   const compact = !useMediaQuery(useTheme().breakpoints.up('md')) && view !== 'result';
+
+  // 読み込み中は描画せず、書き込みも呼ばない（repositories/types.ts の決まり）
+  if (loading) return <RouteLoader label="ヒアリング" />;
 
   return (
     <Box>
@@ -63,10 +67,10 @@ export default function RequirementsPage() {
           <AnalysisSequence
             hostname={hostnameOf(typeof url === 'string' ? url : '')}
             onDone={() => {
-              void requirements.completeAnalysis(req.projectId);
-              setAnalyzing(false);
-              toast('改善提案書ができました', 'ai');
-              window.scrollTo({ top: 0 });
+              void write(requirements.completeAnalysis(req.projectId), '改善提案書ができました', 'ai').then(() => {
+                setAnalyzing(false);
+                window.scrollTo({ top: 0 });
+              });
             }}
           />
         </Reveal>

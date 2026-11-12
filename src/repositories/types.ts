@@ -1,7 +1,6 @@
-import type { AnswerSide, AnswerValue, ApprovalLog, ClientAccount, DevUser, Project, RequirementSession } from '@/types';
+import type { AnswerSide, AnswerValue, ApprovalLog, ClientAccount, DevUser, Project, ProjectDraft, RequirementSession } from '@/types';
 import type { DevPerson } from '@/data/people';
 import type { ClientAccountDraft, DevUserDraft } from '@/data/users';
-import type { ProjectDraft } from '@/features/projects/projectForm';
 
 /**
  * repository 層の型（BACKEND_FIREBASE §13.2。B0 = 型と demo 実装だけ）。
@@ -10,6 +9,13 @@ import type { ProjectDraft } from '@/features/projects/projectForm';
  * - 書き込みは Promise を返す。demo は dispatch を同期で行ってから解決する（呼んだ直後に state が変わる従来の動きのまま）。
  *   不正な操作は従来どおり reducer が受け付けない（demo では失敗にしない）
  * - projectId は live で文書の場所を決めるために渡す。demo の要件・承認のデータは 1 案件分（requirements.projectId）だけ
+ *
+ * 読み込み中・エラーの決まり（BACKEND_PLAN「B の着手条件」2）:
+ * - loading: true の間の data は「空の値」（一覧は []、要件は未回答の draft）。**画面は描画せず（読み込み中の表示を出し）、書き込みを呼ばない**。
+ *   空の値を「無い」と判定しない（例: 一覧が [] だから NotFound、を loading 中に出さない）
+ * - error がある間も書き込みを呼ばない。権限を失った（permission-denied）ときは live の Guard がログイン画面へ戻す
+ * - 書き込みの Promise は失敗しうる（live: Rules の拒否・オフライン）。画面は await して成功時だけ完了を表示し、
+ *   失敗はエラーとして表示する（hooks/useWrite.ts）。`void repo.x(); toast()` の形にしない
  */
 export interface Query<T> {
   data: T;
@@ -32,14 +38,15 @@ export interface AnswerEntry {
 }
 
 export interface RequirementsRepo {
-  useCurrent(): Query<RequirementSession>;
+  /** その案件の要件（ヒアリング回答・状態）。demo は 1 案件分なので projectId を使わない */
+  useCurrent(projectId: string): Query<RequirementSession>;
   setAnswer(projectId: string, questionId: string, value: AnswerValue, by?: AnswerSide): Promise<void>;
   /** まとめて反映する（CSV の取り込み）。live は 1 回の書き込みにする */
   setAnswers(projectId: string, entries: readonly AnswerEntry[], by?: AnswerSide): Promise<void>;
   confirmAnswer(projectId: string, questionId: string, by: AnswerSide): Promise<void>;
-  /** 入力途中の競合サイト（回答として確定するのは setAnswer） */
-  setCompetitors(projectId: string, urls: string[]): Promise<void>;
+  /** AI 分析の完了＝お客様への確認依頼（live: draft → analyzed、要件定義書の写しと submit の記録を 1 回で書く） */
   completeAnalysis(projectId: string): Promise<void>;
+  /** demo: 回答をやり直す（全消去）。live: 確認依頼を差し戻す（analyzed → draft。回答は残す。§6） */
   reset(projectId: string): Promise<void>;
   /** いまの回答をすぐ保存する（「保存」ボタン）。保存できたら true */
   saveNow(): Promise<boolean>;

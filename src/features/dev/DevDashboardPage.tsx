@@ -3,6 +3,7 @@ import { ArrowRight, CircleCheck, FolderKanban, FolderLock, LayoutDashboard, Roc
 import { useNavigate } from 'react-router-dom';
 import { PageHeader, SectionTitle, StatusPill, Surface } from '@/components/ui';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
+import { useRepositories } from '@/repositories';
 import { useDemo, devState } from '@/store/DemoStore';
 import { formatDateTime, relativeTime } from '@/services/time';
 import { DEV_TASK_STATUSES } from '@/data/dev';
@@ -25,7 +26,8 @@ const MINE_ORDER: Record<DevTaskStatus, number> = { doing: 0, review: 1, todo: 2
  * このページは DevProjectGate を通さない（表示中の案件が担当外でも、担当案件の一覧は出す）
  */
 export default function DevDashboardPage() {
-  const { state, dispatch } = useDemo();
+  const { state } = useDemo();
+  const repos = useRepositories();
   // ログイン中のメンバー（「自分の担当」「あなた」の判定と、操作の記録に使う）
   const me = useDevUser();
   const projects = useDevProjects();
@@ -35,7 +37,7 @@ export default function DevDashboardPage() {
 
   // 作業画面（ヒアリング・構築タスクなど）は表示中の案件で動くので、案件を切り替えてから開く
   const open = (id: string, to: string) => {
-    dispatch({ type: 'setCurrentProject', id });
+    repos.projects.select(id);
     navigate(to);
   };
   return (

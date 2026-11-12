@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNod
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import type { Project } from '@/types';
 import { useRepositories } from '@/repositories';
+import { useWrite } from '@/hooks/useWrite';
 import { MEMBERS } from '@/data/members';
 import { MAX_URL } from '@/features/requirements/validation';
 import { MemberAvatar, PageHeader, Reveal, Surface } from '@/components/ui';
@@ -39,6 +40,9 @@ export default function NewProjectPage() {
   const toast = useToast();
   const [draft, setDraft] = useState<ProjectDraft>(() => emptyProjectDraft());
   const [submitted, setSubmitted] = useState(false);
+  // 作成は確定を待つ（BACKEND_FIREBASE §13.3。待つ間はボタンを止め、二重に作らない）
+  const [saving, setSaving] = useState(false);
+  const write = useWrite();
   const refs = useRef<Partial<Record<ProjectField, HTMLElement | null>>>({});
   const accentRefs = useRef<(HTMLButtonElement | null)[]>([]);
   /** 作成を送った時点のプロジェクト id（作成後、これに無い作業中プロジェクトが新しく作ったもの） */
@@ -69,8 +73,14 @@ export default function NewProjectPage() {
       refs.current[first]?.focus();
       return;
     }
+    if (saving) return;
     before.current = new Set(projects.map((p) => p.id));
-    void repo.create(draft);
+    setSaving(true);
+    void write(repo.create(draft)).then((ok) => {
+      setSaving(false);
+      // 失敗したら作成を待つのをやめる（エラーは useWrite が表示する）。成功は上の effect が開く
+      if (!ok) before.current = null;
+    });
   };
 
   // プレビューは入力途中でも崩れないよう、空の項目は仮の文言で埋める
@@ -270,7 +280,7 @@ export default function NewProjectPage() {
 
           <Stack direction={{ xs: 'column-reverse', sm: 'row' }} spacing={1} justifyContent="flex-end">
             <Button variant="outlined" component={RouterLink} to="/projects">キャンセル</Button>
-            <Button type="submit" variant="contained" startIcon={<FolderPlus size={16} />}>作成する</Button>
+            <Button type="submit" variant="contained" startIcon={<FolderPlus size={16} />} disabled={saving}>作成する</Button>
           </Stack>
         </Stack>
 

@@ -4,7 +4,8 @@ import { useEffect, type ReactNode } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import type { Project, Stage } from '@/types';
 import { useDemo } from '@/store/DemoStore';
-import { useRepositories } from '@/repositories';
+import { RouteLoader } from '@/components/layout/RouteLoader';
+import { useCurrentRequirements, useRepositories } from '@/repositories';
 import { STAGES, stageIndex } from '@/data/projects';
 import { memberById } from '@/data/members';
 import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
@@ -57,7 +58,7 @@ export default function ProjectDetailPage() {
   const { projectId } = useParams();
   const routes = useProjectRoutes();
   const { projects } = useRepositories();
-  const { data: list } = projects.useList();
+  const { data: list, loading } = projects.useList();
   const navigate = useNavigate();
   const p = list.find((x) => x.id === projectId);
   const currentId = projects.useCurrentId();
@@ -69,6 +70,8 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     if (syncId) projects.select(syncId);
   }, [syncId]);
+  // 読み込み中は「見つからない」と判定しない（repositories/types.ts の決まり）
+  if (loading) return <RouteLoader label="プロジェクト" />;
   if (!p) return <NotFound list={routes.list} />;
   if (routes.dev) {
     return (
@@ -84,8 +87,8 @@ function Detail({ p }: { p: Project }) {
   const routes = useProjectRoutes();
   // サイトマップ・デザイン・品質・CMS・診断は repository の範囲外（live では隠す。§14）なので DemoStore から読む
   const { state } = useDemo();
-  const { projects, requirements, accounts } = useRepositories();
-  const { data: req } = requirements.useCurrent();
+  const { projects, accounts } = useRepositories();
+  const { data: req } = useCurrentRequirements();
   const { data: devAll } = accounts.useDevProjects();
   const { data: people } = accounts.useDevPeople();
   const navigate = useNavigate();

@@ -41,6 +41,20 @@ export interface Project {
   pendingApprovals: number;
 }
 
+/** 新しいプロジェクトの入力（画面・reducer・repository で使う。検査は features/projects/projectForm.ts） */
+export interface ProjectDraft {
+  clientName: string;
+  siteName: string;
+  siteUrl: string;
+  industry: string;
+  ownerId: string;
+  accent: string;
+  /** yyyy-mm-dd（空なら未定） */
+  launchDate: string;
+  /** 空なら DEFAULT_NEXT_ACTION */
+  nextAction: string;
+}
+
 /* ---------- 要件定義（12項目81問） ---------- */
 
 export type QuestionPriority = 'A' | 'B';
@@ -93,6 +107,8 @@ export interface RequirementSession {
   answerMeta?: Record<string, AnswerMeta>;
   analyzedAt?: ISODate;
   approvedAt?: ISODate;
+  /** live だけ: 確認依頼（分析完了）のときに保存した要件定義書の写し（BACKEND_FIREBASE §3・§5.5）。demo は持たず回答から毎回作る */
+  proposal?: Proposal;
 }
 
 export interface ProposalPoint {
@@ -102,6 +118,20 @@ export interface ProposalPoint {
   priority: 'high' | 'medium' | 'low';
   impact: string;
   area: string;
+}
+
+/** 要件定義書（改善提案）。buildProposal() の結果。live は分析完了時の写しを保存する */
+export interface Proposal {
+  hostname: string;
+  issue: string;
+  purposes: string[];
+  improves: string[];
+  competitors: string[];
+  /** 現状スコア（0-100、デモ用の決定的な値） */
+  currentScore: number;
+  /** 改善後の見込みスコア */
+  projectedScore: number;
+  points: ProposalPoint[];
 }
 
 /* ---------- サイトマップ ---------- */

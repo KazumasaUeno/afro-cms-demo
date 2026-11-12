@@ -2,6 +2,7 @@ import { Box, Button, LinearProgress, Stack, Typography } from '@mui/material';
 import { ArrowRight, ArrowUpRight, FolderKanban } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useRepositories } from '@/repositories';
 import { useDemo, currentProject } from '@/store/DemoStore';
 import { MONTHLY_METRICS } from '@/data/insights';
 import { AiBadge, AiMark, CountUp, MemberAvatar, Reveal, SectionTitle, StageTrack, Surface } from '@/components/ui';
@@ -33,7 +34,8 @@ function KpiItem({ label, value, suffix, foot }: { label: string; value: number;
 
 /** ホームダッシュボード */
 export default function HomePage() {
-  const { state, dispatch } = useDemo();
+  const { state } = useDemo();
+  const { projects } = useRepositories();
   const navigate = useNavigate();
   const project = currentProject(state);
 
@@ -46,7 +48,7 @@ export default function HomePage() {
   const action = nextBestAction(state);
 
   const open = (projectId: string, to: string) => {
-    dispatch({ type: 'setCurrentProject', id: projectId });
+    projects.select(projectId);
     navigate(to);
   };
 

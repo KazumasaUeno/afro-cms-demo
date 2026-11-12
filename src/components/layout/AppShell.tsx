@@ -5,6 +5,7 @@ import { Suspense, lazy, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useOutlet } from 'react-router-dom';
 import { tokens } from '@/theme/tokens';
 import { LANDSCAPE_PHONE } from '@/theme/media';
+import { useRepositories } from '@/repositories';
 import { useDemo, currentProject } from '@/store/DemoStore';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useThemeMode } from '@/theme/ThemeMode';
@@ -21,7 +22,9 @@ import { useDevProjects } from '@/features/dev/useDevUser';
 
 /** プロジェクトの切替。projects を渡すとその中だけを出す（開発者画面: 担当のプロジェクトだけ） */
 function ProjectSwitcher({ projects, emptyText, onSelect }: { projects?: Project[]; emptyText?: string; onSelect?: (id: string) => void }) {
-  const { state, dispatch } = useDemo();
+  const { state } = useDemo();
+  // 選んでいる案件の変更は projects.select に一本化（B の着手条件 3）
+  const { projects: projectsRepo } = useRepositories();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const project = currentProject(state);
   const list = projects ?? state.projects;
@@ -47,7 +50,7 @@ function ProjectSwitcher({ projects, emptyText, onSelect }: { projects?: Project
             key={p.id}
             selected={p.id === project.id}
             onClick={() => {
-              dispatch({ type: 'setCurrentProject', id: p.id });
+              projectsRepo.select(p.id);
               onSelect?.(p.id);
               setAnchor(null);
             }}
@@ -338,12 +341,13 @@ export function AppShell() {
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
   const area = AREAS[areaOf(pathname)];
-  const { state, dispatch } = useDemo();
+  const { projects } = useRepositories();
+  const currentId = projects.useCurrentId();
   // お客様ポータルは MINAMO COFFEE の案件として表示する（データはこの 1 案件分だけ持っている）。
   // 開発者画面は固定せず、担当のプロジェクトから選ぶ（担当外・データの無い案件は DevProjectGate が理由を出す）
   useEffect(() => {
-    if (area.id === 'portal' && state.currentProjectId !== CLIENT_PROJECT_ID) dispatch({ type: 'setCurrentProject', id: CLIENT_PROJECT_ID });
-  }, [area.id, state.currentProjectId, dispatch]);
+    if (area.id === 'portal' && currentId !== CLIENT_PROJECT_ID) projects.select(CLIENT_PROJECT_ID);
+  }, [area.id, currentId, projects]);
   return (
     <Box sx={{ minHeight: '100dvh', bgcolor: tokens.color.bg }}>
       <a href="#main" className="skip-link">本文へスキップ</a>

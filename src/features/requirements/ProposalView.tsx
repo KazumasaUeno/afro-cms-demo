@@ -3,7 +3,8 @@ import { ArrowRight, BadgeCheck, CheckCircle2, Download, Globe, Quote, RotateCcw
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
-import { useRepositories } from '@/repositories';
+import { useCurrentRequirements, useRepositories } from '@/repositories';
+import { useWrite } from '@/hooks/useWrite';
 import { AiBadge, CountUp, ProgressRing, Reveal, StatusPill, Surface, type PillTone } from '@/components/ui';
 import { useToast } from '@/hooks/useToast';
 import { formatDateTime } from '@/services/time';
@@ -23,12 +24,13 @@ const PRIORITY: Record<ProposalPoint['priority'], { label: string; tone: PillTon
 
 export function ProposalView() {
   const { requirements, approvals, projects } = useRepositories();
-  const { data: req } = requirements.useCurrent();
+  const { data: req } = useCurrentRequirements();
   const { data: projectList } = projects.useList();
   const navigate = useNavigate();
   // 開発者画面（/dev/hearing）では要件定義書を見るだけ。やり直し・代理承認・サイトマップへ進むは管理者画面だけに出す（0.25.0）
   const { dev } = useHearingRoutes();
   const toast = useToast();
+  const write = useWrite();
   const [confirmReset, setConfirmReset] = useState(false);
   const proposal = useMemo(() => buildProposal(req.answers, req.competitors), [req.answers, req.competitors]);
   const answered = REQUIREMENT_QUESTIONS.filter((q) => isAnswered(req.answers[q.id])).length;
@@ -156,7 +158,7 @@ export function ProposalView() {
                   <BadgeCheck size={18} /> 承認済み {formatDateTime(req.approvedAt)}
                 </Box>
               ) : !dev && (
-                <Button variant="outlined" startIcon={<CheckCircle2 size={16} />} disabled={pending > 0} onClick={() => { void approvals.approveRequirements(req.projectId); toast('要件定義書を承認しました'); }}>
+                <Button variant="outlined" startIcon={<CheckCircle2 size={16} />} disabled={pending > 0} onClick={() => { void write(approvals.approveRequirements(req.projectId), '要件定義書を承認しました'); }}>
                   アフロが代わりに承認
                 </Button>
               )}
@@ -173,7 +175,7 @@ export function ProposalView() {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
           <Button variant="outlined" onClick={() => setConfirmReset(false)}>キャンセル</Button>
-          <Button variant="contained" onClick={() => { void requirements.reset(req.projectId); setConfirmReset(false); }}>やり直す</Button>
+          <Button variant="contained" onClick={() => { void write(requirements.reset(req.projectId)); setConfirmReset(false); }}>やり直す</Button>
         </DialogActions>
       </Dialog>
     </Stack>

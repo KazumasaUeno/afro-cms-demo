@@ -1,4 +1,4 @@
-import type { AnswerValue, ProposalPoint } from '@/types';
+import type { AnswerValue, Proposal, ProposalPoint } from '@/types';
 import { PROPOSAL_LIBRARY } from '@/data/requirements';
 
 /** 目的（きっかけ）から、関連する改善領域への重み */
@@ -13,18 +13,8 @@ const PURPOSE_TO_AREAS: Record<string, string[]> = {
 
 const BASE: Record<ProposalPoint['priority'], number> = { high: 1.5, medium: 1, low: 0.5 };
 
-export interface Proposal {
-  hostname: string;
-  issue: string;
-  purposes: string[];
-  improves: string[];
-  competitors: string[];
-  /** 現状スコア（0-100、デモ用の決定的な値） */
-  currentScore: number;
-  /** 改善後の見込みスコア */
-  projectedScore: number;
-  points: ProposalPoint[];
-}
+// 型は保存値（live の requirements/current.proposal）にも使うので @/types に置く
+export type { Proposal } from '@/types';
 
 const asArray = (v: AnswerValue | undefined): string[] => (Array.isArray(v) ? v : v ? [v] : []);
 const asString = (v: AnswerValue | undefined): string => (Array.isArray(v) ? v.join('、') : v ?? '');

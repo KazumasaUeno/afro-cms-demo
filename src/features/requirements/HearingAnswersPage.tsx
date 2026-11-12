@@ -2,7 +2,8 @@ import { Box, Button, Stack } from '@mui/material';
 import { ArrowRight, MessageSquareText } from 'lucide-react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { PageHeader, Reveal, StatusPill } from '@/components/ui';
-import { useRepositories } from '@/repositories';
+import { RouteLoader } from '@/components/layout/RouteLoader';
+import { useCurrentRequirements, useRepositories } from '@/repositories';
 import { formatDateTime } from '@/services/time';
 import { HearingEditor } from './HearingEditor';
 import { useHearingRoutes } from './hearingRoutes';
@@ -14,14 +15,15 @@ import { useHearingRoutes } from './hearingRoutes';
  * 承認後は reducer が変更を受け付けないため閲覧のみ。
  */
 export default function HearingAnswersPage() {
-  const { requirements, projects } = useRepositories();
-  const { data: req } = requirements.useCurrent();
+  const { projects } = useRepositories();
+  const { data: req, loading } = useCurrentRequirements();
   const { data: projectList } = projects.useList();
   const navigate = useNavigate();
   const routes = useHearingRoutes();
   const project = projectList.find((p) => p.id === req.projectId);
   const editable = req.status !== 'approved';
 
+  if (loading) return <RouteLoader label="ヒアリング" />;
   if (req.status === 'draft') return <Navigate to={routes.input} replace />;
 
   return (
