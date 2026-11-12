@@ -7,10 +7,13 @@ import { PRODUCTION_PROJECT_IDS } from '../../scripts/firebase-projects.mjs';
 test('--project が無ければ拒否', () => {
   assert.throws(() => checkDeploy({ project: null, only: 'hosting' }), /--project/);
 });
-test('許可リストが TBD のままなら、どの ID も拒否', () => {
-  assert.deepEqual([...PRODUCTION_PROJECT_IDS], ['TBD']);
-  assert.throws(() => checkDeploy({ project: 'TBD', only: 'hosting' }), /許可リスト/);
+test('許可リストは本案件の本番 ID だけ（2026-11-12 ユーザー作成。他案件の ID・demo- を入れない）', () => {
+  assert.deepEqual([...PRODUCTION_PROJECT_IDS], ['afro-cms-4a6ff']);
+  assert.doesNotThrow(() => checkDeploy({ project: 'afro-cms-4a6ff', only: 'hosting' }));
   assert.throws(() => checkDeploy({ project: 'some-other-prod', only: 'hosting' }), /許可リスト/);
+});
+test('TBD は許可リストに入っていても拒否', () => {
+  assert.throws(() => checkDeploy({ project: 'TBD', only: 'hosting' }, ['TBD']), /許可リスト/);
 });
 test('許可リストに無い ID・demo- の ID は拒否', () => {
   const list = ['afro-cms-prod'];
