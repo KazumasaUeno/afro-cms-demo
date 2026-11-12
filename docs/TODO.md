@@ -24,3 +24,7 @@
 
 - プロジェクトの一覧は更新の新しい順に最大 500 件（`src/live/repositories.tsx` の `LIST_LIMIT`）。超えると古い案件が一覧に出ない。件数が近づいたらページングを入れる
 - 開発者の一覧の並び（`memberUids` array-contains ＋ `updatedAt` desc）は `firestore.indexes.json` の複合 Index が要る（定義済み。エミュレータは Index を要求しないため、本番で `firestore:indexes` を先にデプロイして確かめる）
+- 書き込み待ちのタイマーは LiveDataProvider のアンマウント（ログアウト）で片付けていない。ログアウト直前の入力は permission-denied で失われうる（re-review 2026-11-12 Minor。0.28.1 より前から）
+- オフラインでログインすると読み込み中のまま止まり、案内が出ない（`src/live/auth.tsx` の fromCache 待ち。live は接続が前提）
+- 自動テストが無い: `scripts/deploy-firebase.mjs` の `checkHostingBuild`・`parseTestCounts`（127.0.0.1 の検査は assets/*.js だけ）／「別の画面で予約した書き込みも saveNow が待つ」（エミュレータで手動確認のみ）
+- デザインスタジオの説明文が、サイトマップ未承認でも「承認済みサイトマップから」と書いている（`src/features/design/DesignStudioPage.tsx:141-142`。文言のみ）

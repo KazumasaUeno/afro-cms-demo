@@ -1,6 +1,6 @@
 # 実装計画: Firebase バックエンド（要件定義まで）
 
-- 規模: **XL**（認証・認可・個人情報・外部サービス）。作成: lead-architect 2026-11-10。状態: **Plan Review 待ち**
+- 規模: **XL**（認証・認可・個人情報・外部サービス）。作成: lead-architect 2026-11-10。状態: **A・B0・B 完了（2026-11-12、エミュレータで検証。ローカルのみ・未 push）。C は未着手（docs/TODO.md の条件）**
 - 設計の正: `docs/design/BACKEND_FIREBASE.md`（§25・§27 の決定、§26 のセキュリティレビュー M-1〜M-12）
 - 依存の追加（ユーザーが Firebase を選んだ時点で承認済み）: `firebase`、devDependencies `firebase-tools` `@firebase/rules-unit-testing`
 
