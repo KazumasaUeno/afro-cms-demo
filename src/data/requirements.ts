@@ -2,7 +2,9 @@ import type { ProposalPoint, RequirementCategory, RequirementQuestion } from '@/
 
 /**
  * 資料「12項目81問」のカテゴリ＋アフロで追加した「公開・ドメイン（DNS）」（2026-11-10 のレビューで追加）。
- * questionCount は資料上の問数（13 は追加分の問数）
+ * questionCount は資料上の問数（「公開・ドメイン（DNS）」は追加分の問数）。
+ * 資料の「8. デザイン・ブランド」（rc8）は 0.28.0 でデザインの段階の「デザイン要件定義」へ移した（2026-11-12 ユーザー決定。src/data/designRequirements.ts）。
+ * 画面の番号（no）は欠番を作らないよう詰めている（id は変えない。CSV・保存データは id で引く）
  */
 export const REQUIREMENT_CATEGORIES: RequirementCategory[] = [
   { id: 'rc1', no: 1, title: '現状とリニューアルの目的', questionCount: 8 },
@@ -12,15 +14,14 @@ export const REQUIREMENT_CATEGORIES: RequirementCategory[] = [
   { id: 'rc5', no: 5, title: '機能・システム', questionCount: 7 },
   { id: 'rc6', no: 6, title: '導線・コンバージョン', questionCount: 6 },
   { id: 'rc7', no: 7, title: 'SEO・集客', questionCount: 7 },
-  { id: 'rc8', no: 8, title: 'デザイン・ブランド', questionCount: 6 },
-  { id: 'rc9', no: 9, title: '運用体制', questionCount: 7 },
-  { id: 'rc10', no: 10, title: '技術・インフラ', questionCount: 6 },
-  { id: 'rc11', no: 11, title: 'スケジュール・予算', questionCount: 7 },
-  { id: 'rc12', no: 12, title: 'その他・要望', questionCount: 6 },
-  { id: 'rc13', no: 13, title: '公開・ドメイン（DNS）', questionCount: 3 },
+  { id: 'rc9', no: 8, title: '運用体制', questionCount: 7 },
+  { id: 'rc10', no: 9, title: '技術・インフラ', questionCount: 6 },
+  { id: 'rc11', no: 10, title: 'スケジュール・予算', questionCount: 7 },
+  { id: 'rc12', no: 11, title: 'その他・要望', questionCount: 6 },
+  { id: 'rc13', no: 12, title: '公開・ドメイン（DNS）', questionCount: 3 },
 ];
 
-export const TOTAL_REQUIREMENT_QUESTIONS = REQUIREMENT_CATEGORIES.reduce((s, c) => s + c.questionCount, 0); // 81 + 3
+export const TOTAL_REQUIREMENT_QUESTIONS = REQUIREMENT_CATEGORIES.reduce((s, c) => s + c.questionCount, 0); // 81 − 6（デザイン・ブランド）+ 3
 
 export const PURPOSE_OPTIONS = ['問い合わせを増やしたい', '採用を強化したい', 'ブランドを刷新したい', 'EC売上を伸ばしたい', '更新を楽にしたい', 'スマホ対応したい'];
 export const IMPROVE_OPTIONS = ['ファーストビュー', 'ナビゲーション', 'スマホ表示', '表示速度', '問い合わせ導線', '写真・ビジュアル', 'SEO', '更新のしやすさ'];
@@ -45,9 +46,6 @@ export const REQUIREMENT_QUESTIONS: RequirementQuestion[] = [
   { id: 'q-feature', categoryId: 'rc5', priority: 'B', kind: 'text', text: '必要な機能（予約・EC・会員など）はありますか？', placeholder: '例：来店予約のフォーム、お知らせの更新', owner: 'afro' },
   { id: 'q-cv', categoryId: 'rc6', priority: 'A', kind: 'single', text: '最も重要なコンバージョンは何ですか？', options: ['問い合わせ', '資料請求', '来店予約', '購入', '採用応募'], owner: 'client' },
   { id: 'q-seo', categoryId: 'rc7', priority: 'B', kind: 'text', text: '上位表示したいキーワードはありますか？', placeholder: '例：地域名＋カフェ、地域名＋コーヒー豆', owner: 'afro' },
-  { id: 'q-design-dislike', categoryId: 'rc8', priority: 'A', kind: 'longtext', text: '現在のHPのデザインで不満な点は何ですか？', placeholder: '例：写真が暗く、文字が小さくて読みにくい', owner: 'client' },
-  { id: 'q-image', categoryId: 'rc8', priority: 'A', kind: 'text', text: 'ユーザーにどのような企業イメージを持ってほしいですか？', placeholder: '例：誠実で相談しやすい、地元に根ざした会社', owner: 'client' },
-  { id: 'q-brand', categoryId: 'rc8', priority: 'B', kind: 'text', text: 'コーポレートカラーやブランドガイドラインはありますか？', placeholder: '例：ロゴの緑色。ガイドラインは無し', owner: 'client' },
   { id: 'q-ops', categoryId: 'rc9', priority: 'A', kind: 'single', text: '公開後の更新は誰が行いますか？', options: ['社内担当者', 'アフロに依頼', '両方'], owner: 'client' },
   { id: 'q-infra', categoryId: 'rc10', priority: 'B', kind: 'text', text: '現在のサーバー・ドメインの管理状況を教えてください', placeholder: '例：レンタルサーバーを自社で契約。ドメインは制作会社が管理', owner: 'afro' },
   { id: 'q-schedule', categoryId: 'rc11', priority: 'A', kind: 'text', text: '公開希望時期はいつですか？', placeholder: '例：2027 年 3 月末（決算前）', owner: 'client' },

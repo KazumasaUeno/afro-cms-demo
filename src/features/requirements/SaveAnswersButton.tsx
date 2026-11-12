@@ -10,6 +10,7 @@ import { tokens } from '@/theme/tokens';
  * 入力が落ち着いたら saveNow で保存して、その結果（「● 保存済み HH:MM」/ 失敗）を常に表示する。
  * 「保存」ボタンは待たずにすぐ保存する。表示する時刻は、この画面で保存を確かめた時刻（開いた直後は lastAnsweredAt）。
  * beforeSave: 保存の前に確定させたい値を dispatch する
+ * source: ヒアリング以外の回答（デザイン要件定義。0.28.0）で使うときの、見張る値・記録・保存の仕方。省略時はヒアリングの回答
  */
 const SETTLE_MS = 400;
 
@@ -38,10 +39,20 @@ function lastAnsweredAt(meta: Record<string, { at: string }> | undefined): Date 
   return latest === null ? null : new Date(latest);
 }
 
-export function SaveAnswersButton({ beforeSave, disabled = false, compact = false }: { beforeSave?: () => void; disabled?: boolean; compact?: boolean }) {
+export interface SaveSource {
+  /** 変わったら「保存中…」にする値（JSON 文字列） */
+  snapshot: string;
+  /** 回答の記録（開いた直後の「保存済み HH:MM」の時刻に使う） */
+  meta: Record<string, { at: string }> | undefined;
+  saveNow: () => Promise<boolean>;
+}
+
+export function SaveAnswersButton({ beforeSave, disabled = false, compact = false, source }: { beforeSave?: () => void; disabled?: boolean; compact?: boolean; source?: SaveSource }) {
   const { requirements } = useRepositories();
   const { data: req } = useCurrentRequirements();
-  const current = JSON.stringify([req.answers, req.competitors]);
+  const current = source ? source.snapshot : JSON.stringify([req.answers, req.competitors]);
+  const saveNowRef = useRef<() => Promise<boolean>>(() => requirements.saveNow());
+  saveNowRef.current = source ? source.saveNow : () => requirements.saveNow();
   // 画面を開いた時点の回答は保存済み（localStorage から読んだもの）
   const savedSnapshot = useRef(current);
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
@@ -61,7 +72,7 @@ export function SaveAnswersButton({ beforeSave, disabled = false, compact = fals
   // save は currentRef を読むので、effect の依存に入れなくてよい
   const save = () => {
     const snapshot = currentRef.current;
-    void requirements.saveNow().catch(() => false).then((ok) => {
+    void saveNowRef.current().catch(() => false).then((ok) => {
       if (!mounted.current) return;
       // 保存を待つ間にさらに入力されていたら、次の保存を待つ（表示は「保存中…」のまま）
       if (snapshot !== currentRef.current) return;
@@ -90,7 +101,7 @@ export function SaveAnswersButton({ beforeSave, disabled = false, compact = fals
     save();
   }, [requested, current]);
 
-  const idleAt = phase.kind === 'idle' ? lastAnsweredAt(req.answerMeta) : null;
+  const idleAt = phase.kind === 'idle' ? lastAnsweredAt(source ? source.meta : req.answerMeta) : null;
   // 回答が 1 つも無い（記録も無い）ときは「保存済み」と言わない
   const empty = phase.kind === 'idle' && !idleAt;
   const label =

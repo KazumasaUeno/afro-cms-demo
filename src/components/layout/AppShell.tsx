@@ -271,6 +271,8 @@ function BottomTabs({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
 /** ローディング画面に出す移動先の名前 */
 function routeLabel(pathname: string): string {
   if (pathname === '/ai-studio/design') return 'AIデザインスタジオ';
+  if (pathname === '/ai-studio/design/requirements') return 'デザイン要件定義';
+  if (pathname === '/dev/design/requirements') return '開発者画面・デザイン要件定義';
   if (pathname === '/ai-studio') return 'AI要件定義';
   if (pathname === '/ai-studio/requirements') return 'AI要件定義';
   if (pathname === '/dev/requirements') return '開発者画面・AI要件定義';

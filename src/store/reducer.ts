@@ -10,6 +10,7 @@ import { DEV_ENVS, DEV_TASK_STATUSES, DEV_USER_ID, deployGate, seedDev } from '@
 import { memberById } from '@/data/members';
 import { devUsersState, personById } from '@/data/people';
 import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
+import { DESIGN_QUESTIONS } from '@/data/designRequirements';
 import { MODE_LABEL, pendingConfirmations, questionStatus } from '@/features/requirements/assignment';
 import { isAnswered } from '@/features/requirements/validation';
 import { DISPLAY_SLIDES_MAX, normalizeSlide, seedSignage, validateSlide } from '@/data/signage';
@@ -41,6 +42,8 @@ export type Action =
   | { type: 'setSitemap'; variant: SitemapVariant; nodes: SitemapNode[]; edges: SitemapEdge[] }
   | { type: 'approveSitemap'; by?: Side }
   | { type: 'selectDesign'; id: DesignId }
+  /** デザイン要件定義の回答（0.28.0）。デザインの採用・承認の後は変えない */
+  | { type: 'setDesignAnswer'; questionId: string; value: AnswerValue }
   | { type: 'approveDesign'; by?: Side }
   | { type: 'startBuild' }
   | { type: 'completeBuild' }
@@ -224,6 +227,15 @@ function baseReducer(state: DemoState, action: Action): DemoState {
 
     case 'selectDesign':
       return { ...state, design: { ...state.design, selected: action.id } };
+
+    case 'setDesignAnswer': {
+      // 採用・承認の後は変えない（承認した案の前提が変わるため。ヒアリングの承認後と同じ方針）。収録していない質問は受け付けない
+      if (state.design.approvedAt || !DESIGN_QUESTIONS.some((q) => q.id === action.questionId)) return state;
+      const meta = { ...(state.design.answerMeta ?? {}) };
+      if (isAnswered(action.value)) meta[action.questionId] = { by: 'afro', at: nowIso() };
+      else delete meta[action.questionId];
+      return { ...state, design: { ...state.design, answers: { ...(state.design.answers ?? {}), [action.questionId]: action.value }, answerMeta: meta } };
+    }
 
     case 'approveDesign': {
       if (!state.design.selected || !state.sitemap.approvedAt) return state;

@@ -19,6 +19,8 @@ export interface ProjectRoutes {
   /** 制作フロー（要件定義 → サイトマップ → デザイン）。requirements は要件定義書の画面（0.28.0） */
   requirements: string;
   sitemap: string;
+  /** デザイン要件定義（0.28.0。デザインスタジオの前） */
+  designRequirements: string;
   design: string;
   /** 品質チェック・ページ編集（CMS）・改善（インサイト） */
   quality: string;
@@ -35,6 +37,7 @@ const ADMIN: ProjectRoutes = {
   stageLinks: STAGE_LINKS,
   requirements: '/ai-studio/requirements',
   sitemap: '/site',
+  designRequirements: '/ai-studio/design/requirements',
   design: '/ai-studio/design',
   quality: '/quality',
   cms: '/portal/pages',
@@ -45,6 +48,7 @@ const ADMIN: ProjectRoutes = {
 function devRoutes(h: HearingRoutes): ProjectRoutes {
   const sitemap = '/dev/sitemap';
   const design = '/dev/design';
+  const designRequirements = '/dev/design/requirements';
   const quality = '/dev/quality';
   const cms = '/dev/cms';
   const insights = '/dev/insights';
@@ -56,13 +60,14 @@ function devRoutes(h: HearingRoutes): ProjectRoutes {
     stageLinks: {
       hearing: [{ label: 'ヒアリングを入力', to: h.answers }],
       requirements: [{ label: 'AI要件定義を開く', to: h.doc }],
-      build: [{ label: 'サイトマップ', to: sitemap }, { label: 'デザインスタジオ', to: design }],
+      build: [{ label: 'サイトマップ', to: sitemap }, { label: 'デザイン要件定義', to: designRequirements }, { label: 'デザインスタジオ', to: design }],
       quality: [{ label: '品質チェック', to: quality }],
       operation: [{ label: 'ページ・お知らせを編集', to: cms }],
       improvement: [{ label: 'インサイト・改善提案', to: insights }],
     },
     requirements: h.doc,
     sitemap,
+    designRequirements,
     design,
     quality,
     cms,

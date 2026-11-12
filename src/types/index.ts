@@ -181,6 +181,10 @@ export interface DesignVariant {
 
 export interface DesignState {
   selected: DesignId | null;
+  /** デザイン要件定義の回答（0.28.0。src/data/designRequirements.ts）。無い保存データは未回答として扱う（版は上げない） */
+  answers?: Record<string, AnswerValue>;
+  /** デザイン要件定義の回答の記録（入力した時刻。ヒアリングの answerMeta と同じ形） */
+  answerMeta?: Record<string, AnswerMeta>;
   approvedAt?: ISODate;
   buildStartedAt?: ISODate;
   buildCompletedAt?: ISODate;

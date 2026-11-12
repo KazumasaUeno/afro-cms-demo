@@ -1,5 +1,5 @@
 import { Box, Button, ButtonBase, Dialog, IconButton, Stack, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
-import { ArrowRight, BadgeCheck, Check, Columns3, Expand, LayoutTemplate, Monitor, ShieldCheck, Smartphone, Square, Tablet, Wand2, X, PenLine, ListTodo } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Check, Columns3, Expand, LayoutTemplate, Monitor, Palette, ShieldCheck, Smartphone, Square, Tablet, Wand2, X, PenLine, ListTodo } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BuildFlowNav } from '@/components/layout/BuildFlowNav';
@@ -15,6 +15,7 @@ import { DeviceFrame } from './DeviceFrame';
 import { BuildSequence } from './BuildSequence';
 import type { Device } from './previews/shared';
 import { useProjectRoutes } from '@/features/projects/projectRoutes';
+import { DESIGN_REQUIRED, designBlockers, designReady } from './designReq';
 
 const DEVICES: { id: Device; label: string; icon: typeof Monitor }[] = [
   { id: 'pc', label: 'PC', icon: Monitor },
@@ -101,7 +102,7 @@ function VariantCard({ v, selected, adopted, locked, onSelect }: { v: DesignVari
  */
 export default function DesignStudioPage() {
   const { state, dispatch } = useDemo();
-  const { dev, quality: qualityRoute, cms: cmsRoute } = useProjectRoutes();
+  const { dev, quality: qualityRoute, cms: cmsRoute, designRequirements: designReqRoute } = useProjectRoutes();
   const navigate = useNavigate();
   const toast = useToast();
   const design = state.design;
@@ -113,6 +114,9 @@ export default function DesignStudioPage() {
   const locked = !!design.approvedAt;
   const current = DESIGN_VARIANTS.find((v) => v.id === focus) ?? DESIGN_VARIANTS[0];
   const selectedVariant = DESIGN_VARIANTS.find((v) => v.id === design.selected);
+  // デザイン要件定義（0.28.0）の必須の質問がそろうまでは 3 案を出さず、入力へ案内する（採用済みの保存データはそのまま出す）
+  const ready = designReady(state);
+  const missing = designBlockers(design.answers).length;
 
   /** 表示中の案をそのまま採用する（既存 action のみ: 選択 → 承認） */
   const adoptCurrent = () => {
@@ -133,17 +137,37 @@ export default function DesignStudioPage() {
         eyebrow="③ 制作"
         icon={<Wand2 size={14} />}
         title="3つの方向性から、トップページを選ぶ"
-        description="要件定義の回答と承認済みサイトマップから、レイアウト・タイポグラフィ・構成の異なる3案を生成しました。実際のHTML/CSSで描画しているので、端末ごとの見え方まで確認できます。"
-        actions={
+        description={ready
+          ? 'デザイン要件定義の回答と承認済みサイトマップから、レイアウト・タイポグラフィ・構成の異なる3案を生成しました。実際のHTML/CSSで描画しているので、端末ごとの見え方まで確認できます。'
+          : 'デザイン要件定義の回答と承認済みサイトマップから、3つのデザイン案を作ります。'}
+        actions={!ready ? <AiBadge /> : (
           <>
+            <Button variant="outlined" size="small" startIcon={<Palette size={15} />} onClick={() => navigate(designReqRoute)}>デザイン要件定義</Button>
             <AiBadge />
             <ToggleButtonGroup exclusive size="small" value={mode} onChange={(_, v) => v && setMode(v)} aria-label="表示モード">
               <ToggleButton value="single" sx={{ gap: 0.75 }}><Square size={14} />単体</ToggleButton>
               <ToggleButton value="compare" sx={{ gap: 0.75 }}><Columns3 size={14} />比較</ToggleButton>
             </ToggleButtonGroup>
           </>
-        }
+        )}
       />
+
+      {!ready ? (
+        <Reveal>
+          <Surface sx={{ textAlign: 'center', py: { xs: 5, md: 7 }, px: { xs: 2.5, md: 4 }, maxWidth: 600, mx: 'auto' }}>
+            <Stack alignItems="center" spacing={1.5}>
+              <Palette size={36} color={tokens.color.faint} aria-hidden />
+              <Typography variant="h3" component="h2">先にデザイン要件定義を入力してください</Typography>
+              <Typography variant="body2" color="text.secondary">
+                必須（A）の {DESIGN_REQUIRED.length} 問に答えると、3つのデザイン案を作れます（あと {missing} 問）。
+              </Typography>
+              <Box sx={{ pt: 1 }}>
+                <Button variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate(designReqRoute)}>デザイン要件定義へ</Button>
+              </Box>
+            </Stack>
+          </Surface>
+        </Reveal>
+      ) : (<>
 
       {/* 案の選択 */}
       <Box sx={{ display: { xs: 'flex', md: 'grid' }, gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, mb: 3, overflowX: { xs: 'auto', md: 'visible' }, scrollSnapType: 'x mandatory', mx: { xs: -2, md: 0 }, px: { xs: 2, md: 0 }, pb: { xs: 1, md: 0 } }}>
@@ -279,6 +303,7 @@ export default function DesignStudioPage() {
           </Stack>
         </Surface>
       )}
+      </>)}
 
       <Dialog open={expanded} onClose={() => setExpanded(false)} fullScreen PaperProps={{ sx: { bgcolor: tokens.color.bgSubtle, borderRadius: 0, border: 'none' } }} aria-label="大きくプレビュー">
         <Stack direction="row" alignItems="center" spacing={1.5} sx={{ px: { xs: 2, md: 3 }, py: 1.5, bgcolor: tokens.color.surface, borderBottom: `1px solid ${tokens.color.border}` }}>

@@ -1,6 +1,7 @@
 import type { DemoState, QualityCheck, Stage } from '@/types';
 import { QUALITY_ITEMS } from '@/data/quality';
 import { STAGES } from '@/data/projects';
+import { designReady } from '@/features/design/designReq';
 
 /** 各段階から開ける関連画面 */
 export const STAGE_LINKS: Record<Stage, { label: string; to: string }[]> = {
@@ -10,6 +11,8 @@ export const STAGE_LINKS: Record<Stage, { label: string; to: string }[]> = {
   requirements: [{ label: 'AI要件定義を開く', to: '/ai-studio/requirements' }],
   build: [
     { label: 'サイトマップ', to: '/site' },
+    // デザイン要件定義（0.28.0）: サイトマップの承認の後、デザイン案を作る前に聞く
+    { label: 'デザイン要件定義', to: '/ai-studio/design/requirements' },
     { label: 'デザインスタジオ', to: '/ai-studio/design' },
   ],
   quality: [{ label: '品質チェック', to: '/quality' }],
@@ -48,6 +51,13 @@ export function nextBestAction(state: DemoState): { title: string; detail: strin
       title: '改善後のサイトマップが承認待ちです',
       detail: '問い合わせまでの階層を3→1に短縮した構成案です。理由を確認して承認しましょう。',
       to: '/site', cta: 'サイトマップを確認',
+    };
+  }
+  if (!state.design.approvedAt && !designReady(state)) {
+    return {
+      title: 'デザイン要件定義を入力しましょう',
+      detail: '必須（A）の質問に答えると、3つのデザイン案を作れます。',
+      to: '/ai-studio/design/requirements', cta: 'デザイン要件定義を入力する',
     };
   }
   if (!state.design.approvedAt) {

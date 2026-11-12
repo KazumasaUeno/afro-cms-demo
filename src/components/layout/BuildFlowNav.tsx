@@ -30,14 +30,16 @@ export function BuildFlowNav() {
       sx={{ display: 'inline-flex', p: 0.5, gap: 0.5, mb: 3, borderRadius: '14px', bgcolor: tokens.color.bgSubtle, maxWidth: '100%', overflowX: 'auto' }}
     >
       {steps.map((s, i) => {
-        const active = pathname === s.to;
+        // デザインの段階はデザイン要件定義（0.28.0）とデザインスタジオの両方で選択中にする
+        const active = pathname === s.to || (s.to === routes.design && pathname === routes.designRequirements);
         const Icon = s.icon;
         return (
           <ButtonBase
             key={s.to}
             component={NavLink}
             to={s.to}
-            end
+            // NavLink は自分の判定で aria-current を付け直すため、デザインの段階は配下（デザイン要件定義）も一致させる
+            end={s.to !== routes.design}
             aria-current={active ? 'page' : undefined}
             sx={{
               gap: { xs: 0.75, sm: 1 }, px: { xs: 1, sm: 1.5 }, height: { xs: 44, md: 36 }, borderRadius: '10px', whiteSpace: 'nowrap', flexShrink: 0,

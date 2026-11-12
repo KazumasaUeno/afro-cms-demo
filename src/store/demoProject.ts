@@ -3,6 +3,7 @@ import { QUALITY_ITEMS } from '@/data/quality';
 import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
 import { approvalSteps } from '@/features/portal/portalSteps';
 import { isAnswered } from '@/features/requirements/validation';
+import { designReady } from '@/features/design/designReq';
 
 /**
  * デモのデータ（要件・サイトマップ・デザイン・品質）を持つ案件（requirements.projectId）の
@@ -20,6 +21,7 @@ export function derivedDemoProject(state: DemoState): Pick<Project, 'stage' | 'p
   }
   if (req.status === 'analyzed') return { ...base, stage: 'requirements', progress: 18, nextAction: '要件定義書の承認をもらう' };
   if (!state.sitemap.approvedAt) return { ...base, stage: 'build', progress: 25, nextAction: 'サイトマップを承認する' };
+  if (!state.design.approvedAt && !designReady(state)) return { ...base, stage: 'build', progress: 38, nextAction: 'デザイン要件定義を入力する' };
   if (!state.design.approvedAt) return { ...base, stage: 'build', progress: 38, nextAction: 'デザイン案の採用を決める' };
   if (!state.design.buildCompletedAt) return { ...base, stage: 'build', progress: 52, nextAction: '全ページを構築する' };
   const both = QUALITY_ITEMS.filter((i) => state.qualityChecks[i.id]?.afroAt && state.qualityChecks[i.id]?.clientAt).length;

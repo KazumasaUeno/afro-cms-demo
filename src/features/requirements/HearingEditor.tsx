@@ -422,7 +422,7 @@ export function HearingEditor({ editable, onAnalyze }: Props) {
     <Surface padding={0} component="section" aria-labelledby="hearing-cat-title">
       <Box sx={{ px: { xs: 2, md: 3 }, pt: { xs: 2, md: 2.5 }, pb: 1 }}>
         <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
-          <Typography variant="overline" sx={{ color: tokens.color.muted }}>カテゴリ {category.no} / {REQUIREMENT_CATEGORIES.length}</Typography>
+          <Typography variant="overline" sx={{ color: tokens.color.muted }}>カテゴリ {REQUIREMENT_CATEGORIES.indexOf(category) + 1} / {REQUIREMENT_CATEGORIES.length}</Typography>
           {wide && unansweredToggle}
         </Stack>
         <Typography ref={panelRef} tabIndex={-1} id="hearing-cat-title" variant="h3" component="h2" sx={{ outline: 'none', scrollMarginTop: tokens.layout.topbar + 16 }}>

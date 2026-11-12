@@ -82,7 +82,7 @@ service cloud.firestore {
     function reIndustry() { return '(?s)[\\s\\p{Z}\\x{FEFF}\\x{0B}]*([^\\s\\p{Z}\\x{FEFF}\\x{0B}]|[^\\s\\p{Z}\\x{FEFF}\\x{0B}].{0,18}[^\\s\\p{Z}\\x{FEFF}\\x{0B}])[\\s\\p{Z}\\x{FEFF}\\x{0B}]*'; }
     function validAnswers(a) {
       return a is map
-        && a.keys().hasOnly(['q-url', 'q-purpose', 'q-issue', 'q-competitor', 'q-improve', 'q-keep', 'q-target', 'q-strength', 'q-market', 'q-content', 'q-feature', 'q-cv', 'q-seo', 'q-design-dislike', 'q-image', 'q-brand', 'q-ops', 'q-infra', 'q-schedule', 'q-other', 'q-dns-owner', 'q-dns-switch', 'q-dns-note'])
+        && a.keys().hasOnly(['q-url', 'q-purpose', 'q-issue', 'q-competitor', 'q-improve', 'q-keep', 'q-target', 'q-strength', 'q-market', 'q-content', 'q-feature', 'q-cv', 'q-seo', 'q-ops', 'q-infra', 'q-schedule', 'q-other', 'q-dns-owner', 'q-dns-switch', 'q-dns-note'])
         && (!('q-url' in a) || ansUrl(a['q-url'], reMaxUrl()))
         && (!('q-purpose' in a) || ansMulti(a['q-purpose'], purposeOptions()))
         && (!('q-issue' in a) || ansText(a['q-issue'], reMaxLongtext()))
@@ -96,9 +96,6 @@ service cloud.firestore {
         && (!('q-feature' in a) || ansText(a['q-feature'], reMaxText()))
         && (!('q-cv' in a) || ansSingle(a['q-cv'], ['問い合わせ', '資料請求', '来店予約', '購入', '採用応募']))
         && (!('q-seo' in a) || ansText(a['q-seo'], reMaxText()))
-        && (!('q-design-dislike' in a) || ansText(a['q-design-dislike'], reMaxLongtext()))
-        && (!('q-image' in a) || ansText(a['q-image'], reMaxText()))
-        && (!('q-brand' in a) || ansText(a['q-brand'], reMaxText()))
         && (!('q-ops' in a) || ansSingle(a['q-ops'], ['社内担当者', 'アフロに依頼', '両方']))
         && (!('q-infra' in a) || ansText(a['q-infra'], reMaxText()))
         && (!('q-schedule' in a) || ansText(a['q-schedule'], reMaxText()))

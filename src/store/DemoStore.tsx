@@ -4,6 +4,7 @@ import { loadJson, removeKey, saveJson, STORAGE_KEY } from '@/services/storage';
 import { createSeedState, isDemoState } from './seed';
 import { reducer, type Action } from './reducer';
 import { syncDemoProject } from './demoProject';
+import { moveDesignAnswers } from '@/features/design/designReq';
 
 interface StoreValue {
   state: DemoState;
@@ -25,8 +26,9 @@ function withAfroMode(state: DemoState): DemoState {
 }
 
 function init(): DemoState {
-  // 保存済みのデータに古い進捗が残っていても、デモのデータに合わせ直す
-  return syncDemoProject(withAfroMode(loadJson(STORAGE_KEY, isDemoState) ?? createSeedState()));
+  // 保存済みのデータに古い進捗が残っていても、デモのデータに合わせ直す。
+  // 0.27 までのヒアリングにあったデザインの 3 問の回答は、デザイン要件定義へ移す（0.28.0。版は上げない）
+  return syncDemoProject(moveDesignAnswers(withAfroMode(loadJson(STORAGE_KEY, isDemoState) ?? createSeedState())));
 }
 
 export function DemoStoreProvider({ children }: { children: ReactNode }) {

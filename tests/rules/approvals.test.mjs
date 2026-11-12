@@ -27,7 +27,7 @@ describe('確認依頼（submit: draft → analyzed）', () => {
     await seed(env);
     await assertSucceeds(submitBatch(dbAs(env, 'devB'), { uid: 'devB' })); // 名義（updatedBy・ログの actor）も本人
   });
-  test('全 23 問・提案 6 件を上限ちょうどで submit できる（式数・get の上限に当たらない）', async () => {
+  test('全 20 問・提案 6 件を上限ちょうどで submit できる（式数・get の上限に当たらない）', async () => {
     await seed(env);
     await env.withSecurityRulesDisabled(async (ctx) => {
       await updateDoc(doc(ctx.firestore(), 'projects/p1/requirements/current'), { answers: FULL_ANSWERS, answerMeta: Object.fromEntries(Object.keys(FULL_ANSWERS).map((k) => [k, { by: 'afro', at: T0 }])) });
@@ -158,7 +158,7 @@ describe('お客様の承認（approve: analyzed → approved）', () => {
       tx.set(doc(db, `projects/p1/approvals/${aid}`), approvalDoc('client1', 'approve', rev, { answers: r.data().answers, proposal: r.data().proposal }));
     }));
   });
-  test('全 23 問・提案 6 件の承認（写しの一致の比較が上限に当たらない）', async () => {
+  test('全 20 問・提案 6 件の承認（写しの一致の比較が上限に当たらない）', async () => {
     await seed(env, { reqState: 'analyzed' });
     await env.withSecurityRulesDisabled(async (ctx) => {
       await updateDoc(doc(ctx.firestore(), 'projects/p1/requirements/current'), { answers: FULL_ANSWERS, proposal: FULL_PROPOSAL });

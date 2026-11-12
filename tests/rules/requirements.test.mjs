@@ -33,7 +33,7 @@ describe('requirements/current: 回答の更新（draft のとき）', () => {
     await assertSucceeds(answer('devB', 'q-cv', '資料請求'));
     await assertSucceeds(updateDoc(doc(dbAs(env, 'devA'), REQ), { 'answers.q-issue': deleteField(), 'answerMeta.q-issue': deleteField(), ...stamp('devA') }));
   });
-  test('全 23 問を上限ちょうどで書ける（式数の上限に当たらない）', async () => {
+  test('全 20 問を上限ちょうどで書ける（式数の上限に当たらない）', async () => {
     await assertSucceeds(updateDoc(doc(dbAs(env, 'devA'), REQ), { answers: FULL_ANSWERS, answerMeta: answerMetaFor(FULL_ANSWERS), ...stamp('devA') }));
   });
   test('お客様は回答を書けない（2026-11-10 決定でアフロが全問入力）', async () => {
@@ -44,7 +44,7 @@ describe('requirements/current: 回答の更新（draft のとき）', () => {
     await assertSucceeds(answer('admin2', 'q-cv', '資料請求'));
     await assertSucceeds(updateDoc(doc(dbAs(env, 'admin1'), REQ), { 'answers.q-issue': deleteField(), 'answerMeta.q-issue': deleteField(), ...stamp('admin1') }));
   });
-  test('admin も全 23 問を上限ちょうどで書ける（式数の上限に当たらない）', async () => {
+  test('admin も全 20 問を上限ちょうどで書ける（式数の上限に当たらない）', async () => {
     await assertSucceeds(updateDoc(doc(dbAs(env, 'admin1'), REQ), { answers: FULL_ANSWERS, answerMeta: answerMetaFor(FULL_ANSWERS), ...stamp('admin1') }));
   });
   test('admin でも不正な回答・meta だけのキー・updatedBy が他人 → 拒否', async () => {
@@ -142,6 +142,7 @@ describe('validAnswers（§9 生成。上限ちょうど→許可、+1→拒否�
   ng('競合の要素が数値', 'q-competitor', [1]);
   ng('競合の要素が 201 文字', 'q-competitor', ['https://' + 'a'.repeat(190) + '.jp']);
   ng('未知の質問 ID', 'q-unknown', 'x');
+  ng('ヒアリングから外した質問 ID（0.28.0 でデザイン要件定義へ移した）', 'q-design-dislike', 'デザインが古い');
   ng('質問 ID に似た別名（大文字）', 'Q-TARGET', 'x');
 });
 

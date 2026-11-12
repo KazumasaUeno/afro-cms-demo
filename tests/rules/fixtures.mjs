@@ -189,7 +189,7 @@ export function createProjectBatch(db, { uid = 'devA', pid = 'p9', key = 'new-si
 
 export { deleteField, doc, serverTimestamp, setDoc, updateDoc, writeBatch };
 
-/** 全 23 問を上限ちょうどで埋めた回答（Rules の式数の上限に当たらないことの確認にも使う） */
+/** 全 20 問を上限ちょうどで埋めた回答（Rules の式数の上限に当たらないことの確認にも使う） */
 export const FULL_ANSWERS = {
   'q-url': 'https://' + 'a'.repeat(200 - 'https://'.length - '.jp'.length) + '.jp',
   'q-purpose': ['問い合わせを増やしたい', '採用を強化したい', 'ブランドを刷新したい', 'EC売上を伸ばしたい', '更新を楽にしたい', 'スマホ対応したい'],
@@ -198,7 +198,8 @@ export const FULL_ANSWERS = {
   'q-improve': ['ファーストビュー', 'ナビゲーション', 'スマホ表示', '表示速度', '問い合わせ導線', '写真・ビジュアル', 'SEO', '更新のしやすさ'],
   'q-keep': 'い'.repeat(600), 'q-target': 'う'.repeat(120), 'q-strength': 'え'.repeat(600), 'q-market': 'お'.repeat(120),
   'q-content': 'か'.repeat(120), 'q-feature': 'き'.repeat(120), 'q-cv': '採用応募', 'q-seo': 'く'.repeat(120),
-  'q-design-dislike': 'け'.repeat(600), 'q-image': 'こ'.repeat(120), 'q-brand': 'さ'.repeat(120), 'q-ops': '両方',
+  // デザインの 3 問（q-design-dislike・q-image・q-brand）は 0.28.0 でヒアリングから外した（デザイン要件定義は demo だけ）
+  'q-ops': '両方',
   'q-infra': 'し'.repeat(120), 'q-schedule': 'す'.repeat(120), 'q-other': 'せ'.repeat(600),
   'q-dns-owner': '不明', 'q-dns-switch': '未定', 'q-dns-note': 'そ'.repeat(600),
 };
