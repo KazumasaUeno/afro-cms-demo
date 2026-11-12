@@ -1,4 +1,4 @@
-import { Box, Button, Stack, Typography } from '@mui/material';
+import { Box, Button, Dialog, DialogActions, DialogContent, Stack, Typography } from '@mui/material';
 import { UserPlus, Users } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { PageHeader, StatusPill, Surface } from '@/components/ui';
@@ -53,6 +53,9 @@ export default function LiveUsersPage() {
   const [clientEditing, setClientEditing] = useState<ClientAccountDraft | null>(null);
   const [devEditing, setDevEditing] = useState<DevUserDraft | null>(null);
   const [assigning, setAssigning] = useState<DevPerson | null>(null);
+  // 無効にする前の確認（ログイン中の人もその場でログアウトされるため。有効に戻すのは確認なし）
+  const [disabling, setDisabling] = useState<{ id: string; name: string; dev: boolean } | null>(null);
+  const [disablingBusy, setDisablingBusy] = useState(false);
 
   if (clients.loading || devs.loading || devProjects.loading) return <RouteLoader label="ユーザー" />;
   if (clients.error || devs.error) return <LoadError what="ユーザーの一覧" />;
@@ -75,7 +78,7 @@ export default function LiveUsersPage() {
         eyebrow="管理者画面"
         icon={<Users size={14} />}
         title="ユーザー"
-        description="お客様と開発者を招待します。招待された人は、招待されたメールアドレスで「初めての方」から登録すると使い始められます。"
+        description="お客様と開発者を招待します。招待メールは送られないため、招待した人に、そのメールアドレスでログイン画面の「初めての方」から登録するよう伝えてください。"
       />
       <Stack spacing={2.5}>
         <Surface component="section" aria-labelledby="live-users-clients">
@@ -99,7 +102,7 @@ export default function LiveUsersPage() {
                   ) : (
                     <>
                       <Button size="small" variant="outlined" onClick={() => editClient(a)}>編集</Button>
-                      <Button size="small" variant="text" onClick={() => { void write(repo.setClientAccountStatus(a.id, a.status !== 'active'), a.status === 'active' ? '無効にしました' : '有効にしました'); }}>
+                      <Button size="small" variant="text" onClick={() => { if (a.status === 'active') setDisabling({ id: a.id, name: a.name, dev: false }); else void write(repo.setClientAccountStatus(a.id, true), '有効にしました'); }}>
                         {a.status === 'active' ? '無効にする' : '有効にする'}
                       </Button>
                     </>
@@ -136,7 +139,7 @@ export default function LiveUsersPage() {
                     <>
                       <Button size="small" variant="outlined" onClick={() => setAssigning(devUserToPerson(u))}>担当を変更</Button>
                       <Button size="small" variant="outlined" onClick={() => editDev(u)}>編集</Button>
-                      <Button size="small" variant="text" onClick={() => { void write(repo.setDevUserStatus(u.id, u.status !== 'active'), u.status === 'active' ? '無効にしました' : '有効にしました'); }}>
+                      <Button size="small" variant="text" onClick={() => { if (u.status === 'active') setDisabling({ id: u.id, name: u.name, dev: true }); else void write(repo.setDevUserStatus(u.id, true), '有効にしました'); }}>
                         {u.status === 'active' ? '無効にする' : '有効にする'}
                       </Button>
                     </>
@@ -147,6 +150,32 @@ export default function LiveUsersPage() {
           </Box>
         </Surface>
       </Stack>
+
+      <Dialog open={!!disabling} onClose={() => !disablingBusy && setDisabling(null)} maxWidth="xs" fullWidth aria-labelledby="live-disable-title">
+        <DialogContent sx={{ pt: 3 }}>
+          <Typography id="live-disable-title" variant="h3" sx={{ mb: 1 }}>{disabling?.name ?? ''} さんを無効にしますか？</Typography>
+          <Typography variant="body2" color="text.secondary">
+            無効にすると、ログインできなくなります。ログイン中の場合も、その場でログアウトされます。あとから「有効にする」で戻せます。
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button variant="outlined" disabled={disablingBusy} onClick={() => setDisabling(null)}>キャンセル</Button>
+          <Button
+            variant="contained" color="error" disabled={disablingBusy}
+            onClick={() => {
+              if (!disabling) return;
+              setDisablingBusy(true);
+              const op = disabling.dev ? repo.setDevUserStatus(disabling.id, false) : repo.setClientAccountStatus(disabling.id, false);
+              void write(op, '無効にしました').then(() => {
+                setDisablingBusy(false);
+                setDisabling(null);
+              });
+            }}
+          >
+            {disablingBusy ? '無効にしています…' : '無効にする'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <ClientAccountDialog draft={clientEditing} accounts={clients.data} projects={projects} onClose={() => setClientEditing(null)} onSave={saveClient} />
       <DevUserDialog draft={devEditing} devUsers={devs.data} accounts={clients.data} projects={[]} onClose={() => setDevEditing(null)} onSave={saveDev} />

@@ -68,10 +68,18 @@ export function DevUserDialog({ draft: initial, devUsers, accounts, projects, on
             {isNew && (
               <Stack direction="row" spacing={1.25} sx={{ p: 1.5, borderRadius: `${tokens.radius.sm}px`, bgcolor: tokens.color.infoSoft, color: tokens.color.inkSoft }}>
                 <Info size={18} color={tokens.color.info} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
-                <Typography variant="body2" sx={{ color: 'inherit' }}>
-                  登録すると開発者画面の権限がオンになり、入力したメールアドレスで開発者画面にログインできます。開けるのは選んだ担当プロジェクトだけです。
-                  <Box component="span" sx={{ display: 'block', mt: 0.5 }}>デモのため、実際の招待メールの送信・認証は行いません。</Box>
-                </Typography>
+                {live ? (
+                  // live: 招待は invites の文書を作るだけ。このアプリは招待メールを送らない（届くのは登録後の確認メールだけ。§2.4）
+                  <Typography variant="body2" sx={{ color: 'inherit' }}>
+                    登録すると「招待中」になります。このアプリから招待メールは送りません。
+                    <Box component="span" sx={{ display: 'block', mt: 0.5 }}>本人に、ログイン画面の「初めての方」から、このメールアドレスで登録するよう伝えてください。届いた確認メールのリンクを開くと「有効」になり、開発者画面にログインできます。</Box>
+                  </Typography>
+                ) : (
+                  <Typography variant="body2" sx={{ color: 'inherit' }}>
+                    登録すると開発者画面の権限がオンになり、入力したメールアドレスで開発者画面にログインできます。開けるのは選んだ担当プロジェクトだけです。
+                    <Box component="span" sx={{ display: 'block', mt: 0.5 }}>デモのため、実際の招待メールの送信・認証は行いません。</Box>
+                  </Typography>
+                )}
               </Stack>
             )}
             <TextField
@@ -93,7 +101,7 @@ export function DevUserDialog({ draft: initial, devUsers, accounts, projects, on
               onChange={(e) => set({ email: e.target.value })}
               // live: メールの変更は作らない（ログインの ID のため。§28.8）。招待のときだけ入力する
               disabled={lockEmail}
-              error={!!show('email')} helperText={show('email') ?? (lockEmail ? 'ログインに使うため変更できません' : live ? 'このメールアドレスへ招待します。開発者画面のログインに使います' : '開発者画面のログインに使います')}
+              error={!!show('email')} helperText={show('email') ?? (lockEmail ? 'ログインに使うため変更できません' : live ? '本人がこのメールアドレスで登録し、開発者画面のログインに使います' : '開発者画面のログインに使います')}
               inputRef={(el: HTMLElement | null) => { refs.current.email = el; }}
               inputProps={{ maxLength: DEV_USER_LIMITS.email + 10, inputMode: 'email', autoComplete: 'off', spellCheck: false, autoCapitalize: 'none' }}
             />

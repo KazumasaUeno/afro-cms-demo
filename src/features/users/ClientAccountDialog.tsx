@@ -70,16 +70,24 @@ export function ClientAccountDialog({ draft: initial, accounts, projects, onClos
             {isNew && (
               <Stack direction="row" spacing={1.25} sx={{ p: 1.5, borderRadius: `${tokens.radius.sm}px`, bgcolor: tokens.color.infoSoft, color: tokens.color.inkSoft }}>
                 <Info size={18} color={tokens.color.info} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
-                <Typography variant="body2" sx={{ color: 'inherit' }}>
-                  登録すると、入力したメールアドレスに招待メールを送り「招待中」になります。お客様ポータルに初めてログインすると「有効」になります。
-                  <Box component="span" sx={{ display: 'block', mt: 0.5 }}>デモのため、実際にはメールを送信しません。</Box>
-                </Typography>
+                {DATA_MODE === 'live' ? (
+                  // live: 招待は invites の文書を作るだけ。このアプリは招待メールを送らない（届くのは登録後の確認メールだけ。§2.4）
+                  <Typography variant="body2" sx={{ color: 'inherit' }}>
+                    登録すると「招待中」になります。このアプリから招待メールは送りません。
+                    <Box component="span" sx={{ display: 'block', mt: 0.5 }}>お客様に、ログイン画面の「初めての方」から、このメールアドレスで登録するようお伝えください。届いた確認メールのリンクを開くと「有効」になります。</Box>
+                  </Typography>
+                ) : (
+                  <Typography variant="body2" sx={{ color: 'inherit' }}>
+                    登録すると、入力したメールアドレスに招待メールを送り「招待中」になります。お客様ポータルに初めてログインすると「有効」になります。
+                    <Box component="span" sx={{ display: 'block', mt: 0.5 }}>デモのため、実際にはメールを送信しません。</Box>
+                  </Typography>
+                )}
               </Stack>
             )}
             <TextField
               select fullWidth required label="担当案件" value={draft.projectId} disabled={locked}
               onChange={(e) => chooseProject(e.target.value)}
-              error={!!show('projectId')} helperText={show('projectId') ?? 'このお客様の案件（デモのお客様ポータルは、どの案件でも MINAMO COFFEE のデータを表示します）'}
+              error={!!show('projectId')} helperText={show('projectId') ?? (DATA_MODE === 'live' ? 'このお客様がお客様ポータルで見る案件' : 'このお客様の案件（デモのお客様ポータルは、どの案件でも MINAMO COFFEE のデータを表示します）')}
               inputRef={(el: HTMLElement | null) => { refs.current.projectId = el; }}
               SelectProps={{ MenuProps: { PaperProps: { sx: { maxHeight: 320 } } } }}
             >
@@ -110,7 +118,7 @@ export function ClientAccountDialog({ draft: initial, accounts, projects, onClos
             <TextField
               fullWidth required label="メールアドレス" type="email" value={draft.email} disabled={locked}
               onChange={(e) => set({ email: e.target.value })}
-              error={!!show('email')} helperText={show('email') ?? (locked ? 'ログインに使うため変更できません' : DATA_MODE === 'live' ? 'このメールアドレスへ招待します。お客様ポータルのログインに使います' : 'お客様ポータルのログインに使います')}
+              error={!!show('email')} helperText={show('email') ?? (locked ? 'ログインに使うため変更できません' : DATA_MODE === 'live' ? 'お客様がこのメールアドレスで登録し、お客様ポータルのログインに使います' : 'お客様ポータルのログインに使います')}
               inputRef={(el: HTMLElement | null) => { refs.current.email = el; }}
               inputProps={{ maxLength: CLIENT_LIMITS.email + 10, inputMode: 'email', autoComplete: 'off', spellCheck: false, autoCapitalize: 'none' }}
             />

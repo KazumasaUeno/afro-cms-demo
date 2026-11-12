@@ -51,6 +51,9 @@ export default function LiveLoginPage() {
   const [params] = useSearchParams();
   const toast = useToast();
   const [tab, setTab] = useState<'login' | 'signup'>('login');
+  // パスワードの再設定（ログインのタブから開く。送信後は、登録の有無にかかわらず同じ案内を出す）
+  const [resetting, setResetting] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -104,6 +107,47 @@ export default function LiveLoginPage() {
     );
   }
 
+  if (resetting) {
+    const send = (e: FormEvent) => {
+      e.preventDefault();
+      if (!EMAIL_RE.test(email.trim())) {
+        setError('メールアドレスの形式を確認してください');
+        return;
+      }
+      void run(async () => {
+        await auth.resetPassword(email);
+        setResetSent(true);
+      });
+    };
+    const back = () => { setResetting(false); setResetSent(false); setError(null); };
+    return (
+      <Frame title="パスワードの再設定">
+        {resetSent ? (
+          <>
+            <Alert severity="success" sx={{ mb: 2 }}>
+              <b>{email.trim()}</b> が登録されていれば、パスワードを再設定するメールを送りました。メールのリンクから新しいパスワードを決めて、ログインしてください。
+              届かない場合は、迷惑メールのフォルダとメールアドレスを確かめてください。
+            </Alert>
+            <Button variant="contained" fullWidth onClick={back}>ログインへ戻る</Button>
+          </>
+        ) : (
+          <Box component="form" noValidate onSubmit={send}>
+            <Stack spacing={2}>
+              <Typography variant="body2">登録したメールアドレスを入力してください。パスワードを再設定するメールを送ります。</Typography>
+              <TextField
+                label="メールアドレス" type="email" value={email} onChange={(e) => setEmail(e.target.value)} fullWidth required
+                inputProps={{ inputMode: 'email', autoComplete: 'email', autoCapitalize: 'none', spellCheck: false }}
+              />
+              {error && <Alert severity="error" role="alert">{error}</Alert>}
+              <Button type="submit" variant="contained" size="large" disabled={busy}>{busy ? '送信しています…' : '再設定のメールを送る'}</Button>
+              <Button variant="text" disabled={busy} onClick={back}>ログインへ戻る</Button>
+            </Stack>
+          </Box>
+        )}
+      </Frame>
+    );
+  }
+
   const signup = tab === 'signup';
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -139,7 +183,7 @@ export default function LiveLoginPage() {
       </Tabs>
       {signup && (
         <Typography variant="caption" component="p" sx={{ mb: 2 }}>
-          招待メールを受け取ったメールアドレスで登録してください。確認メールのリンクを開くと、招待を受け取って使い始められます。
+          アフロの担当者から案内されたメールアドレスで登録してください。届いた確認メールのリンクを開くと、招待を受け取って使い始められます。
         </Typography>
       )}
       <Box component="form" noValidate onSubmit={submit}>
@@ -162,6 +206,9 @@ export default function LiveLoginPage() {
           {error && <Alert severity="error" role="alert">{error}</Alert>}
           <Button type="submit" variant="contained" size="large" disabled={busy}>
             {busy ? '処理しています…' : signup ? '登録して確認メールを送る' : 'ログイン'}
+          </Button>
+          <Button variant="text" size="small" disabled={busy} onClick={() => { setResetting(true); setResetSent(false); setError(null); }} sx={{ alignSelf: 'center' }}>
+            パスワードを忘れた方
           </Button>
         </Stack>
       </Box>

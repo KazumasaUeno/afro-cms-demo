@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  createUserWithEmailAndPassword, onAuthStateChanged, sendEmailVerification, signInWithEmailAndPassword, signOut as fbSignOut, type User,
+  createUserWithEmailAndPassword, onAuthStateChanged, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut as fbSignOut, type User,
 } from 'firebase/auth';
 import { doc, getDoc, onSnapshot, serverTimestamp, writeBatch, type DocumentData } from 'firebase/firestore';
 import { normalizeEmail } from '@/data/users';
@@ -26,6 +26,8 @@ interface AuthValue {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   resendVerification: () => Promise<void>;
+  /** パスワードの再設定メール。登録の無いメールでも成功として返す（どのメールが登録済みかを推測させない。security M1） */
+  resetPassword: (email: string) => Promise<void>;
   /** 確認メールのリンクを開いた後に押す（ユーザー情報と ID トークンを取り直す） */
   recheck: () => Promise<void>;
   signOut: (reason?: string) => Promise<void>;
@@ -154,6 +156,16 @@ export function LiveAuthProvider({ children }: { children: ReactNode }) {
     resendVerification: async () => {
       if (auth.currentUser) await sendEmailVerification(auth.currentUser);
     },
+    resetPassword: async (email) => {
+      try {
+        await sendPasswordResetEmail(auth, normalizeEmail(email));
+      } catch (e) {
+        // メール列挙の保護が OFF の環境（エミュレータ等）では未登録が user-not-found になる。画面は登録済みのときと同じにする
+        const code = String((e as { code?: string }).code ?? '');
+        if (code === 'auth/user-not-found' || code === 'auth/invalid-email') return;
+        throw e;
+      }
+    },
     recheck: async () => {
       const u = auth.currentUser;
       if (!u) return;
@@ -179,7 +191,7 @@ export function authErrorMessage(e: unknown): string {
     case 'auth/invalid-email':
       return 'メールアドレスまたはパスワードが正しくありません';
     case 'auth/email-already-in-use':
-      return 'このメールアドレスは登録済みです。「ログイン」からお進みください';
+      return 'このメールアドレスは登録済みです。「ログイン」からお進みください。パスワードがわからない場合は「パスワードを忘れた方」から再設定できます';
     case 'auth/weak-password':
     case 'auth/password-does-not-meet-requirements':
       return 'パスワードは 8 文字以上で入力してください';

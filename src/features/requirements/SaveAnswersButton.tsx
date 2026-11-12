@@ -1,7 +1,7 @@
 import { Box, Button } from '@mui/material';
 import { Save } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { useCurrentRequirements, useRepositories } from '@/repositories';
+import { DATA_MODE, useCurrentRequirements, useRepositories } from '@/repositories';
 import { tokens } from '@/theme/tokens';
 
 /**
@@ -106,20 +106,22 @@ export function SaveAnswersButton({ beforeSave, disabled = false, compact = fals
   const empty = phase.kind === 'idle' && !idleAt;
   const label =
     phase.kind === 'saving' ? '保存中…'
-      : phase.kind === 'failed' ? '保存できませんでした（ブラウザの保存領域を確認してください）'
+      : phase.kind === 'failed' ? (DATA_MODE === 'live' ? '保存できませんでした。接続を確かめて「保存」を押してください' : '保存できませんでした（ブラウザの保存領域を確認してください）')
         : phase.kind === 'saved' ? `保存済み ${stamp(phase.at)}`
           : idleAt ? `保存済み ${stamp(idleAt)}`
             : '未入力';
   const dotColor = phase.kind === 'saving' || empty ? tokens.color.borderStrong : phase.kind === 'failed' ? tokens.color.danger : tokens.color.success;
 
   return (
-    <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: compact ? 0.75 : 1.25, minWidth: 0 }}>
+    // compact（狭い画面のヒアリングの下部）は状態をボタンの上に縦に積む。横に並べると「未入力」「保存済み HH:MM」が保存ボタンに重なる（390px。D3）
+    <Box sx={{ display: 'inline-flex', alignItems: 'center', flexDirection: compact ? 'column' : 'row', gap: compact ? 0.25 : 1.25, minWidth: 0, maxWidth: '100%' }}>
       <Box
         component="span"
         role="status"
         aria-live="polite"
         sx={{
-          display: 'inline-flex', alignItems: 'center', gap: 0.75, minWidth: 0, fontSize: 12.5, fontWeight: 600, fontVariantNumeric: 'tabular-nums',
+          display: 'inline-flex', alignItems: 'center', gap: compact ? 0.5 : 0.75, minWidth: 0, maxWidth: '100%', fontSize: compact ? 11 : 12.5, lineHeight: compact ? 1.3 : undefined,
+          fontWeight: 600, fontVariantNumeric: 'tabular-nums', textAlign: compact ? 'center' : undefined,
           color: phase.kind === 'failed' ? tokens.color.danger : phase.kind === 'saving' || empty ? tokens.color.muted : tokens.color.successInk,
         }}
       >
