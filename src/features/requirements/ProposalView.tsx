@@ -3,7 +3,7 @@ import { ArrowRight, BadgeCheck, CheckCircle2, Download, Globe, Quote, RotateCcw
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
-import { useCurrentRequirements, useRepositories } from '@/repositories';
+import { DATA_MODE, useCurrentRequirements, useRepositories } from '@/repositories';
 import { useWrite } from '@/hooks/useWrite';
 import { AiBadge, CountUp, ProgressRing, Reveal, StatusPill, Surface, type PillTone } from '@/components/ui';
 import { useToast } from '@/hooks/useToast';
@@ -15,6 +15,7 @@ import { isAnswered } from './validation';
 import { pendingConfirmations } from './assignment';
 import { downloadRequirementsDoc } from './requirementsDoc';
 import { useHearingRoutes } from './hearingRoutes';
+import { useLiveRoleOptional } from '@/live/session';
 
 const PRIORITY: Record<ProposalPoint['priority'], { label: string; tone: PillTone; color: string }> = {
   high: { label: '優先度 高', tone: 'danger', color: tokens.color.danger },
@@ -22,7 +23,12 @@ const PRIORITY: Record<ProposalPoint['priority'], { label: string; tone: PillTon
   low: { label: '優先度 低', tone: 'neutral', color: tokens.color.faint },
 };
 
-export function ProposalView() {
+/**
+ * variant='client'（live のお客様ポータル）: お客様本人の「承認する」だけを出す（§25-2。代理承認は live に無い）。
+ * live の開発者: 承認待ちの間だけ「差し戻す」（requirements.reset＝analyzed → draft。回答は残す。§6）。
+ * live では保存した提案（req.proposal＝承認の対象と同じ写し）を見せる。無ければ回答から作る（demo は常に回答から作る）
+ */
+export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'client' }) {
   const { requirements, approvals, projects } = useRepositories();
   const { data: req } = useCurrentRequirements();
   const { data: projectList } = projects.useList();
@@ -32,9 +38,16 @@ export function ProposalView() {
   const toast = useToast();
   const write = useWrite();
   const [confirmReset, setConfirmReset] = useState(false);
-  const proposal = useMemo(() => buildProposal(req.answers, req.competitors), [req.answers, req.competitors]);
-  const answered = REQUIREMENT_QUESTIONS.filter((q) => isAnswered(req.answers[q.id])).length;
   const approved = req.status === 'approved';
+  const live = DATA_MODE === 'live';
+  const role = useLiveRoleOptional();
+  const client = variant === 'client';
+  const [confirmApprove, setConfirmApprove] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const proposal = useMemo(() => req.proposal ?? buildProposal(req.answers, req.competitors), [req.proposal, req.answers, req.competitors]);
+  // 差し戻し: demo は管理者画面の「回答をやり直す」、live はアサインされた開発者の「差し戻す」（承認待ちの間だけ）
+  const canReset = live ? role === 'developer' && req.status === 'analyzed' && !client : !approved && !dev;
+  const answered = REQUIREMENT_QUESTIONS.filter((q) => isAnswered(req.answers[q.id])).length;
   // 内容の確認待ちの回答（0.17 までの保存データでお客様が入力したもの）が残っている間は承認できない（reducer と同じ条件）
   const pending = pendingConfirmations(req).length;
 
@@ -95,7 +108,7 @@ export function ProposalView() {
                 </Typography>
               </Stack>
               <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.55)' }}>
-                ヒアリングの回答 {answered}問から作成。デモ用の推定値です。
+                ヒアリングの回答 {answered}問から作成。{live ? 'AI による推定値です。' : 'デモ用の推定値です。'}
               </Typography>
             </Box>
           </Box>
@@ -134,8 +147,10 @@ export function ProposalView() {
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }}>
             <Box sx={{ flex: 1 }}>
               <Typography variant="h4" component="h2">要件定義書の承認</Typography>
-              <Typography variant="body2" color="text.secondary">承認されると、この内容をもとにサイトマップとデザイン案の作成に進みます。</Typography>
-              {!approved && (
+              <Typography variant="body2" color="text.secondary">
+                {client ? '内容をご確認のうえ「承認する」を押してください。承認後に内容を変える場合は、アフロの担当者へご連絡ください。' : '承認されると、この内容をもとにサイトマップとデザイン案の作成に進みます。'}
+              </Typography>
+              {!approved && !client && (
                 <Stack direction="row" spacing={0.75} alignItems="center" role="status" sx={{ mt: 1, color: tokens.color.infoInk }}>
                   <Send size={14} style={{ flexShrink: 0 }} />
                   <Typography variant="caption" sx={{ color: 'inherit', fontWeight: 650 }}>お客様ポータルの「確認・承認」で、お客様に承認を依頼しています</Typography>
@@ -148,7 +163,7 @@ export function ProposalView() {
               )}
             </Box>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ flexWrap: 'wrap' }}>
-              {!approved && !dev && <Button variant="text" startIcon={<RotateCcw size={16} />} onClick={() => setConfirmReset(true)}>回答をやり直す</Button>}
+              {canReset && <Button variant="text" startIcon={<RotateCcw size={16} />} onClick={() => setConfirmReset(true)}>{live ? '差し戻す' : '回答をやり直す'}</Button>}
               <Button variant="outlined" startIcon={<Download size={16} />} onClick={() => { downloadRequirementsDoc({ requirements: req, projects: projectList }); toast('要件定義書をダウンロードしました'); }}>要件定義書をダウンロード</Button>
               {approved ? (
                 <Box
@@ -157,12 +172,16 @@ export function ProposalView() {
                 >
                   <BadgeCheck size={18} /> 承認済み {formatDateTime(req.approvedAt)}
                 </Box>
-              ) : !dev && (
+              ) : client ? (
+                <Button variant="contained" startIcon={<CheckCircle2 size={16} />} disabled={approving} onClick={() => setConfirmApprove(true)}>
+                  承認する
+                </Button>
+              ) : !dev && !live && (
                 <Button variant="outlined" startIcon={<CheckCircle2 size={16} />} disabled={pending > 0} onClick={() => { void write(approvals.approveRequirements(req.projectId), '要件定義書を承認しました'); }}>
                   アフロが代わりに承認
                 </Button>
               )}
-              {!dev && <Button variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate('/site')}>サイトマップへ進む</Button>}
+              {!dev && !live && <Button variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate('/site')}>サイトマップへ進む</Button>}
             </Stack>
           </Stack>
         </Surface>
@@ -170,12 +189,36 @@ export function ProposalView() {
 
       <Dialog open={confirmReset} onClose={() => setConfirmReset(false)} maxWidth="xs" fullWidth aria-labelledby="req-reset-title">
         <DialogContent sx={{ pt: 3 }}>
-          <Typography id="req-reset-title" variant="h3" sx={{ mb: 1 }}>回答をやり直しますか？</Typography>
-          <Typography variant="body2" color="text.secondary">ヒアリングの回答と提案書が消え、最初の質問に戻ります。</Typography>
+          <Typography id="req-reset-title" variant="h3" sx={{ mb: 1 }}>{live ? '承認の依頼を差し戻しますか？' : '回答をやり直しますか？'}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            {live ? 'お客様の承認待ちを取り下げ、ヒアリングの入力に戻します。回答は残ります。直した後にもう一度 AI 分析を実行してください。' : 'ヒアリングの回答と提案書が消え、最初の質問に戻ります。'}
+          </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
           <Button variant="outlined" onClick={() => setConfirmReset(false)}>キャンセル</Button>
-          <Button variant="contained" onClick={() => { void write(requirements.reset(req.projectId)); setConfirmReset(false); }}>やり直す</Button>
+          <Button variant="contained" onClick={() => { void write(requirements.reset(req.projectId), live ? '承認の依頼を差し戻しました' : undefined); setConfirmReset(false); }}>{live ? '差し戻す' : 'やり直す'}</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={confirmApprove} onClose={() => !approving && setConfirmApprove(false)} maxWidth="xs" fullWidth aria-labelledby="req-approve-title">
+        <DialogContent sx={{ pt: 3 }}>
+          <Typography id="req-approve-title" variant="h3" sx={{ mb: 1 }}>要件定義書を承認しますか？</Typography>
+          <Typography variant="body2" color="text.secondary">承認すると、この内容でサイトの制作に進みます。承認の記録（日時・お名前）が残ります。</Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button variant="outlined" disabled={approving} onClick={() => setConfirmApprove(false)}>キャンセル</Button>
+          <Button
+            variant="contained" disabled={approving}
+            onClick={() => {
+              setApproving(true);
+              void write(approvals.approveRequirements(req.projectId, 'client'), '要件定義書を承認しました').then(() => {
+                setApproving(false);
+                setConfirmApprove(false);
+              });
+            }}
+          >
+            {approving ? '承認しています…' : '承認する'}
+          </Button>
         </DialogActions>
       </Dialog>
     </Stack>

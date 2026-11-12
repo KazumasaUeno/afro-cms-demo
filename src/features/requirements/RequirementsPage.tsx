@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { AiBadge, PageHeader, Reveal } from '@/components/ui';
 import { RouteLoader } from '@/components/layout/RouteLoader';
-import { useCurrentRequirements, useRepositories } from '@/repositories';
+import { DATA_MODE, useCurrentRequirements, useRepositories } from '@/repositories';
+import { useLiveRoleOptional } from '@/live/session';
 import { useWrite } from '@/hooks/useWrite';
 import { AnalysisSequence } from './AnalysisSequence';
 import { ProposalView } from './ProposalView';
@@ -27,6 +28,9 @@ export default function RequirementsPage() {
   const routes = useHearingRoutes();
   const status = req.status;
   const [analyzing, setAnalyzing] = useState(false);
+  // live: AI 分析（＝お客様への確認依頼）はアサインされた開発者だけ（Rules reqUpdateOk）。管理者は回答の入力だけ（§25-1）
+  const liveRole = useLiveRoleOptional();
+  const canAnalyze = DATA_MODE !== 'live' || liveRole === 'developer';
   const view: View = analyzing ? 'analyzing' : status === 'draft' ? 'input' : 'result';
   const url = req.answers['q-url'];
   // スマホの入力画面は説明・バッジを出さず、質問までの距離を縮める（保存の状態は下のバーに出る）
@@ -78,10 +82,10 @@ export default function RequirementsPage() {
         <Reveal>
           <HearingEditor
             editable
-            onAnalyze={() => {
+            onAnalyze={canAnalyze ? () => {
               setAnalyzing(true);
               window.scrollTo({ top: 0 });
-            }}
+            } : undefined}
           />
         </Reveal>
       )}

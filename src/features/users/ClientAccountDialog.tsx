@@ -5,6 +5,7 @@ import type { ClientAccount, Project } from '@/types';
 import { CLIENT_LIMITS, validateClientAccount, type ClientAccountDraft, type ClientField } from '@/data/users';
 import { useFullScreenDialog } from '@/hooks/useMediaQueries';
 import { tokens } from '@/theme/tokens';
+import { DATA_MODE } from '@/repositories/mode';
 
 interface Props {
   /** 開いている間の入力の初期値（新規は id なし）。null で閉じる */
@@ -33,6 +34,8 @@ export function ClientAccountDialog({ draft: initial, accounts, projects, onClos
     }
   }
 
+  // live の編集で変えられるのは担当者名だけ（メールはログインの ID。担当案件・会社名は招待の内容。§28.8）
+  const locked = DATA_MODE === 'live' && !!draft?.id;
   const errors = useMemo(() => (draft ? validateClientAccount(draft, accounts, projects) : {}), [draft, accounts, projects]);
   if (!draft) return <Dialog open={false} />;
 
@@ -74,7 +77,7 @@ export function ClientAccountDialog({ draft: initial, accounts, projects, onClos
               </Stack>
             )}
             <TextField
-              select fullWidth required label="担当案件" value={draft.projectId}
+              select fullWidth required label="担当案件" value={draft.projectId} disabled={locked}
               onChange={(e) => chooseProject(e.target.value)}
               error={!!show('projectId')} helperText={show('projectId') ?? 'このお客様の案件（デモのお客様ポータルは、どの案件でも MINAMO COFFEE のデータを表示します）'}
               inputRef={(el: HTMLElement | null) => { refs.current.projectId = el; }}
@@ -91,7 +94,7 @@ export function ClientAccountDialog({ draft: initial, accounts, projects, onClos
               ))}
             </TextField>
             <TextField
-              fullWidth required label="会社名" value={draft.company}
+              fullWidth required label="会社名" value={draft.company} disabled={locked}
               onChange={(e) => set({ company: e.target.value })}
               error={!!show('company')} helperText={show('company') ?? `${draft.company.trim().length} / ${CLIENT_LIMITS.company}文字`}
               inputRef={(el: HTMLElement | null) => { refs.current.company = el; }}
@@ -105,9 +108,9 @@ export function ClientAccountDialog({ draft: initial, accounts, projects, onClos
               inputProps={{ maxLength: CLIENT_LIMITS.name + 10, autoComplete: 'off' }}
             />
             <TextField
-              fullWidth required label="メールアドレス" type="email" value={draft.email}
+              fullWidth required label="メールアドレス" type="email" value={draft.email} disabled={locked}
               onChange={(e) => set({ email: e.target.value })}
-              error={!!show('email')} helperText={show('email') ?? 'お客様ポータルのログインに使います'}
+              error={!!show('email')} helperText={show('email') ?? (locked ? 'ログインに使うため変更できません' : DATA_MODE === 'live' ? 'このメールアドレスへ招待します。お客様ポータルのログインに使います' : 'お客様ポータルのログインに使います')}
               inputRef={(el: HTMLElement | null) => { refs.current.email = el; }}
               inputProps={{ maxLength: CLIENT_LIMITS.email + 10, inputMode: 'email', autoComplete: 'off', spellCheck: false, autoCapitalize: 'none' }}
             />

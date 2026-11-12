@@ -8,6 +8,7 @@ import { DEV_AFFILIATION, DEV_USER_LIMITS, validateDevUser, type DevUserDraft, t
 import { useFullScreenDialog } from '@/hooks/useMediaQueries';
 import { TOUCH } from '@/theme/media';
 import { tokens } from '@/theme/tokens';
+import { DATA_MODE } from '@/repositories/mode';
 
 interface Props {
   /** 開いている間の入力の初期値（新規は id なし）。null で閉じる */
@@ -37,6 +38,8 @@ export function DevUserDialog({ draft: initial, devUsers, accounts, projects, on
     }
   }
 
+  const live = DATA_MODE === 'live';
+  const lockEmail = live && !!draft?.id;
   const errors = useMemo(() => (draft ? validateDevUser(draft, devUsers, accounts) : {}), [draft, devUsers, accounts]);
   if (!draft) return <Dialog open={false} />;
 
@@ -88,7 +91,9 @@ export function DevUserDialog({ draft: initial, devUsers, accounts, projects, on
             <TextField
               fullWidth required label="メールアドレス" type="email" value={draft.email}
               onChange={(e) => set({ email: e.target.value })}
-              error={!!show('email')} helperText={show('email') ?? '開発者画面のログインに使います'}
+              // live: メールの変更は作らない（ログインの ID のため。§28.8）。招待のときだけ入力する
+              disabled={lockEmail}
+              error={!!show('email')} helperText={show('email') ?? (lockEmail ? 'ログインに使うため変更できません' : live ? 'このメールアドレスへ招待します。開発者画面のログインに使います' : '開発者画面のログインに使います')}
               inputRef={(el: HTMLElement | null) => { refs.current.email = el; }}
               inputProps={{ maxLength: DEV_USER_LIMITS.email + 10, inputMode: 'email', autoComplete: 'off', spellCheck: false, autoCapitalize: 'none' }}
             />
@@ -112,7 +117,9 @@ export function DevUserDialog({ draft: initial, devUsers, accounts, projects, on
                 inputProps={{ maxLength: DEV_USER_LIMITS.partnerCompany + 10, autoComplete: 'organization' }}
               />
             )}
-            {isNew ? (
+            {isNew && live ? (
+              <Typography variant="caption" component="p">担当プロジェクトは、招待を受け取ってアカウントができた後に、一覧の「担当を変更」から割り当てます。</Typography>
+            ) : isNew ? (
               <Box>
                 <Typography variant="body2" component="h3" sx={{ fontWeight: 650, fontSize: 13, color: tokens.color.inkSoft }}>担当プロジェクト（複数選べます）</Typography>
                 <Typography variant="caption" component="p" sx={{ mb: 0.5 }}>チェックしたプロジェクトだけを開発者画面で開けます。あとから「担当を変更」で変えられます。</Typography>

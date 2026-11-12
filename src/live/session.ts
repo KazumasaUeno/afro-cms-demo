@@ -6,6 +6,9 @@ import { createContext, useContext } from 'react';
  */
 export type LiveRole = 'admin' | 'developer' | 'client';
 
+/** 役割ごとの最初の画面 */
+export const ROLE_HOME: Record<LiveRole, string> = { admin: '/projects', developer: '/dev/projects', client: '/portal/approvals' };
+
 export interface LiveAccount {
   uid: string;
   role: LiveRole;
@@ -32,4 +35,12 @@ export function useLiveSession(): LiveSession {
   const s = useContext(LiveSessionContext);
   if (!s) throw new Error('useLiveSession はログイン後の画面（LiveSessionContext の内側）でだけ使う');
   return s;
+}
+
+/**
+ * 共有の画面（ヒアリング・提案書など）が live の出し分けに使う。demo（LiveSessionContext が無い）では null。
+ * このファイルは Firebase を import しないので、共有の画面から import しても demo のビルドに SDK は入らない
+ */
+export function useLiveRoleOptional(): LiveRole | null {
+  return useContext(LiveSessionContext)?.account.role ?? null;
 }

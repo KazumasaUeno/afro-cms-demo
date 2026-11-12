@@ -3,7 +3,7 @@ import { ArrowRight, MessageSquareText } from 'lucide-react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { PageHeader, Reveal, StatusPill } from '@/components/ui';
 import { RouteLoader } from '@/components/layout/RouteLoader';
-import { useCurrentRequirements, useRepositories } from '@/repositories';
+import { DATA_MODE, useCurrentRequirements, useRepositories } from '@/repositories';
 import { formatDateTime } from '@/services/time';
 import { HearingEditor } from './HearingEditor';
 import { useHearingRoutes } from './hearingRoutes';
@@ -21,7 +21,9 @@ export default function HearingAnswersPage() {
   const navigate = useNavigate();
   const routes = useHearingRoutes();
   const project = projectList.find((p) => p.id === req.projectId);
-  const editable = req.status !== 'approved';
+  // live: 回答を変えられるのは draft の間だけ（Rules M-4。承認待ちの間に変えるなら開発者が差し戻す）。demo は承認まで入力できる
+  const live = DATA_MODE === 'live';
+  const editable = live ? req.status === 'draft' : req.status !== 'approved';
 
   if (loading) return <RouteLoader label="ヒアリング" />;
   if (req.status === 'draft') return <Navigate to={routes.input} replace />;
@@ -42,7 +44,9 @@ export default function HearingAnswersPage() {
             </Box>
             {editable
               ? 'AI 分析の後も、要件定義書の承認まで入力できます。変えた内容は提案書にすぐ反映されます。'
-              : '要件定義書を承認済みのため、閲覧だけできます。'}
+              : live && req.status !== 'approved'
+                ? 'お客様の承認待ちのため、閲覧だけできます。回答を直すときは、提案書の「差し戻す」でヒアリングの入力に戻します。'
+                : '要件定義書を承認済みのため、閲覧だけできます。'}
           </>
         }
         actions={

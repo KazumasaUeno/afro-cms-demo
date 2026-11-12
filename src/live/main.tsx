@@ -6,17 +6,25 @@ import '@fontsource/noto-sans-jp/700.css';
 import '../global.css';
 import { ThemeModeProvider } from '@/theme/ThemeMode';
 import { ToastProvider } from '@/hooks/useToast';
-import { app } from './firebase';
+import { registerLiveRepositories } from '@/repositories';
+import { LiveAuthProvider } from './auth';
+import { useLiveRepositoriesImpl } from './repositories';
+import LiveApp from './LiveApp';
 
 /**
  * live モードの入口（index.html の入口を vite.config.ts の afro-live-html が差し替える）。
- * demo の DemoStore・SESSION_KEY・localStorage の状態は読まない（BACKEND_PLAN C3）
+ * demo の DemoStore・SESSION_KEY・localStorage の状態は読まない（BACKEND_PLAN C3）。
+ * 画面の useRepositories() は、ここで登録した Firestore の実装を使う（LiveDataProvider の内側でだけ呼ばれる）
  */
+registerLiveRepositories(useLiveRepositoriesImpl);
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeModeProvider>
       <ToastProvider>
-        <p style={{ padding: 24 }}>live モード（{app.options.projectId}）は準備中です。</p>
+        <LiveAuthProvider>
+          <LiveApp />
+        </LiveAuthProvider>
       </ToastProvider>
     </ThemeModeProvider>
   </StrictMode>,
