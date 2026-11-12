@@ -99,8 +99,11 @@ export function LiveAuthProvider({ children }: { children: ReactNode }) {
     setState({ kind: 'loading' });
     let alive = true;
     let claiming = false;
-    const unsub = onSnapshot(doc(db, 'accounts', user.uid), async (s) => {
+    // includeMetadataChanges: 受け取りのバッチは端末側で先に反映される（hasPendingWrites）。サーバーに確定する前に
+    // 画面を出すと、他の購読（案件の一覧など）が accounts の無い状態で Rules に評価されて拒否されるので、確定を待つ
+    const unsub = onSnapshot(doc(db, 'accounts', user.uid), { includeMetadataChanges: true }, async (s) => {
       if (!alive) return;
+      if (s.metadata.hasPendingWrites) return;
       if (!s.exists()) {
         if (claiming) return;
         claiming = true;
