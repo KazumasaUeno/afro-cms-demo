@@ -642,16 +642,20 @@ src/repositories/
 
 ## 15. 環境設定
 
-| 変数 | 内容 |
-|---|---|
-| `VITE_DATA_MODE` | `demo` / `live` の既定（既定 `demo`） |
-| `VITE_FIREBASE_API_KEY` / `VITE_FIREBASE_AUTH_DOMAIN` / `VITE_FIREBASE_PROJECT_ID` / `VITE_FIREBASE_APP_ID` | Web 設定（Storage・Messaging は今回不要） |
-| `VITE_FIREBASE_EMULATOR` | `1` のときローカルのエミュレータへ接続（開発用。本番ビルドでは未設定） |
+> **2026-11-12 改訂（security M4）**: 旧版（`VITE_DATA_MODE` を env で切り替える・`pages.yml` の Variables・github.io / `localhost` のリファラー）は、live を Firebase Hosting に分けたこと（§27 M-6）で**無効**。下が実装の正（`vite.config.ts`・`package.json`・`scripts/deploy-firebase.mjs`・`firebase.json`）。
 
-- Web 設定は**秘密ではない**が、コードには書かない（`.env.local` は `.gitignore`、`.env.example` に項目名だけ）
-- GitHub Actions: リポジトリの **Variables**（`vars.*`）に置き、`pages.yml` の Build ステップの `env:` で渡す（Secrets ではなく Variables）
-- **API キーの制限**（Google Cloud Console）: HTTP リファラーを `https://kazumasaueno.github.io/*` と `http://localhost:*` に限定、API を Identity Toolkit / Token Service / Cloud Firestore に限定 [NC-9 作業はユーザー]
-- Firebase Auth の**承認済みドメイン**に `kazumasaueno.github.io` を追加
+| 項目 | 内容 |
+|---|---|
+| モード | **`vite --mode` だけで決まる**（既定＝demo／`--mode live`／`--mode emulator`）。`VITE_DATA_MODE`・`VITE_FIREBASE_EMULATOR` は `vite.config.ts` の define で mode から作る（`.env*` では切り替えられない） |
+| live の Web 設定 | `VITE_FIREBASE_API_KEY` / `VITE_FIREBASE_AUTH_DOMAIN` / `VITE_FIREBASE_PROJECT_ID` / `VITE_FIREBASE_APP_ID` を **`.env.live.local`**（コミットしない。項目名は `.env.example`）。無い・`demo-` の ID ならビルドが失敗する |
+| ビルド | `npm run build:live` → `dist-live/`（Hosting の public）。`npm run build:emulator` → `dist-emulator/`（エミュレータ専用。`127.0.0.1` への接続はこのビルドだけ） |
+| 公開先 | **Firebase Hosting**: `<projectId>.web.app`（＋使うなら独自ドメイン）。GitHub Pages は demo のまま（Firebase の変数を渡さない） |
+| デプロイ | `npm run deploy:firebase -- --project <ID> --only hosting,firestore:rules,firestore:indexes`。ID は `scripts/firebase-projects.mjs` の許可リストと完全一致（`TBD` の間はすべて拒否）。hosting は `dist-live` が同じ ID でビルドされていること、rules は `rules:check` と `test:rules`（1 件以上・失敗 0）を先に通す |
+| 応答ヘッダ | `firebase.json` の hosting `headers`: `X-Frame-Options: DENY`・`Content-Security-Policy: frame-ancestors 'none'`・`X-Content-Type-Options: nosniff`・`Referrer-Policy: strict-origin-when-cross-origin`（meta の CSP は frame-ancestors を効かせられないため） |
+
+- Web 設定は**秘密ではない**が、コードには書かない（`.env*` は `.gitignore`）
+- **API キーの制限**（Google Cloud Console）: HTTP リファラーを `https://<projectId>.web.app/*`・`https://<projectId>.firebaseapp.com/*`（＋独自ドメイン）に限定し、**`localhost` を入れない**。API を Identity Toolkit / Token Service / Cloud Firestore に限定 [段階 C・作業はユーザー]
+- Firebase Auth の**承認済みドメイン**: `<projectId>.web.app`・`<projectId>.firebaseapp.com`（＋独自ドメイン）。既定で入る `localhost` は**消す**（エミュレータは別プロジェクト `demo-afro-cms` なので不要）
 - `.firebaserc` に `default` を置かない（§16）
 
 ---

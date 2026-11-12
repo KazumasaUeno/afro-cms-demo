@@ -4,8 +4,10 @@
 // - --project は必須。scripts/firebase-projects.mjs の許可リストと完全一致する ID だけ通す（'TBD' は常に拒否）
 // - --only は必須。hosting / firestore:rules / firestore:indexes の組み合わせだけ通す
 // - gcloud・ADC・.firebaserc の既定には頼らない（firebase CLI へ --project を必ず渡す）
-// - --dry-run は実行するコマンドを表示するだけ（何も送らない）
-import { existsSync } from 'node:fs';
+// - --dry-run は実行するコマンドを表示するだけ（何も送らない。下の事前確認は --dry-run でも行う）
+// - hosting: dist-live が同じ --project 向けにビルドされていること（ビルドに焼き込まれた projectId を見る。security M3）
+// - firestore:rules: 送る前に rules:check（質問の定義と Rules の一致）と test:rules（エミュレータ。1 件以上・失敗 0）を通す
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
@@ -44,12 +46,52 @@ export function checkDeploy({ project, only }, allowlist = PRODUCTION_PROJECT_ID
   return { project, targets };
 }
 
+/** dist-live の JS に、このプロジェクトの ID が文字列として入っているか（別のプロジェクト向けのビルドを送らない） */
+export function checkHostingBuild(project, dir = join(root, 'dist-live'), allowlist = PRODUCTION_PROJECT_IDS) {
+  if (!existsSync(join(dir, 'index.html'))) throw new Error('dist-live/index.html がありません（npm run build:live を先に実行する）');
+  const assets = join(dir, 'assets');
+  const js = existsSync(assets) ? readdirSync(assets).filter((f) => f.endsWith('.js')).map((f) => readFileSync(join(assets, f), 'utf8')) : [];
+  const quoted = (id) => [`"${id}"`, `'${id}'`, `\`${id}\``];
+  const has = (id) => js.some((src) => quoted(id).some((q) => src.includes(q)));
+  if (js.some((src) => src.includes('127.0.0.1:8080') || src.includes('127.0.0.1:9099'))) {
+    throw new Error('dist-live にエミュレータの接続先が入っています（--mode live でビルドし直す）');
+  }
+  if (!has(project)) throw new Error(`dist-live は --project ${project} 向けのビルドではありません（.env.live.local の VITE_FIREBASE_PROJECT_ID を確かめてビルドし直す）`);
+  const others = allowlist.filter((id) => id !== project && id !== 'TBD' && has(id));
+  if (others.length) throw new Error(`dist-live に別のプロジェクトの ID（${others.join(', ')}）が入っています`);
+}
+
+/** test:rules の出力（node --test の spec）から件数を読む */
+export function parseTestCounts(out) {
+  const num = (k) => {
+    const m = new RegExp(`(?:ℹ|#)\\s*${k}\\s+(\\d+)`).exec(out);
+    return m ? Number(m[1]) : null;
+  };
+  return { tests: num('tests'), pass: num('pass'), fail: num('fail') };
+}
+
+function runNode(script, args = []) {
+  const r = spawnSync(process.execPath, [join(root, 'scripts', script), ...args], { cwd: root, encoding: 'utf8', env: process.env, maxBuffer: 64 * 1024 * 1024 });
+  process.stdout.write(r.stdout ?? '');
+  process.stderr.write(r.stderr ?? '');
+  return { status: r.status ?? 1, out: `${r.stdout ?? ''}\n${r.stderr ?? ''}` };
+}
+
+/** Rules を送る前の確認（どれか 1 つでも通らなければ送らない） */
+function checkRulesBeforeDeploy() {
+  const check = spawnSync(process.execPath, ['--experimental-strip-types', '--no-warnings', join(root, 'scripts', 'gen-rules-questions.mjs'), '--check'], { cwd: root, stdio: 'inherit' });
+  if (check.status !== 0) throw new Error('rules:check が通りません（npm run rules:gen で Rules を作り直す）');
+  const t = runNode('test-rules.mjs');
+  const c = parseTestCounts(t.out);
+  console.log(`[deploy] test:rules tests=${c.tests} pass=${c.pass} fail=${c.fail}`);
+  if (t.status !== 0 || !c.tests || c.fail !== 0 || c.pass !== c.tests) throw new Error('test:rules が通りません（件数 0 件・失敗あり・終了コード 0 以外）');
+}
+
 function main() {
   const args = parseDeployArgs(process.argv.slice(2));
   const { project, targets } = checkDeploy(args);
-  if (targets.includes('hosting') && !existsSync(join(root, 'dist-live', 'index.html'))) {
-    throw new Error('dist-live/index.html がありません（live ビルドを先に作る）');
-  }
+  if (targets.includes('hosting')) checkHostingBuild(project);
+  if (targets.includes('firestore:rules')) checkRulesBeforeDeploy();
   const require = createRequire(import.meta.url);
   const cli = join(dirname(require.resolve('firebase-tools/package.json')), 'lib', 'bin', 'firebase.js');
   const cmd = [cli, 'deploy', '--project', project, '--only', targets.join(','), '--non-interactive'];
