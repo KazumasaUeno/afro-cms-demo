@@ -11,8 +11,7 @@ import { useHearingRoutes } from './hearingRoutes';
 /**
  * ヒアリングの回答（管理者画面 /ai-studio/hearing・開発者画面 /dev/hearing/answers。0.25.0）。
  * AI 分析の前は入力の正の画面（同じエリアの /ai-studio・/dev/hearing）へ転送する（入力する場所を 1 つにする。2026-11-11 決定 B）。
- * AI 分析の後は同じ入力画面で見直す。要件定義書の承認まで入力でき、変えた回答は提案書（回答から毎回作る）にすぐ反映される。
- * 承認後は reducer が変更を受け付けないため閲覧のみ。
+ * AI 分析の後は同じ画面で回答を確認する（閲覧のみ。reducer も AI 分析の前しか変更を受け付けない。0.29.2）。
  */
 export default function HearingAnswersPage() {
   const { projects } = useRepositories();
@@ -21,9 +20,10 @@ export default function HearingAnswersPage() {
   const navigate = useNavigate();
   const routes = useHearingRoutes();
   const project = projectList.find((p) => p.id === req.projectId);
-  // live: 回答を変えられるのは draft の間だけ（Rules M-4。承認待ちの間に変えるなら開発者が差し戻す）。demo は承認まで入力できる
+  // 回答を変えられるのは draft（AI 分析の前）の間だけ。分析後の「ヒアリングを確認」は閲覧だけ（demo も live と同じ。2026-11-12 ユーザー指示）。
+  // 直すときは提案書から入力に戻す（live: 差し戻す（Rules M-4）／ demo: 回答をやり直す）
   const live = DATA_MODE === 'live';
-  const editable = live ? req.status === 'draft' : req.status !== 'approved';
+  const editable = req.status === 'draft';
 
   if (loading) return <RouteLoader label="ヒアリング" />;
   if (req.status === 'draft') return <Navigate to={routes.input} replace />;
@@ -43,10 +43,12 @@ export default function HearingAnswersPage() {
               </StatusPill>
             </Box>
             {editable
-              ? 'AI 分析の後も、要件定義書の承認まで入力できます。変えた内容は提案書にすぐ反映されます。'
-              : live && req.status !== 'approved'
-                ? 'お客様の承認待ちのため、閲覧だけできます。回答を直すときは、提案書の「差し戻す」でヒアリングの入力に戻します。'
-                : '要件定義書を承認済みのため、閲覧だけできます。'}
+              ? '回答を入力できます。'
+              : req.status === 'approved'
+                ? '要件定義書を承認済みのため、閲覧だけできます。'
+                : live
+                  ? 'お客様の承認待ちのため、閲覧だけできます。回答を直すときは、提案書の「差し戻す」でヒアリングの入力に戻します。'
+                  : 'AI 分析済みのため、閲覧だけできます。回答を直すときは、提案書の「回答をやり直す」で最初から入力し直します。'}
           </>
         }
         actions={

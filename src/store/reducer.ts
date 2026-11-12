@@ -161,8 +161,8 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       return { ...state, projects: state.projects.map((p) => (p.id === action.id ? { ...p, ...action.patch, updatedAt: nowIso() } : p)) };
 
     case 'setAnswer': {
-      // 承認後は回答を変えない（変えると確認待ちが生まれ、承認し直す手段が無い）
-      if (state.requirements.status === 'approved') return state;
+      // 回答を変えられるのは AI 分析の前だけ（分析後の「ヒアリングを確認」は閲覧だけ。2026-11-12 ユーザー指示。承認後も変えない）
+      if (state.requirements.status !== 'draft') return state;
       const { answerMeta = {}, ...req } = state.requirements;
       const meta = { ...answerMeta };
       // 書き換えた人が新しい回答者になる（代理回答の確認は取り消し）。空にしたら記録も消す
