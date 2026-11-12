@@ -269,7 +269,8 @@ function Detail({ p }: { p: Project }) {
                         onClick={() => go(l.to)}
                         sx={{ justifyContent: 'space-between' }}
                       >
-                        {l.label}
+                        {/* ヒアリングを終えた（AI 分析済み）案件は入力ではなく確認（2026-11-12 ユーザー指示）。要件定義書の承認後は回答画面が閲覧だけになる */}
+                        {s.id === 'hearing' && req.status !== 'draft' ? 'ヒアリングを確認' : l.label}
                       </Button>
                     ))}
                   </Stack>
