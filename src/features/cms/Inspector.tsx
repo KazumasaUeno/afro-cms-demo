@@ -65,7 +65,8 @@ export function Inspector({ draft, onChange, slugError }: Props) {
 
   useEffect(() => () => window.clearInterval(timer.current), []);
 
-  const parentOptions = Array.from(new Set(state.sitemap.after.nodes.map((n) => n.data.path))).sort();
+  // いま入っている親ページも選択肢に残す（サイトマップがまだ無い案件・サイトマップから消えたページでも、選択欄が空の値にならないように。0.29.4）
+  const parentOptions = Array.from(new Set([...state.sitemap.after.nodes.map((n) => n.data.path), ...(draft.parentPath ? [draft.parentPath] : [])])).sort();
   const meta = STATUS_META[draft.status];
 
   const generate = () => {

@@ -4,13 +4,12 @@ import {
   useEdgesState, useNodesState, useReactFlow, type Connection, type Edge, type EdgeChange, type NodeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { ArrowRight, BadgeCheck, CheckCircle2, Lightbulb, Lock, Maximize2, Network, Plus, Trash2 } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Lightbulb, Lock, Maximize2, Network, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BuildFlowNav } from '@/components/layout/BuildFlowNav';
 import { AiBadge, PageHeader, Reveal, StatusPill, Surface } from '@/components/ui';
 import { useDemo } from '@/store/DemoStore';
-import { useToast } from '@/hooks/useToast';
 import { formatDateTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
 import { useThemeMode } from '@/theme/ThemeMode';
@@ -20,6 +19,7 @@ import { PageNode, KIND_META, type PageFlowNode } from './PageNode';
 import { AddPageDialog, type NewPageInput } from './AddPageDialog';
 import { sitemapMetrics, validateLabel } from './metrics';
 import { useProjectRoutes } from '@/features/projects/projectRoutes';
+import { sitemapCreated } from '@/data/sitemap';
 
 const nodeTypes = { page: PageNode };
 const defaultEdgeOptions = {
@@ -249,17 +249,39 @@ function Editor({ variant, onVariant }: { variant: SitemapVariant; onVariant: (v
 /**
  * サイトマップ。管理者画面（/site）と開発者画面（/dev/sitemap。0.26.0）で同じ画面。
  * 構造の編集はお客様の承認前だけ（管理者・開発者とも。承認後は閲覧のみ。2026-11-11 ユーザー判断）。
- * 開発者画面では構造の確認・編集はできるが、承認（アフロがお客様の代わりに承認する操作）は出さない（表示の出し分けだけ。実体はルール）
+ * 承認はお客様ポータルだけ。管理者・開発者画面には承認の操作を出さず、承認待ちの表示だけ出す（2026-11-12 ユーザー判断）
  */
+/** まだサイトマップを作っていない案件（要件定義書の承認前。0.29.4）。キャンバスは出さず、作られる時期と要件定義書への道だけ示す */
+function NotCreated({ requirementsTo }: { requirementsTo: string }) {
+  const navigate = useNavigate();
+  return (
+    <Surface padding={{ xs: 3, md: 5 }} sx={{ textAlign: 'center' }}>
+      <Stack alignItems="center" spacing={1.5}>
+        <Box aria-hidden sx={{ display: 'grid', placeItems: 'center', width: 56, height: 56, borderRadius: '50%', bgcolor: tokens.color.surfaceMuted, color: tokens.color.inkSoft }}>
+          <Network size={26} />
+        </Box>
+        <Typography variant="h5" component="h2">サイトマップはまだ作成されていません</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 440 }}>
+          要件定義書の承認後に、要件定義から改善後のページ構成を作成します。作成すると、ここで現在のサイトと比べながら組み替えられます。
+        </Typography>
+        <Button variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate(requirementsTo)} sx={{ mt: 1 }}>
+          要件定義書を確認する
+        </Button>
+      </Stack>
+    </Surface>
+  );
+}
+
 export default function SitemapPage() {
-  const { state, dispatch } = useDemo();
+  const { state } = useDemo();
   const routes = useProjectRoutes();
   const navigate = useNavigate();
-  const toast = useToast();
   const [variant, setVariant] = useState<SitemapVariant>('after');
   const approvedAt = state.sitemap.approvedAt;
   // ウォーターフォール: 要件定義書の承認が先
   const reqApproved = state.requirements.status === 'approved';
+  // サイトマップは要件定義書の承認のときに作る（はじめは無い。0.29.4）
+  const created = sitemapCreated(state.sitemap);
 
   return (
     <Box>
@@ -268,35 +290,38 @@ export default function SitemapPage() {
         eyebrow="③ 制作"
         icon={<Network size={14} />}
         title="サイトの構造を、見ながら組み替える"
-        description={approvedAt
+        description={!created
+          ? '要件定義書の承認のあとに、要件定義から改善後のサイト構造を作成します。'
+          : approvedAt
           ? '現在のサイトと、要件定義から導いた改善後の構造を切り替えて比較できます。お客様の承認後は閲覧だけできます。'
           : '現在のサイトと、要件定義から導いた改善後の構造を切り替えて比較できます。ページの追加・移動・接続はそのまま保存されます。'}
         actions={
-          approvedAt ? (
+          !created ? undefined : approvedAt ? (
             <>
               <Box role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, minHeight: 40, borderRadius: 3, bgcolor: tokens.color.successSoft, color: tokens.color.successInk, fontWeight: 650, fontSize: 14 }}>
                 <BadgeCheck size={18} /> 承認済み {formatDateTime(approvedAt)}
               </Box>
               <Button variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate(routes.design)}>デザインへ進む</Button>
             </>
-          ) : routes.dev ? (
-            <Box role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, minHeight: 40, borderRadius: 3, bgcolor: tokens.color.surfaceMuted, color: tokens.color.inkSoft, fontWeight: 600, fontSize: 14 }}>
-              未承認（承認は管理者画面で行います）
-            </Box>
           ) : (
+            // 承認はお客様ポータルだけ（管理者・開発者は承認しない。2026-11-12 ユーザー判断）
             <Stack alignItems={{ xs: 'stretch', sm: 'flex-end' }} spacing={0.5}>
-              <Button variant="contained" startIcon={<CheckCircle2 size={16} />} disabled={!reqApproved} onClick={() => { dispatch({ type: 'approveSitemap' }); toast('改善後のサイトマップを承認しました'); }}>
-                改善後のサイトマップを承認
-              </Button>
-              {!reqApproved && <Typography variant="caption">要件定義書の承認の後に承認できます</Typography>}
+              <Box role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, minHeight: 40, borderRadius: 3, bgcolor: tokens.color.warningSoft, color: tokens.color.warningInk, fontWeight: 650, fontSize: 14 , py: 0.75, whiteSpace: { sm: 'nowrap' } }}>
+                お客様の承認待ち（お客様ポータルで承認します）
+              </Box>
+              {!reqApproved && <Typography variant="caption">要件定義書の承認の後に、お客様が承認できます</Typography>}
             </Stack>
           )
         }
       />
       <Reveal>
-        <ReactFlowProvider key={variant}>
-          <Editor variant={variant} onVariant={setVariant} />
-        </ReactFlowProvider>
+        {created ? (
+          <ReactFlowProvider key={variant}>
+            <Editor variant={variant} onVariant={setVariant} />
+          </ReactFlowProvider>
+        ) : (
+          <NotCreated requirementsTo={routes.requirements} />
+        )}
       </Reveal>
     </Box>
   );

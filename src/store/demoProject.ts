@@ -20,10 +20,10 @@ export function derivedDemoProject(state: DemoState): Pick<Project, 'stage' | 'p
     const answered = REQUIREMENT_QUESTIONS.filter((q) => isAnswered(req.answers[q.id])).length;
     return { ...base, stage: 'hearing', progress: 2 + Math.round((10 * answered) / REQUIREMENT_QUESTIONS.length), nextAction: 'ヒアリングを入力する' };
   }
-  if (req.status === 'analyzed') return { ...base, stage: 'requirements', progress: 18, nextAction: '要件定義書の承認をもらう' };
-  if (!state.sitemap.approvedAt) return { ...base, stage: 'build', progress: 25, nextAction: 'サイトマップを承認する' };
+  if (req.status === 'analyzed') return { ...base, stage: 'requirements', progress: 18, nextAction: 'お客様の要件定義書の承認を待つ' };
+  if (!state.sitemap.approvedAt) return { ...base, stage: 'build', progress: 25, nextAction: 'お客様のサイトマップ承認を待つ' };
   if (!state.design.approvedAt && !designReady(state)) return { ...base, stage: 'build', progress: 38, nextAction: 'デザイン要件定義を入力する' };
-  if (!state.design.approvedAt) return { ...base, stage: 'build', progress: 38, nextAction: 'デザイン案の採用を決める' };
+  if (!state.design.approvedAt) return { ...base, stage: 'build', progress: 38, nextAction: 'お客様のデザイン案の採用を待つ' };
   if (!state.design.buildCompletedAt) return { ...base, stage: 'build', progress: 52, nextAction: '全ページを構築する' };
   const both = QUALITY_ITEMS.filter((i) => state.qualityChecks[i.id]?.afroAt && state.qualityChecks[i.id]?.clientAt).length;
   const stage: Stage = 'quality';

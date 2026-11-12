@@ -31,6 +31,7 @@ export function useDemoRepositories(): Repositories {
         useCurrentId: () => useDemo().state.currentProjectId,
         select: (id) => dispatch({ type: 'setCurrentProject', id }),
         create: (project) => run({ type: 'createProject', project }),
+        update: (id, project) => run({ type: 'updateProject', id, project }),
       },
       requirements: {
         useCurrent: (_projectId) => ready(useDemo().state.requirements),

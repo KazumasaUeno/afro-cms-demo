@@ -70,15 +70,14 @@ export function CategoryDetail({ category, onClose }: Props) {
 function DetailBody({ category, onClose }: { category: QualityCategory; onClose: () => void }) {
   const { state, dispatch } = useDemo();
   const toast = useToast();
-  // 開発者画面（0.27.0）: アフロ側だけ操作できる。顧客側は表示のみ（お客様がポータルで承認する）
+  // 管理者・開発者画面ともアフロ側だけ操作できる。顧客側は表示のみ（お客様がポータルで承認する。開発者 0.27.0・管理者 2026-11-12）
   const devBy = useQualityDevBy();
-  const dev = !!devBy;
   const [openOnly, setOpenOnly] = useState(false);
   const items = QUALITY_ITEMS.filter((i) => i.categoryId === category.id);
   const stats = computeStats(items, state.qualityChecks);
   const shown = openOnly ? items.filter((i) => !isComplete(state.qualityChecks[i.id])) : items;
 
-  const bulk = (side: 'afro' | 'client', priority: 'A' | 'B') => {
+  const bulk = (side: 'afro', priority: 'A' | 'B') => {
     const targets = items.filter((i) => i.priority === priority && !(side === 'afro' ? state.qualityChecks[i.id]?.afroAt : state.qualityChecks[i.id]?.clientAt));
     if (targets.length === 0) {
       toast(`${priority}区分はすべて${side === 'afro' ? 'アフロ確認' : '顧客承認'}済みです`, 'info');
@@ -106,8 +105,8 @@ function DetailBody({ category, onClose }: { category: QualityCategory; onClose:
           <SideBar label="アフロ確認" value={stats.afroRate} color={tokens.color.primary} />
           <SideBar label="顧客承認" value={stats.clientRate} color={tokens.color.success} />
         </Stack>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: dev ? '1fr' : '1fr 1fr' }, gap: 1, mt: 2 }}>
-          {(dev ? (['afro'] as const) : (['afro', 'client'] as const)).map((side) => (
+        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr', gap: 1, mt: 2 }}>
+          {(['afro'] as const).map((side) => (
             <Stack key={side} direction="row" spacing={0.75} sx={{ p: 0.75, borderRadius: '12px', bgcolor: tokens.color.bgSubtle }}>
               {(['A', 'B'] as const).map((p) => (
                 <Button
@@ -160,7 +159,7 @@ function DetailBody({ category, onClose }: { category: QualityCategory; onClose:
                 {/* スマホは2者のチェックを縦に並べ、日時と担当者を省略させない */}
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
                   <CheckToggle side="afro" check={check} itemText={item.text} onToggle={() => dispatch({ type: 'toggleQuality', itemId: item.id, side: 'afro', devBy })} />
-                  <CheckToggle side="client" check={check} itemText={item.text} readOnly={dev} onToggle={() => dispatch({ type: 'toggleQuality', itemId: item.id, side: 'client' })} />
+                  <CheckToggle side="client" check={check} itemText={item.text} readOnly onToggle={() => undefined} />
                 </Stack>
               </Box>
             );

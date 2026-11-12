@@ -2,10 +2,12 @@ import { createContext, useContext, useEffect, useMemo, useReducer, useRef, type
 import type { DemoState } from '@/types';
 import { loadJson, removeKey, saveJson, STORAGE_KEY } from '@/services/storage';
 import { createSeedState, isDemoState } from './seed';
+import { seedProjects } from '@/data/projects';
 import { reducer, type Action } from './reducer';
 import { syncDemoProject } from './demoProject';
 import { seedWorkFor, switchWork } from './projectWork';
 import { moveDesignAnswers } from '@/features/design/designReq';
+import { emptySitemap, sitemapCreated } from '@/data/sitemap';
 
 interface StoreValue {
   state: DemoState;
@@ -38,10 +40,34 @@ function withCurrentWork(state: DemoState): DemoState {
     : switchWork(filled, filled.currentProjectId);
 }
 
+/**
+ * サイトマップは要件定義書の承認のときに作る（0.29.4。はじめは無い）。0.29.3 までの保存データは、要件定義書が未承認でも
+ * 見本のサイトマップを持っているので、未承認でサイトマップも未承認の案件は「まだ作っていない」に戻す（選んでいない案件の分も。版は上げない）
+ */
+function withoutEarlySitemap(state: DemoState): DemoState {
+  const early = (w: Pick<DemoState, 'requirements' | 'sitemap'>) =>
+    w.requirements.status !== 'approved' && !w.sitemap.approvedAt && sitemapCreated(w.sitemap);
+  const work = state.projectWork ?? {};
+  const ids = Object.keys(work).filter((id) => early(work[id]));
+  if (!early(state) && ids.length === 0) return state;
+  return {
+    ...state,
+    ...(early(state) ? { sitemap: emptySitemap() } : {}),
+    ...(ids.length ? { projectWork: { ...work, ...Object.fromEntries(ids.map((id) => [id, { ...work[id], sitemap: emptySitemap() }])) } } : {}),
+  };
+}
+
+/** 初期データに後から足した見本の案件（p7 など）を、保存済みのデータにも加える（無い id だけ。制作データは withCurrentWork が段階から補う） */
+function withSeedProjects(state: DemoState): DemoState {
+  const missing = seedProjects().filter((p) => !state.projects.some((x) => x.id === p.id));
+  return missing.length ? { ...state, projects: [...state.projects, ...missing] } : state;
+}
+
 function init(): DemoState {
   // 保存済みのデータに古い進捗が残っていても、デモのデータに合わせ直す。
   // 0.27 までのヒアリングにあったデザインの 3 問の回答は、デザイン要件定義へ移す（0.28.0。版は上げない）
-  return syncDemoProject(withCurrentWork(moveDesignAnswers(withAfroMode(loadJson(STORAGE_KEY, isDemoState) ?? createSeedState()))));
+  // 要件定義書の承認前に持っているサイトマップは外す（0.29.4。版は上げない）
+  return syncDemoProject(withoutEarlySitemap(withCurrentWork(withSeedProjects(moveDesignAnswers(withAfroMode(loadJson(STORAGE_KEY, isDemoState) ?? createSeedState()))))));
 }
 
 export function DemoStoreProvider({ children }: { children: ReactNode }) {

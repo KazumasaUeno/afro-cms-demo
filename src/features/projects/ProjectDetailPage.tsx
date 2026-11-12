@@ -1,6 +1,6 @@
 import { Box, Button, Stack, Typography } from '@mui/material';
-import { ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Clock, Code2, FolderSearch, Globe, User } from 'lucide-react';
-import { useEffect, type ReactNode } from 'react';
+import { ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Clock, Code2, FolderSearch, Globe, Pencil, User } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import type { Project, Stage } from '@/types';
 import { useDemo } from '@/store/DemoStore';
@@ -15,6 +15,7 @@ import { TOTAL_QUALITY_QUESTIONS } from '@/data/quality';
 import { MemberAvatar, ProgressRing, Reveal, StatusPill, Surface } from '@/components/ui';
 import { formatDate, formatDateTime, relativeTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
+import { TOUCH } from '@/theme/media';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { DevProjectGate } from '@/features/dev/DevProjectGate';
 import { useDevProjects } from '@/features/dev/useDevUser';
@@ -22,6 +23,10 @@ import { nextBestAction, qualityCompletion } from './projectHelpers';
 import { devNextWork, useProjectRoutes } from './projectRoutes';
 import { ClientStatusPanel } from './ClientStatusPanel';
 import { ApprovalHistory } from './ApprovalHistory';
+import { sitemapCreated } from '@/data/sitemap';
+import { useWrite } from '@/hooks/useWrite';
+import { EditProjectDialog } from './EditProjectDialog';
+import type { ProjectDraft } from './projectForm';
 
 function Fact({ label, value, ok }: { label: string; value: ReactNode; ok?: boolean }) {
   return (
@@ -95,6 +100,20 @@ function Detail({ p }: { p: Project }) {
   const { data: devAll } = accounts.useDevProjects();
   const { data: people } = accounts.useDevPeople();
   const navigate = useNavigate();
+  const { data: allProjects } = projects.useList();
+  const write = useWrite();
+  // 情報の編集は管理者画面の demo だけ（live の repository は update を持たない。2026-11-12）
+  const update = !routes.dev ? projects.update : undefined;
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const saveInfo = (draft: ProjectDraft) => {
+    if (!update) return;
+    setSaving(true);
+    void write(update(p.id, draft), 'プロジェクトの情報を更新しました').then((ok) => {
+      setSaving(false);
+      if (ok) setEditing(false);
+    });
+  };
 
   const cur = stageIndex(p.stage);
   const owner = memberById(p.ownerId);
@@ -131,7 +150,7 @@ function Detail({ p }: { p: Project }) {
     ),
     build: (
       <>
-        <Fact label="サイトマップ" value={state.sitemap.approvedAt ? '承認済み' : '未承認'} ok={!!state.sitemap.approvedAt} />
+        <Fact label="サイトマップ" value={state.sitemap.approvedAt ? '承認済み' : sitemapCreated(state.sitemap) ? '未承認' : '未作成'} ok={!!state.sitemap.approvedAt} />
         <Fact label="デザイン" value={state.design.approvedAt ? '採用済み' : state.design.selected ? '選択中' : '未選択'} ok={!!state.design.approvedAt} />
         <Fact label="全ページ構築" value={state.design.buildCompletedAt ? '完了' : '未実施'} ok={!!state.design.buildCompletedAt} />
       </>
@@ -179,8 +198,17 @@ function Detail({ p }: { p: Project }) {
               {p.siteName.slice(0, 1)}
             </Box>
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography variant="overline">{p.clientName}・{p.industry}</Typography>
-              <Typography variant="h1" component="h1">{p.siteName}</Typography>
+              <Stack direction="row" spacing={1.5} alignItems="flex-start" justifyContent="space-between">
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="overline">{p.clientName}・{p.industry}</Typography>
+                  <Typography variant="h1" component="h1">{p.siteName}</Typography>
+                </Box>
+                {update && (
+                  <Button variant="outlined" size="small" startIcon={<Pencil size={15} />} onClick={() => setEditing(true)} sx={{ flexShrink: 0, minHeight: 36, [TOUCH]: { minHeight: 44 } }}>
+                    編集
+                  </Button>
+                )}
+              </Stack>
               <Stack direction="row" sx={{ mt: 1.5, flexWrap: 'wrap', gap: { xs: 1, sm: 2.5 }, color: tokens.color.muted }}>
                 <Stack direction="row" spacing={0.75} alignItems="center"><Globe size={15} /><Typography variant="body2">{p.siteUrl.replace(/^https?:\/\//, '')}</Typography></Stack>
                 <Stack direction="row" spacing={0.75} alignItems="center"><User size={15} /><Typography variant="body2">{owner.name}（{owner.role}）</Typography></Stack>
@@ -267,6 +295,8 @@ function Detail({ p }: { p: Project }) {
                         variant="outlined"
                         endIcon={<ArrowRight size={15} />}
                         onClick={() => go(l.to)}
+                        // まだ始まっていない段階の画面は開けない（何も設定していない案件でインサイト等が見えないように。2026-11-12 ユーザー指示）
+                        disabled={!done && !active}
                         sx={{ justifyContent: 'space-between' }}
                       >
                         {/* ヒアリングを終えた（AI 分析済み）案件は入力ではなく確認（2026-11-12 ユーザー指示）。要件定義書の承認後は回答画面が閲覧だけになる */}
@@ -282,12 +312,14 @@ function Detail({ p }: { p: Project }) {
       </Box>
 
       {/* プロジェクト全体（ヘッダー）→ 制作の段階 → お客様の対応状況の順に、全体像から細部へ */}
-      {isDemo && (
-        <Reveal delay={0.03}>
-          <Box sx={{ mt: { xs: 3, md: 4 } }}><ClientStatusPanel /></Box>
-        </Reveal>
-      )}
+      {/* どの案件でも出す（案件ごとの制作データから導く。2026-11-12 ユーザー決定） */}
+      <Reveal delay={0.03}>
+        <Box sx={{ mt: { xs: 3, md: 4 } }}><ClientStatusPanel project={p} /></Box>
+      </Reveal>
       <Box sx={{ mt: { xs: 3, md: 4 } }}><ApprovalHistory projectId={p.id} siteName={p.siteName} /></Box>
+      {update && (
+        <EditProjectDialog project={editing ? p : null} projects={allProjects} onClose={() => setEditing(false)} onSave={saveInfo} saving={saving} />
+      )}
     </Box>
   );
 }

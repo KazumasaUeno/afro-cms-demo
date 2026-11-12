@@ -57,8 +57,15 @@ export function ymdToIso(ymd: string): string | null {
   return date.toISOString();
 }
 
-/** 画面と reducer の両方で使う入力チェック（URL の重複は既存のすべてのプロジェクトと比べる） */
-export function validateProject(d: ProjectDraft, projects: Project[]): Partial<Record<ProjectField, string>> {
+/** エラーがあるとき、最初にフォーカスを移す順（画面の上から） */
+export const PROJECT_FIELD_ORDER: ProjectField[] = ['clientName', 'siteName', 'siteUrl', 'industry', 'ownerId', 'launchDate', 'nextAction', 'accent'];
+
+/**
+ * 画面と reducer の両方で使う入力チェック（URL の重複は既存のすべてのプロジェクトと比べる）。
+ * self: 編集する案件（2026-11-12）。重複の判定から自分を外し、いまの公開予定日（過去でも）・いまのブランド色（候補に無くても）は
+ * 変えていなければそのまま通す（初期データには過去日・候補外の色の案件があり、ほかの項目だけ直せなくなるため）。省略時は作成と同じ判定
+ */
+export function validateProject(d: ProjectDraft, projects: Project[], self?: Project): Partial<Record<ProjectField, string>> {
   const e: Partial<Record<ProjectField, string>> = {};
   const clientName = d.clientName.trim();
   const siteName = d.siteName.trim();
@@ -75,16 +82,17 @@ export function validateProject(d: ProjectDraft, projects: Project[]): Partial<R
   if (urlError) e.siteUrl = urlError;
   else {
     const host = siteHost(d.siteUrl);
-    if (host && projects.some((p) => siteHost(p.siteUrl) === host)) e.siteUrl = 'このURLのプロジェクトはすでにあります';
+    if (host && projects.some((p) => p.id !== self?.id && siteHost(p.siteUrl) === host)) e.siteUrl = 'このURLのプロジェクトはすでにあります';
   }
 
   if (!industry) e.industry = '業種を入力してください';
   else if (industry.length > PROJECT_LIMITS.industry) e.industry = `${PROJECT_LIMITS.industry}文字以内で入力してください`;
   if (!MEMBERS.some((m) => m.id === d.ownerId)) e.ownerId = '担当者を選んでください';
-  if (!ACCENT_PRESETS.some((a) => a.value === d.accent)) e.accent = 'ブランド色を選んでください';
+  const keptAccent = !!self && d.accent === self.accent;
+  if (!keptAccent && !ACCENT_PRESETS.some((a) => a.value === d.accent)) e.accent = 'ブランド色を選んでください';
   if (launchDate) {
     if (!ymdToIso(launchDate)) e.launchDate = '日付の形式を確認してください';
-    else if (launchDate < todayYmd()) e.launchDate = '今日以降の日付を選んでください';
+    else if (launchDate < todayYmd() && !(self?.launchDate && launchDate === isoToYmd(self.launchDate))) e.launchDate = '今日以降の日付を選んでください';
   }
   if (nextAction.length > PROJECT_LIMITS.nextAction) e.nextAction = `${PROJECT_LIMITS.nextAction}文字以内で入力してください`;
   return e;
@@ -106,4 +114,39 @@ export function projectFromDraft(d: ProjectDraft): Omit<Project, 'id' | 'updated
     ...(launchIso ? { launchDate: launchIso } : {}),
     pendingApprovals: 0,
   };
+}
+
+/** ISO 文字列を端末の日付で yyyy-mm-dd に（ymdToIso の逆。読めなければ空） */
+export function isoToYmd(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '' : todayYmd(date);
+}
+
+/** 編集の入力の初期値（いまの案件の値。次の作業は段階と同じくデータから導くので入力させない） */
+export function projectToDraft(p: Project): ProjectDraft {
+  return {
+    clientName: p.clientName, siteName: p.siteName, siteUrl: p.siteUrl, industry: p.industry, ownerId: p.ownerId, accent: p.accent,
+    // 次の作業は編集の対象外（隠した欄でエラーを出さないよう空にする。projectPatchFromDraft も使わない）
+    launchDate: p.launchDate ? isoToYmd(p.launchDate) : '', nextAction: '',
+  };
+}
+
+/** 編集で変えてよい項目。段階・進捗・次の作業・承認待ちの数はデータから導く（syncDemoProject）ので含めない */
+export type ProjectInfoPatch = Pick<Project, 'clientName' | 'siteName' | 'siteUrl' | 'industry' | 'ownerId' | 'accent' | 'launchDate'>;
+
+/** 編集の入力から案件へ書く値（projectFromDraft と同じ整形）。launchDate が undefined なら公開予定日を消す */
+export function projectPatchFromDraft(d: ProjectDraft): ProjectInfoPatch {
+  const { clientName, siteName, siteUrl, industry, ownerId, accent, launchDate } = projectFromDraft(d);
+  return { clientName, siteName, siteUrl, industry, ownerId, accent, launchDate };
+}
+
+/** 編集の値をいまの案件に当てる（公開予定日を空にしたら項目ごと消す。同じ日付なら元の時刻を残す）。何も変わらなければ null */
+export function applyProjectPatch(p: Project, patch: ProjectInfoPatch): Project | null {
+  const sameDay = !!patch.launchDate && !!p.launchDate && isoToYmd(patch.launchDate) === isoToYmd(p.launchDate);
+  const fixed: ProjectInfoPatch = { ...patch, launchDate: sameDay ? p.launchDate : patch.launchDate };
+  const keys = Object.keys(fixed) as (keyof ProjectInfoPatch)[];
+  if (keys.every((k) => p[k] === fixed[k])) return null;
+  const next: Project = { ...p, ...fixed };
+  if (!fixed.launchDate) delete next.launchDate;
+  return next;
 }

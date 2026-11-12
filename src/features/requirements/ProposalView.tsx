@@ -24,7 +24,7 @@ const PRIORITY: Record<ProposalPoint['priority'], { label: string; tone: PillTon
 };
 
 /**
- * variant='client'（live のお客様ポータル）: お客様本人の「承認する」だけを出す（§25-2。代理承認は live に無い）。
+ * variant='client'（live のお客様ポータル）: お客様本人の「承認する」だけを出す（§25-2。代理承認は demo・live とも無い。2026-11-12）。
  * live の開発者: 承認待ちの間だけ「差し戻す」（requirements.reset＝analyzed → draft。回答は残す。§6）。
  * live では保存した提案（req.proposal＝承認の対象と同じ写し）を見せる。無ければ回答から作る（demo は常に回答から作る）
  */
@@ -33,7 +33,7 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
   const { data: req } = useCurrentRequirements();
   const { data: projectList } = projects.useList();
   const navigate = useNavigate();
-  // 開発者画面（/dev/hearing）では要件定義書を見るだけ。やり直し・代理承認・サイトマップへ進むは管理者画面だけに出す（0.25.0）
+  // 開発者画面（/dev/hearing）では要件定義書を見るだけ。やり直し・サイトマップへ進むは管理者画面だけに出す（0.25.0）。承認はお客様ポータルだけ（管理者・開発者には承認待ちの表示。2026-11-12）
   const { dev } = useHearingRoutes();
   const toast = useToast();
   const write = useWrite();
@@ -145,8 +145,9 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
       {/* 承認 */}
       <Reveal delay={0.3}>
         <Surface tone="muted">
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }}>
-            <Box sx={{ flex: 1 }}>
+          {/* 見出し・説明は横幅いっぱい、操作はその下で折り返す（横並びだとボタン群に押されて見出しが 1 文字ずつ折れていた。2026-11-12） */}
+          <Stack spacing={2}>
+            <Box sx={{ minWidth: 0 }}>
               <Typography variant="h4" component="h2">要件定義書の承認</Typography>
               <Typography variant="body2" color="text.secondary">
                 {client ? '内容をご確認のうえ「承認する」を押してください。承認後に内容を変える場合は、アフロの担当者へご連絡ください。' : '承認されると、この内容をもとにサイトマップとデザイン案の作成に進みます。'}
@@ -163,7 +164,7 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
                 </Typography>
               )}
             </Box>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ flexWrap: 'wrap' }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: { sm: 'center' }, justifyContent: { sm: 'flex-end' } }}>
               {/* 差し戻す（回答を残して入力へ戻す）は demo・live 共通。demo は承認待ちの間だけ（0.29.3） */}
               {canReset && (live || req.status === 'analyzed') && <Button variant="text" startIcon={<RotateCcw size={16} />} onClick={() => setConfirmReset('sendBack')}>差し戻す</Button>}
               {canReset && !live && <Button variant="text" onClick={() => setConfirmReset('reset')}>回答をやり直す</Button>}
@@ -179,12 +180,17 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
                 <Button variant="contained" startIcon={<CheckCircle2 size={16} />} disabled={approving} onClick={() => setConfirmApprove(true)}>
                   承認する
                 </Button>
-              ) : !dev && !live && (
-                <Button variant="outlined" startIcon={<CheckCircle2 size={16} />} disabled={pending > 0} onClick={() => { void write(approvals.approveRequirements(req.projectId), '要件定義書を承認しました'); }}>
-                  アフロが代わりに承認
-                </Button>
+              ) : (
+                // 管理者・開発者は承認しない（承認はお客様ポータルだけ。2026-11-12 ユーザー判断）
+                <Box
+                  role="status"
+                  sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 0.75, minHeight: 40, borderRadius: 3, bgcolor: tokens.color.warningSoft, color: tokens.color.warningInk, fontWeight: 650, fontSize: 14, whiteSpace: { sm: 'nowrap' } }}
+                >
+                  お客様の承認待ち（お客様ポータルで承認します）
+                </Box>
               )}
-              {!dev && !live && <Button variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate('/site')}>サイトマップへ進む</Button>}
+              {/* サイトマップはお客様の承認で作られる（0.29.4）。承認前に出すと、空のサイトマップから要件定義書へ戻されるだけなので出さない */}
+              {!dev && !live && approved && <Button variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate('/site')}>サイトマップへ進む</Button>}
             </Stack>
           </Stack>
         </Surface>

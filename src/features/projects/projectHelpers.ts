@@ -41,15 +41,15 @@ export function nextBestAction(state: DemoState): { title: string; detail: strin
   }
   if (state.requirements.status === 'analyzed') {
     return {
-      title: '要件定義書ができました。お客様の承認をもらいましょう',
-      detail: '承認をもらうと、サイトマップの作成へ進めます。',
+      title: '要件定義書ができました。お客様の承認を待っています',
+      detail: 'お客様がお客様ポータルで承認すると、サイトマップの作成へ進めます。',
       to: '/ai-studio/requirements', cta: '要件定義書を確認する',
     };
   }
   if (!state.sitemap.approvedAt) {
     return {
-      title: '改善後のサイトマップが承認待ちです',
-      detail: '問い合わせまでの階層を3→1に短縮した構成案です。理由を確認して承認しましょう。',
+      title: '改善後のサイトマップがお客様の承認待ちです',
+      detail: '問い合わせまでの階層を3→1に短縮した構成案です。お客様がお客様ポータルで承認します。',
       to: '/site', cta: 'サイトマップを確認',
     };
   }
@@ -62,8 +62,8 @@ export function nextBestAction(state: DemoState): { title: string; detail: strin
   }
   if (!state.design.approvedAt) {
     return {
-      title: 'デザイン案3パターンが揃いました',
-      detail: '要件定義から生成したミニマル・クリエイティブ・プレミアムの3案。採用すると全ページ構築へ進めます。',
+      title: 'デザイン案3パターンが揃いました。お客様の採用を待っています',
+      detail: '要件定義から生成したミニマル・クリエイティブ・プレミアムの3案。お客様がお客様ポータルで採用すると、全ページ構築へ進めます。',
       to: '/ai-studio/design', cta: 'デザイン案を比較する',
     };
   }

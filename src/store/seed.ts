@@ -1,6 +1,6 @@
 import type { DemoState } from '@/types';
 import { seedActivities, seedProjects } from '@/data/projects';
-import { seedSitemap } from '@/data/sitemap';
+import { emptySitemap } from '@/data/sitemap';
 import { seedPages } from '@/data/cms';
 import { seedDiagnoses } from '@/data/insights';
 import { seedDev } from '@/data/dev';
@@ -22,7 +22,8 @@ export const createSeedState = (): DemoState => ({
   projects: seedProjects(),
   // 受託開発ではアフロ（ディレクター）がヒアリングして全問を入力する（2026-11-10 決定）
   requirements: blankRequirements('p1'),
-  sitemap: seedSitemap(),
+  // サイトマップは要件定義書の承認のときに作る（はじめは無い。0.29.4）
+  sitemap: emptySitemap(),
   design: { selected: null },
   // ミナモ珈琲（デモの案件）はヒアリング前なので、品質チェックと承認の記録は空から始める（2026-11-12 ユーザー指示）
   qualityChecks: {},

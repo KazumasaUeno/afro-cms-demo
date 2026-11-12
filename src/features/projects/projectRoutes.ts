@@ -9,7 +9,7 @@ import { nextBestAction, STAGE_LINKS } from './projectHelpers';
 export interface StageLink { label: string; to: string }
 
 export interface ProjectRoutes {
-  /** 開発者画面（/dev 配下）で開いているか。管理者だけの操作（新しいプロジェクト・代理承認・採用・構築・公開など）を出し分ける */
+  /** 開発者画面（/dev 配下）で開いているか。管理者だけの操作（新しいプロジェクト・構築・公開など。承認・採用はお客様ポータルだけ）を出し分ける */
   dev: boolean;
   /** プロジェクト一覧 */
   list: string;

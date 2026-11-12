@@ -30,6 +30,8 @@ export interface ProjectsRepo {
   select(id: string): void;
   /** 作成した案件は作業中の案件になる（useCurrentId が新しい id に変わる） */
   create(draft: ProjectDraft): Promise<void>;
+  /** demo だけ: 案件の情報を編集する（2026-11-12）。live は実装しない（画面は無ければ「編集」を出さない）。段階・進捗などは変えない */
+  update?(id: string, draft: ProjectDraft): Promise<void>;
 }
 
 export interface AnswerEntry {
@@ -56,7 +58,7 @@ export interface RequirementsRepo {
 
 export interface ApprovalsRepo {
   useHistory(projectId: string): Query<ApprovalLog[]>;
-  /** by: 実際に操作した側（省略時はアフロの代理承認。demo だけ） */
+  /** by: 実際に操作した側（省略時はアフロ。管理者画面からの代理承認は 2026-11-12 に廃止し、画面からは client だけを渡す） */
   approveRequirements(projectId: string, by?: AnswerSide): Promise<void>;
 }
 

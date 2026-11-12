@@ -9,7 +9,6 @@ import { useToast } from '@/hooks/useToast';
 import { tokens } from '@/theme/tokens';
 import { formatDateTime, relativeTime } from '@/services/time';
 import { CountUp, PageHeader, ProgressRing, Reveal, SectionTitle, StatusPill, Surface } from '@/components/ui';
-import { useProjectRoutes } from '@/features/projects/projectRoutes';
 import { CategoryDetail, PriorityChip } from './CategoryDetail';
 import { computeStats, isComplete } from './qualityStats';
 import { useQualityDevBy } from './useQualityDevBy';
@@ -29,16 +28,16 @@ function MiniBar({ value, color, label }: { value: number; color: string; label:
   );
 }
 
-function BulkMenu({ side }: { side: 'afro' | 'client' }) {
+/** アフロ側の一括チェック。顧客側の承認はお客様ポータルだけ（管理者画面からの再現操作は 2026-11-12 に廃止） */
+function BulkMenu({ side }: { side: 'afro' }) {
   const { state, dispatch } = useDemo();
   const toast = useToast();
   const devBy = useQualityDevBy();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const label = side === 'afro' ? 'アフロ側' : '顧客側';
+  const label = 'アフロ側';
   const run = (priority: 'A' | 'B') => {
     setAnchor(null);
-    const key = side === 'afro' ? 'afroAt' : 'clientAt';
-    const n = QUALITY_ITEMS.filter((i) => i.priority === priority && !state.qualityChecks[i.id]?.[key]).length;
+    const n = QUALITY_ITEMS.filter((i) => i.priority === priority && !state.qualityChecks[i.id]?.afroAt).length;
     if (n === 0) {
       toast(`${label}の${priority}区分はすべてチェック済みです`, 'info');
       return;
@@ -48,16 +47,9 @@ function BulkMenu({ side }: { side: 'afro' | 'client' }) {
   };
   return (
     <>
-      {side === 'afro' ? (
-        <Button variant="contained" startIcon={<Building2 size={16} />} onClick={(e) => setAnchor(e.currentTarget)} aria-haspopup="menu">
-          {label}で一括チェック
-        </Button>
-      ) : (
-        // 顧客の承認は本来お客様ポータルで行う。ここは商談デモ用の再現操作
-        <Button size="small" variant="text" startIcon={<UserRound size={15} />} onClick={(e) => setAnchor(e.currentTarget)} aria-haspopup="menu" sx={{ minHeight: 44 }}>
-          デモ操作: 顧客の承認を再現
-        </Button>
-      )}
+      <Button variant="contained" startIcon={<Building2 size={16} />} onClick={(e) => setAnchor(e.currentTarget)} aria-haspopup="menu">
+        {label}で一括チェック
+      </Button>
       <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)}>
         {(['A', 'B'] as const).map((p) => (
           <MenuItem key={p} onClick={() => run(p)}>
@@ -77,8 +69,7 @@ function BulkMenu({ side }: { side: 'afro' | 'client' }) {
 
 export default function QualityPage() {
   const { state } = useDemo();
-  // 開発者画面ではアフロ側の確認だけを行う。顧客側の承認（デモの再現操作を含む）はお客様ポータルで行うので出さない（0.27.0）
-  const { dev } = useProjectRoutes();
+  // 管理者・開発者画面ではアフロ側の確認だけを行う。顧客側の承認はお客様ポータルだけ（開発者 0.27.0・管理者 2026-11-12）
   const [selected, setSelected] = useState<QualityCategory | null>(null);
   const overall = computeStats(QUALITY_ITEMS, state.qualityChecks);
 
@@ -106,9 +97,7 @@ export default function QualityPage() {
         eyebrow="④ 品質管理"
         icon={<ShieldCheck size={15} />}
         title="品質チェック"
-        description={dev
-          ? `12項目${TOTAL_QUALITY_QUESTIONS}問の品質基準のうち、アフロ側の確認を行います。顧客の承認はお客様がポータルで行います（デモでは代表${QUALITY_ITEMS.length}問を収録）。`
-          : `12項目${TOTAL_QUALITY_QUESTIONS}問の品質基準を、アフロと顧客の双方で確認します（デモでは代表${QUALITY_ITEMS.length}問を収録）。`}
+        description={`12項目${TOTAL_QUALITY_QUESTIONS}問の品質基準のうち、アフロ側の確認を行います。顧客の承認はお客様がお客様ポータルで行います（デモでは代表${QUALITY_ITEMS.length}問を収録）。`}
         actions={<BulkMenu side="afro" />}
       />
 
@@ -149,11 +138,6 @@ export default function QualityPage() {
               ))}
             </Box>
           </Box>
-          {!dev && (
-            <Stack direction="row" justifyContent="flex-end" sx={{ mt: 1.5, mr: -1, mb: -1 }}>
-              <BulkMenu side="client" />
-            </Stack>
-          )}
         </Surface>
       </Reveal>
 

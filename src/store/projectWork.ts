@@ -1,5 +1,5 @@
 import type { AnswerValue, DemoState, ProjectWork, QualityCheck, RequirementSession, Stage } from '@/types';
-import { seedSitemap } from '@/data/sitemap';
+import { emptySitemap, sitemapFor } from '@/data/sitemap';
 import { QUALITY_ITEMS } from '@/data/quality';
 import { daysAgo, hoursAgo } from '@/services/time';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
@@ -19,7 +19,7 @@ export const blankRequirements = (projectId: string): RequirementSession => ({
 
 export const blankWork = (projectId: string): ProjectWork => ({
   requirements: blankRequirements(projectId),
-  sitemap: seedSitemap(),
+  sitemap: emptySitemap(),
   design: { selected: null },
   qualityChecks: {},
 });
@@ -30,6 +30,28 @@ type Answers = Record<string, AnswerValue>;
 
 /** ヒアリングの回答（架空の顧客。src/data/requirements.ts の質問 id） */
 const HEARING: Record<string, Answers> = {
+  p8: {
+    'q-url': 'https://hanami-ryokan.example.jp',
+    'q-purpose': ['問い合わせを増やしたい', 'ブランドを刷新したい', 'スマホ対応したい'],
+    'q-issue': '予約サイト経由ばかりで、自社サイトからの直接予約が少ない',
+    'q-competitor': ['https://ryokan-sample.example.jp'],
+    'q-improve': ['写真・ビジュアル', '問い合わせ導線', 'スマホ表示'],
+    'q-keep': '露天風呂と庭の写真は評判が良い',
+    'q-target': '記念日に夫婦で訪れる 40〜60 代と、海外からの旅行者',
+    'q-strength': '創業 120 年。全室から庭が見え、地元の食材の会席料理',
+    'q-market': '客室ごとの写真と料金が一覧で見られる',
+    'q-content': '客室・料理・温泉・アクセス・宿泊プラン',
+    'q-feature': '予約システムへの導線、英語ページ',
+    'q-cv': '来店予約',
+    'q-seo': '地域名＋旅館、地域名＋露天風呂付き客室',
+    'q-ops': '両方',
+    'q-infra': 'サーバー・ドメインとも自社管理',
+    'q-schedule': '2026 年 3 月（春の観光シーズン前）',
+    'q-other': '季節のお知らせを女将が更新したい',
+    'q-dns-owner': 'お客様',
+    'q-dns-switch': 'アフロへ移管',
+    'q-dns-note': '予約システムを同じドメインで使っている',
+  },
   p2: {
     'q-url': 'https://hojo-kensetsu.example.jp',
     'q-purpose': ['採用を強化したい', '問い合わせを増やしたい', 'スマホ対応したい'],
@@ -144,6 +166,14 @@ const HEARING: Record<string, Answers> = {
 
 /** デザイン要件定義の回答（src/data/designRequirements.ts の質問 id）。制作の段階より先の案件だけ */
 const DESIGN: Record<string, Answers> = {
+  p8: {
+    'q-design-dislike': '写真が古く、旅館の落ち着いた雰囲気が伝わらない',
+    'q-image': '静かで上質、また訪れたくなる',
+    'q-design-ref': '縦書きと余白を生かした和風のサイト',
+    'q-brand': 'ロゴの朱色',
+    'q-design-media': '客室・料理・庭は撮り下ろし。季節の動画も使う',
+    'q-design-sp': '空室確認と予約までを片手で操作したい',
+  },
   p3: {
     'q-design-dislike': '色が多く、子ども向けなのか大人向けなのか分からない',
     'q-image': '清潔で、子ども連れでも気軽に行ける',
@@ -186,7 +216,8 @@ function qualityChecks(partial: boolean): Record<string, QualityCheck> {
   const checks: Record<string, QualityCheck> = {};
   QUALITY_ITEMS.forEach((item, i) => {
     if (!partial) {
-      checks[item.id] = { afroAt: daysAgo(40 - i * 0.1), afroBy: '藤井 慎', clientAt: daysAgo(38 - i * 0.1), clientBy: 'お客様 担当者' };
+      // 全ページ構築（運用＝20 日前・改善＝10 日前）の後に確認した日付にする
+      checks[item.id] = { afroAt: daysAgo(8 - i * 0.05), afroBy: '藤井 慎', clientAt: daysAgo(6 - i * 0.05), clientBy: 'お客様 担当者' };
     } else if (item.categoryId === 'qc1' || item.categoryId === 'qc2') {
       checks[item.id] = {
         afroAt: daysAgo(2 - i * 0.05), afroBy: '藤井 慎',
@@ -203,8 +234,8 @@ const ORDER: Stage[] = ['hearing', 'requirements', 'build', 'quality', 'operatio
 
 /**
  * 案件の段階に合う制作データ。段階より前の工程は入力・承認済みにする。
- * - requirements: ヒアリング済み・AI 分析済み（要件定義書の承認待ち）
- * - build: 要件定義書・サイトマップを承認済み、デザイン要件定義を入力済み（デザイン案の採用待ち）
+ * - requirements: ヒアリング済み・AI 分析済み（要件定義書の承認待ち。サイトマップはまだ無い）
+ * - build: 要件定義書を承認済み・サイトマップを作成して承認済み、デザイン要件定義を入力済み（デザイン案の採用待ち）
  * - quality: デザイン採用・全ページ構築まで済み、品質チェックが途中
  * - operation / improvement: 品質チェックまで完了
  */
@@ -224,7 +255,7 @@ export function seedWorkFor(projectId: string, stage: Stage): ProjectWork {
     ...(at >= 2 ? { approvedAt: daysAgo(75 - at * 10) } : {}),
   };
   if (at >= 2) {
-    work.sitemap = { ...work.sitemap, approvedAt: at >= 3 ? daysAgo(70 - at * 10) : daysAgo(1.5) };
+    work.sitemap = { ...sitemapFor(projectId), approvedAt: at >= 3 ? daysAgo(70 - at * 10) : daysAgo(1.5) };
     const design = DESIGN[projectId] ?? {};
     work.design = { selected: null, answers: design, answerMeta: answerMetaOf(design, daysAgo(at >= 3 ? 65 - at * 10 : 1)) };
   }

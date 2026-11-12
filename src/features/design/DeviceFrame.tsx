@@ -8,6 +8,7 @@ import { DEVICE_HEIGHT, DEVICE_WIDTH, type Device, type PreviewProps } from './p
 import { MinimalPreview } from './previews/MinimalPreview';
 import { CreativePreview } from './previews/CreativePreview';
 import { PremiumPreview } from './previews/PremiumPreview';
+import { useDesignContext } from './designContext';
 
 export const PREVIEWS: Record<DesignId, ComponentType<PreviewProps>> = {
   minimal: MinimalPreview,
@@ -23,16 +24,22 @@ interface Props {
   /** 表示する高さ（論理 px）。省略時は端末の画面高さ */
   viewportHeight?: number;
   label?: string;
+  /** 表示する画面（0 = トップ、1・2 = 改善後サイトマップの主要ページ。0.29.5） */
+  screen?: number;
+  /** 案件（省略時は選んでいる案件） */
+  projectId?: string;
 }
 
 /**
  * 実寸（1280/820/390px）でレンダリングし、置き場所の幅に合わせて縮小表示する。
  * プレビュー自体は device によってレイアウトを切り替える（実際の HTML/CSS）。
  */
-export function DeviceFrame({ design, device, thumbnail, viewportHeight, label }: Props) {
+export function DeviceFrame({ design, device, thumbnail, viewportHeight, label, screen = 0, projectId }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [avail, setAvail] = useState(0);
   const reduced = useReducedMotion();
+  const ctx = useDesignContext(projectId);
+  const page = screen > 0 ? ctx.pages[screen - 1] : undefined;
   const w = DEVICE_WIDTH[device];
   const h = viewportHeight ?? DEVICE_HEIGHT[device];
 
@@ -65,12 +72,13 @@ export function DeviceFrame({ design, device, thumbnail, viewportHeight, label }
           <Box sx={{ height: barH, display: 'flex', alignItems: 'center', gap: 0.75, px: 1.5, bgcolor: tokens.color.bgSubtle, borderBottom: `1px solid ${tokens.color.border}` }}>
             {['#F87171', '#FBBF24', '#34D399'].map((c) => <Box key={c} sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: c, opacity: 0.8 }} />)}
             <Box sx={{ flex: 1, mx: 1, height: 20, borderRadius: '6px', bgcolor: '#fff', fontSize: 12, color: tokens.color.muted, display: 'flex', alignItems: 'center', px: 1, overflow: 'hidden', whiteSpace: 'nowrap' }}>
-              minamo-coffee.example.jp
+              {ctx.domain}{page?.path ?? ''}
             </Box>
           </Box>
         )}
         {scale > 0 && (
           <Box
+            key={page?.key ?? 'top'}
             role={thumbnail ? undefined : 'region'}
             aria-label={label}
             aria-hidden={thumbnail || undefined}
@@ -80,7 +88,7 @@ export function DeviceFrame({ design, device, thumbnail, viewportHeight, label }
               overflowY: thumbnail ? 'hidden' : 'auto', overflowX: 'hidden', pointerEvents: thumbnail ? 'none' : 'auto',
             }}
           >
-            <Preview device={device} still={thumbnail || reduced} />
+            <Preview device={device} still={thumbnail || reduced} ctx={ctx} page={page} />
           </Box>
         )}
       </Box>

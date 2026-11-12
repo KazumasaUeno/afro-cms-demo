@@ -4,7 +4,9 @@ import { useState } from 'react';
 import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { DiagnosisReport } from '@/types';
 import { MONTHLY_METRICS, PAGE_PERFORMANCE, RENEWAL_MONTH, TRAFFIC_SOURCES } from '@/data/insights';
-import { useDemo } from '@/store/DemoStore';
+import { currentProject, useDemo } from '@/store/DemoStore';
+import { useNavigate } from 'react-router-dom';
+import { useProjectRoutes } from '@/features/projects/projectRoutes';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { tokens } from '@/theme/tokens';
 import { daysFromNow, formatDate, formatDateTime } from '@/services/time';
@@ -67,7 +69,40 @@ function TrendChart({ dataKey, name, color, gradientId, latest, unit, showXAxis,
   );
 }
 
+/**
+ * インサイトは改善の段階（公開後）の画面。選んでいる案件がまだその段階でなければ、データを出さずに案内だけ出す（2026-11-12 ユーザー指示）。
+ * アクセス・診断のデモのデータは 1 案件分の見本（data/insights.ts）
+ */
 export default function InsightsPage() {
+  const { state } = useDemo();
+  const project = currentProject(state);
+  const routes = useProjectRoutes();
+  const navigate = useNavigate();
+  if (project.stage !== 'improvement') {
+    return (
+      <Box>
+        <PageHeader eyebrow="⑥ 改善" icon={<BarChart3 size={15} />} title="インサイト" description="アクセスと問い合わせの推移を見ながら、4か月ごとのAI診断で次の改善を決めます。" />
+        <Surface padding={{ xs: 3, md: 5 }} sx={{ textAlign: 'center' }}>
+          <Stack alignItems="center" spacing={1.5}>
+            <Box aria-hidden sx={{ display: 'grid', placeItems: 'center', width: 56, height: 56, borderRadius: '50%', bgcolor: tokens.color.surfaceMuted, color: tokens.color.inkSoft }}>
+              <BarChart3 size={26} />
+            </Box>
+            <Typography variant="h5" component="h2">{project.siteName} のインサイトはまだありません</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 460 }}>
+              サイトの公開後、改善の段階になると、アクセスと問い合わせの推移と AI サイト診断を確認できます。
+            </Typography>
+            <Button variant="contained" endIcon={<ArrowUpRight size={16} />} onClick={() => navigate(routes.detail(project.id))} sx={{ mt: 1 }}>
+              プロジェクト詳細を開く
+            </Button>
+          </Stack>
+        </Surface>
+      </Box>
+    );
+  }
+  return <InsightsBody />;
+}
+
+function InsightsBody() {
   const { state } = useDemo();
   const reduced = useReducedMotion();
   const [dialog, setDialog] = useState<{ open: boolean; report: DiagnosisReport | null }>({ open: false, report: null });

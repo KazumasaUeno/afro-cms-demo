@@ -24,12 +24,12 @@ export const seedProjects = (): Project[] => [
   {
     id: 'p2', clientName: '北条建設株式会社', siteName: 'HOJO Construction', siteUrl: 'https://hojo-kensetsu.example.jp',
     industry: '建設・不動産', stage: 'requirements', progress: 18, ownerId: 'm1', updatedAt: hoursAgo(3),
-    nextAction: '要件定義書の承認をもらう', accent: '#1D4ED8', launchDate: daysFromNow(80), pendingApprovals: 1,
+    nextAction: 'お客様の要件定義書の承認を待つ', accent: '#1D4ED8', launchDate: daysFromNow(80), pendingApprovals: 1,
   },
   {
     id: 'p3', clientName: 'ひだまり歯科クリニック', siteName: 'Hidamari Dental', siteUrl: 'https://hidamari-dental.example.jp',
     industry: '医療', stage: 'build', progress: 38, ownerId: 'm2', updatedAt: hoursAgo(5),
-    nextAction: 'デザイン案の採用を決める', accent: '#0D9488', launchDate: daysFromNow(50), pendingApprovals: 1,
+    nextAction: 'お客様のデザイン案の採用を待つ', accent: '#0D9488', launchDate: daysFromNow(50), pendingApprovals: 1,
   },
   {
     id: 'p4', clientName: 'Lumière Atelier', siteName: 'Lumière Bridal', siteUrl: 'https://lumiere-bridal.example.jp',
@@ -45,6 +45,18 @@ export const seedProjects = (): Project[] => [
     id: 'p6', clientName: '一般社団法人まちの学び舎', siteName: 'Machi no Manabiya', siteUrl: 'https://manabiya.example.org',
     industry: '教育・NPO', stage: 'improvement', progress: 100, ownerId: 'm3', updatedAt: daysAgo(4),
     nextAction: '第1回 AI改善診断のレポート送付', accent: '#7C3AED', pendingApprovals: 0,
+  },
+  // 何も設定していない案件（登録しただけ。ヒアリング・サイトマップ・担当の開発者・お客様アカウント・公開予定日なし。2026-11-12 ユーザー指示）
+  {
+    id: 'p7', clientName: '有限会社あおば工務店', siteName: 'Aoba Koumuten', siteUrl: 'https://aoba-koumuten.example.jp',
+    industry: '建設・リフォーム', stage: 'hearing', progress: 0, ownerId: 'm1', updatedAt: hoursAgo(0.5),
+    nextAction: 'ヒアリングを入力する', accent: '#15803D', pendingApprovals: 0,
+  },
+  // すべての工程を終えた案件（進捗 100%。ヒアリング〜品質チェックまで完了し、公開済み。2026-11-12 ユーザー指示）
+  {
+    id: 'p8', clientName: '株式会社はなみ旅館', siteName: 'Hanami Ryokan', siteUrl: 'https://hanami-ryokan.example.jp',
+    industry: '宿泊・観光', stage: 'improvement', progress: 100, ownerId: 'm4', updatedAt: daysAgo(6),
+    nextAction: 'すべての工程が完了しました', accent: '#B91C1C', pendingApprovals: 0,
   },
 ];
 

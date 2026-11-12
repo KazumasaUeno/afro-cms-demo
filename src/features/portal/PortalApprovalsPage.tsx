@@ -13,8 +13,10 @@ import { tokens } from '@/theme/tokens';
 import type { DesignId } from '@/types';
 import { AREAS } from '@/components/layout/nav';
 import { DeviceFrame } from '@/features/design/DeviceFrame';
+import { personalize, useDesignContext } from '@/features/design/designContext';
 import { buildProposal } from '@/features/requirements/buildProposal';
 import { approvalSteps, type ApprovalKey, type ApprovalStep } from './portalSteps';
+import { sitemapCreated } from '@/data/sitemap';
 import { pendingConfirmations } from '@/features/requirements/assignment';
 import { downloadRequirementsDoc } from '@/features/requirements/requirementsDoc';
 
@@ -73,6 +75,8 @@ const CONFIRM: Record<Exclude<ApprovalKey, 'quality'>, { title: string; body: st
 export default function PortalApprovalsPage() {
   // サイトマップ・デザインの承認は repository の範囲外（live では隠す。§14）なので DemoStore のまま
   const { state, dispatch } = useDemo();
+  // デザイン案は案件ごと（ポータルは MINAMO COFFEE。0.29.5）
+  const designCtx = useDesignContext();
   const { approvals } = useRepositories();
   const { data: req } = useCurrentRequirements();
   const toast = useToast();
@@ -172,32 +176,39 @@ export default function PortalApprovalsPage() {
 
         {/* 2. サイトマップ */}
         <Reveal delay={0.04}>
-          <StepCard step={byKey.sitemap} action={approveBtn('sitemap')}>
-            <Typography variant="body2" sx={{ mb: 1.5 }}>
-              リニューアル後は <b>{afterPages.length}</b> ページの構成です（新しく作るページ <b>{newPages.length}</b>）。
-            </Typography>
-            <Box component="ul" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, listStyle: 'none', m: 0, p: 0 }}>
-              {afterPages.map((n) => (
-                <Box
-                  component="li" key={n.id} title={n.data.reason}
-                  sx={{
-                    px: 1.25, py: 0.5, borderRadius: 2, fontSize: 13, fontWeight: 600,
-                    bgcolor: n.data.kind === 'new' ? AREA.soft : tokens.color.bgSubtle, color: n.data.kind === 'new' ? AREA.color : tokens.color.inkSoft,
-                  }}
-                >
-                  {n.data.kind === 'new' && <Sparkles size={12} style={{ marginRight: 4, verticalAlign: '-1px' }} />}
-                  {n.data.label}
+          <StepCard step={byKey.sitemap} action={approveBtn('sitemap', !sitemapCreated(state.sitemap))}>
+            {/* サイトマップは要件定義書の承認のときに作る（0.29.4）。承認前はこの欄ごと隠れるが、念のため未作成でも空の一覧を出さない */}
+            {!sitemapCreated(state.sitemap) ? (
+              <Typography variant="body2" color="text.secondary">アフロがサイトマップを作成しています。できあがると、ここでページ構成をご確認いただけます。</Typography>
+            ) : (
+              <>
+                <Typography variant="body2" sx={{ mb: 1.5 }}>
+                  リニューアル後は <b>{afterPages.length}</b> ページの構成です（新しく作るページ <b>{newPages.length}</b>）。
+                </Typography>
+                <Box component="ul" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, listStyle: 'none', m: 0, p: 0 }}>
+                  {afterPages.map((n) => (
+                    <Box
+                      component="li" key={n.id} title={n.data.reason}
+                      sx={{
+                        px: 1.25, py: 0.5, borderRadius: 2, fontSize: 13, fontWeight: 600,
+                        bgcolor: n.data.kind === 'new' ? AREA.soft : tokens.color.bgSubtle, color: n.data.kind === 'new' ? AREA.color : tokens.color.inkSoft,
+                      }}
+                    >
+                      {n.data.kind === 'new' && <Sparkles size={12} style={{ marginRight: 4, verticalAlign: '-1px' }} />}
+                      {n.data.label}
+                    </Box>
+                  ))}
                 </Box>
-              ))}
-            </Box>
-            {newPages.some((n) => n.data.reason) && (
-              <Stack spacing={0.75} sx={{ mt: 2 }}>
-                {newPages.filter((n) => n.data.reason).slice(0, 3).map((n) => (
-                  <Typography key={n.id} variant="caption" sx={{ display: 'block' }}>
-                    <b>{n.data.label}</b>: {n.data.reason}
-                  </Typography>
-                ))}
-              </Stack>
+                {newPages.some((n) => n.data.reason) && (
+                  <Stack spacing={0.75} sx={{ mt: 2 }}>
+                    {newPages.filter((n) => n.data.reason).slice(0, 3).map((n) => (
+                      <Typography key={n.id} variant="caption" sx={{ display: 'block' }}>
+                        <b>{n.data.label}</b>: {n.data.reason}
+                      </Typography>
+                    ))}
+                  </Stack>
+                )}
+              </>
             )}
           </StepCard>
         </Reveal>
@@ -206,7 +217,8 @@ export default function PortalApprovalsPage() {
         <Reveal delay={0.08}>
           <StepCard step={byKey.design} action={approveBtn('design', !state.design.selected)}>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0,1fr))' }, gap: 1.5 }} role="radiogroup" aria-label="採用するデザイン">
-              {DESIGN_VARIANTS.map((v) => {
+              {DESIGN_VARIANTS.map((v0) => {
+                const v = personalize(v0, designCtx);
                 const selected = state.design.selected === v.id;
                 const locked = !!state.design.approvedAt;
                 return (

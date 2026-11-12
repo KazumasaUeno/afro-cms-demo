@@ -4,6 +4,7 @@ import type {
 } from '@/types';
 import { QUALITY_CATEGORIES, QUALITY_ITEMS } from '@/data/quality';
 import { nowIso } from '@/services/time';
+import { sitemapCreated, sitemapFor } from '@/data/sitemap';
 import { createSeedState } from './seed';
 import { blankRequirements, demoDesignApprovedAt, switchWork } from './projectWork';
 import { syncDemoProject } from './demoProject';
@@ -19,7 +20,7 @@ import {
   DEV_AFFILIATION, normalizeEmail, seedClientAccounts, seedDevAccess, seedDevProjects, validateClientAccount, validateDevUser,
   type ClientAccountDraft, type DevUserDraft,
 } from '@/data/users';
-import { projectFromDraft, validateProject, type ProjectDraft } from '@/features/projects/projectForm';
+import { applyProjectPatch, projectFromDraft, projectPatchFromDraft, validateProject, type ProjectDraft } from '@/features/projects/projectForm';
 
 /** 操作した側。省略時はアフロ（管理者画面）。お客様の画面（CMS・ポータル）からは client を渡す */
 export type Side = AnswerSide;
@@ -27,7 +28,8 @@ export type Side = AnswerSide;
 export type Action =
   | { type: 'reset' }
   | { type: 'setCurrentProject'; id: string }
-  | { type: 'updateProject'; id: string; patch: Partial<Project> }
+  /** 案件の情報の編集（管理者画面・demo だけ。2026-11-12）。id・段階・進捗・次の作業・承認待ちの数は変えない */
+  | { type: 'updateProject'; id: string; project: ProjectDraft }
   /** 新しいプロジェクト（管理者画面）。要件定義・0% で作り、作業中のプロジェクトにする */
   | { type: 'createProject'; project: ProjectDraft }
   /** by を省略するとアフロ（管理者画面）。お客様ポータルからは client */
@@ -158,8 +160,16 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       return log(s, `プロジェクト「${created.siteName}」（${created.clientName}）を作成しました`, 'edit', ACTOR.afro, created.id);
     }
 
-    case 'updateProject':
-      return { ...state, projects: state.projects.map((p) => (p.id === action.id ? { ...p, ...action.patch, updatedAt: nowIso() } : p)) };
+    case 'updateProject': {
+      // 作成と同じ入力チェック（URL の重複は自分を除く）。不正な値・何も変わらない編集は受け付けない
+      const prev = state.projects.find((p) => p.id === action.id);
+      if (!prev || Object.keys(validateProject(action.project, state.projects, prev)).length > 0) return state;
+      const next = applyProjectPatch(prev, projectPatchFromDraft(action.project));
+      if (!next) return state;
+      const updated: Project = { ...next, updatedAt: nowIso() };
+      const s = { ...state, projects: state.projects.map((p) => (p.id === prev.id ? updated : p)) };
+      return log(s, `プロジェクト「${updated.siteName}」（${updated.clientName}）の情報を更新しました`, 'edit', ACTOR.afro, prev.id);
+    }
 
     case 'setAnswer': {
       // 回答を変えられるのは AI 分析の前だけ（分析後の「ヒアリングを確認」は閲覧だけ。2026-11-12 ユーザー指示。承認後も変えない）
@@ -208,7 +218,10 @@ function baseReducer(state: DemoState, action: Action): DemoState {
         {},
       );
       // 承認の記録には実際に操作した人を残す（アフロが代わりに承認した場合はアフロの名前）
-      return log(approval(s, 'client', '要件定義書を承認', '要件定義', ACTOR[action.by ?? 'afro']), APPROVE_TEXT.requirements, 'approve', ACTOR[action.by ?? 'afro'], state.requirements.projectId);
+      const approved = log(approval(s, 'client', '要件定義書を承認', '要件定義', ACTOR[action.by ?? 'afro']), APPROVE_TEXT.requirements, 'approve', ACTOR[action.by ?? 'afro'], state.requirements.projectId);
+      // サイトマップは初めは無く、要件定義書の承認のときに作る（0.29.4。2026-11-12 ユーザー指示）
+      if (sitemapCreated(approved.sitemap)) return approved;
+      return log({ ...approved, sitemap: sitemapFor(state.requirements.projectId) }, 'AI がサイトマップ案を作成しました', 'ai', 'AI', state.requirements.projectId);
     }
 
     case 'sendBackRequirements': {
@@ -225,12 +238,12 @@ function baseReducer(state: DemoState, action: Action): DemoState {
 
     case 'setSitemap':
       // お客様の承認後は構造を変えない（管理者・開発者とも。2026-11-11 ユーザー判断。ページの追加・削除・移動・接続・名前の変更はすべてこの action を通る）
-      if (state.sitemap.approvedAt) return state;
+      if (state.sitemap.approvedAt || !sitemapCreated(state.sitemap)) return state;
       return { ...state, sitemap: { ...state.sitemap, [action.variant]: { nodes: action.nodes, edges: action.edges } } };
 
     case 'approveSitemap': {
       // ウォーターフォール: 要件定義書の承認の後だけ（画面でも止めている）
-      if (state.requirements.status !== 'approved' || state.sitemap.approvedAt) return state;
+      if (state.requirements.status !== 'approved' || state.sitemap.approvedAt || !sitemapCreated(state.sitemap)) return state;
       const s = patchOwner({ ...state, sitemap: { ...state.sitemap, approvedAt: nowIso() } }, {});
       return log(approval(s, 'client', 'サイトマップを承認', '制作 / サイトマップ', ACTOR[action.by ?? 'afro']), APPROVE_TEXT.sitemap, 'approve', ACTOR[action.by ?? 'afro'], state.requirements.projectId);
     }

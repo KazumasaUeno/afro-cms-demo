@@ -17,6 +17,8 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { tokens } from '@/theme/tokens';
 import { LANDSCAPE_PHONE } from '@/theme/media';
 import type { DesignId } from '@/types';
+import { seedSitemap, sitemapCreated } from '@/data/sitemap';
+import { copyFor, personalize, useDesignContext, type DesignContext } from '@/features/design/designContext';
 
 const c = tokens.color;
 
@@ -140,17 +142,19 @@ function AnalysisSlide({ reduced }: { reduced: boolean }) {
   );
 }
 
-/* 4. デザイン案（簡易のHTML/CSSモック） */
-function MiniSite({ id }: { id: DesignId }) {
-  const v = DESIGN_VARIANTS.find((d) => d.id === id)!;
+/* 4. デザイン案（簡易のHTML/CSSモック）。中身は選んでいる案件（デザインスタジオと同じ designContext。0.29.5） */
+function MiniSite({ id, ctx }: { id: DesignId; ctx: DesignContext }) {
+  const v = personalize(DESIGN_VARIANTS.find((d) => d.id === id)!, ctx);
   const [bg, ink, accent, sub] = v.palette;
+  const copy = copyFor(ctx, id);
+  const lines = (max: number) => copy.headline.slice(0, max).map((l, i, a) => <span key={i}>{l}{i < a.length - 1 && <br />}</span>);
   if (id === 'minimal') {
     return (
       <Box sx={{ bgcolor: bg, color: ink, p: 2, height: '100%' }}>
-        <Stack direction="row" justifyContent="space-between" sx={{ fontSize: 9, letterSpacing: '0.2em' }}><span>MINAMO</span><span>SHOP　STORY</span></Stack>
-        <Box sx={{ mt: 3, fontFamily: 'serif', fontSize: 18, lineHeight: 1.5 }}>一杯から、<br />日常を少し特別に。</Box>
+        <Stack direction="row" justifyContent="space-between" sx={{ fontSize: 9, letterSpacing: '0.2em' }}><span>{ctx.logo.toUpperCase()}</span><span>{ctx.nav.slice(0, 2).join('　')}</span></Stack>
+        <Box sx={{ mt: 3, fontFamily: 'serif', fontSize: ctx.coffee ? 18 : 15, lineHeight: 1.5 }}>{ctx.coffee ? <>一杯から、<br />日常を少し特別に。</> : lines(2)}</Box>
         <Box sx={{ mt: 2, height: 70, bgcolor: sub, borderRadius: 0.5 }} />
-        <Box sx={{ mt: 1.5, fontSize: 9, borderBottom: `1px solid ${accent}`, display: 'inline-block', color: accent }}>オンラインで購入 →</Box>
+        <Box sx={{ mt: 1.5, fontSize: 9, borderBottom: `1px solid ${accent}`, display: 'inline-block', color: accent }}>{copy.cta} →</Box>
       </Box>
     );
   }
@@ -158,8 +162,8 @@ function MiniSite({ id }: { id: DesignId }) {
     return (
       <Box sx={{ bgcolor: bg, color: ink, p: 2, height: '100%', position: 'relative', overflow: 'hidden' }}>
         <Box sx={{ position: 'absolute', right: -30, top: -20, width: 120, height: 120, borderRadius: '50%', bgcolor: sub, opacity: 0.6 }} />
-        <Box sx={{ fontSize: 9, fontWeight: 800 }}>MINAMO★COFFEE</Box>
-        <Box sx={{ mt: 2.5, fontSize: 26, fontWeight: 900, lineHeight: 1, position: 'relative' }}>BREW<br /><Box component="span" sx={{ color: accent }}>YOUR</Box><br />DAY.</Box>
+        <Box sx={{ fontSize: 9, fontWeight: 800 }}>{ctx.coffee ? 'MINAMO★COFFEE' : `${ctx.siteName.toUpperCase()}★`}</Box>
+        <Box sx={{ mt: 2.5, fontSize: 26, fontWeight: 900, lineHeight: 1, position: 'relative' }}>{ctx.display[0]}<br /><Box component="span" sx={{ color: accent }}>{ctx.display[1]}</Box><br />{ctx.coffee ? 'DAY.' : ctx.display[2]}</Box>
         <Stack direction="row" spacing={0.75} sx={{ mt: 2 }}>
           <Box sx={{ flex: 2, height: 46, bgcolor: accent, borderRadius: 2 }} /><Box sx={{ flex: 1, height: 46, bgcolor: ink, borderRadius: 2 }} />
         </Stack>
@@ -168,16 +172,17 @@ function MiniSite({ id }: { id: DesignId }) {
   }
   return (
     <Box sx={{ bgcolor: bg, color: ink, p: 2, height: '100%', textAlign: 'center' }}>
-      <Box sx={{ fontSize: 9, letterSpacing: '0.3em', color: accent }}>MINAMO COFFEE</Box>
+      <Box sx={{ fontSize: 9, letterSpacing: '0.3em', color: accent }}>{ctx.siteName.toUpperCase()}</Box>
       <Box sx={{ mt: 1.5, height: 64, bgcolor: sub, borderRadius: 1, border: `1px solid ${accent}55` }} />
-      <Box sx={{ mt: 1.5, fontFamily: 'serif', fontSize: 16 }}>想いを届ける、<br />特別な一杯を。</Box>
-      <Box sx={{ mt: 1.5, display: 'inline-block', px: 1.5, py: 0.5, border: `1px solid ${accent}`, color: accent, fontSize: 9 }}>法人ギフトを見る</Box>
+      <Box sx={{ mt: 1.5, fontFamily: 'serif', fontSize: ctx.coffee ? 16 : 14 }}>{ctx.coffee ? <>想いを届ける、<br />特別な一杯を。</> : lines(2)}</Box>
+      <Box sx={{ mt: 1.5, display: 'inline-block', px: 1.5, py: 0.5, border: `1px solid ${accent}`, color: accent, fontSize: 9 }}>{ctx.coffee ? '法人ギフトを見る' : copy.cta}</Box>
     </Box>
   );
 }
 
 function DesignSlide() {
   const [sel, setSel] = useState<DesignId>('creative');
+  const ctx = useDesignContext();
   return (
     <SlideFrame eyebrow="③ 制作" title="要件から、3つのデザイン案を生成" lead="色違いではなく、レイアウト・書体・構成まで異なる3案。顧客と並べて比べ、その場で採用できます。（クリックで選択）">
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2.5 }}>
@@ -185,13 +190,13 @@ function DesignSlide() {
           const on = sel === d.id;
           return (
             <ButtonBase key={d.id} onClick={() => setSel(d.id)} aria-pressed={on} sx={{ display: 'block', textAlign: 'left', borderRadius: 4, border: `2px solid ${on ? c.primary : c.border}`, bgcolor: '#fff', overflow: 'hidden', boxShadow: on ? tokens.shadow.lg : tokens.shadow.sm, transform: on ? 'translateY(-4px)' : 'none', transition: `all .24s ${tokens.motion.easeCss}` }}>
-              <Box sx={{ height: { xs: 180, md: 210 } }}><MiniSite id={d.id} /></Box>
+              <Box sx={{ height: { xs: 180, md: 210 } }}><MiniSite id={d.id} ctx={ctx} /></Box>
               <Box sx={{ p: 2, borderTop: `1px solid ${c.border}` }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                   <Typography sx={{ fontWeight: 700 }}>{d.label}：{d.name}</Typography>
                   {on && <StatusPill tone="primary">選択中</StatusPill>}
                 </Stack>
-                <Typography variant="caption">{d.tagline}</Typography>
+                <Typography variant="caption">{personalize(d, ctx).tagline}</Typography>
               </Box>
             </ButtonBase>
           );
@@ -204,8 +209,10 @@ function DesignSlide() {
 /* 5. ビフォーアフター */
 function BeforeAfterSlide() {
   const { state } = useDemo();
+  // 営業用の見本スライド（数値もデモデータ）。案件のサイトマップがまだ無い（要件定義書の承認前。0.29.4）ときは見本の構成で見せる
+  const sitemap = sitemapCreated(state.sitemap) ? state.sitemap : seedSitemap();
   const firstLevel = (v: 'before' | 'after') => {
-    const g = state.sitemap[v];
+    const g = sitemap[v];
     const home = g.nodes.find((n) => n.data.kind === 'home');
     const ids = g.edges.filter((e) => e.source === home?.id).map((e) => e.target);
     return g.nodes.filter((n) => ids.includes(n.id));

@@ -2,7 +2,7 @@ import { useLocation } from 'react-router-dom';
 import { areaOf } from '@/components/layout/nav';
 
 export interface HearingRoutes {
-  /** 開発者画面（/dev 配下）で開いているか。管理者だけの操作（代理承認・サイトマップへ進む等）を出し分ける */
+  /** 開発者画面（/dev 配下）で開いているか。管理者だけの操作（サイトマップへ進む等。承認はお客様ポータルだけ）を出し分ける */
   dev: boolean;
   /** 入力の正の画面（AI 分析の前は入力、分析後は要件定義書） */
   input: string;
