@@ -40,6 +40,7 @@ export type Action =
   | { type: 'completeAnalysis' }
   | { type: 'approveRequirements'; by?: Side }
   | { type: 'resetRequirements' }
+  | { type: 'sendBackRequirements' }
   | { type: 'setSitemap'; variant: SitemapVariant; nodes: SitemapNode[]; edges: SitemapEdge[] }
   | { type: 'approveSitemap'; by?: Side }
   | { type: 'selectDesign'; id: DesignId }
@@ -208,6 +209,13 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       );
       // 承認の記録には実際に操作した人を残す（アフロが代わりに承認した場合はアフロの名前）
       return log(approval(s, 'client', '要件定義書を承認', '要件定義', ACTOR[action.by ?? 'afro']), APPROVE_TEXT.requirements, 'approve', ACTOR[action.by ?? 'afro'], state.requirements.projectId);
+    }
+
+    case 'sendBackRequirements': {
+      // 差し戻す: AI 分析済み（承認待ち）からヒアリングの入力へ戻す。回答は残す（live の差し戻しと同じ。0.29.3）
+      if (state.requirements.status !== 'analyzed') return state;
+      const { analyzedAt: _analyzedAt, ...req } = state.requirements;
+      return log({ ...state, requirements: { ...req, status: 'draft' } }, 'ヒアリングを差し戻し、入力に戻しました', 'edit', ACTOR.afro, state.requirements.projectId);
     }
 
     case 'resetRequirements':

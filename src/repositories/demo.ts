@@ -42,6 +42,7 @@ export function useDemoRepositories(): Repositories {
         confirmAnswer: (_projectId, questionId, by) => run({ type: 'confirmAnswer', questionId, by }),
         completeAnalysis: () => run({ type: 'completeAnalysis' }),
         reset: () => run({ type: 'resetRequirements' }),
+        sendBack: () => run({ type: 'sendBackRequirements' }),
         saveNow: () => Promise.resolve(flush()),
       },
       approvals: {

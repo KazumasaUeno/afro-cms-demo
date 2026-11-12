@@ -48,6 +48,8 @@ export interface RequirementsRepo {
   completeAnalysis(projectId: string): Promise<void>;
   /** demo: 回答をやり直す（全消去）。live: 確認依頼を差し戻す（analyzed → draft。回答は残す。§6） */
   reset(projectId: string): Promise<void>;
+  /** demo だけ: 差し戻す（analyzed → draft。回答は残す。0.29.3）。live は reset が差し戻し */
+  sendBack?(projectId: string): Promise<void>;
   /** いまの回答をすぐ保存する（「保存」ボタン）。保存できたら true */
   saveNow(): Promise<boolean>;
 }

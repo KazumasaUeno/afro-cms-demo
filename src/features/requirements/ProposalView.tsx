@@ -37,7 +37,8 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
   const { dev } = useHearingRoutes();
   const toast = useToast();
   const write = useWrite();
-  const [confirmReset, setConfirmReset] = useState(false);
+  // 確認ダイアログ: sendBack＝差し戻す（回答は残す）／ reset＝回答をやり直す（demo だけ。全消去）
+  const [confirmReset, setConfirmReset] = useState<false | 'sendBack' | 'reset'>(false);
   const approved = req.status === 'approved';
   const live = DATA_MODE === 'live';
   const role = useLiveRoleOptional();
@@ -45,7 +46,7 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
   const [confirmApprove, setConfirmApprove] = useState(false);
   const [approving, setApproving] = useState(false);
   const proposal = useMemo(() => req.proposal ?? buildProposal(req.answers, req.competitors), [req.proposal, req.answers, req.competitors]);
-  // 差し戻し: demo は管理者画面の「回答をやり直す」、live はアサインされた開発者の「差し戻す」（承認待ちの間だけ）
+  // 差し戻し: demo は管理者画面の「差し戻す」（承認待ちの間）と「回答をやり直す」、live はアサインされた開発者の「差し戻す」（承認待ちの間だけ）
   const canReset = live ? role === 'developer' && req.status === 'analyzed' && !client : !approved && !dev;
   const answered = REQUIREMENT_QUESTIONS.filter((q) => isAnswered(req.answers[q.id])).length;
   // 内容の確認待ちの回答（0.17 までの保存データでお客様が入力したもの）が残っている間は承認できない（reducer と同じ条件）
@@ -163,7 +164,9 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
               )}
             </Box>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ flexWrap: 'wrap' }}>
-              {canReset && <Button variant="text" startIcon={<RotateCcw size={16} />} onClick={() => setConfirmReset(true)}>{live ? '差し戻す' : '回答をやり直す'}</Button>}
+              {/* 差し戻す（回答を残して入力へ戻す）は demo・live 共通。demo は承認待ちの間だけ（0.29.3） */}
+              {canReset && (live || req.status === 'analyzed') && <Button variant="text" startIcon={<RotateCcw size={16} />} onClick={() => setConfirmReset('sendBack')}>差し戻す</Button>}
+              {canReset && !live && <Button variant="text" onClick={() => setConfirmReset('reset')}>回答をやり直す</Button>}
               <Button variant="outlined" startIcon={<Download size={16} />} onClick={() => { downloadRequirementsDoc({ requirements: req, projects: projectList }); toast('要件定義書をダウンロードしました'); }}>要件定義書をダウンロード</Button>
               {approved ? (
                 <Box
@@ -187,16 +190,25 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
         </Surface>
       </Reveal>
 
-      <Dialog open={confirmReset} onClose={() => setConfirmReset(false)} maxWidth="xs" fullWidth aria-labelledby="req-reset-title">
+      <Dialog open={confirmReset !== false} onClose={() => setConfirmReset(false)} maxWidth="xs" fullWidth aria-labelledby="req-reset-title">
         <DialogContent sx={{ pt: 3 }}>
-          <Typography id="req-reset-title" variant="h3" sx={{ mb: 1 }}>{live ? '承認の依頼を差し戻しますか？' : '回答をやり直しますか？'}</Typography>
+          <Typography id="req-reset-title" variant="h3" sx={{ mb: 1 }}>{confirmReset === 'reset' ? '回答をやり直しますか？' : '承認の依頼を差し戻しますか？'}</Typography>
           <Typography variant="body2" color="text.secondary">
-            {live ? 'お客様の承認待ちを取り下げ、ヒアリングの入力に戻します。回答は残ります。直した後にもう一度 AI 分析を実行してください。' : 'ヒアリングの回答と提案書が消え、最初の質問に戻ります。'}
+            {confirmReset === 'reset' ? 'ヒアリングの回答と提案書が消え、最初の質問に戻ります。' : 'お客様の承認待ちを取り下げ、ヒアリングの入力に戻します。回答は残ります。直した後にもう一度 AI 分析を実行してください。'}
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
           <Button variant="outlined" onClick={() => setConfirmReset(false)}>キャンセル</Button>
-          <Button variant="contained" onClick={() => { void write(requirements.reset(req.projectId), live ? '承認の依頼を差し戻しました' : undefined); setConfirmReset(false); }}>{live ? '差し戻す' : 'やり直す'}</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              const task = confirmReset === 'reset' ? requirements.reset(req.projectId) : (requirements.sendBack ?? requirements.reset)(req.projectId);
+              void write(task, confirmReset === 'reset' ? undefined : '承認の依頼を差し戻しました');
+              setConfirmReset(false);
+            }}
+          >
+            {confirmReset === 'reset' ? 'やり直す' : '差し戻す'}
+          </Button>
         </DialogActions>
       </Dialog>
 
