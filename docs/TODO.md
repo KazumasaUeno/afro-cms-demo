@@ -28,3 +28,4 @@
 - オフラインでログインすると読み込み中のまま止まり、案内が出ない（`src/live/auth.tsx` の fromCache 待ち。live は接続が前提）
 - 自動テストが無い: `scripts/deploy-firebase.mjs` の `checkHostingBuild`・`parseTestCounts`（127.0.0.1 の検査は assets/*.js だけ）／「別の画面で予約した書き込みも saveNow が待つ」（エミュレータで手動確認のみ）
 - デザインスタジオの説明文が、サイトマップ未承認でも「承認済みサイトマップから」と書いている（`src/features/design/DesignStudioPage.tsx:141-142`。文言のみ）
+- Auth の「ユーザー アクション」: 作成（登録）を許可 ON は招待の後の本人登録に必要なので維持。**削除を許可 ON**（本人が SDK から Auth アカウントを消せる。`accounts`・承認の記録は残る）は、削除依頼の手順（設計書 §17.2）と合わせて OFF にするかを決める
