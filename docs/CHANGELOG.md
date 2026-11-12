@@ -434,3 +434,11 @@
 - `firebase.json` の Hosting に応答ヘッダ（`X-Frame-Options: DENY`・`frame-ancestors 'none'`・`nosniff`・`Referrer-Policy`）を追加
 - `npm run deploy:firebase`: hosting は `dist-live` が同じ `--project` 向けにビルドされているかを確かめ、Rules は `rules:check` と `test:rules`（1 件以上・失敗 0）を通してから送る
 - `BACKEND_FIREBASE.md` §15（環境設定）を実際の構成（`--mode`・Firebase Hosting・`localhost` を許可しない）に書き直した
+
+## 0.28.2 — 2026-11-12
+
+### デモの初期データ（「デモをリセット」後・初めて開いたとき）
+
+- MINAMO COFFEE（デモの案件）を「ヒアリング前」にそろえた。品質チェックのチェック済み・承認の記録・デザイン生成やページ更新の履歴を外し、開発者画面の構築タスクはすべて未着手、デプロイと直近のエラーは旧サイトの分だけにした
+- ほかの案件を 1 段階ずつ先の作業に並べた（北条建設＝要件定義の承認待ち、ひだまり歯科＝制作でデザイン案の採用待ち、Lumière＝品質管理、ソラノ精機＝運用、まちの学び舎＝改善）。最近の活動もそれぞれの段階に合う内容にした
+- 保存済みのデモのデータは変えない（版は上げない）。新しい初期データにするには「デモをリセット」を使う

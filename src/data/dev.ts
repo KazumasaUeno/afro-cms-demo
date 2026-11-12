@@ -23,28 +23,21 @@ export interface DevError { id: string; env: DeployEnv; level: 'error' | 'warnin
 /** 直近のエラー（デモデータ。実際の監視とは連携していない。時刻は表示時点から計算する） */
 export function devRecentErrors(): DevError[] {
   return [
-    { id: 'e1', env: 'staging', level: 'warning', message: 'オンラインショップ: 商品画像の読み込みに 2.4 秒かかっています', at: hoursAgo(3), count: 12 },
-    { id: 'e2', env: 'development', level: 'error', message: 'お問い合わせ: 送信後の完了画面へ移動しません', at: hoursAgo(6), count: 3 },
     { id: 'e3', env: 'production', level: 'warning', message: '旧サイト: /shop/old-item へのリンク切れ（404）', at: daysAgo(1), count: 27 },
   ];
 }
 
-const STATUS_CYCLE: DevTaskStatus[] = ['done', 'done', 'review', 'doing', 'doing', 'todo', 'review', 'todo', 'todo'];
-
+/** MINAMO COFFEE はヒアリング前なので、構築タスクはすべて未着手・デプロイは旧サイトの分だけ（2026-11-12 ユーザー指示） */
 export function seedDev(): DevState {
   const tasks: DevTask[] = BUILD_PAGES.map((page, i) => ({
     id: `dt${i + 1}`,
     page,
     title: `${page}ページのコーディング`,
     assigneeId: i % 3 === 2 ? 'm2' : 'm3',
-    status: STATUS_CYCLE[i % STATUS_CYCLE.length],
+    status: 'todo',
     updatedAt: hoursAgo(2 + i * 5),
   }));
   const deploys: Deploy[] = [
-    { id: 'dp5', env: 'development', version: '0.9.3', at: hoursAgo(2), by: '黒田 蓮', status: 'success', note: 'ストーリーページのレイアウト調整' },
-    { id: 'dp4', env: 'development', version: '0.9.2', at: hoursAgo(9), by: '佐倉 美緒', status: 'failed', note: 'ビルドエラー（画像の参照先が見つからない）' },
-    { id: 'dp3', env: 'staging', version: '0.9.1', at: daysAgo(1), by: '黒田 蓮', status: 'success', note: 'トップページをお客様確認用に反映' },
-    { id: 'dp2', env: 'development', version: '0.9.1', at: daysAgo(1.2), by: '黒田 蓮', status: 'success', note: 'トップページの実装' },
     { id: 'dp1', env: 'production', version: '0.8.0', at: daysAgo(30), by: '黒田 蓮', status: 'success', note: '旧サイトの最終更新' },
   ];
   return { tasks, deploys };
