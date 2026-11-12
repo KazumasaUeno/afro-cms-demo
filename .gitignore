@@ -10,3 +10,6 @@ dist
 # Firebase: live ビルドの出力・CLI のキャッシュ（BACKEND_PLAN.md C2）
 dist-live
 .firebase/
+
+# エミュレータ用のビルド出力（npm run build:emulator）
+dist-emulator

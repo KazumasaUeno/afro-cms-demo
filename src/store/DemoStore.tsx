@@ -65,6 +65,11 @@ export function DemoStoreProvider({ children }: { children: ReactNode }) {
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
 
+/** DemoStoreProvider の外（live モード）では null。モードに関係なく使う部品（動きを減らす設定など）だけが使う */
+export function useDemoOptional(): StoreValue | null {
+  return useContext(StoreContext);
+}
+
 export function useDemo(): StoreValue {
   const v = useContext(StoreContext);
   if (!v) throw new Error('useDemo must be used inside DemoStoreProvider');

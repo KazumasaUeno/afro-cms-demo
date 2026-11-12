@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useDemo } from '@/store/DemoStore';
+import { useDemoOptional } from '@/store/DemoStore';
 
 const QUERY = '(prefers-reduced-motion: reduce)';
 
@@ -12,7 +12,8 @@ function systemPrefersReduced(): boolean {
  * GSAP・Motion・カウントアップはすべてこのフックで判定する。
  */
 export function useReducedMotion(): boolean {
-  const { state } = useDemo();
+  // live モードには DemoStore が無い（設定画面も無い）ので OS の設定だけを見る
+  const demo = useDemoOptional();
   const [system, setSystem] = useState(systemPrefersReduced);
 
   useEffect(() => {
@@ -23,6 +24,6 @@ export function useReducedMotion(): boolean {
     return () => mq.removeEventListener('change', on);
   }, []);
 
-  const pref = state.settings.reducedMotion;
+  const pref = demo?.state.settings.reducedMotion ?? 'system';
   return pref === 'on' ? true : pref === 'off' ? false : system;
 }

@@ -6,12 +6,18 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build",
+    "build:live": "tsc -p tsconfig.json && vite build --mode live",
+    "build:emulator": "tsc -p tsconfig.json && vite build --mode emulator",
     "preview": "vite preview",
+    "dev:emulator": "vite --mode emulator",
+    "preview:emulator": "vite preview --mode emulator",
     "typecheck": "tsc -p tsconfig.json",
     "test:rules": "node scripts/test-rules.mjs",
     "rules:gen": "node --experimental-strip-types --no-warnings scripts/gen-rules-questions.mjs",
     "rules:check": "node --experimental-strip-types --no-warnings scripts/gen-rules-questions.mjs --check",
-    "deploy:firebase": "node scripts/deploy-firebase.mjs"
+    "deploy:firebase": "node scripts/deploy-firebase.mjs",
+    "emulators": "node scripts/emulators.mjs",
+    "seed:emulator": "node scripts/seed-emulator.mjs"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
