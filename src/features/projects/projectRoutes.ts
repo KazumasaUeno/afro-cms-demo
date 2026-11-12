@@ -16,7 +16,7 @@ export interface ProjectRoutes {
   detail: (id: string) => string;
   /** 各段階から開ける関連画面（開発者画面では、開発者画面の中にある画面だけ。無い段階は空） */
   stageLinks: Record<Stage, StageLink[]>;
-  /** 制作フロー（要件定義 → サイトマップ → デザイン） */
+  /** 制作フロー（要件定義 → サイトマップ → デザイン）。requirements は要件定義書の画面（0.28.0） */
   requirements: string;
   sitemap: string;
   design: string;
@@ -33,13 +33,13 @@ const ADMIN: ProjectRoutes = {
   list: '/projects',
   detail: (id) => `/projects/${id}`,
   stageLinks: STAGE_LINKS,
-  requirements: '/ai-studio',
+  requirements: '/ai-studio/requirements',
   sitemap: '/site',
   design: '/ai-studio/design',
   quality: '/quality',
   cms: '/portal/pages',
   insights: '/insights',
-  approval: { requirements: '/ai-studio', sitemap: '/site', design: '/ai-studio/design', quality: '/quality' },
+  approval: { requirements: '/ai-studio/requirements', sitemap: '/site', design: '/ai-studio/design', quality: '/quality' },
 };
 
 function devRoutes(h: HearingRoutes): ProjectRoutes {
@@ -55,19 +55,19 @@ function devRoutes(h: HearingRoutes): ProjectRoutes {
     // 品質・運用・改善も開発者画面の中で開く（2026-11-11 ユーザー決定。0.27.0）
     stageLinks: {
       hearing: [{ label: 'ヒアリングを入力', to: h.answers }],
-      requirements: [{ label: 'AI要件定義を開く', to: h.input }],
+      requirements: [{ label: 'AI要件定義を開く', to: h.doc }],
       build: [{ label: 'サイトマップ', to: sitemap }, { label: 'デザインスタジオ', to: design }],
       quality: [{ label: '品質チェック', to: quality }],
       operation: [{ label: 'ページ・お知らせを編集', to: cms }],
       improvement: [{ label: 'インサイト・改善提案', to: insights }],
     },
-    requirements: h.input,
+    requirements: h.doc,
     sitemap,
     design,
     quality,
     cms,
     insights,
-    approval: { requirements: h.input, sitemap, design, quality },
+    approval: { requirements: h.doc, sitemap, design, quality },
   };
 }
 
@@ -85,13 +85,15 @@ export function useProjectRoutes(): ProjectRoutes {
 
 /**
  * 開発者画面で、担当案件の「次の作業」とその行き先（開発者画面の中だけ）。
- * ヒアリング・要件定義の段階 → ヒアリング（/dev/hearing）、それ以降 → 構築タスク。
+ * ヒアリングの段階 → ヒアリング（/dev/hearing）、要件定義の段階 → 要件定義書（/dev/requirements。0.28.0）、それ以降 → 構築タスク。
  * デモの案件は制作フローの「次の一手」で判定し、ヒアリング・要件定義以外の一手（サイトマップ・デザインの承認など）は管理者の作業なので構築タスクを出す。
  * ダッシュボードのカードとプロジェクト詳細の「次に必要な作業」で使う
  */
 export function devNextWork(p: Project, state: DemoState): { next: string; to: string } {
   if (p.id === CLIENT_PROJECT_ID) {
-    return state.requirements.status !== 'approved' ? { next: nextBestAction(state).cta, to: '/dev/hearing' } : { next: '構築タスクを進める', to: '/dev/tasks' };
+    // 分析前はヒアリングの入力、分析後（承認待ち）は要件定義書（0.28.0）
+    if (state.requirements.status === 'draft') return { next: nextBestAction(state).cta, to: '/dev/hearing' };
+    return state.requirements.status === 'analyzed' ? { next: nextBestAction(state).cta, to: '/dev/requirements' } : { next: '構築タスクを進める', to: '/dev/tasks' };
   }
-  return { next: p.nextAction, to: p.stage === 'hearing' || p.stage === 'requirements' ? '/dev/hearing' : '/dev/tasks' };
+  return { next: p.nextAction, to: p.stage === 'hearing' ? '/dev/hearing' : p.stage === 'requirements' ? '/dev/requirements' : '/dev/tasks' };
 }

@@ -8,10 +8,12 @@ export interface HearingRoutes {
   input: string;
   /** ヒアリングの回答（AI 分析の後の見直し） */
   answers: string;
+  /** 要件定義書の画面（0.28.0。AI 分析の前は「まだ作成されていません」、分析後は要件定義書）。demo だけ（live の router には無い） */
+  doc: string;
 }
 
-const ADMIN: HearingRoutes = { dev: false, input: '/ai-studio', answers: '/ai-studio/hearing' };
-const DEV: HearingRoutes = { dev: true, input: '/dev/hearing', answers: '/dev/hearing/answers' };
+const ADMIN: HearingRoutes = { dev: false, input: '/ai-studio', answers: '/ai-studio/hearing', doc: '/ai-studio/requirements' };
+const DEV: HearingRoutes = { dev: true, input: '/dev/hearing', answers: '/dev/hearing/answers', doc: '/dev/requirements' };
 
 /**
  * ヒアリング・要件定義の画面は、管理者画面（/ai-studio）と開発者画面（/dev/hearing。0.25.0）で同じ部品を使う。

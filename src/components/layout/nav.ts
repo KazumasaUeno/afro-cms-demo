@@ -73,7 +73,8 @@ const DEV_ITEMS: NavItem[] = [
   //   常に「プロジェクト」を選択中にする（下の match）
   { to: '/dev/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/dev/projects', '/dev/sitemap', '/dev/design', '/dev/quality', '/dev/cms', '/dev/insights'], hint: '担当案件の6段階' },
   // ヒアリング（0.25.0）: 担当案件のヒアリング入力・AI分析・要件定義書の確認。管理者画面の /ai-studio と同じ画面を開発者画面の中で開く
-  { to: '/dev/hearing', label: 'ヒアリング', icon: MessageSquareText, match: ['/dev/hearing'], hint: '入力・AI分析・要件定義書' },
+  // 要件定義書（/dev/requirements。0.28.0）もヒアリングを選択中にする
+  { to: '/dev/hearing', label: 'ヒアリング', icon: MessageSquareText, match: ['/dev/hearing', '/dev/requirements'], hint: '入力・AI分析・要件定義書' },
   { to: '/dev/tasks', label: '構築タスク', icon: ListTodo, match: ['/dev/tasks'], hint: 'ページごとの実装状況' },
   // 自動チェック（/dev/checks）は 0.19.0 でメニューから外した（11/10 レビュー）。URL はダッシュボードへ転送する
   // 下部タブは添字 [0,1,2,3]（ホーム・プロジェクト・ヒアリング・構築タスク）。環境・デプロイはメニューから開く（0.26.0）

@@ -12,6 +12,7 @@ const NewProjectPage = lazy(() => import('@/features/projects/NewProjectPage'));
 const ProjectDetailPage = lazy(() => import('@/features/projects/ProjectDetailPage'));
 const RequirementsPage = lazy(() => import('@/features/requirements/RequirementsPage'));
 const HearingAnswersPage = lazy(() => import('@/features/requirements/HearingAnswersPage'));
+const RequirementsDocPage = lazy(() => import('@/features/requirements/RequirementsDocPage'));
 const DesignStudioPage = lazy(() => import('@/features/design/DesignStudioPage'));
 const SitemapPage = lazy(() => import('@/features/sitemap/SitemapPage'));
 const QualityPage = lazy(() => import('@/features/quality/QualityPage'));
@@ -55,6 +56,8 @@ const router = createBrowserRouter([
       { path: 'projects/:projectId', element: <ProjectDetailPage /> },
       { path: 'ai-studio', element: <RequirementsPage /> },
       { path: 'ai-studio/hearing', element: <HearingAnswersPage /> },
+      // 要件定義書（0.28.0）。AI 分析の前は「まだ作成されていません」、分析後は要件定義書。プロジェクト詳細の「AI要件定義を開く」の行き先
+      { path: 'ai-studio/requirements', element: <RequirementsDocPage /> },
       { path: 'ai-studio/design', element: <DesignStudioPage /> },
       { path: 'site', element: <SitemapPage /> },
       { path: 'quality', element: <QualityPage /> },
@@ -76,6 +79,7 @@ const router = createBrowserRouter([
       // 開発者画面のヒアリング（0.25.0）。管理者画面の /ai-studio・/ai-studio/hearing と同じ画面を開発者画面の中で開く（担当案件だけ。DevProjectGate）
       { path: 'dev/hearing', element: <RequirementsPage /> },
       { path: 'dev/hearing/answers', element: <HearingAnswersPage /> },
+      { path: 'dev/requirements', element: <RequirementsDocPage /> },
       { path: 'dev/tasks', element: <DevTasksPage /> },
       // 自動チェックは 0.19.0 で開発者画面から外した（11/10 レビュー）。古いリンク・ブックマークはダッシュボードへ
       { path: 'dev/checks', element: <Navigate to="/dev" replace /> },

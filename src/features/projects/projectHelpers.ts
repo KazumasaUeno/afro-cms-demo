@@ -6,7 +6,8 @@ import { STAGES } from '@/data/projects';
 export const STAGE_LINKS: Record<Stage, { label: string; to: string }[]> = {
   // 入力する場所は 1 画面（0.24.0）。/ai-studio/hearing は AI 分析の前なら入力画面（/ai-studio）へ転送し、分析後は回答の見直しを開く
   hearing: [{ label: 'ヒアリングを入力', to: '/ai-studio/hearing' }],
-  requirements: [{ label: 'AI要件定義を開く', to: '/ai-studio' }],
+  // 要件定義書の画面（0.28.0）。AI 分析の前は「まだ作成されていません」と入力への入口を出す（入力画面へは飛ばさない）
+  requirements: [{ label: 'AI要件定義を開く', to: '/ai-studio/requirements' }],
   build: [
     { label: 'サイトマップ', to: '/site' },
     { label: 'デザインスタジオ', to: '/ai-studio/design' },
@@ -39,7 +40,7 @@ export function nextBestAction(state: DemoState): { title: string; detail: strin
     return {
       title: '要件定義書ができました。お客様の承認をもらいましょう',
       detail: '承認をもらうと、サイトマップの作成へ進めます。',
-      to: '/ai-studio', cta: '要件定義書を確認する',
+      to: '/ai-studio/requirements', cta: '要件定義書を確認する',
     };
   }
   if (!state.sitemap.approvedAt) {
