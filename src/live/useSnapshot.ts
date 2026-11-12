@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Unsubscribe } from 'firebase/firestore';
 import type { Query } from '@/repositories/types';
 
@@ -29,7 +29,10 @@ export function useSnapshot<T>(
     // subscribe・empty は key と一緒に決まる（呼び出し側で毎回作っても購読し直さない）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
-  if (key === null) return { data: empty, loading: false, error: null };
-  if (!state || state.key !== key) return { data: empty, loading: true, error: null };
-  return { data: state.data, loading: false, error: state.error };
+  // 同じ値なら同じオブジェクトを返す（LiveDataProvider の value が描画のたびに変わって全画面が描き直されないように）
+  const current = key !== null && state?.key === key ? state : null;
+  const data = key === null || !current ? empty : current.data;
+  const loading = key !== null && !current;
+  const error = current?.error ?? null;
+  return useMemo(() => ({ data, loading, error }), [data, loading, error]);
 }

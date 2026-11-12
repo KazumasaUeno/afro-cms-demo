@@ -104,6 +104,9 @@ export function LiveAuthProvider({ children }: { children: ReactNode }) {
     const unsub = onSnapshot(doc(db, 'accounts', user.uid), { includeMetadataChanges: true }, async (s) => {
       if (!alive) return;
       if (s.metadata.hasPendingWrites) return;
+      // 端末のキャッシュの値では判断しない（ログアウト前の「無効」が残っていて、有効に戻した後も拒否してしまう。
+      // 「無い」も同じで、確かめずに招待の受け取りへ進まない）。サーバーの値が届くまで loading のまま
+      if (s.metadata.fromCache) return;
       if (!s.exists()) {
         if (claiming) return;
         claiming = true;

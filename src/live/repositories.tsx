@@ -36,6 +36,17 @@ interface LiveData {
   currentId: string;
   select: (id: string) => void;
   pending: PendingAnswers;
+  writes: AnswerWrites;
+}
+
+/**
+ * 回答の書き込みの待ち合わせ（LiveDataProvider が 1 つ持つ。部品ごとに持つと、別の部品の「保存」が他の部品の予約した書き込みを待てない）
+ * - timers: 入力が落ち着くのを待っている案件ごとの予約
+ * - inflight: 送信中の書き込み（「保存済み」はこれが終わってから出す）
+ */
+interface AnswerWrites {
+  timers: Map<string, { timer: number; resolve: () => void; reject: (e: unknown) => void }>;
+  inflight: Set<Promise<void>>;
 }
 
 const LiveDataContext = createContext<LiveData | null>(null);
@@ -61,8 +72,10 @@ function useProjectDocs(session: LiveSession): Query<ProjectDoc[]> {
       return onSnapshot(doc(db, 'projects', projectId), (s) => next(s.exists() ? [projectDoc(s)] : []), fail);
     }
     const base = collection(db, 'projects');
-    const q = role === 'admin' ? query(base, limit(LIST_LIMIT)) : query(base, where('memberUids', 'array-contains', session.uid), limit(LIST_LIMIT));
-    return onSnapshot(q, (s) => next(s.docs.map(projectDoc).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))), fail);
+    // 新しく更新された順に上限まで（上限を超えた古い案件は出ない。docs/TODO.md）。開発者の条件は firestore.indexes.json の memberUids＋updatedAt
+    const newest = [orderBy('updatedAt', 'desc'), limit(LIST_LIMIT)] as const;
+    const q = role === 'admin' ? query(base, ...newest) : query(base, where('memberUids', 'array-contains', session.uid), ...newest);
+    return onSnapshot(q, (s) => next(s.docs.map(projectDoc)), fail);
   }, NO_PROJECTS);
 }
 const NO_PROJECTS: ProjectDoc[] = [];
@@ -74,6 +87,8 @@ export function LiveDataProvider({ session, children }: { session: LiveSession; 
   });
   const pendingRef = useRef<PendingAnswers | null>(null);
   pendingRef.current ??= new PendingAnswers();
+  const writesRef = useRef<AnswerWrites | null>(null);
+  writesRef.current ??= { timers: new Map(), inflight: new Set() };
   const select = useCallback((id: string) => {
     setChosen(id);
     try { window.sessionStorage.setItem(PROJECT_KEY, id); } catch { /* 保存できなくても画面の状態としては選べる */ }
@@ -82,7 +97,7 @@ export function LiveDataProvider({ session, children }: { session: LiveSession; 
   const currentId = session.account.role === 'client'
     ? session.account.projectId ?? ''
     : projects.data.some((p) => p.id === chosen) ? chosen : projects.data[0]?.id ?? '';
-  const value = useMemo<LiveData>(() => ({ session, projects, currentId, select, pending: pendingRef.current! }), [session, projects, currentId, select]);
+  const value = useMemo<LiveData>(() => ({ session, projects, currentId, select, pending: pendingRef.current!, writes: writesRef.current! }), [session, projects, currentId, select]);
   return <LiveDataContext.Provider value={value}>{children}</LiveDataContext.Provider>;
 }
 
@@ -118,15 +133,24 @@ const actor = (s: LiveSession) => ({ actorUid: s.uid, actorName: s.account.name,
 
 export function useLiveRepositoriesImpl(): Repositories {
   const data = useLiveData();
-  const { session, pending, select } = data;
+  const { session, pending, select, writes } = data;
   const uid = session.uid;
   // 書き込みの中で最新の一覧を使う（アサインの差分）
   const projectsRef = useRef(data.projects.data);
   projectsRef.current = data.projects.data;
-  const timers = useRef(new Map<string, { timer: number; resolve: () => void; reject: (e: unknown) => void }>());
+  const timers = writes.timers;
 
   return useMemo<Repositories>(() => {
-    const flush = async (pid: string): Promise<void> => {
+    /** 送信中の書き込みとして登録する（saveNow がどの部品から呼ばれても待てるように） */
+    const flush = (pid: string): Promise<void> => {
+      const run = write(pid);
+      writes.inflight.add(run);
+      const done = () => { writes.inflight.delete(run); };
+      run.then(done, done);
+      return run;
+    };
+
+    const write = async (pid: string): Promise<void> => {
       const entries = Object.entries(pending.of(pid));
       const updates: Record<string, unknown> = {};
       const written: Record<string, AnswerValue> = {};
@@ -152,25 +176,25 @@ export function useLiveRepositoriesImpl(): Repositories {
 
     /** 入力が落ち着いたら保存する。前の呼び出しの Promise は置き換えた時点で解決する（エラーの表示は最後の 1 回だけ） */
     const schedule = (pid: string): Promise<void> => {
-      const prev = timers.current.get(pid);
+      const prev = timers.get(pid);
       if (prev) {
         window.clearTimeout(prev.timer);
         prev.resolve();
       }
       return new Promise<void>((resolve, reject) => {
         const timer = window.setTimeout(() => {
-          timers.current.delete(pid);
+          timers.delete(pid);
           flush(pid).then(resolve, reject);
         }, ANSWER_DEBOUNCE_MS);
-        timers.current.set(pid, { timer, resolve, reject });
+        timers.set(pid, { timer, resolve, reject });
       });
     };
 
     const flushNow = async (pid: string): Promise<void> => {
-      const t = timers.current.get(pid);
+      const t = timers.get(pid);
       if (t) {
         window.clearTimeout(t.timer);
-        timers.current.delete(pid);
+        timers.delete(pid);
         try {
           await flush(pid);
           t.resolve();
@@ -203,7 +227,7 @@ export function useLiveRepositoriesImpl(): Repositories {
           const batch = writeBatch(db);
           batch.set(ref, {
             schemaVersion: 1, clientName: p.clientName, siteName: p.siteName, siteUrl: p.siteUrl, siteUrlKey: key, industry: p.industry, accent: p.accent,
-            ...(p.launchDate ? { launchDate: Timestamp.fromDate(new Date(p.launchDate)) } : {}),
+            ...(p.launchDate ? { launchDate: Timestamp.fromDate(localDate(p.launchDate)) } : {}),
             ownerUid: uid, memberUids: [uid], requirements: { status: 'draft', revision: 0 }, archived: false,
             createdAt: serverTimestamp(), createdBy: uid, ...stamp(uid),
           });
@@ -283,10 +307,12 @@ export function useLiveRepositoriesImpl(): Repositories {
             tx.update(projRef(projectId), { 'requirements.status': 'draft', ...stamp(uid) });
           });
         },
+        // 予約中の書き込みを今すぐ送り、送信中のものも含めてすべて終わるのを待つ（どの部品が予約したものでも）
         saveNow: async () => {
-          const pids = [...new Set([...timers.current.keys()])];
+          const pids = [...timers.keys()];
+          const sending = [...writes.inflight];
           try {
-            await Promise.all(pids.map(flushNow));
+            await Promise.all([...pids.map(flushNow), ...sending]);
             return true;
           } catch (e) {
             console.warn('save failed', e);
@@ -399,10 +425,16 @@ export function useLiveRepositoriesImpl(): Repositories {
         },
       },
     };
-  }, [pending, select, session, uid]);
+  }, [pending, select, session, uid, writes, timers]);
 }
 
 const NO_LOGS: ApprovalLog[] = [];
+
+/** "YYYY-MM-DD" をその日の 0 時（端末の時刻）にする。new Date("YYYY-MM-DD") は UTC の 0 時になり、日本では日付は合うが西の時間帯で前日になる */
+function localDate(ymd: string): Date {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(ymd);
+}
 const NONE: never[] = [];
 
 /** 招待の文書 ID はメール。同じメールの招待が既にあると create が update 扱いになり Rules が拒否する */

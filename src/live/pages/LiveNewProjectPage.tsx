@@ -27,13 +27,15 @@ export default function LiveNewProjectPage() {
   const [draft, setDraft] = useState<ProjectDraft>(() => emptyProjectDraft());
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
+  // 作成を押した時点の一覧で重複を見る（作成中・作成後は自分の案件が一覧に先に出て「すでにあります」と誤って出るため）
+  const [frozen, setFrozen] = useState<typeof projects | null>(null);
   const refs = useRef<Partial<Record<LiveField, HTMLElement | null>>>({});
   const errors = useMemo(() => {
-    const e = validateProject(draft, projects);
+    const e = validateProject(draft, frozen ?? projects);
     delete e.ownerId;
     delete e.nextAction;
     return e;
-  }, [draft, projects]);
+  }, [draft, projects, frozen]);
   const set = (patch: Partial<ProjectDraft>) => setDraft((d) => ({ ...d, ...patch }));
   const show = (k: LiveField) => (submitted ? errors[k] : undefined);
   const counter = (k: 'clientName' | 'siteName' | 'industry') => `${draft[k].trim().length} / ${PROJECT_LIMITS[k]}文字`;
@@ -47,8 +49,10 @@ export default function LiveNewProjectPage() {
     }
     if (saving) return;
     setSaving(true);
+    setFrozen(projects);
     void write(repo.create(draft), 'プロジェクトを作成しました').then((ok) => {
       setSaving(false);
+      if (!ok) setFrozen(null);
       // 作成した案件は作業中の案件になる（create の中で select 済み）。ヒアリングの入力へ進む
       if (ok) navigate('/dev/hearing', { replace: true });
     });
