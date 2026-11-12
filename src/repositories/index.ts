@@ -5,9 +5,17 @@ import type { Repositories } from './types';
 export type * from './types';
 export { DATA_MODE } from './mode';
 
-/** live（Firestore）の実装は B で入れる。それまでは live のビルドを動かさない（demo のデータへ黙って落とさない） */
+/**
+ * live（Firestore）の実装は src/live/ の入口が登録する（ここから live を import しない＝demo のビルドに Firebase を入れない。C2）。
+ * 登録されていなければ動かさない（demo のデータへ黙って落とさない）
+ */
+let liveImpl: (() => Repositories) | null = null;
+export function registerLiveRepositories(impl: () => Repositories): void {
+  liveImpl = impl;
+}
 function useLiveRepositories(): Repositories {
-  throw new Error('VITE_DATA_MODE=live はまだ使えません（BACKEND_PLAN の B で実装する）');
+  if (!liveImpl) throw new Error('live の repository が登録されていません（src/live/main.tsx）');
+  return liveImpl();
 }
 
 /** 画面はこれだけを使う（DemoStore の dispatch を直接呼ばない）。モードはビルド時に決まるので、フックの呼び出し順は変わらない */
