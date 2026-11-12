@@ -5,6 +5,7 @@ import { PageHeader, SectionTitle, StatusPill, Surface } from '@/components/ui';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { useRepositories } from '@/repositories';
 import { useDemo, devState } from '@/store/DemoStore';
+import { demoDesignApprovedAt } from '@/store/projectWork';
 import { formatDateTime, relativeTime } from '@/services/time';
 import { DEV_TASK_STATUSES } from '@/data/dev';
 import { devNextWork } from '@/features/projects/projectRoutes';
@@ -95,7 +96,7 @@ function BuildStatus({ project, meId, openWork }: { project: Project; meId: stri
   const dev = devState(state);
   const mineAll = dev.tasks.filter((t) => t.assigneeId === meId && t.status !== 'done');
   const mine = [...mineAll].sort((a, b) => MINE_ORDER[a.status] - MINE_ORDER[b.status]).slice(0, 3);
-  const next = nextDevAction(dev, !!state.design.approvedAt, meId);
+  const next = nextDevAction(dev, !!demoDesignApprovedAt(state), meId);
 
   return (
     <Box component="section" aria-labelledby="build-status-title" sx={{ mt: { xs: 4, md: 5 }, pt: { xs: 3, md: 4 }, borderTop: `1px solid ${tokens.color.border}` }}>

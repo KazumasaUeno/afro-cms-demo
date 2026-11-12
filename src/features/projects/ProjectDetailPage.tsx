@@ -4,8 +4,9 @@ import { useEffect, type ReactNode } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import type { Project, Stage } from '@/types';
 import { useDemo } from '@/store/DemoStore';
+import { workView } from '@/store/projectWork';
 import { RouteLoader } from '@/components/layout/RouteLoader';
-import { useCurrentRequirements, useRepositories } from '@/repositories';
+import { useRepositories } from '@/repositories';
 import { STAGES, stageIndex } from '@/data/projects';
 import { memberById } from '@/data/members';
 import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
@@ -86,9 +87,11 @@ export default function ProjectDetailPage() {
 function Detail({ p }: { p: Project }) {
   const routes = useProjectRoutes();
   // サイトマップ・デザイン・品質・CMS・診断は repository の範囲外（live では隠す。§14）なので DemoStore から読む
-  const { state } = useDemo();
+  // 制作データ（ヒアリング〜品質チェック）は案件ごと（0.29.0）。管理者画面は開いただけでは案件を選ばないので、この案件の分を差し込んで読む
+  const { state: demoState } = useDemo();
+  const state = workView(demoState, p.id);
   const { projects, accounts } = useRepositories();
-  const { data: req } = useCurrentRequirements();
+  const req = state.requirements;
   const { data: devAll } = accounts.useDevProjects();
   const { data: people } = accounts.useDevPeople();
   const navigate = useNavigate();
@@ -103,14 +106,15 @@ function Detail({ p }: { p: Project }) {
   const scheduled = state.pages.filter((x) => x.status === 'scheduled').length;
   const latest = state.diagnoses[0];
   const reqStatus = { draft: '入力中', analyzed: 'AI分析済み', approved: '承認済み' }[req.status];
-  /** デモの数値（state）は MINAMO COFFEE の 1 案件分だけ。他の案件では出さない */
+  /** お客様ポータル・運用（ページ）・改善（診断）のデモのデータは MINAMO COFFEE の 1 案件分だけ。制作の段階（ヒアリング〜品質管理）は案件ごとに持つ */
   const isDemo = p.id === CLIENT_PROJECT_ID;
+  const hasFacts = (stage: Stage) => isDemo || (stage !== 'operation' && stage !== 'improvement');
   const demoAction = nextBestAction(state);
   // 開発者画面はダッシュボードのカードと同じ「次の作業」（行き先は開発者画面の中だけ）
   const devWork = routes.dev ? devNextWork(p, state) : null;
   const next = devWork
     ? { label: devWork.next, to: devWork.to }
-    : isDemo ? { label: demoAction.cta, to: demoAction.to } : { label: p.nextAction, to: routes.stageLinks[p.stage][0].to };
+    : hasFacts(p.stage) ? { label: demoAction.cta, to: demoAction.to } : { label: p.nextAction, to: routes.stageLinks[p.stage][0].to };
 
   const facts: Record<Stage, ReactNode> = {
     hearing: (
@@ -248,7 +252,7 @@ function Detail({ p }: { p: Project }) {
                     <Typography variant="caption" sx={{ display: 'block', py: 0.75, borderTop: `1px solid ${tokens.color.border}` }}>
                       前の段階が終わると始まります
                     </Typography>
-                  ) : isDemo ? (
+                  ) : hasFacts(s.id) ? (
                     <Box>{facts[s.id]}</Box>
                   ) : (
                     <Typography variant="caption" sx={{ display: 'block', py: 0.75, borderTop: `1px solid ${tokens.color.border}` }}>

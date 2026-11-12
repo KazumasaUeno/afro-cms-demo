@@ -4,6 +4,7 @@ import { loadJson, removeKey, saveJson, STORAGE_KEY } from '@/services/storage';
 import { createSeedState, isDemoState } from './seed';
 import { reducer, type Action } from './reducer';
 import { syncDemoProject } from './demoProject';
+import { seedWorkFor, switchWork } from './projectWork';
 import { moveDesignAnswers } from '@/features/design/designReq';
 
 interface StoreValue {
@@ -25,10 +26,22 @@ function withAfroMode(state: DemoState): DemoState {
   return state.requirements.mode === 'afro' ? state : { ...state, requirements: { ...state.requirements, mode: 'afro' } };
 }
 
+/** 選んでいる案件と制作データの持ち主がずれた保存データ（0.28 まで。制作データは 1 案件分だけ）を、選んでいる案件の分に入れ替える */
+function withCurrentWork(state: DemoState): DemoState {
+  // 制作データの無い案件（0.28 までの保存データ）は、段階に合う初期データで補って保存する（表示のたびに作り直さない）
+  const missing = state.projects.filter((p) => p.id !== state.requirements.projectId && !state.projectWork?.[p.id]);
+  const filled = missing.length
+    ? { ...state, projectWork: { ...state.projectWork, ...Object.fromEntries(missing.map((p) => [p.id, seedWorkFor(p.id, p.stage)])) } }
+    : state;
+  return filled.currentProjectId === filled.requirements.projectId || !filled.projects.some((p) => p.id === filled.currentProjectId)
+    ? filled
+    : switchWork(filled, filled.currentProjectId);
+}
+
 function init(): DemoState {
   // 保存済みのデータに古い進捗が残っていても、デモのデータに合わせ直す。
   // 0.27 までのヒアリングにあったデザインの 3 問の回答は、デザイン要件定義へ移す（0.28.0。版は上げない）
-  return syncDemoProject(moveDesignAnswers(withAfroMode(loadJson(STORAGE_KEY, isDemoState) ?? createSeedState())));
+  return syncDemoProject(withCurrentWork(moveDesignAnswers(withAfroMode(loadJson(STORAGE_KEY, isDemoState) ?? createSeedState()))));
 }
 
 export function DemoStoreProvider({ children }: { children: ReactNode }) {

@@ -4,10 +4,11 @@ import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
 import { approvalSteps } from '@/features/portal/portalSteps';
 import { isAnswered } from '@/features/requirements/validation';
 import { designReady } from '@/features/design/designReq';
+import { workView } from './projectWork';
 
 /**
- * デモのデータ（要件・サイトマップ・デザイン・品質）を持つ案件（requirements.projectId）の
- * 段階・進捗・次の作業・承認待ちの数を、そのデータから導く。
+ * 案件の段階・進捗・次の作業・承認待ちの数を、その案件の制作データ（要件・サイトマップ・デザイン・品質）から導く。
+ * state はその案件の制作データを差し込んだもの（workView）を渡す。
  * 以前は承認のたびに固定値を足していた（前回より下がらない）ため、デモをやり直すと
  * 「進捗 46% なのに次の作業が AI 要件定義」のような矛盾が残った。値の正はデモのデータ側に置く。
  */
@@ -29,12 +30,20 @@ export function derivedDemoProject(state: DemoState): Pick<Project, 'stage' | 'p
   return { ...base, stage, progress: 64 + Math.round((30 * both) / QUALITY_ITEMS.length), nextAction: '品質チェック（110問）を進める' };
 }
 
-/** デモの案件の表示用の値をデモのデータに合わせる（変わらなければ同じ state を返す） */
+/**
+ * 案件の表示用の値（段階・進捗・次の作業・承認待ちの数）を、それぞれの案件の制作データに合わせる（0.29.0 から全案件。変わらなければ同じ state を返す）。
+ * 運用・改善の段階は制作データからは導けない（品質チェックの完了の先）ので、全ページ構築まで済んでいれば段階をそのまま保つ
+ */
 export function syncDemoProject(state: DemoState): DemoState {
-  const id = state.requirements.projectId;
-  const cur = state.projects.find((p) => p.id === id);
-  if (!cur) return state;
-  const d = derivedDemoProject(state);
-  if (cur.stage === d.stage && cur.progress === d.progress && cur.nextAction === d.nextAction && cur.pendingApprovals === d.pendingApprovals) return state;
-  return { ...state, projects: state.projects.map((p) => (p.id === id ? { ...p, ...d } : p)) };
+  let changed = false;
+  const projects = state.projects.map((cur) => {
+    const view = workView(state, cur.id);
+    // 品質チェックを後から外しても段階は下げない（下げると付け直しても運用・改善へ戻せないため）
+    if ((cur.stage === 'operation' || cur.stage === 'improvement') && view.design.buildCompletedAt) return cur;
+    const d = derivedDemoProject(view);
+    if (cur.stage === d.stage && cur.progress === d.progress && cur.nextAction === d.nextAction && cur.pendingApprovals === d.pendingApprovals) return cur;
+    changed = true;
+    return { ...cur, ...d };
+  });
+  return changed ? { ...state, projects } : state;
 }

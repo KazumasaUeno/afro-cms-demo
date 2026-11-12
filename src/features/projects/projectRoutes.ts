@@ -1,6 +1,7 @@
 import { useLocation } from 'react-router-dom';
 import type { DemoState, Project, Stage } from '@/types';
 import { areaOf, CLIENT_PROJECT_ID } from '@/components/layout/nav';
+import { workView } from '@/store/projectWork';
 import type { ApprovalKey } from '@/features/portal/portalSteps';
 import { useHearingRoutes, type HearingRoutes } from '@/features/requirements/hearingRoutes';
 import { nextBestAction, STAGE_LINKS } from './projectHelpers';
@@ -95,10 +96,12 @@ export function useProjectRoutes(): ProjectRoutes {
  * ダッシュボードのカードとプロジェクト詳細の「次に必要な作業」で使う
  */
 export function devNextWork(p: Project, state: DemoState): { next: string; to: string } {
-  if (p.id === CLIENT_PROJECT_ID) {
+  // 制作データは案件ごと（0.29.0）。運用・改善の段階はデモのデータ（ページ・診断）が MINAMO COFFEE の分だけなので、案件の値を使う
+  if (p.id === CLIENT_PROJECT_ID || (p.stage !== 'operation' && p.stage !== 'improvement')) {
+    const view = workView(state, p.id);
     // 分析前はヒアリングの入力、分析後（承認待ち）は要件定義書（0.28.0）
-    if (state.requirements.status === 'draft') return { next: nextBestAction(state).cta, to: '/dev/hearing' };
-    return state.requirements.status === 'analyzed' ? { next: nextBestAction(state).cta, to: '/dev/requirements' } : { next: '構築タスクを進める', to: '/dev/tasks' };
+    if (view.requirements.status === 'draft') return { next: nextBestAction(view).cta, to: '/dev/hearing' };
+    return view.requirements.status === 'analyzed' ? { next: nextBestAction(view).cta, to: '/dev/requirements' } : { next: '構築タスクを進める', to: '/dev/tasks' };
   }
-  return { next: p.nextAction, to: p.stage === 'hearing' ? '/dev/hearing' : p.stage === 'requirements' ? '/dev/requirements' : '/dev/tasks' };
+  return { next: p.nextAction, to: '/dev/tasks' };
 }

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import type { ApprovalLog, DemoState } from '@/types';
 import { allDevPeople } from '@/data/people';
 import { clientAccountsState, devAccessState, devProjectsState, devUsersState, useDemo } from '@/store/DemoStore';
+import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import type { Query, Repositories } from './types';
 
 /**
@@ -13,7 +14,8 @@ const ready = <T>(data: T): Query<T> => ({ data, loading: false, error: null });
 
 /** 承認の記録のうち、その案件のもの。projectId の無い古い記録は、デモのデータを持つ案件のものとみなす */
 export function approvalLogsOf(state: DemoState, projectId: string): ApprovalLog[] {
-  return state.approvalLogs.filter((l) => (l.projectId ?? state.requirements.projectId) === projectId);
+  // projectId の無い古い記録は MINAMO COFFEE（0.28 までは制作データがこの案件の分だけだった）
+  return state.approvalLogs.filter((l) => (l.projectId ?? CLIENT_PROJECT_ID) === projectId);
 }
 
 export function useDemoRepositories(): Repositories {

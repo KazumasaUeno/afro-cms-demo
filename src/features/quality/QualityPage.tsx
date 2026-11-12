@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import type { QualityCategory } from '@/types';
 import { QUALITY_CATEGORIES, QUALITY_ITEMS, TOTAL_QUALITY_QUESTIONS } from '@/data/quality';
 import { useDemo } from '@/store/DemoStore';
+import { approvalLogsOf } from '@/repositories/demo';
 import { useToast } from '@/hooks/useToast';
 import { tokens } from '@/theme/tokens';
 import { formatDateTime, relativeTime } from '@/services/time';
@@ -239,7 +240,8 @@ export default function QualityPage() {
       <Surface>
         <SectionTitle title="承認履歴" icon={<History size={18} color={tokens.color.muted} />} sub={<Typography variant="caption" sx={{ ml: 1 }}>タイムスタンプ付き</Typography>} />
         <Box component="ol" sx={{ listStyle: 'none', m: 0, p: 0, maxHeight: 440, overflowY: 'auto', pr: 1 }} aria-label="承認履歴">
-          {state.approvalLogs.slice(0, 30).map((l, i, arr) => {
+          {/* 選んでいる案件の記録だけ（制作データは案件ごと。0.29.0） */}
+          {approvalLogsOf(state, state.requirements.projectId).slice(0, 30).map((l, i, arr) => {
             const afro = l.side === 'afro';
             return (
               <Box component="li" key={l.id} sx={{ display: 'grid', gridTemplateColumns: '20px 1fr', gap: 1.5 }}>

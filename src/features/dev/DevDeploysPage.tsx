@@ -4,6 +4,7 @@ import { Fragment, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader, Reveal, SectionTitle, StatusPill, Surface } from '@/components/ui';
 import { useDemo, devState } from '@/store/DemoStore';
+import { demoDesignApprovedAt } from '@/store/projectWork';
 import { useToast } from '@/hooks/useToast';
 import { formatDateTime, relativeTime } from '@/services/time';
 import { DEV_ENVS, deployGate, latestDeploy, latestSuccess } from '@/data/dev';
@@ -30,11 +31,11 @@ export default function DevDeploysPage() {
   const dev = devState(state);
   const [confirm, setConfirm] = useState<string | null>(null);
 
-  const gates = Object.fromEntries(DEV_ENVS.map((e) => [e.id, deployGate(dev, e.id, state.design.approvedAt)])) as Record<DeployEnv, ReturnType<typeof deployGate>>;
+  const gates = Object.fromEntries(DEV_ENVS.map((e) => [e.id, deployGate(dev, e.id, demoDesignApprovedAt(state))])) as Record<DeployEnv, ReturnType<typeof deployGate>>;
   const primaryEnv = PRIMARY_ORDER.find((env) => gates[env].ok);
 
   const doDeploy = (env: DeployEnv) => {
-    const gate = deployGate(dev, env, state.design.approvedAt);
+    const gate = deployGate(dev, env, demoDesignApprovedAt(state));
     if (!gate.ok) return;
     dispatch({ type: 'deploy', env, by: me.id });
     toast(`${envDef(env).label}へ v${gate.version} をデプロイしました（シミュレーション）`);

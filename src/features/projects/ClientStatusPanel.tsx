@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useDemo } from '@/store/DemoStore';
 import { useRepositories } from '@/repositories';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
+import { workView } from '@/store/projectWork';
 import { StatusPill, Surface, type PillTone } from '@/components/ui';
 import { formatDateTime, relativeTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
@@ -31,7 +32,8 @@ export function ClientStatusPanel() {
   const project = state.projects.find((p) => p.id === CLIENT_PROJECT_ID);
 
   if (!project) return null;
-  const s = clientStatus(state);
+  // お客様ポータルの案件（MINAMO COFFEE）の分を読む（選んでいる案件がほかでも食い違わないように。0.29.0）
+  const s = clientStatus(workView(state, project.id));
 
   const go = (to: string) => {
     projects.select(project.id);

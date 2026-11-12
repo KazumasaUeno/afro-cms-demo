@@ -423,6 +423,14 @@ export interface DevUser {
 
 /* ---------- ストア全体 ---------- */
 
+/** 1 案件分の制作データ（ヒアリング・要件定義・サイトマップ・デザイン・品質チェック） */
+export interface ProjectWork {
+  requirements: RequirementSession;
+  sitemap: SitemapState;
+  design: DesignState;
+  qualityChecks: Record<string, QualityCheck>;
+}
+
 export interface DemoState {
   version: number;
   userName: string;
@@ -432,6 +440,11 @@ export interface DemoState {
   sitemap: SitemapState;
   design: DesignState;
   qualityChecks: Record<string, QualityCheck>;
+  /**
+   * 選んでいない案件の制作データ（ヒアリング〜品質チェック。0.29.0）。選んでいる案件の分は上の requirements・sitemap・design・qualityChecks
+   * （持ち主は requirements.projectId）。案件を切り替えるときに入れ替える（store/projectWork.ts）。無い保存データは初期データで補う（版は上げない）
+   */
+  projectWork?: Record<string, ProjectWork>;
   approvalLogs: ApprovalLog[];
   pages: CmsPage[];
   diagnoses: DiagnosisReport[];

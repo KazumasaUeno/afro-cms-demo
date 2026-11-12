@@ -5,6 +5,7 @@ import type {
 import { QUALITY_CATEGORIES, QUALITY_ITEMS } from '@/data/quality';
 import { nowIso } from '@/services/time';
 import { createSeedState } from './seed';
+import { blankRequirements, demoDesignApprovedAt, switchWork } from './projectWork';
 import { syncDemoProject } from './demoProject';
 import { DEV_ENVS, DEV_TASK_STATUSES, DEV_USER_ID, deployGate, seedDev } from '@/data/dev';
 import { memberById } from '@/data/members';
@@ -107,8 +108,8 @@ function approval(state: DemoState, side: 'afro' | 'client', action: string, tar
 
 /**
  * 承認などで、データの持ち主の案件の更新日時を進める（段階・進捗は syncDemoProject が導く）。
- * 要件・サイトマップ・デザインのデータは 1 案件分（requirements.projectId）だけ持つ。
- * それらの承認で進める案件は、画面で選んでいる案件ではなくデータの持ち主にする
+ * 要件・サイトマップ・デザインのデータの持ち主は requirements.projectId（選んでいる案件。ほかの案件の分は projectWork）。
+ * それらの承認で進める案件は、データの持ち主にする
  */
 function patchOwner(state: DemoState, patch: Partial<Project>): DemoState {
   const id = state.requirements.projectId;
@@ -145,13 +146,14 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       return createSeedState();
 
     case 'setCurrentProject':
-      return state.projects.some((p) => p.id === action.id) ? { ...state, currentProjectId: action.id } : state;
+      // 制作データ（ヒアリング〜品質チェック）も、選んだ案件の分へ入れ替える（0.29.0）
+      return state.projects.some((p) => p.id === action.id) ? { ...switchWork(state, action.id), currentProjectId: action.id } : state;
 
     case 'createProject': {
       // 画面でも止めているが、不正な値・URL の重複はここでも作らない
       if (Object.keys(validateProject(action.project, state.projects)).length > 0) return state;
       const created: Project = { id: uid('p'), ...projectFromDraft(action.project), updatedAt: nowIso() };
-      const s = { ...state, projects: [created, ...state.projects], currentProjectId: created.id };
+      const s = { ...switchWork({ ...state, projects: [created, ...state.projects] }, created.id), currentProjectId: created.id };
       return log(s, `プロジェクト「${created.siteName}」（${created.clientName}）を作成しました`, 'edit', ACTOR.afro, created.id);
     }
 
@@ -211,7 +213,7 @@ function baseReducer(state: DemoState, action: Action): DemoState {
     case 'resetRequirements':
       // 承認後はやり直せない（後ろの段階の承認が残り、表示が食い違うため。回答の変更を止めるのと同じ方針）
       if (state.requirements.status === 'approved') return state;
-      return { ...state, requirements: { ...createSeedState().requirements, mode: state.requirements.mode } };
+      return { ...state, requirements: { ...blankRequirements(state.requirements.projectId), mode: state.requirements.mode } };
 
     case 'setSitemap':
       // お客様の承認後は構造を変えない（管理者・開発者とも。2026-11-11 ユーザー判断。ページの追加・削除・移動・接続・名前の変更はすべてこの action を通る）
@@ -358,7 +360,7 @@ function baseReducer(state: DemoState, action: Action): DemoState {
 
     case 'deploy': {
       const dev = devState(state);
-      const gate = deployGate(dev, action.env, state.design.approvedAt);
+      const gate = deployGate(dev, action.env, demoDesignApprovedAt(state));
       if (!gate.ok || !gate.version) return state;
       const env = DEV_ENVS.find((e) => e.id === action.env);
       const note = action.env === 'development' ? '最新の作業内容を反映' : `v${gate.version} を${action.env === 'staging' ? '開発環境' : '検証環境'}から昇格`;
