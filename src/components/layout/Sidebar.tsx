@@ -5,7 +5,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import { tokens } from '@/theme/tokens';
 import { AREAS, areaOf, isActive, type AreaDef, type NavItem } from './nav';
 import { Logo, LogoMark } from './Logo';
-import { navIndicatorSx } from './navIndicator';
+import { navIndicatorSx, navToneSx, toneIndicator } from './navIndicator';
 import { MemberAvatar } from '@/components/ui';
 import { memberById } from '@/data/members';
 import { useDevProjects, useDevUser } from '@/features/dev/useDevUser';
@@ -27,18 +27,19 @@ function NavRow({ item, color, onNavigate }: { item: NavItem; color: string; onN
         width: '100%', justifyContent: 'flex-start', gap: 1.5, px: 2, height: 56, borderRadius: `${tokens.radius.full}px`,
         color: active ? tokens.color.onSecondaryContainer : tokens.color.onSurfaceVariant, fontWeight: active ? 700 : 500, fontSize: 14,
         transition: 'color .2s',
-        ...navIndicatorSx(active, { fill: true }),
+        ...navIndicatorSx(active, { fill: true, indicator: toneIndicator(item.tone) }),
+        ...(item.tone && navToneSx(item.tone)),
       }}
     >
       <Box component="span" className="nav-ind" aria-hidden />
-      <Icon size={20} strokeWidth={active ? 2.2 : 1.9} color={active ? color : 'currentColor'} />
+      <Icon size={20} strokeWidth={active ? 2.2 : 1.9} color={item.tone ? 'currentColor' : active ? color : 'currentColor'} />
       <span>{item.label}</span>
     </ButtonBase>
   );
 }
 
 /** PC のナビゲーションレールの項目（M3 Expressive: 56×32 の印＋12px のラベル） */
-function RailItem({ to, label, icon: Icon, active, color, hint }: { to: string; label: string; icon: LucideIcon; active: boolean; color?: string; hint: string }) {
+function RailItem({ to, label, icon: Icon, active, color, hint, tone }: { to: string; label: string; icon: LucideIcon; active: boolean; color?: string; hint: string; tone?: NavItem['tone'] }) {
   return (
     <Tooltip title={hint} placement="right" enterDelay={600}>
       <ButtonBase
@@ -51,14 +52,15 @@ function RailItem({ to, label, icon: Icon, active, color, hint }: { to: string; 
           // 96px のレールで語の途中で折れないよう、M3 Label small（11px）で 1 行に収める
           fontSize: 11, lineHeight: '16px', fontWeight: active ? 700 : 500, letterSpacing: 0, textAlign: 'center', whiteSpace: 'nowrap',
           transition: 'color .2s',
-          ...navIndicatorSx(active),
+          ...navIndicatorSx(active, { indicator: toneIndicator(tone) }),
           // キーボードのフォーカスは印の外側に輪郭線を出す（ButtonBase は outline を消すので明示する）
           '&.Mui-focusVisible, &:focus-visible': { outline: 'none' },
           '&.Mui-focusVisible .nav-ind, &:focus-visible .nav-ind': { outline: `3px solid ${tokens.color.secondary}`, outlineOffset: 2 },
+          ...(tone && navToneSx(tone)),
         }}
       >
         <Box component="span" className="nav-ind" sx={{ width: 56, height: 32, display: 'grid', placeItems: 'center', flexShrink: 0, color: active ? tokens.color.onSecondaryContainer : 'inherit' }}>
-          <Icon size={22} strokeWidth={active ? 2.2 : 1.8} color={active && color ? color : 'currentColor'} />
+          <Icon size={22} strokeWidth={active ? 2.2 : 1.8} color={!tone && active && color ? color : 'currentColor'} />
         </Box>
         <Box component="span" sx={{ maxWidth: '100%', overflowWrap: 'anywhere' }}>{label}</Box>
       </ButtonBase>
@@ -242,7 +244,7 @@ export function Sidebar() {
       <Box component="nav" aria-label={`${area.label}のメニュー`} sx={{ width: '100%' }}>
         <Stack spacing={1.5}>
           {area.items.map((item) => (
-            <RailItem key={item.to} to={item.to} label={item.label} icon={item.icon} hint={item.hint} active={isActive(item, pathname)} color={area.color} />
+            <RailItem key={item.to} to={item.to} label={item.label} icon={item.icon} hint={item.hint} active={isActive(item, pathname)} color={area.color} tone={item.tone} />
           ))}
         </Stack>
       </Box>

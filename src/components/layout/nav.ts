@@ -1,7 +1,7 @@
 import { tokens } from '@/theme/tokens';
 import {
   Building2, ClipboardCheck, Code2, FileText, FolderKanban, House, LayoutDashboard, ListChecks, ListTodo, Monitor,
-  Rocket, ScrollText, Settings, Stamp, UserRound, UsersRound, type LucideIcon,
+  Palette, Rocket, ScrollText, Settings, Stamp, UserRound, UsersRound, type LucideIcon,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -13,6 +13,8 @@ export interface NavItem {
   hint: string;
   /** true のときは match と完全一致のときだけアクティブ（エリアのトップ用） */
   exact?: boolean;
+  /** ほかの項目と色を変えて目立たせる（info = 青。開発者画面の「デザイン」。2026-11-13 ユーザー指示） */
+  tone?: 'info';
 }
 
 /**
@@ -68,14 +70,17 @@ const DEV_ITEMS: NavItem[] = [
   { to: '/dev', label: 'ダッシュボード', icon: LayoutDashboard, match: ['/dev'], exact: true, hint: '担当案件と構築状況' },
   // プロジェクト（0.26.0）: 管理者画面と同じ一覧・詳細（担当案件だけ）。
   // 選択中の規則: URL が属するメニュー項目を選択中にし、どこから開いたかでは変えない。
-  //   メニューに項目が無いサイトマップ（/dev/sitemap）・デザイン（/dev/design）・品質（/dev/quality）・ページ編集（/dev/cms）・改善（/dev/insights。0.27.0）は、
+  //   メニューに項目が無いサイトマップ（/dev/sitemap）・品質（/dev/quality）・ページ編集（/dev/cms）・改善（/dev/insights。0.27.0）は、
   //   常に「プロジェクト」を選択中にする（下の match）
-  { to: '/dev/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/dev/projects', '/dev/hearing', '/dev/requirements', '/dev/sitemap', '/dev/design', '/dev/quality', '/dev/cms', '/dev/insights'], hint: '担当案件の6段階' },
+  { to: '/dev/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/dev/projects', '/dev/hearing', '/dev/requirements', '/dev/sitemap', '/dev/quality', '/dev/cms', '/dev/insights'], hint: '担当案件の6段階' },
   // ヒアリング（/dev/hearing・/dev/requirements）はメニューから外した（2026-11-12 ユーザー指示）。プロジェクト詳細・担当案件から開き、「プロジェクト」を選択中にする
   { to: '/dev/tasks', label: '構築タスク', icon: ListTodo, match: ['/dev/tasks'], hint: 'ページごとの実装状況' },
   // 自動チェック（/dev/checks）は 0.19.0 でメニューから外した（11/10 レビュー）。URL はダッシュボードへ転送する
   // 下部タブは添字 [0,1,2,3]（ホーム・プロジェクト・構築タスク・環境・デプロイ）
   { to: '/dev/deploys', label: '環境・デプロイ', icon: Rocket, match: ['/dev/deploys'], hint: '開発・検証・本番' },
+  // デザイン（2026-11-13 ユーザー指示「左メニューに追加して、ほかと違う色に」）。デザイン要件定義（/dev/design/requirements）もここを選択中にする。
+  // 下部タブの添字が変わらないよう末尾に足す（スマホは「メニュー」から開く）
+  { to: '/dev/design', label: 'デザイン', icon: Palette, match: ['/dev/design'], hint: 'デザイン要件定義とデザインスタジオ', tone: 'info' },
 ];
 
 export const SETTINGS_ITEM: NavItem = { to: '/settings', label: '設定', icon: Settings, match: ['/settings'], hint: 'デモの設定' };
@@ -95,7 +100,7 @@ export const AREAS: Record<AreaId, AreaDef> = {
   },
   dev: {
     id: 'dev', label: '開発者画面', short: '開発者', audience: '制作エンジニア',
-    description: '担当案件・プロジェクト・ヒアリング・構築タスク・環境とデプロイ', home: '/dev', icon: Code2,
+    description: '担当案件・プロジェクト・ヒアリング・構築タスク・環境とデプロイ・デザイン', home: '/dev', icon: Code2,
     color: tokens.color.tertiary, soft: tokens.color.tertiaryContainer,
     items: DEV_ITEMS, bottom: [{ ...DEV_ITEMS[0], label: 'ホーム' }, DEV_ITEMS[1], DEV_ITEMS[2], DEV_ITEMS[3]],
   },
