@@ -6,7 +6,7 @@ import { QUALITY_CATEGORIES, QUALITY_ITEMS } from '@/data/quality';
 import { nowIso } from '@/services/time';
 import { sitemapCreated, sitemapFor } from '@/data/sitemap';
 import { createSeedState } from './seed';
-import { blankRequirements, demoDesignApprovedAt, switchWork } from './projectWork';
+import { blankRequirements, blankWork, demoDesignApprovedAt, switchWork, workOf } from './projectWork';
 import { syncDemoProject } from './demoProject';
 import { DEV_ENVS, DEV_TASK_STATUSES, DEV_USER_ID, deployGate, seedDev } from '@/data/dev';
 import { memberById } from '@/data/members';
@@ -21,7 +21,8 @@ import {
   DEV_AFFILIATION, normalizeEmail, seedClientAccounts, seedDevAccess, seedDevProjects, validateClientAccount, validateDevUser,
   type ClientAccountDraft, type DevUserDraft,
 } from '@/data/users';
-import { applyProjectPatch, projectFromDraft, projectPatchFromDraft, validateProject, type ProjectDraft } from '@/features/projects/projectForm';
+import { applyProjectPatch, DEFAULT_NEXT_ACTION, projectFromDraft, projectPatchFromDraft, validateProject, type ProjectDraft } from '@/features/projects/projectForm';
+import { followUpName } from '@/features/projects/followUp';
 
 /** 操作した側。省略時はアフロ（管理者画面）。お客様の画面（CMS・ポータル）からは client を渡す */
 export type Side = AnswerSide;
@@ -33,6 +34,12 @@ export type Action =
   | { type: 'updateProject'; id: string; project: ProjectDraft }
   /** 新しいプロジェクト（管理者画面）。要件定義・0% で作り、作業中のプロジェクトにする */
   | { type: 'createProject'; project: ProjectDraft }
+  /**
+   * 追加開発の案件を起こす（0.31.0。開発者画面のインサイトだけ）。改善の段階の案件の最新の AI 改善提案から 1 件以上を採用し、
+   * 元の案件とつながった新しい案件（ヒアリングの回答を写す）を作って作業中にする。元の案件は変えない。
+   * createProject とは別（URL の重複の検査は同じサイトなので当てはめない）
+   */
+  | { type: 'startFollowUp'; parentId: string; proposals: string[]; devBy?: string }
   /** by を省略するとアフロ（管理者画面）。お客様ポータルからは client */
   | { type: 'setAnswer'; questionId: string; value: AnswerValue; by?: Side }
   /** 回答の分担を切り替える（承認前のみ） */
@@ -173,6 +180,38 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       const created: Project = { id: uid('p'), ...projectFromDraft(action.project), updatedAt: nowIso() };
       const s = { ...switchWork({ ...state, projects: [created, ...state.projects] }, created.id), currentProjectId: created.id };
       return log(s, `プロジェクト「${created.siteName}」（${created.clientName}）を作成しました`, 'edit', ACTOR.afro, created.id);
+    }
+
+    case 'startFollowUp': {
+      // 起こせるのは改善の段階の案件だけ。採用する提案は、その案件の最新の診断の提案の中から 1 件以上（画面でも止めている）
+      const parent = state.projects.find((p) => p.id === action.parentId);
+      if (!parent || parent.stage !== 'improvement') return state;
+      const parentWork = workOf(state, parent.id);
+      const titles = new Set(parentWork.diagnoses[0]?.findings.map((f) => f.title) ?? []);
+      const proposals = [...new Set(action.proposals)].filter((t) => titles.has(t));
+      if (proposals.length === 0 || proposals.length !== new Set(action.proposals).size) return state;
+      const created: Project = {
+        id: uid('p'), clientName: parent.clientName, siteName: followUpName(parent, state.projects), siteUrl: parent.siteUrl, industry: parent.industry,
+        stage: 'hearing', progress: 0, ownerId: parent.ownerId, updatedAt: nowIso(), nextAction: DEFAULT_NEXT_ACTION, accent: parent.accent,
+        pendingApprovals: 0, parentProjectId: parent.id, adoptedProposals: proposals,
+      };
+      // ヒアリングの回答（回答者・分担・競合サイトを含む）だけを写す。AI 分析・承認・サイトマップ・デザイン・品質・公開後のデータは空から
+      const src = parentWork.requirements;
+      const work = blankWork(created.id);
+      work.requirements = {
+        ...work.requirements, answers: { ...src.answers }, competitors: [...src.competitors],
+        ...(src.mode ? { mode: src.mode } : {}), answerMeta: { ...(src.answerMeta ?? {}) },
+      };
+      // 開発担当は元の案件の担当をそのまま引き継ぐ（作った開発者が開けるように）
+      const devAll = devProjectsState(state);
+      const devProjects = Object.fromEntries(Object.entries(devAll).map(([m, ids]) => [m, ids.includes(parent.id) ? [...ids, created.id] : ids]));
+      const added: DemoState = {
+        ...state, projects: [created, ...state.projects], projectWork: { ...(state.projectWork ?? {}), [created.id]: work }, devProjects,
+      };
+      const actor = action.devBy ? devActor(state, action.devBy) : ACTOR.afro;
+      let s: DemoState = { ...switchWork(added, created.id), currentProjectId: created.id };
+      s = log(s, `追加開発のプロジェクト「${created.siteName}」を作成しました（採用した改善提案 ${proposals.length}件）`, 'edit', actor, parent.id);
+      return log(s, `「${parent.siteName}」の改善提案から追加開発を始めました（ヒアリングの回答を引き継ぎ）`, 'edit', actor, created.id);
     }
 
     case 'updateProject': {

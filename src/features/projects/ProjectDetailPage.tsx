@@ -25,6 +25,7 @@ import { ApprovalHistory } from './ApprovalHistory';
 import { sitemapCreated } from '@/data/sitemap';
 import { useWrite } from '@/hooks/useWrite';
 import { EditProjectDialog } from './EditProjectDialog';
+import { FollowUpLinks } from './FollowUpLinks';
 import type { ProjectDraft } from './projectForm';
 
 function Fact({ label, value, ok }: { label: string; value: ReactNode; ok?: boolean }) {
@@ -235,6 +236,9 @@ function Detail({ p }: { p: Project }) {
           </Stack>
         </Surface>
       </Reveal>
+
+      {/* 追加開発のつながり（0.31.0）。元の案件・追加開発の詳細を開く（開発者画面では詳細を開くと上部の案件も揃う） */}
+      <FollowUpLinks p={p} projects={allProjects} onOpen={(id) => navigate(routes.detail(id))} />
 
       <Typography variant="h3" component="h2" sx={{ mb: 0.5 }}>制作の6段階</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>

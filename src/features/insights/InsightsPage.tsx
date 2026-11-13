@@ -1,6 +1,6 @@
 import { Box, Button, ButtonBase, Stack, Typography } from '@mui/material';
-import { BarChart3, Info, ScanSearch, TrendingDown, TrendingUp, ArrowUpRight } from 'lucide-react';
-import { useState } from 'react';
+import { BarChart3, GitBranchPlus, Info, ScanSearch, TrendingDown, TrendingUp, ArrowUpRight } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { DiagnosisReport } from '@/types';
 import { metricsOf, type ProjectMetrics } from '@/data/projectContent';
@@ -11,7 +11,10 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { tokens } from '@/theme/tokens';
 import { daysFromNow, formatDate, formatDateTime } from '@/services/time';
 import { AiBadge, CountUp, NotYetPanel, PageHeader, Reveal, SectionTitle, StatusPill, Surface } from '@/components/ui';
+import { useToast } from '@/hooks/useToast';
+import { useDevUser } from '@/features/dev/useDevUser';
 import { DiagnosisDialog } from './DiagnosisDialog';
+import { FollowUpDialog } from './FollowUpDialog';
 
 /** 今月の値とリニューアル前月の値（数値は案件ごと。0.30.0） */
 const pointsOf = (m: ProjectMetrics) => ({
@@ -77,7 +80,7 @@ function TrendChart({ metrics, dataKey, name, color, gradientId, latest, unit, s
  * アクセス・診断のデモのデータは案件ごと（data/projectContent.ts。0.30.0）
  */
 export default function InsightsPage() {
-  const { state } = useDemo();
+  const { state, dispatch } = useDemo();
   const project = currentProject(state);
   const routes = useProjectRoutes();
   const navigate = useNavigate();
@@ -86,6 +89,32 @@ export default function InsightsPage() {
   // 診断ダイアログは案内とインサイトの外に置く（診断で改善の段階になって中身が切り替わっても、結果の表示まで閉じない）
   const [firstDiagnosis, setFirstDiagnosis] = useState(false);
   const canRunFirst = routes.dev && project.stage === 'operation';
+  // 追加開発（0.31.0。2026-11-13 ユーザー決定）: 改善の段階の案件は、開発者画面から最新の AI 改善提案を選んで別の案件として起こせる。
+  // 管理者画面は見るだけ（ボタンを出さない）。お客様ポータルにこの画面は無い
+  const toast = useToast();
+  const me = useDevUser();
+  const findings = state.diagnoses[0]?.findings ?? [];
+  const canFollowUp = routes.dev && project.stage === 'improvement' && findings.length > 0;
+  const [followUp, setFollowUp] = useState(false);
+  // 作成を送った時点の元の案件と案件の一覧（作成後、作業中になった新しい追加開発の案件の詳細を開く。新しいプロジェクトの作成と同じ流れ）
+  const pending = useRef<{ parentId: string; before: Set<string> } | null>(null);
+  useEffect(() => {
+    const p = pending.current;
+    if (!p || p.before.has(project.id) || project.parentProjectId !== p.parentId) return;
+    pending.current = null;
+    toast(`追加開発のプロジェクト「${project.siteName}」を作成しました`, 'success');
+    navigate(routes.detail(project.id));
+  }, [project.id, project.parentProjectId, project.siteName, navigate, routes, toast]);
+  const startFollowUp = (proposals: string[]) => {
+    pending.current = { parentId: project.id, before: new Set(state.projects.map((p) => p.id)) };
+    dispatch({ type: 'startFollowUp', parentId: project.id, proposals, devBy: me.id });
+    setFollowUp(false);
+  };
+  const followUpButton = canFollowUp ? (
+    <Button variant="outlined" size="small" startIcon={<GitBranchPlus size={15} />} onClick={() => setFollowUp(true)} sx={{ alignSelf: 'flex-start' }}>
+      追加開発として起こす
+    </Button>
+  ) : null;
   return (
     <>
       {/* 見本の数値が無い案件（新しく作った案件など）も、改善の段階の前と同じ案内にする（0.30.0） */}
@@ -109,16 +138,19 @@ export default function InsightsPage() {
               <Button variant="contained" startIcon={<ScanSearch size={16} />} onClick={() => setFirstDiagnosis(true)}>第1回 AIサイト診断を実行</Button>
             </Stack>
           )}
+          {/* アクセスの見本の数値が無い改善の段階の案件も、診断の提案から追加開発を起こせる */}
+          {followUpButton && <Stack alignItems="center" sx={{ mt: 2 }}>{followUpButton}</Stack>}
         </Box>
       ) : (
-        <InsightsBody key={project.id} metrics={metrics} />
+        <InsightsBody key={project.id} metrics={metrics} followUpButton={followUpButton} />
       )}
       <DiagnosisDialog open={firstDiagnosis} onClose={() => setFirstDiagnosis(false)} report={null} />
+      <FollowUpDialog project={followUp ? project : null} findings={findings} onClose={() => setFollowUp(false)} onStart={startFollowUp} />
     </>
   );
 }
 
-function InsightsBody({ metrics }: { metrics: ProjectMetrics }) {
+function InsightsBody({ metrics, followUpButton }: { metrics: ProjectMetrics; followUpButton: ReactNode }) {
   const { state } = useDemo();
   const { last, before } = pointsOf(metrics);
   const TRAFFIC_SOURCES = metrics.traffic;
@@ -242,7 +274,10 @@ function InsightsBody({ metrics }: { metrics: ProjectMetrics }) {
                   <Typography variant="body2" color="text.secondary">{f.detail}</Typography>
                 </Box>
               ))}
-              <Button size="small" endIcon={<ArrowUpRight size={14} />} onClick={() => setDialog({ open: true, report: latest })} sx={{ alignSelf: 'flex-start' }}>レポート全体を見る</Button>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+                <Button size="small" endIcon={<ArrowUpRight size={14} />} onClick={() => setDialog({ open: true, report: latest })} sx={{ alignSelf: 'flex-start' }}>レポート全体を見る</Button>
+                {followUpButton}
+              </Stack>
             </Stack>
           ) : <Typography variant="body2" color="text.secondary">まだ診断がありません。</Typography>}
         </Surface>

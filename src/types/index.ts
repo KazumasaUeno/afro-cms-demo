@@ -39,6 +39,13 @@ export interface Project {
   accent: string;
   launchDate?: ISODate;
   pendingApprovals: number;
+  /**
+   * 追加開発の元の案件（Project.id。0.31.0。2026-11-13 ユーザー決定）。改善の段階の案件の AI 改善提案から、別の案件として起こしたときだけ持つ。
+   * 無い保存データは「元の案件なし」として扱う（版は上げない）
+   */
+  parentProjectId?: string;
+  /** 追加開発で採用した改善提案の見出し（作成時の写し。0.31.0） */
+  adoptedProposals?: string[];
 }
 
 /** 新しいプロジェクトの入力（画面・reducer・repository で使う。検査は features/projects/projectForm.ts） */

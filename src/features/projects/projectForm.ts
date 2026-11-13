@@ -41,6 +41,20 @@ export function siteHost(url: string): string | null {
   }
 }
 
+/**
+ * 追加開発（0.31.0）をたどった一番元の案件の id。元の案件が無ければ自分の id。
+ * 一覧に無い元の案件（削除済みなど）で止め、循環しても止まるよう、たどる回数を案件の数までにする
+ */
+export function projectRoot(projects: Project[], p: Project): string {
+  let cur = p;
+  for (let i = 0; i < projects.length && cur.parentProjectId; i++) {
+    const parent = projects.find((x) => x.id === cur.parentProjectId);
+    if (!parent) break;
+    cur = parent;
+  }
+  return cur.id;
+}
+
 /** 端末の日付で今日（yyyy-mm-dd） */
 export function todayYmd(now: Date = new Date()): string {
   const p = (n: number) => String(n).padStart(2, '0');
@@ -82,7 +96,9 @@ export function validateProject(d: ProjectDraft, projects: Project[], self?: Pro
   if (urlError) e.siteUrl = urlError;
   else {
     const host = siteHost(d.siteUrl);
-    if (host && projects.some((p) => p.id !== self?.id && siteHost(p.siteUrl) === host)) e.siteUrl = 'このURLのプロジェクトはすでにあります';
+    // 編集では、元の案件と追加開発（0.31.0）は同じサイトなので重複に数えない。作成（self なし）は従来どおりすべてと比べる
+    const root = self ? projectRoot(projects, self) : null;
+    if (host && projects.some((p) => p.id !== self?.id && (!root || projectRoot(projects, p) !== root) && siteHost(p.siteUrl) === host)) e.siteUrl = 'このURLのプロジェクトはすでにあります';
   }
 
   if (!industry) e.industry = '業種を入力してください';

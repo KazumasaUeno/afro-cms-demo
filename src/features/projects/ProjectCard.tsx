@@ -7,6 +7,7 @@ import { memberById } from '@/data/members';
 import { MemberAvatar, StageTrack, StatusPill, Surface } from '@/components/ui';
 import { relativeTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
+import { FollowUpBadge } from '@/features/projects/FollowUpBadge';
 import { stageLabel } from './projectHelpers';
 
 /**
@@ -54,6 +55,8 @@ export function ProjectCard({ p, onOpen }: { p: Project; onOpen?: () => void }) 
         <Box sx={{ minWidth: 0 }}>
           <Typography variant="caption" noWrap sx={{ display: 'block' }}>{p.clientName}</Typography>
           <Typography variant="h4" component="h2" noWrap>{p.siteName}</Typography>
+          {/* 追加開発の案件（0.31.0）は元の案件の名前を添える */}
+          {p.parentProjectId && <FollowUpBadge p={p} />}
           <Stack direction="row" spacing={0.75} alignItems="center" sx={{ color: tokens.color.muted, mt: 0.25 }}>
             <Globe size={13} style={{ flexShrink: 0 }} />
             <Typography variant="caption" noWrap>{p.siteUrl.replace(/^https?:\/\//, '')}</Typography>

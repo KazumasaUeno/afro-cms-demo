@@ -5,6 +5,7 @@ import { STAGES } from '@/data/projects';
 import { StageTrack, StatusPill, Surface } from '@/components/ui';
 import { formatDate } from '@/services/time';
 import { tokens } from '@/theme/tokens';
+import { FollowUpBadge } from '@/features/projects/FollowUpBadge';
 import { stageLabel } from '@/features/projects/projectHelpers';
 
 /**
@@ -36,6 +37,8 @@ export function DevProjectCard({ p, next, onOpen }: { p: Project; next: string; 
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography variant="h5" component="h3" noWrap>{p.siteName}</Typography>
           <Typography variant="caption" noWrap sx={{ display: 'block' }}>{p.clientName}</Typography>
+          {/* 追加開発の案件（0.31.0）は元の案件の名前を添える */}
+          {p.parentProjectId && <FollowUpBadge p={p} />}
         </Box>
       </Stack>
       <StageTrack stage={p.stage} compact />
