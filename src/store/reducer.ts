@@ -112,9 +112,9 @@ const qualityActor = (state: DemoState, side: 'afro' | 'client', devBy?: string)
 let seq = 0;
 const uid = (p: string) => `${p}-${Date.now().toString(36)}-${(seq++).toString(36)}`;
 
-function log(state: DemoState, text: string, kind: Activity['kind'], actor: string = ACTOR.afro, projectId: string = state.currentProjectId): DemoState {
+function log(state: DemoState, text: string, kind: Activity['kind'], actor: string = ACTOR.afro, projectId: string = state.currentProjectId, side?: 'client'): DemoState {
   // その時点のお客様の担当者名で残した操作には、お客様側の印を付ける（0.30.3。呼び出し側は変えない）
-  const a: Activity = { id: uid('act'), at: nowIso(), actor, text, kind, projectId, ...(actor === clientActorOf(state, projectId) ? { side: 'client' as const } : {}) };
+  const a: Activity = { id: uid('act'), at: nowIso(), actor, text, kind, projectId, ...(side === 'client' || actor === clientActorOf(state, projectId) ? { side: 'client' as const } : {}) };
   return { ...state, activities: [a, ...state.activities].slice(0, 60) };
 }
 
@@ -519,7 +519,8 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       const prev = accounts.find((x) => x.email === email);
       if (!prev || prev.status !== 'invited') return state;
       const s = { ...state, clientAccounts: accounts.map((x) => (x.id === prev.id ? { ...x, status: 'active' as const, activatedAt: nowIso() } : x)) };
-      return log(s, `お客様ポータルに初めてログインしました（${prev.company}）`, 'edit', prev.name, prev.projectId);
+      // 担当者の名前で残すので、お客様側の印を明示する（0.30.4。「お客様の対応状況」の最後の操作に数える）
+      return log(s, `お客様ポータルに初めてログインしました（${prev.company}）`, 'edit', prev.name, prev.projectId, 'client');
     }
 
     case 'setDevAccess': {

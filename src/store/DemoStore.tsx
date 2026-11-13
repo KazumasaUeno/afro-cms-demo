@@ -3,7 +3,7 @@ import type { DemoState } from '@/types';
 import { loadJson, removeKey, saveJson, STORAGE_KEY } from '@/services/storage';
 import { createSeedState, isDemoState } from './seed';
 import { seedProjects } from '@/data/projects';
-import { reducer, type Action } from './reducer';
+import { ACTOR, clientActorOf, reducer, type Action } from './reducer';
 import { syncDemoProject } from './demoProject';
 import { seedWorkFor, switchWork, withContent } from './projectWork';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
@@ -97,12 +97,26 @@ function withSeedProjects(state: DemoState): DemoState {
   return missing.length ? { ...state, projects: [...state.projects, ...missing] } : state;
 }
 
+/**
+ * 0.30.2 までのアクティビティには、お客様側の操作の印（side）が無い。会社名を後から直すと名前では見分けられなくなるので、
+ * 読み込み時に 1 回だけ、いまの担当者名か旧名（0.30.1 まで全案件で使っていた「ミナモ珈琲 担当者」）の記録に印を付ける（0.30.4。版は上げない）
+ */
+export function withClientMarks(state: DemoState): DemoState {
+  let changed = false;
+  const activities = state.activities.map((a) => {
+    if (a.side || !a.projectId || (a.actor !== ACTOR.client && a.actor !== clientActorOf(state, a.projectId))) return a;
+    changed = true;
+    return { ...a, side: 'client' as const };
+  });
+  return changed ? { ...state, activities } : state;
+}
+
 function init(): DemoState {
   // 保存済みのデータに古い進捗が残っていても、デモのデータに合わせ直す。
   // 0.27 までのヒアリングにあったデザインの 3 問の回答は、デザイン要件定義へ移す（0.28.0。版は上げない）
   // 要件定義書の承認前に持っているサイトマップは外す（0.29.4。版は上げない）
   // 公開後のデータ（ページ・診断・サイネージ）を案件ごとに分ける（0.30.0。版は上げない）
-  return syncDemoProject(withoutEarlySitemap(withCurrentWork(withProjectContent(withSeedProjects(moveDesignAnswers(withAfroMode(loadJson(STORAGE_KEY, isDemoState) ?? createSeedState())))))));
+  return syncDemoProject(withClientMarks(withoutEarlySitemap(withCurrentWork(withProjectContent(withSeedProjects(moveDesignAnswers(withAfroMode(loadJson(STORAGE_KEY, isDemoState) ?? createSeedState()))))))));
 }
 
 export function DemoStoreProvider({ children }: { children: ReactNode }) {
