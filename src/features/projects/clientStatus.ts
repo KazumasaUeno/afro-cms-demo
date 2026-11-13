@@ -1,5 +1,5 @@
-import type { DemoState, ISODate, Project } from '@/types';
-import { clientActorOf } from '@/store/reducer';
+import type { Activity, DemoState, ISODate, Project } from '@/types';
+import { ACTOR, clientActorOf } from '@/store/reducer';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { workView } from '@/store/projectWork';
 import { approvalSteps, type ApprovalKey, type ApprovalStatus } from '@/features/portal/portalSteps';
@@ -63,11 +63,14 @@ export function clientStatus(state: DemoState, project: Project): ClientStatus {
   const publishWaiting = project.stage === 'operation' || project.stage === 'improvement'
     ? w.pages.filter((p) => p.status === 'review').length
     : 0;
-  // お客様の操作 = この案件のアクティビティ・承認の記録（その案件のお客様の担当者）と、品質チェックのお客様側の確認。
-  // 担当者名は案件ごと（0.30.2）。MINAMO COFFEE（p1）は従来の「ミナモ珈琲 担当者」と同じ文字列なので、保存済みの記録もそのまま一致する
+  // お客様の操作 = この案件のアクティビティ・承認の記録（お客様側）と、品質チェックのお客様側の確認。
+  // 名前ではなく印（activity.side・approvalLog.side）で見分ける（0.30.3。会社名を後から直しても数えられるように）。
+  // 印の無い 0.30.2 までのアクティビティは、いまの担当者名か、0.30.1 まで全案件で使っていた「ミナモ珈琲 担当者」で見分ける。
+  // 承認の記録の side は「お客様の承認」を表すので、0.29.4 まであった「アフロが代わりに承認」（actor がアフロ）を除く
   const clientActor = clientActorOf(state, pid);
-  const lastClient = state.activities.find((a) => ofProject(a.projectId) && a.actor === clientActor)?.at;
-  const lastLog = state.approvalLogs.find((l) => ofProject(l.projectId) && l.side === 'client' && l.actor === clientActor)?.at;
+  const byClient = (a: Activity) => a.side === 'client' || (!a.side && (a.actor === clientActor || a.actor === ACTOR.client));
+  const lastClient = state.activities.find((a) => ofProject(a.projectId) && byClient(a))?.at;
+  const lastLog = state.approvalLogs.find((l) => ofProject(l.projectId) && l.side === 'client' && l.actor !== ACTOR.afro)?.at;
   const lastCheck = Object.values(w.qualityChecks).map((c) => c.clientAt).filter((v): v is string => !!v).sort().pop();
   return {
     approvals, waiting, done, next, publishWaiting,

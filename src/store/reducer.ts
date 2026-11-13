@@ -113,7 +113,8 @@ let seq = 0;
 const uid = (p: string) => `${p}-${Date.now().toString(36)}-${(seq++).toString(36)}`;
 
 function log(state: DemoState, text: string, kind: Activity['kind'], actor: string = ACTOR.afro, projectId: string = state.currentProjectId): DemoState {
-  const a: Activity = { id: uid('act'), at: nowIso(), actor, text, kind, projectId };
+  // その時点のお客様の担当者名で残した操作には、お客様側の印を付ける（0.30.3。呼び出し側は変えない）
+  const a: Activity = { id: uid('act'), at: nowIso(), actor, text, kind, projectId, ...(actor === clientActorOf(state, projectId) ? { side: 'client' as const } : {}) };
   return { ...state, activities: [a, ...state.activities].slice(0, 60) };
 }
 

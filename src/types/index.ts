@@ -284,6 +284,11 @@ export interface Activity {
   text: string;
   kind: 'approve' | 'publish' | 'ai' | 'edit' | 'check' | 'comment';
   projectId?: string;
+  /**
+   * お客様側の操作の印（0.30.3。2026-11-13 ユーザー指示）。お客様の操作かを名前ではなくこの印で見分ける（会社名を後から直しても数えられるように）。
+   * 0.30.2 までの記録には無い（clientStatus.ts は名前で見分ける）
+   */
+  side?: 'client';
 }
 
 /* ---------- 開発者画面（アフロ制作エンジニア） ---------- */
