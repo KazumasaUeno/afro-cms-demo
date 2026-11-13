@@ -82,22 +82,40 @@ export default function InsightsPage() {
   const routes = useProjectRoutes();
   const navigate = useNavigate();
   const metrics = metricsOf(project.id);
-  // 見本の数値が無い案件（新しく作った案件など）も、改善の段階の前と同じ案内にする（0.30.0）
-  if (project.stage !== 'improvement' || !metrics) {
-    return (
-      <Box>
-        <PageHeader eyebrow="⑥ 改善" icon={<BarChart3 size={15} />} title="インサイト" description="アクセスと問い合わせの推移を見ながら、4か月ごとのAI診断で次の改善を決めます。" />
-        <NotYetPanel
-          icon={<BarChart3 size={26} />}
-          title={`${project.siteName} のインサイトはまだありません`}
-          description="サイトの公開後、改善の段階になると、アクセスと問い合わせの推移と AI サイト診断を確認できます。"
-          actionLabel="プロジェクト詳細を開く"
-          onAction={() => navigate(routes.detail(project.id))}
-        />
-      </Box>
-    );
-  }
-  return <InsightsBody key={project.id} metrics={metrics} />;
+  // 運用の段階の案件は、開発者画面から第1回の診断を実行して改善の段階へ進める（0.30.1。2026-11-13 ユーザー指示）。
+  // 診断ダイアログは案内とインサイトの外に置く（診断で改善の段階になって中身が切り替わっても、結果の表示まで閉じない）
+  const [firstDiagnosis, setFirstDiagnosis] = useState(false);
+  const canRunFirst = routes.dev && project.stage === 'operation';
+  return (
+    <>
+      {/* 見本の数値が無い案件（新しく作った案件など）も、改善の段階の前と同じ案内にする（0.30.0） */}
+      {project.stage !== 'improvement' || !metrics ? (
+        <Box>
+          <PageHeader eyebrow="⑥ 改善" icon={<BarChart3 size={15} />} title="インサイト" description="アクセスと問い合わせの推移を見ながら、4か月ごとのAI診断で次の改善を決めます。" />
+          <NotYetPanel
+            icon={<BarChart3 size={26} />}
+            title={`${project.siteName} のインサイトはまだありません`}
+            description={canRunFirst
+              ? '運用の段階です。第1回 AIサイト診断を実行すると改善の段階へ進み、診断結果を確認できます。'
+              : project.stage === 'improvement'
+                // 見本のアクセスの数値が無い案件は、改善の段階でも推移は出せない（診断結果はレポートで見られる。0.30.1）
+                ? 'この案件にはアクセスの見本の数値がありません。AI サイト診断の結果はレポートで確認できます。'
+                : 'サイトの公開後、改善の段階になると、アクセスと問い合わせの推移と AI サイト診断を確認できます。'}
+            actionLabel="プロジェクト詳細を開く"
+            onAction={() => navigate(routes.detail(project.id))}
+          />
+          {canRunFirst && (
+            <Stack alignItems="center" sx={{ mt: 2 }}>
+              <Button variant="contained" startIcon={<ScanSearch size={16} />} onClick={() => setFirstDiagnosis(true)}>第1回 AIサイト診断を実行</Button>
+            </Stack>
+          )}
+        </Box>
+      ) : (
+        <InsightsBody key={project.id} metrics={metrics} />
+      )}
+      <DiagnosisDialog open={firstDiagnosis} onClose={() => setFirstDiagnosis(false)} report={null} />
+    </>
+  );
 }
 
 function InsightsBody({ metrics }: { metrics: ProjectMetrics }) {

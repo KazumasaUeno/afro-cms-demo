@@ -51,6 +51,8 @@ export type Action =
   | { type: 'approveDesign'; by?: Side }
   | { type: 'startBuild' }
   | { type: 'completeBuild' }
+  /** サイトの公開（0.30.1。開発者画面だけ）。品質チェックが双方とも済んだ案件を運用の段階へ進める */
+  | { type: 'launchSite'; devBy?: string }
   // devBy: 開発者画面（0.27.0）で操作したメンバーの id。アフロ側の確認者をその人の名前で残す（省略時は従来どおり ACTOR）
   | { type: 'toggleQuality'; itemId: string; side: 'afro' | 'client'; devBy?: string }
   | { type: 'bulkQuality'; side: 'afro' | 'client'; priority: QuestionPriority | 'all'; categoryId?: string; devBy?: string }
@@ -276,6 +278,17 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       return log(s, '採用デザインをもとに全 9 ページを構築しました（シミュレーション）', 'ai', 'AI', state.requirements.projectId);
     }
 
+    case 'launchSite': {
+      // 品質チェックの段階から運用へ進める手段が無かった（2026-11-13 ユーザー指示「残課題を進めて」。0.30.1）。
+      // 運用・改善は制作データから導けないので、ここで段階を書き、以後は syncDemoProject が保つ（buildCompletedAt がある間）
+      const id = state.requirements.projectId;
+      const owner = state.projects.find((p) => p.id === id);
+      if (id !== state.currentProjectId || owner?.stage !== 'quality' || !state.design.buildCompletedAt) return state;
+      if (!QUALITY_ITEMS.every((i) => state.qualityChecks[i.id]?.afroAt && state.qualityChecks[i.id]?.clientAt)) return state;
+      const s = patchOwner(state, { stage: 'operation', progress: 88, nextAction: 'ページ・お知らせを更新する' });
+      return log(s, 'サイトを公開しました（運用の段階へ）', 'publish', action.devBy ? devActor(state, action.devBy) : ACTOR.afro, id);
+    }
+
     case 'toggleQuality': {
       const prev = state.qualityChecks[action.itemId] ?? {};
       const atKey = action.side === 'afro' ? 'afroAt' : 'clientAt';
@@ -347,7 +360,14 @@ function baseReducer(state: DemoState, action: Action): DemoState {
 
     case 'addDiagnosis': {
       const report: DiagnosisReport = { ...action.report, id: uid('diag'), at: nowIso(), cycle: state.diagnoses.length + 1 };
-      return log({ ...state, diagnoses: [report, ...state.diagnoses] }, `第${report.cycle}回 AIサイト診断を作成（スコア ${report.score}・デモデータ）`, 'ai', 'AI');
+      let s = log({ ...state, diagnoses: [report, ...state.diagnoses] }, `第${report.cycle}回 AIサイト診断を作成（スコア ${report.score}・デモデータ）`, 'ai', 'AI');
+      // 運用の段階の案件は、最初の診断で改善の段階へ進める（運用から先へ進む手段が無かった。2026-11-13 ユーザー指示。0.30.1）
+      const ownerId = state.requirements.projectId;
+      if (state.projects.find((p) => p.id === ownerId)?.stage === 'operation') {
+        s = patchOwner(s, { stage: 'improvement', progress: 100, nextAction: '改善の提案を確認する' });
+        s = log(s, 'AIサイト診断の結果をもとに改善の段階へ進みました', 'ai', 'AI', ownerId);
+      }
+      return s;
     }
 
     case 'updateSettings':

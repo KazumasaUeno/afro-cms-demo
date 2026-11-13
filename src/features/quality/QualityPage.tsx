@@ -1,5 +1,5 @@
 import { Box, Button, Menu, MenuItem, Stack, Typography, ListItemText } from '@mui/material';
-import { ArrowUpRight, CheckCheck, ShieldCheck, Building2, UserRound, History } from 'lucide-react';
+import { ArrowUpRight, CheckCheck, ShieldCheck, Building2, UserRound, History, Rocket } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { QualityCategory } from '@/types';
 import { QUALITY_CATEGORIES, QUALITY_ITEMS, TOTAL_QUALITY_QUESTIONS } from '@/data/quality';
@@ -68,7 +68,9 @@ function BulkMenu({ side }: { side: 'afro' }) {
 }
 
 export default function QualityPage() {
-  const { state } = useDemo();
+  const { state, dispatch } = useDemo();
+  const toast = useToast();
+  const devBy = useQualityDevBy();
   // 管理者・開発者画面ではアフロ側の確認だけを行う。顧客側の承認はお客様ポータルだけ（開発者 0.27.0・管理者 2026-11-12）
   const [selected, setSelected] = useState<QualityCategory | null>(null);
   const overall = computeStats(QUALITY_ITEMS, state.qualityChecks);
@@ -85,6 +87,17 @@ export default function QualityPage() {
   const openItems = QUALITY_ITEMS.filter((i) => !isComplete(state.qualityChecks[i.id]));
   const openByCategory = perCategory.filter((c) => c.stats.open > 0).slice(0, 5);
 
+  // 公開（0.30.1。2026-11-13 ユーザー指示）: 双方確認が済んだら開発者画面から運用の段階へ進める。管理者画面は見るだけ（文言だけ出す）
+  const ownerStage = state.projects.find((p) => p.id === state.requirements.projectId)?.stage;
+  const canLaunch = openItems.length === 0 && !!state.design.buildCompletedAt && ownerStage === 'quality' && state.requirements.projectId === state.currentProjectId;
+  const launch = () => {
+    dispatch({ type: 'launchSite', devBy });
+    toast('サイトを公開しました。運用の段階へ進みます', 'success');
+  };
+  const doneText = ownerStage === 'operation' || ownerStage === 'improvement'
+    ? 'すべての項目が完了し、サイトを公開しました（運用の段階）。'
+    : devBy ? 'すべての項目が完了しました。サイトを公開すると運用の段階へ進みます。' : 'すべての項目が完了しました。開発者がサイトを公開すると運用の段階へ進みます。';
+
   const kpis = [
     { label: 'アフロ確認', value: overall.afroRate as number | null, n: overall.afro, color: tokens.color.primary, soft: tokens.color.primarySoft, icon: <Building2 size={16} /> },
     { label: '顧客承認', value: overall.clientRate as number | null, n: overall.client, color: tokens.color.success, soft: tokens.color.successSoft, icon: <UserRound size={16} /> },
@@ -98,7 +111,14 @@ export default function QualityPage() {
         icon={<ShieldCheck size={15} />}
         title="品質チェック"
         description={`12項目${TOTAL_QUALITY_QUESTIONS}問の品質基準のうち、アフロ側の確認を行います。顧客の承認はお客様がお客様ポータルで行います（デモでは代表${QUALITY_ITEMS.length}問を収録）。`}
-        actions={<BulkMenu side="afro" />}
+        actions={
+          <>
+            {devBy && canLaunch && (
+              <Button variant="contained" color="success" startIcon={<Rocket size={16} />} onClick={launch}>サイトを公開して運用へ進む</Button>
+            )}
+            <BulkMenu side="afro" />
+          </>
+        }
       />
 
       <Reveal>
@@ -144,7 +164,7 @@ export default function QualityPage() {
       <Surface sx={{ mb: 4 }}>
         <SectionTitle title="未完了の項目" sub={openItems.length > 0 ? <StatusPill tone="warning" dot={false}>{openItems.length}件</StatusPill> : undefined} />
         {openByCategory.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">すべての項目が完了しました。公開準備に進めます。</Typography>
+          <Typography variant="body2" color="text.secondary">{doneText}</Typography>
         ) : (
           <Stack spacing={1.5}>
             {openByCategory.map(({ category, items }) => {

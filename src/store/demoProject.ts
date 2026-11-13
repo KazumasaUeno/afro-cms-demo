@@ -27,7 +27,9 @@ export function derivedDemoProject(state: DemoState): Pick<Project, 'stage' | 'p
   if (!state.design.buildCompletedAt) return { ...base, stage: 'build', progress: 52, nextAction: '全ページを構築する' };
   const both = QUALITY_ITEMS.filter((i) => state.qualityChecks[i.id]?.afroAt && state.qualityChecks[i.id]?.clientAt).length;
   const stage: Stage = 'quality';
-  return { ...base, stage, progress: 64 + Math.round((30 * both) / QUALITY_ITEMS.length), nextAction: '品質チェック（110問）を進める' };
+  // すべて双方確認済みなら次は公開（開発者画面の品質チェックから運用へ進める。0.30.1）
+  const nextAction = both === QUALITY_ITEMS.length ? 'サイトを公開する' : '品質チェック（110問）を進める';
+  return { ...base, stage, progress: 64 + Math.round((30 * both) / QUALITY_ITEMS.length), nextAction };
 }
 
 /**

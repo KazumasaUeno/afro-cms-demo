@@ -186,20 +186,52 @@ function CmsEditor() {
     toast(status === 'published' ? '公開しました（シミュレーション）' : status === 'review' ? (dev ? 'お客様に承認を依頼しました' : '承認を依頼しました') : '予約公開を設定しました', status === 'review' ? 'info' : 'success');
   };
 
-  if (!draft) return <PageHeader title="ページ・お知らせ" description="ページがありません" />;
+  const header = (
+    <PageHeader
+      eyebrow={dev ? '⑤ 運用' : 'お客様ポータル'}
+      icon={<LayoutTemplate size={15} />}
+      title="ページ・お知らせ"
+      description={dev
+        ? 'お客様サイトのページとお知らせの下書きを編集し、お客様に承認を依頼します。公開はお客様がポータルの「公開承認」で行います。'
+        : 'ページとお知らせを編集し、承認を経て公開します。公開はデモ上の状態変更のみで、実際のサーバーには反映されません。'}
+    />
+  );
+  const newPageDialog = (
+    <NewPageDialog
+      open={!!newType}
+      initialType={newType ?? 'page'}
+      pages={pages}
+      parentOptions={parentOptions}
+      onClose={() => setNewType(null)}
+      onCreate={(page) => {
+        dispatch({ type: 'savePage', page, ...actor });
+        setNewType(null);
+        setSelectedId(page.id);
+        setDraft(page);
+        setMobileView('editor');
+        toast(`「${page.title}」を作成しました`);
+      }}
+    />
+  );
+  // ページがまだ無い案件（見本の無い案件を公開した直後など。0.30.1）: 見出しと空の一覧から最初のページ・お知らせを作れるようにする
+  // （以前は「ページがありません」の見出しだけで、作成の入口が無かった）
+  if (!draft) {
+    return (
+      <>
+        {header}
+        <Box sx={{ maxWidth: 360 }}>
+          <PageList pages={pages} onSelect={requestOpen} onNew={(t) => setNewType(t)} />
+        </Box>
+        {newPageDialog}
+      </>
+    );
+  }
   const showList = isDesktop || !isMobile || mobileView === 'list';
   const showEditor = isDesktop || !isMobile || mobileView === 'editor';
 
   return (
     <>
-      <PageHeader
-        eyebrow={dev ? '⑤ 運用' : 'お客様ポータル'}
-        icon={<LayoutTemplate size={15} />}
-        title="ページ・お知らせ"
-        description={dev
-          ? 'お客様サイトのページとお知らせの下書きを編集し、お客様に承認を依頼します。公開はお客様がポータルの「公開承認」で行います。'
-          : 'ページとお知らせを編集し、承認を経て公開します。公開はデモ上の状態変更のみで、実際のサーバーには反映されません。'}
-      />
+      {header}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '240px minmax(0,1fr)', lg: '260px minmax(0,1fr) 320px' }, gap: { xs: 2, md: 3 }, alignItems: 'start' }}>
         {showList && (
           // 追従する一覧・設定は画面より高くなると下端に届かないので、画面の高さで区切って中をスクロールさせる
@@ -273,21 +305,7 @@ function CmsEditor() {
         )}
       </Box>
 
-      <NewPageDialog
-        open={!!newType}
-        initialType={newType ?? 'page'}
-        pages={pages}
-        parentOptions={parentOptions}
-        onClose={() => setNewType(null)}
-        onCreate={(page) => {
-          dispatch({ type: 'savePage', page, ...actor });
-          setNewType(null);
-          setSelectedId(page.id);
-          setDraft(page);
-          setMobileView('editor');
-          toast(`「${page.title}」を作成しました`);
-        }}
-      />
+      {newPageDialog}
       <Dialog open={!!pending} onClose={() => setPending(null)} maxWidth="xs" fullWidth>
         <DialogTitle>保存していない変更があります</DialogTitle>
         <DialogContent><Typography variant="body2" color="text.secondary">「{draft.title}」の変更を保存してから移動しますか？</Typography></DialogContent>

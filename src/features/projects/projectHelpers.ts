@@ -80,14 +80,16 @@ export function nextBestAction(state: DemoState): { title: string; detail: strin
     const review = state.pages.filter((p) => p.status === 'review').length;
     return {
       title: review ? `お客様の公開承認を待っている更新が ${review} 件あります` : 'ページ・お知らせを更新しましょう',
-      detail: '公開後の運用の段階です。お知らせの追加や予約公開で、サイトを新しく保ちます。',
+      // 運用から改善へは最初の AIサイト診断で進む（0.30.1）。まだ診断が無ければその道筋も示す
+      detail: `公開後の運用の段階です。お知らせの追加や予約公開で、サイトを新しく保ちます。${state.diagnoses.length === 0 ? '開発者が第1回 AIサイト診断を実行すると、改善の段階へ進みます。' : ''}`,
       to: STAGE_LINKS.operation[0].to, cta: 'CMSで更新',
     };
   }
   if (stage !== 'improvement') {
     return {
-      title: '品質チェックが完了しました',
-      detail: 'アフロとお客様の双方の確認が済みました。公開の準備ができています。',
+      // 公開は開発者画面の品質チェックで行う（0.30.1。管理者画面は見るだけなので、ここからは公開しない）
+      title: '品質チェックが完了しました。サイトを公開できます',
+      detail: 'アフロとお客様の双方の確認が済みました。開発者がサイトを公開すると運用の段階へ進みます。',
       to: '/quality', cta: '品質チェックを見る',
     };
   }

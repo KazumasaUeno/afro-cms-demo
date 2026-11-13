@@ -1,10 +1,11 @@
 import { useLocation } from 'react-router-dom';
 import type { DemoState, Project, Stage } from '@/types';
-import { areaOf } from '@/components/layout/nav';
+import { areaOf, CLIENT_PROJECT_ID } from '@/components/layout/nav';
+import { designReady } from '@/features/design/designReq';
 import { workView } from '@/store/projectWork';
 import type { ApprovalKey } from '@/features/portal/portalSteps';
 import { useHearingRoutes, type HearingRoutes } from '@/features/requirements/hearingRoutes';
-import { nextBestAction, STAGE_LINKS } from './projectHelpers';
+import { nextBestAction, qualityCompletion, STAGE_LINKS } from './projectHelpers';
 
 export interface StageLink { label: string; to: string }
 
@@ -91,8 +92,11 @@ export function useProjectRoutes(): ProjectRoutes {
 
 /**
  * 開発者画面で、担当案件の「次の作業」とその行き先（開発者画面の中だけ）。
- * ヒアリングの段階 → ヒアリング（/dev/hearing）、要件定義の段階 → 要件定義書（/dev/requirements。0.28.0）、それ以降 → 構築タスク。
- * デモの案件は制作フローの「次の一手」で判定し、ヒアリング・要件定義以外の一手（サイトマップ・デザインの承認など）は管理者の作業なので構築タスクを出す。
+ * ヒアリングの段階 → ヒアリング（/dev/hearing）、要件定義の段階 → 要件定義書（/dev/requirements。0.28.0）。
+ * 構築・品質の段階は、その案件の制作データで行き先を分ける（0.30.1。以前は一律に構築タスクだったため、構築タスクを持たない案件では行き止まりだった）:
+ * サイトマップ未承認 → /dev/sitemap、デザイン要件定義が未完 → /dev/design/requirements、デザイン未採用 → /dev/design、
+ * 全ページ未構築 → MINAMO COFFEE は構築タスク（/dev/tasks。構築タスクはこの案件の分だけ）・ほかはデザインスタジオ（/dev/design）、
+ * 品質チェック → /dev/quality（双方確認が済んでいれば「サイトを公開する」）。
  * ダッシュボードのカードとプロジェクト詳細の「次に必要な作業」で使う
  */
 export function devNextWork(p: Project, state: DemoState): { next: string; to: string } {
@@ -102,5 +106,13 @@ export function devNextWork(p: Project, state: DemoState): { next: string; to: s
   const view = workView(state, p.id);
   // 分析前はヒアリングの入力、分析後（承認待ち）は要件定義書（0.28.0）
   if (view.requirements.status === 'draft') return { next: nextBestAction(view).cta, to: '/dev/hearing' };
-  return view.requirements.status === 'analyzed' ? { next: nextBestAction(view).cta, to: '/dev/requirements' } : { next: '構築タスクを進める', to: '/dev/tasks' };
+  if (view.requirements.status === 'analyzed') return { next: nextBestAction(view).cta, to: '/dev/requirements' };
+  // 承認・採用はお客様の作業なので、待っている間もその画面を開く（開発者は内容を確認できる）
+  if (!view.sitemap.approvedAt) return { next: 'お客様のサイトマップ承認を待つ', to: '/dev/sitemap' };
+  if (!view.design.approvedAt && !designReady(view)) return { next: 'デザイン要件定義を入力する', to: '/dev/design/requirements' };
+  if (!view.design.approvedAt) return { next: 'お客様のデザイン案の採用を待つ', to: '/dev/design' };
+  if (!view.design.buildCompletedAt) {
+    return p.id === CLIENT_PROJECT_ID ? { next: '構築タスクを進める', to: '/dev/tasks' } : { next: '全ページを構築する', to: '/dev/design' };
+  }
+  return { next: qualityCompletion(view.qualityChecks).percent === 100 ? 'サイトを公開する' : '品質チェックを進める', to: '/dev/quality' };
 }
