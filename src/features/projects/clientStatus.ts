@@ -8,7 +8,7 @@ import { approvalSteps, type ApprovalKey, type ApprovalStatus } from '@/features
  * 管理者画面の「お客様の対応状況」。お客様ポータルと同じ値（portalSteps）から導く（専用の状態は持たない）。
  * 案件ごとの制作データ（workView）で、どの案件でも出す（2026-11-12 ユーザー決定）。
  * 承認はお客様ポータルだけなので、承認した人は区別しない（アフロの代理承認は 2026-11-12 に廃止）。
- * ページ・お知らせ（CMS）は MINAMO COFFEE の分しか無いので、公開承認はその案件の運用・改善の段階のときだけ数える。
+ * ページ・お知らせ（CMS）は案件ごと（0.30.0）。公開承認は運用・改善の段階のときだけ数える。
  */
 
 export interface ClientApprovalRow {
@@ -30,7 +30,7 @@ export interface ClientStatus {
   done: ClientApprovalRow[];
   /** 次にお願いすること（最初の locked の節目） */
   next?: ClientApprovalRow;
-  /** お客様の公開承認を待っているページ・お知らせ（MINAMO COFFEE の運用・改善の段階のときだけ。それ以外は 0） */
+  /** お客様の公開承認を待っているページ・お知らせ（運用・改善の段階のときだけ。それ以外は 0） */
   publishWaiting: number;
   /** いまお願いしていることの数（waiting の節目 ＋ 公開承認があれば 1） */
   waitingCount: number;
@@ -60,8 +60,8 @@ export function clientStatus(state: DemoState, project: Project): ClientStatus {
   const waiting = approvals.filter((a) => a.status === 'waiting');
   const done = approvals.filter((a) => a.status === 'approved');
   const next = approvals.find((a) => a.status === 'locked');
-  const publishWaiting = pid === CLIENT_PROJECT_ID && (project.stage === 'operation' || project.stage === 'improvement')
-    ? state.pages.filter((p) => p.status === 'review').length
+  const publishWaiting = project.stage === 'operation' || project.stage === 'improvement'
+    ? w.pages.filter((p) => p.status === 'review').length
     : 0;
   // お客様の操作 = この案件のアクティビティ・承認の記録（お客様の担当者）と、品質チェックのお客様側の確認
   const lastClient = state.activities.find((a) => ofProject(a.projectId) && a.actor === ACTOR.client)?.at;

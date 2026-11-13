@@ -3,20 +3,23 @@ import { BarChart3, Info, ScanSearch, TrendingDown, TrendingUp, ArrowUpRight } f
 import { useState } from 'react';
 import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { DiagnosisReport } from '@/types';
-import { MONTHLY_METRICS, PAGE_PERFORMANCE, RENEWAL_MONTH, TRAFFIC_SOURCES } from '@/data/insights';
+import { metricsOf, type ProjectMetrics } from '@/data/projectContent';
 import { currentProject, useDemo } from '@/store/DemoStore';
 import { useNavigate } from 'react-router-dom';
 import { useProjectRoutes } from '@/features/projects/projectRoutes';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { tokens } from '@/theme/tokens';
 import { daysFromNow, formatDate, formatDateTime } from '@/services/time';
-import { AiBadge, CountUp, PageHeader, Reveal, SectionTitle, StatusPill, Surface } from '@/components/ui';
+import { AiBadge, CountUp, NotYetPanel, PageHeader, Reveal, SectionTitle, StatusPill, Surface } from '@/components/ui';
 import { DiagnosisDialog } from './DiagnosisDialog';
 
-const last = MONTHLY_METRICS[MONTHLY_METRICS.length - 1];
-const before = MONTHLY_METRICS[MONTHLY_METRICS.findIndex((m) => m.month === RENEWAL_MONTH) - 1];
+/** 今月の値とリニューアル前月の値（数値は案件ごと。0.30.0） */
+const pointsOf = (m: ProjectMetrics) => ({
+  last: m.monthly[m.monthly.length - 1],
+  before: m.monthly[Math.max(0, m.monthly.findIndex((x) => x.month === m.renewalMonth) - 1)],
+});
 
-function Kpi({ label, value, base, decimals = 0, suffix = '' }: { label: string; value: number; base: number; decimals?: number; suffix?: string }) {
+function Kpi({ label, value, base, beforeMonth, decimals = 0, suffix = '' }: { label: string; value: number; base: number; beforeMonth: string; decimals?: number; suffix?: string }) {
   const delta = ((value - base) / base) * 100;
   const up = delta >= 0;
   return (
@@ -29,7 +32,7 @@ function Kpi({ label, value, base, decimals = 0, suffix = '' }: { label: string;
         <StatusPill tone={up ? 'success' : 'danger'} dot={false} icon={up ? <TrendingUp size={13} /> : <TrendingDown size={13} />}>
           {up ? '+' : ''}{delta.toFixed(0)}%
         </StatusPill>
-        <Typography variant="caption">リニューアル前（{before.month}）比</Typography>
+        <Typography variant="caption">リニューアル前（{beforeMonth}）比</Typography>
       </Stack>
     </Surface>
   );
@@ -38,8 +41,8 @@ function Kpi({ label, value, base, decimals = 0, suffix = '' }: { label: string;
 const CHART_Y_WIDTH = 40;
 
 /** 推移グラフ 1 段分（上下 2 段で同じ x 位置に揃える） */
-function TrendChart({ dataKey, name, color, gradientId, latest, unit, showXAxis, tickFormatter, anim, ariaLabel }: {
-  dataKey: 'sessions' | 'inquiries'; name: string; color: string; gradientId: string; latest: number; unit: string;
+function TrendChart({ metrics, dataKey, name, color, gradientId, latest, unit, showXAxis, tickFormatter, anim, ariaLabel }: {
+  metrics: ProjectMetrics; dataKey: 'sessions' | 'inquiries'; name: string; color: string; gradientId: string; latest: number; unit: string;
   showXAxis?: boolean; tickFormatter?: (v: number) => string; anim: boolean; ariaLabel: string;
 }) {
   return (
@@ -48,11 +51,11 @@ function TrendChart({ dataKey, name, color, gradientId, latest, unit, showXAxis,
         <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: color, alignSelf: 'center' }} />
         <Typography variant="caption" sx={{ fontWeight: 600, color: tokens.color.inkSoft }}>{name}</Typography>
         <Typography sx={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{latest.toLocaleString('ja-JP')}{unit}</Typography>
-        <Typography variant="caption">（{last.month}）</Typography>
+        <Typography variant="caption">（{metrics.monthly[metrics.monthly.length - 1].month}）</Typography>
       </Stack>
       <Box sx={{ height: 150 }} role="img" aria-label={ariaLabel}>
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={MONTHLY_METRICS} syncId="insightsTrend" margin={{ top: 18, right: 8, left: 0, bottom: 0 }}>
+          <AreaChart data={metrics.monthly} syncId="insightsTrend" margin={{ top: 18, right: 8, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={color} stopOpacity={0.2} /><stop offset="1" stopColor={color} stopOpacity={0} /></linearGradient>
             </defs>
@@ -60,7 +63,7 @@ function TrendChart({ dataKey, name, color, gradientId, latest, unit, showXAxis,
             <XAxis dataKey="month" hide={!showXAxis} tickFormatter={(m: string) => m.slice(5) + '月'} tick={{ fontSize: 12, fill: tokens.color.muted }} axisLine={false} tickLine={false} />
             <YAxis width={CHART_Y_WIDTH} tick={{ fontSize: 12, fill: tokens.color.muted }} axisLine={false} tickLine={false} tickFormatter={tickFormatter} />
             <Tooltip contentStyle={{ borderRadius: 12, border: `1px solid ${tokens.color.border}`, backgroundColor: tokens.color.surfaceContainerHigh, color: tokens.color.ink, boxShadow: tokens.shadow.md, fontSize: 12 }} formatter={(v) => [Number(v).toLocaleString('ja-JP'), name]} />
-            <ReferenceLine x={RENEWAL_MONTH} stroke={tokens.color.ink} strokeDasharray="4 4" label={{ value: 'リニューアル', position: 'top', fontSize: 12, fill: tokens.color.ink }} />
+            <ReferenceLine x={metrics.renewalMonth} stroke={tokens.color.ink} strokeDasharray="4 4" label={{ value: 'リニューアル', position: 'top', fontSize: 12, fill: tokens.color.ink }} />
             <Area type="monotone" dataKey={dataKey} stroke={color} strokeWidth={2} fill={`url(#${gradientId})`} isAnimationActive={anim} />
           </AreaChart>
         </ResponsiveContainer>
@@ -71,47 +74,45 @@ function TrendChart({ dataKey, name, color, gradientId, latest, unit, showXAxis,
 
 /**
  * インサイトは改善の段階（公開後）の画面。選んでいる案件がまだその段階でなければ、データを出さずに案内だけ出す（2026-11-12 ユーザー指示）。
- * アクセス・診断のデモのデータは 1 案件分の見本（data/insights.ts）
+ * アクセス・診断のデモのデータは案件ごと（data/projectContent.ts。0.30.0）
  */
 export default function InsightsPage() {
   const { state } = useDemo();
   const project = currentProject(state);
   const routes = useProjectRoutes();
   const navigate = useNavigate();
-  if (project.stage !== 'improvement') {
+  const metrics = metricsOf(project.id);
+  // 見本の数値が無い案件（新しく作った案件など）も、改善の段階の前と同じ案内にする（0.30.0）
+  if (project.stage !== 'improvement' || !metrics) {
     return (
       <Box>
         <PageHeader eyebrow="⑥ 改善" icon={<BarChart3 size={15} />} title="インサイト" description="アクセスと問い合わせの推移を見ながら、4か月ごとのAI診断で次の改善を決めます。" />
-        <Surface padding={{ xs: 3, md: 5 }} sx={{ textAlign: 'center' }}>
-          <Stack alignItems="center" spacing={1.5}>
-            <Box aria-hidden sx={{ display: 'grid', placeItems: 'center', width: 56, height: 56, borderRadius: '50%', bgcolor: tokens.color.surfaceMuted, color: tokens.color.inkSoft }}>
-              <BarChart3 size={26} />
-            </Box>
-            <Typography variant="h5" component="h2">{project.siteName} のインサイトはまだありません</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 460 }}>
-              サイトの公開後、改善の段階になると、アクセスと問い合わせの推移と AI サイト診断を確認できます。
-            </Typography>
-            <Button variant="contained" endIcon={<ArrowUpRight size={16} />} onClick={() => navigate(routes.detail(project.id))} sx={{ mt: 1 }}>
-              プロジェクト詳細を開く
-            </Button>
-          </Stack>
-        </Surface>
+        <NotYetPanel
+          icon={<BarChart3 size={26} />}
+          title={`${project.siteName} のインサイトはまだありません`}
+          description="サイトの公開後、改善の段階になると、アクセスと問い合わせの推移と AI サイト診断を確認できます。"
+          actionLabel="プロジェクト詳細を開く"
+          onAction={() => navigate(routes.detail(project.id))}
+        />
       </Box>
     );
   }
-  return <InsightsBody />;
+  return <InsightsBody key={project.id} metrics={metrics} />;
 }
 
-function InsightsBody() {
+function InsightsBody({ metrics }: { metrics: ProjectMetrics }) {
   const { state } = useDemo();
+  const { last, before } = pointsOf(metrics);
+  const TRAFFIC_SOURCES = metrics.traffic;
+  const PAGE_PERFORMANCE = metrics.pagePerformance;
   const reduced = useReducedMotion();
   const [dialog, setDialog] = useState<{ open: boolean; report: DiagnosisReport | null }>({ open: false, report: null });
   const latest = state.diagnoses[0];
   const anim = !reduced;
 
-  // 4か月単位の診断サイクル（リニューアル 2026/05 を起点）
+  // 4か月単位の診断サイクル（リニューアルの月を起点。案件ごと）
   const cycles = [
-    { label: 'リニューアル', sub: '2026/05' },
+    { label: 'リニューアル', sub: metrics.renewalMonth },
     { label: '4か月後', sub: '第1回 診断' },
     { label: '8か月後', sub: '第2回 診断' },
     { label: '12か月後', sub: '第3回 診断' },
@@ -135,9 +136,9 @@ function InsightsBody() {
       </Stack>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 2, mb: 3 }}>
-        <Reveal><Kpi label={`月間アクセス（${last.month}）`} value={last.sessions} base={before.sessions} /></Reveal>
-        <Reveal delay={0.05}><Kpi label="月間問い合わせ" value={last.inquiries} base={before.inquiries} suffix="件" /></Reveal>
-        <Reveal delay={0.1}><Kpi label="コンバージョン率" value={last.cvr} base={before.cvr} decimals={2} suffix="%" /></Reveal>
+        <Reveal><Kpi label={`月間アクセス（${last.month}）`} value={last.sessions} base={before.sessions} beforeMonth={before.month} /></Reveal>
+        <Reveal delay={0.05}><Kpi label="月間問い合わせ" value={last.inquiries} base={before.inquiries} beforeMonth={before.month} suffix="件" /></Reveal>
+        <Reveal delay={0.1}><Kpi label="コンバージョン率" value={last.cvr} base={before.cvr} beforeMonth={before.month} decimals={2} suffix="%" /></Reveal>
       </Box>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: 3, mb: 3 }}>
@@ -145,14 +146,14 @@ function InsightsBody() {
           <SectionTitle title="アクセスと問い合わせの推移" sub={<Typography variant="caption" sx={{ ml: 1, display: { xs: 'none', sm: 'block' } }}>月次</Typography>} />
           {/* 二軸をやめて上下 2 段。x 軸と参照線の位置を揃えるため、y 軸の幅と余白を両方で同じにする */}
           <TrendChart
-            dataKey="sessions" name="アクセス数" color={tokens.color.primary} gradientId="gSessions" latest={last.sessions} unit=""
+            metrics={metrics} dataKey="sessions" name="アクセス数" color={tokens.color.primary} gradientId="gSessions" latest={last.sessions} unit=""
             tickFormatter={(v) => `${v / 1000}k`} anim={anim}
-            ariaLabel={`アクセス数は ${MONTHLY_METRICS[0].sessions.toLocaleString('ja-JP')} から ${last.sessions.toLocaleString('ja-JP')} へ推移`}
+            ariaLabel={`アクセス数は ${metrics.monthly[0].sessions.toLocaleString('ja-JP')} から ${last.sessions.toLocaleString('ja-JP')} へ推移`}
           />
           <TrendChart
-            dataKey="inquiries" name="問い合わせ数" color={tokens.color.info} gradientId="gInq" latest={last.inquiries} unit="件"
+            metrics={metrics} dataKey="inquiries" name="問い合わせ数" color={tokens.color.info} gradientId="gInq" latest={last.inquiries} unit="件"
             showXAxis anim={anim}
-            ariaLabel={`問い合わせは ${MONTHLY_METRICS[0].inquiries} 件から ${last.inquiries} 件へ推移`}
+            ariaLabel={`問い合わせは ${metrics.monthly[0].inquiries} 件から ${last.inquiries} 件へ推移`}
           />
         </Surface>
 
@@ -167,7 +168,7 @@ function InsightsBody() {
               </PieChart>
             </ResponsiveContainer>
             <Box sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', pointerEvents: 'none', textAlign: 'center' }}>
-              <Box><Typography sx={{ fontSize: 22, fontWeight: 740 }}>{TRAFFIC_SOURCES[0].value}%</Typography><Typography variant="caption">自然検索</Typography></Box>
+              <Box><Typography sx={{ fontSize: 22, fontWeight: 740 }}>{TRAFFIC_SOURCES[0].value}%</Typography><Typography variant="caption">{TRAFFIC_SOURCES[0].name}</Typography></Box>
             </Box>
           </Box>
           <Stack spacing={1} sx={{ mt: 1 }}>

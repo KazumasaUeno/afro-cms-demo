@@ -103,7 +103,7 @@ export const AREAS: Record<AreaId, AreaDef> = {
 
 export const AREA_ORDER: AreaId[] = ['admin', 'dev', 'portal'];
 
-/** お客様ポータル・開発者画面が扱う案件（デモのデータは MINAMO COFFEE の 1 案件分だけ持っている） */
+/** デモの基準の案件（MINAMO COFFEE）。開発データ（構築タスク・デプロイ）と営業プレゼンはこの案件の分だけ持っている（0.30.0） */
 export const CLIENT_PROJECT_ID = 'p1';
 
 export function areaOf(pathname: string): AreaId {

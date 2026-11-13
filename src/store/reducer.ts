@@ -15,7 +15,7 @@ import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
 import { DESIGN_QUESTIONS } from '@/data/designRequirements';
 import { MODE_LABEL, pendingConfirmations, questionStatus } from '@/features/requirements/assignment';
 import { isAnswered } from '@/features/requirements/validation';
-import { DISPLAY_SLIDES_MAX, normalizeSlide, seedSignage, validateSlide } from '@/data/signage';
+import { DISPLAY_SLIDES_MAX, normalizeSlide, validateSlide } from '@/data/signage';
 import {
   DEV_AFFILIATION, normalizeEmail, seedClientAccounts, seedDevAccess, seedDevProjects, validateClientAccount, validateDevUser,
   type ClientAccountDraft, type DevUserDraft,
@@ -572,11 +572,13 @@ export function devProjectsState(state: DemoState): Record<string, string[]> {
   return state.devProjects ?? (devProjectsFallback ??= seedDevProjects());
 }
 
-/** サイネージのデータ（0.11.0 より前の保存データには無いので初期値で補う） */
-/** 0.11.0 より前の保存データ用の初期値。描画のたびに作り直すとタイマーが毎回やり直しになるので 1 回だけ作る */
+/**
+ * サイネージのデータ（選んでいる案件の分）。0.30.0 から読み込み時に必ず入れる（DemoStore の withProjectContent）ので、無いときは空にする
+ * （MINAMO COFFEE の見本を出すと、ほかの案件に MINAMO の画面が出てしまう）。描画のたびに作り直すとタイマーが毎回やり直しになるので 1 回だけ作る
+ */
 let signageFallback: SignageState | null = null;
 export function signageState(state: DemoState): SignageState {
-  return state.signage ?? (signageFallback ??= seedSignage());
+  return state.signage ?? (signageFallback ??= { displays: [], slides: [] });
 }
 
 /** 開発者画面のデータ（0.5.0 より前の保存データには無いので初期値で補う） */

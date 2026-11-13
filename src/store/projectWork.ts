@@ -1,8 +1,9 @@
-import type { AnswerValue, DemoState, ProjectWork, QualityCheck, RequirementSession, Stage } from '@/types';
+import type { AnswerValue, DemoState, ProjectContent, ProjectWork, QualityCheck, RequirementSession, Stage } from '@/types';
 import { emptySitemap, sitemapFor } from '@/data/sitemap';
 import { QUALITY_ITEMS } from '@/data/quality';
 import { daysAgo, hoursAgo } from '@/services/time';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
+import { emptyContent, emptySignage, seedContentFor } from '@/data/projectContent';
 
 /**
  * 案件ごとの制作データ（ヒアリング・要件定義・サイトマップ・デザイン・品質チェック。0.29.0。2026-11-12 ユーザー決定）。
@@ -10,18 +11,23 @@ import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
  * 画面は従来どおり state.requirements・sitemap・design・qualityChecks（= 選んでいる案件の分）を読み書きする。
  * 選んでいない案件の分は state.projectWork に置き、案件を切り替えるときに入れ替える（switchWork）。
  * 画面で選んでいる案件と違う案件を表示するときは workView で、その案件の分を差し込んだ state を作って読む。
+ * 公開後のデータ（ページ・お知らせ、AI 診断、サイネージ）も同じ方式で案件ごとに持つ（0.30.0。2026-11-13 ユーザー指示。data/projectContent.ts）。
  */
+
+/** 制作データと公開後のデータ（workOf が返す形。公開後のデータは必ずある） */
+export type FullWork = ProjectWork & ProjectContent;
 
 /** まだヒアリングしていない案件の要件（受託開発ではアフロが全問を入力する。2026-11-10 決定） */
 export const blankRequirements = (projectId: string): RequirementSession => ({
   projectId, answers: {}, competitors: [], status: 'draft', mode: 'afro', answerMeta: {},
 });
 
-export const blankWork = (projectId: string): ProjectWork => ({
+export const blankWork = (projectId: string): FullWork => ({
   requirements: blankRequirements(projectId),
   sitemap: emptySitemap(),
   design: { selected: null },
   qualityChecks: {},
+  ...emptyContent(),
 });
 
 /* ---------- 初期データ（各案件の段階より前は入力・承認済み） ---------- */
@@ -238,9 +244,10 @@ const ORDER: Stage[] = ['hearing', 'requirements', 'build', 'quality', 'operatio
  * - build: 要件定義書を承認済み・サイトマップを作成して承認済み、デザイン要件定義を入力済み（デザイン案の採用待ち）
  * - quality: デザイン採用・全ページ構築まで済み、品質チェックが途中
  * - operation / improvement: 品質チェックまで完了
+ * 公開後のデータ（ページ・診断・サイネージ）は段階ではなく案件の id で決める（data/projectContent.ts。0.30.0）
  */
-export function seedWorkFor(projectId: string, stage: Stage): ProjectWork {
-  const work = blankWork(projectId);
+export function seedWorkFor(projectId: string, stage: Stage): FullWork {
+  const work: FullWork = { ...blankWork(projectId), ...seedContentFor(projectId) };
   const answers = HEARING[projectId];
   const at = ORDER.indexOf(stage);
   if (!answers || at < 1) return work;
@@ -269,15 +276,24 @@ export function seedWorkFor(projectId: string, stage: Stage): ProjectWork {
 
 /* ---------- 選んでいる案件の入れ替え ---------- */
 
-const currentWork = (state: DemoState): ProjectWork => ({
+// サイネージは読み込み時に必ず入れる（DemoStore の withProjectContent）。無いときの空は念のため
+const currentWork = (state: DemoState): FullWork => ({
   requirements: state.requirements, sitemap: state.sitemap, design: state.design, qualityChecks: state.qualityChecks,
+  pages: state.pages, diagnoses: state.diagnoses, signage: state.signage ?? emptySignage(),
 });
 
-/** 案件の制作データ（保存に無い案件は、その案件の段階に合う初期データ） */
-export function workOf(state: DemoState, projectId: string): ProjectWork {
+/** 保存した制作データに公開後のデータが無ければ（0.29 までの保存データ）、その案件の初期データで補う。そろっていれば同じものを返す */
+export function withContent(projectId: string, work: ProjectWork): FullWork {
+  if (work.pages && work.diagnoses && work.signage) return work as FullWork;
+  const seed = seedContentFor(projectId);
+  return { ...work, pages: work.pages ?? seed.pages, diagnoses: work.diagnoses ?? seed.diagnoses, signage: work.signage ?? seed.signage };
+}
+
+/** 案件の制作データと公開後のデータ（保存に無い案件は、その案件の段階に合う初期データ） */
+export function workOf(state: DemoState, projectId: string): FullWork {
   if (projectId === state.requirements.projectId) return currentWork(state);
   const saved = state.projectWork?.[projectId];
-  if (saved) return saved;
+  if (saved) return withContent(projectId, saved);
   const p = state.projects.find((x) => x.id === projectId);
   return seedWorkFor(projectId, p?.stage ?? 'hearing');
 }
@@ -293,7 +309,7 @@ export function workView(state: DemoState, projectId: string): DemoState {
  */
 export const demoDesignApprovedAt = (state: DemoState): string | undefined => workOf(state, CLIENT_PROJECT_ID).design.approvedAt;
 
-/** 選んでいる案件を切り替える。いまの案件の制作データを projectWork へしまい、次の案件の分を出す */
+/** 選んでいる案件を切り替える。いまの案件の制作データ・公開後のデータを projectWork へしまい、次の案件の分を出す */
 export function switchWork(state: DemoState, projectId: string): DemoState {
   const cur = state.requirements.projectId;
   if (projectId === cur) return state;

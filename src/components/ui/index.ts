@@ -8,3 +8,4 @@ export * from './MemberAvatar';
 export * from './Reveal';
 export * from './SectionTitle';
 export * from './StageTrack';
+export * from './NotYetPanel';

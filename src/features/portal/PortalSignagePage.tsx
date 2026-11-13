@@ -3,7 +3,9 @@ import { AlertTriangle, ChevronDown, Eye, Megaphone, Monitor, Pencil, Plus, Send
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PageHeader, Reveal, StatusPill, Surface } from '@/components/ui';
-import { signageState, useDemo } from '@/store/DemoStore';
+import { currentProject, signageState, useDemo } from '@/store/DemoStore';
+import { isSiteLive } from '@/data/projectContent';
+import { SiteNotLive } from '@/features/projects/SiteNotLive';
 import { useToast } from '@/hooks/useToast';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useFullScreenDialog } from '@/hooks/useMediaQueries';
@@ -188,8 +190,27 @@ function NewsPickerDialog({ open, pages, onClose, onPick }: { open: boolean; pag
   );
 }
 
-/** お客様ポータル: 店頭の画面（デジタルサイネージ）のコンテンツ作成と配信（デモ: 実際の端末には接続しない） */
+const HEADER = { eyebrow: 'お客様ポータル', title: 'サイネージ', description: '店頭の画面に流すコンテンツを作り、店舗の端末へ配信します。デモのため、実際の端末には接続していません。' };
+
+/**
+ * お客様ポータル: 店頭の画面（デジタルサイネージ）のコンテンツ作成と配信（デモ: 実際の端末には接続しない）。
+ * サイネージは案件ごと（0.30.0）。サイトの公開前の案件は案内だけ出す（2026-11-13 ユーザー指示）
+ */
 export default function PortalSignagePage() {
+  const { state } = useDemo();
+  const project = currentProject(state);
+  if (!isSiteLive(project.stage)) {
+    return (
+      <>
+        <PageHeader {...HEADER} icon={<Monitor size={15} />} />
+        <SiteNotLive icon={<Monitor size={26} />} feature="サイネージ" />
+      </>
+    );
+  }
+  return <Signage key={project.id} />;
+}
+
+function Signage() {
   const { state, dispatch } = useDemo();
   const toast = useToast();
   const [params, setParams] = useSearchParams();
@@ -246,12 +267,7 @@ export default function PortalSignagePage() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="お客様ポータル"
-        icon={<Monitor size={15} />}
-        title="サイネージ"
-        description="店頭の画面に流すコンテンツを作り、店舗の端末へ配信します。デモのため、実際の端末には接続していません。"
-      />
+      <PageHeader {...HEADER} icon={<Monitor size={15} />} />
 
       <Stack spacing={{ xs: 2, md: 2.5 }}>
         <Reveal>
@@ -279,7 +295,13 @@ export default function PortalSignagePage() {
         </Tabs>
 
         <Box id="signage-panel" role="tabpanel" aria-labelledby={`signage-tab-${tab}`}>
-          {tab === 'displays' ? (
+          {tab === 'displays' && displays.length === 0 ? (
+            // 端末の無い案件（0.30.0 から案件ごと。デモでは端末を追加できない）
+            <Surface padding={{ xs: 3, md: 4 }} sx={{ textAlign: 'center' }}>
+              <Typography variant="h5" component="p">まだ端末がありません</Typography>
+              <Typography variant="body2" sx={{ mt: 0.5, color: tokens.color.muted }}>店頭に画面を置くと、ここに表示されます。コンテンツは「コンテンツ」で先に作れます。</Typography>
+            </Surface>
+          ) : tab === 'displays' ? (
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0,1fr)', md: 'repeat(2, minmax(0,1fr))', xl: 'repeat(3, minmax(0,1fr))' }, gap: { xs: 2, md: 2.5 } }}>
               {displays.map((d, i) => (
                 <Reveal key={d.id} delay={i * 0.04}>

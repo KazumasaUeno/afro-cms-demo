@@ -5,8 +5,8 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Surface } from '@/components/ui';
 import { Logo } from '@/components/layout/Logo';
-import { AREA_ORDER, AREAS, CLIENT_PROJECT_ID, type AreaId } from '@/components/layout/nav';
-import { useDemo } from '@/store/DemoStore';
+import { AREA_ORDER, AREAS, type AreaId } from '@/components/layout/nav';
+import { currentProject, useDemo } from '@/store/DemoStore';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useToast } from '@/hooks/useToast';
 import { LOGIN_PATH, loginArea, logoutArea, safeNext, useSessions } from '@/services/session';
@@ -46,7 +46,8 @@ export default function LoginPage({ area: areaId }: { area: AreaId }) {
   const toast = useToast();
   const reduced = useReducedMotion();
   const { state, dispatch } = useDemo();
-  const client = state.projects.find((p) => p.id === CLIENT_PROJECT_ID);
+  // お客様ポータルは選んでいる案件を表示する（0.30.0）
+  const client = currentProject(state);
 
   const [step, setStep] = useState<1 | 2>(1);
   const [email, setEmail] = useState(account.email);

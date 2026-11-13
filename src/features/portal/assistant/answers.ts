@@ -5,6 +5,11 @@ import { memberById } from '@/data/members';
 import { formatDate } from '@/services/time';
 import { approvalSteps } from '../portalSteps';
 import { hasUndelivered } from '@/data/signage';
+import { isSiteLive } from '@/data/projectContent';
+
+/** ページ・公開承認・サイネージ・レポートはサイトの公開後（運用の段階）から使える（0.30.0。2026-11-13 ユーザー指示） */
+const live = (state: DemoState) => isSiteLive(currentProject(state).stage);
+const notYet = (state: DemoState, feature: string): AssistantReply => ({ text: `${currentProject(state).siteName} の${feature}は、サイトの公開後（運用の段階）から使えます。` });
 
 /**
  * お客様ポータルの AI アシスタント（シミュレーション）。
@@ -24,7 +29,7 @@ export function clientTodos(state: DemoState): { label: string; to: string }[] {
   approvalSteps(state).filter((s) => s.status === 'waiting').forEach((s) => {
     out.push({ label: s.progress ? `${s.title}（${s.progress.done} / ${s.progress.total}）` : `${s.title}の承認`, to: s.key === 'quality' ? '/portal/quality' : `/portal/approvals#${s.key}` });
   });
-  const review = state.pages.filter((p) => p.status === 'review').length;
+  const review = live(state) ? state.pages.filter((p) => p.status === 'review').length : 0;
   if (review) out.push({ label: `ページ・お知らせの公開承認 ${review} 件`, to: '/portal/publish' });
   return out;
 }
@@ -40,6 +45,7 @@ function nextTodo(state: DemoState): AssistantReply {
 
 /** サイネージの状況（端末の数・未配信の変更・オフライン） */
 function signageGuide(state: DemoState): AssistantReply {
+  if (!live(state)) return notYet(state, 'サイネージ');
   const { displays, slides } = signageState(state);
   const changed = displays.filter((d) => hasUndelivered(d, slides));
   const offline = displays.filter((d) => !d.online);
@@ -64,12 +70,15 @@ export function pageGuide(pathname: string, state: DemoState): AssistantReply {
     case '/portal/quality':
       return { text: '公開前に、お客様の目で確認していただく項目です。実際のページを見ながらチェックしてください。カテゴリごとにまとめて確認することもできます。' };
     case '/portal/pages':
+      if (!live(state)) return notYet(state, 'ページ編集');
       return { text: 'ページやお知らせを書いて、公開や予約公開ができます。「承認依頼」にすると、社内の承認を経てから公開されます。' };
     case '/portal/publish': {
+      if (!live(state)) return notYet(state, '公開承認');
       const review = state.pages.filter((p) => p.status === 'review').length;
       return { text: review ? `承認待ちの更新が ${review} 件あります。変更前と変更後を見比べて、承認するか、コメントを付けて差し戻してください。` : '承認待ちの更新はありません。' };
     }
     case '/portal/reports':
+      if (!live(state)) return notYet(state, 'レポート');
       return { text: state.diagnoses.length
         ? `公開後の改善レポートを ${state.diagnoses.length} 件お届けしています。点数が低いカテゴリから改善の提案を読むのがおすすめです。`
         : '公開後に、サイトの改善レポートがここに届きます。' };
@@ -109,6 +118,7 @@ export const TOPICS: Topic[] = [
     id: 'signage', label: 'サイネージを更新したい', // 「画面」は「承認の画面」などにも当たるので入れない
     keywords: ['サイネージ', '店頭', 'モニター'],
     answer: (state) => {
+      if (!live(state)) return notYet(state, 'サイネージ');
       const { displays, slides } = signageState(state);
       const changed = displays.filter((d) => hasUndelivered(d, slides)).length;
       return {
@@ -120,7 +130,7 @@ export const TOPICS: Topic[] = [
   // 「お知らせを公開したい」を公開日の質問と取り違えないよう、launch より先に判定する
   {
     id: 'news', label: 'お知らせを出したい', keywords: ['お知らせ', 'ニュース', '記事', '更新', 'ページ'],
-    answer: () => ({ text: '「ページ・お知らせ」から書けます。タイトルと本文を書いて、すぐ公開するか、日時を決めて予約公開できます。', action: { label: 'お知らせを書く', to: '/portal/pages?new=news' } }),
+    answer: (state) => !live(state) ? notYet(state, 'お知らせの更新') : ({ text: '「ページ・お知らせ」から書けます。タイトルと本文を書いて、すぐ公開するか、日時を決めて予約公開できます。', action: { label: 'お知らせを書く', to: '/portal/pages?new=news' } }),
   },
   {
     id: 'launch', label: '公開はいつ？', keywords: ['公開', 'いつ', '予定', '納期', 'リリース'],

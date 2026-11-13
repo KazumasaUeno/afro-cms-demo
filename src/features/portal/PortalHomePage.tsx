@@ -3,6 +3,7 @@ import { ArrowRight, BadgeCheck, CalendarDays, Clock3, House, Lock, Megaphone, M
 import { useNavigate } from 'react-router-dom';
 import { MemberAvatar, PageHeader, ProgressRing, Reveal, SectionTitle, StageTrack, StatusPill, Surface } from '@/components/ui';
 import { useDemo, currentProject } from '@/store/DemoStore';
+import { isSiteLive } from '@/data/projectContent';
 import { useToast } from '@/hooks/useToast';
 import { formatDate, formatDateTime, relativeTime } from '@/services/time';
 import { memberById } from '@/data/members';
@@ -31,7 +32,9 @@ export default function PortalHomePage() {
   const project = currentProject(state);
   const owner = memberById(project.ownerId);
   const steps = approvalSteps(state);
-  const cmsReview = state.pages.filter((p) => p.status === 'review').length;
+  // ページ・お知らせはサイトの公開後（運用の段階）から。公開前は承認待ちも「サイトの更新」も出さない（0.30.0。2026-11-13 ユーザー指示）
+  const live = isSiteLive(project.stage);
+  const cmsReview = live ? state.pages.filter((p) => p.status === 'review').length : 0;
   // 数え方の正は clientTodos（AI アシスタントのボタンの件数と揃える）
   const todoCount = clientTodos(state).length;
   const stage = STAGES[stageIndex(project.stage)];
@@ -141,7 +144,7 @@ export default function PortalHomePage() {
 
           <Stack spacing={{ xs: 2.5, md: 3 }}>
             {/* サイトの更新（ページ・お知らせ） */}
-            <Surface>
+            {live && <Surface>
               <SectionTitle title="サイトの更新" sub={<Typography variant="caption">ページ・お知らせ {state.pages.length} 件</Typography>} />
               <Box component="dl" sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 1, m: 0 }}>
                 {pageCounts.map((c) => (
@@ -157,7 +160,7 @@ export default function PortalHomePage() {
                 <Button fullWidth variant="contained" startIcon={<Megaphone size={16} />} onClick={() => navigate('/portal/pages?new=news')}>お知らせを書く</Button>
                 <Button fullWidth variant="outlined" startIcon={<PenLine size={16} />} onClick={() => navigate('/portal/pages')}>編集する</Button>
               </Stack>
-            </Surface>
+            </Surface>}
 
             {/* 担当者 */}
             <Surface>

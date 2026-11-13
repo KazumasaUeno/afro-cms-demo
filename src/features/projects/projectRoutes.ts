@@ -1,6 +1,6 @@
 import { useLocation } from 'react-router-dom';
 import type { DemoState, Project, Stage } from '@/types';
-import { areaOf, CLIENT_PROJECT_ID } from '@/components/layout/nav';
+import { areaOf } from '@/components/layout/nav';
 import { workView } from '@/store/projectWork';
 import type { ApprovalKey } from '@/features/portal/portalSteps';
 import { useHearingRoutes, type HearingRoutes } from '@/features/requirements/hearingRoutes';
@@ -96,12 +96,11 @@ export function useProjectRoutes(): ProjectRoutes {
  * ダッシュボードのカードとプロジェクト詳細の「次に必要な作業」で使う
  */
 export function devNextWork(p: Project, state: DemoState): { next: string; to: string } {
-  // 制作データは案件ごと（0.29.0）。運用・改善の段階はデモのデータ（ページ・診断）が MINAMO COFFEE の分だけなので、案件の値を使う
-  if (p.id === CLIENT_PROJECT_ID || (p.stage !== 'operation' && p.stage !== 'improvement')) {
-    const view = workView(state, p.id);
-    // 分析前はヒアリングの入力、分析後（承認待ち）は要件定義書（0.28.0）
-    if (view.requirements.status === 'draft') return { next: nextBestAction(view).cta, to: '/dev/hearing' };
-    return view.requirements.status === 'analyzed' ? { next: nextBestAction(view).cta, to: '/dev/requirements' } : { next: '構築タスクを進める', to: '/dev/tasks' };
-  }
-  return { next: p.nextAction, to: '/dev/tasks' };
+  // 運用・改善の段階は、ページ・診断が案件ごとになった（0.30.0）ので、どの案件もページ編集・インサイトへ（以前は MINAMO COFFEE 以外を構築タスクへ）
+  if (p.stage === 'operation') return { next: p.nextAction, to: '/dev/cms' };
+  if (p.stage === 'improvement') return { next: p.nextAction, to: '/dev/insights' };
+  const view = workView(state, p.id);
+  // 分析前はヒアリングの入力、分析後（承認待ち）は要件定義書（0.28.0）
+  if (view.requirements.status === 'draft') return { next: nextBestAction(view).cta, to: '/dev/hearing' };
+  return view.requirements.status === 'analyzed' ? { next: nextBestAction(view).cta, to: '/dev/requirements' } : { next: '構築タスクを進める', to: '/dev/tasks' };
 }

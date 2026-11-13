@@ -87,7 +87,7 @@ export function ClientAccountDialog({ draft: initial, accounts, projects, onClos
             <TextField
               select fullWidth required label="担当案件" value={draft.projectId} disabled={locked}
               onChange={(e) => chooseProject(e.target.value)}
-              error={!!show('projectId')} helperText={show('projectId') ?? (DATA_MODE === 'live' ? 'このお客様がお客様ポータルで見る案件' : 'このお客様の案件（デモのお客様ポータルは、どの案件でも MINAMO COFFEE のデータを表示します）')}
+              error={!!show('projectId')} helperText={show('projectId') ?? (DATA_MODE === 'live' ? 'このお客様がお客様ポータルで見る案件' : 'このお客様の案件（デモのお客様ポータルは、管理者画面・開発者画面で選んでいる案件を表示します）')}
               inputRef={(el: HTMLElement | null) => { refs.current.projectId = el; }}
               SelectProps={{ MenuProps: { PaperProps: { sx: { maxHeight: 320 } } } }}
             >

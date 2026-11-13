@@ -3,7 +3,10 @@ import { CheckCircle2, Eye, GitCompare, Inbox, Megaphone, FileText, Stamp, Undo2
 import { useState } from 'react';
 import type { CmsPage } from '@/types';
 import { MemberAvatar, PageHeader, Reveal, SectionTitle, StatusPill, Surface } from '@/components/ui';
-import { useDemo } from '@/store/DemoStore';
+import { currentProject, useDemo } from '@/store/DemoStore';
+import { isSiteLive } from '@/data/projectContent';
+import { SiteNotLive } from '@/features/projects/SiteNotLive';
+import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { useToast } from '@/hooks/useToast';
 import { formatDateTime, relativeTime } from '@/services/time';
 import { memberById } from '@/data/members';
@@ -36,23 +39,37 @@ function RejectDialog({ page, onClose, onConfirm }: { page: CmsPage | null; onCl
   );
 }
 
+const HEADER = { eyebrow: 'お客様ポータル', title: '公開承認', description: '編集者から承認を依頼された更新です。プレビューと変更点を確認して、公開するか差し戻してください。' };
+
+/** 承認待ちのページは案件ごと（0.30.0）。サイトの公開前の案件は案内だけ出す（2026-11-13 ユーザー指示） */
 export default function PublishApprovalsPage() {
+  const { state } = useDemo();
+  const project = currentProject(state);
+  if (!isSiteLive(project.stage)) {
+    return (
+      <>
+        <PageHeader {...HEADER} icon={<Stamp size={15} />} />
+        <SiteNotLive icon={<Stamp size={26} />} feature="公開承認" />
+      </>
+    );
+  }
+  return <PublishApprovals key={project.id} />;
+}
+
+function PublishApprovals() {
   const { state, dispatch } = useDemo();
+  const projectId = currentProject(state).id;
   const toast = useToast();
   const [preview, setPreview] = useState<CmsPage | null>(null);
   const [compare, setCompare] = useState<CmsPage | null>(null);
   const [reject, setReject] = useState<CmsPage | null>(null);
   const waiting = state.pages.filter((p) => p.status === 'review').sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
-  const history = state.approvalLogs.filter((l) => l.target.startsWith('CMS / ')).slice(0, 8);
+  // 承認の記録もこの案件の分だけ（projectId の無い古い記録は MINAMO COFFEE のもの）
+  const history = state.approvalLogs.filter((l) => l.target.startsWith('CMS / ') && (l.projectId ?? CLIENT_PROJECT_ID) === projectId).slice(0, 8);
 
   return (
     <>
-      <PageHeader
-        eyebrow="お客様ポータル"
-        icon={<Stamp size={15} />}
-        title="公開承認"
-        description="編集者から承認を依頼された更新です。プレビューと変更点を確認して、公開するか差し戻してください。"
-      />
+      <PageHeader {...HEADER} icon={<Stamp size={15} />} />
 
       <Stack spacing={{ xs: 2.5, md: 3 }}>
         <Box>

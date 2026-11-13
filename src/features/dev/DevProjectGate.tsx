@@ -1,6 +1,7 @@
 import { Box, Button, Stack, Typography } from '@mui/material';
 import { FolderLock } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 import type { Project } from '@/types';
 import { Surface } from '@/components/ui';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
@@ -10,9 +11,13 @@ import { TOUCH } from '@/theme/media';
 import { tokens } from '@/theme/tokens';
 import { useDevProjects } from './useDevUser';
 
+/** 開発データ（MINAMO COFFEE の 1 案件分だけ）を出す画面: 構築タスク・環境・デプロイ（0.30.0） */
+const devDataOnly = (pathname: string) => /^\/dev\/(tasks|deploys)(\/|$)/.test(pathname);
+
 /**
  * 開発者画面: ログイン中のメンバーが、表示中のプロジェクトの担当かを確かめてから中身を出す。
  * 担当外・担当なし・（担当だが）デモにデータが無い案件は、理由と行き先だけを出す（転送はしない）。
+ * 制作・運用のデータは案件ごと（0.29.0・0.30.0）なので、MINAMO COFFEE だけに限るのは開発データ（構築タスク・環境・デプロイ）の画面だけ
  * デモのため見た目の制御だけで、セキュリティ境界ではない。
  */
 export function DevProjectGate({ children, project: target, onOpen }: {
@@ -26,11 +31,12 @@ export function DevProjectGate({ children, project: target, onOpen }: {
   onOpen?: (id: string) => void;
 }) {
   const { state } = useDemo();
+  const { pathname } = useLocation();
   const { projects } = useRepositories();
   const project = target ?? currentProject(state);
   const mine = useDevProjects();
   const assigned = mine.some((p) => p.id === project.id);
-  if (assigned && (target || project.id === CLIENT_PROJECT_ID)) return <>{children}</>;
+  if (assigned && (target || project.id === CLIENT_PROJECT_ID || !devDataOnly(pathname))) return <>{children}</>;
   const open = onOpen ?? ((id: string) => projects.select(id));
 
   const title = !mine.length

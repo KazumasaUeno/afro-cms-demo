@@ -3,10 +3,11 @@ import { ArrowDownRight, ArrowUpRight, ChevronRight, MessageSquare, ScrollText }
 import { useState } from 'react';
 import type { DiagnosisReport } from '@/types';
 import { AiBadge, PageHeader, ProgressRing, SectionTitle, Surface } from '@/components/ui';
-import { useDemo } from '@/store/DemoStore';
+import { currentProject, useDemo } from '@/store/DemoStore';
+import { isSiteLive, metricsOf } from '@/data/projectContent';
+import { SiteNotLive } from '@/features/projects/SiteNotLive';
 import { useToast } from '@/hooks/useToast';
 import { formatDate } from '@/services/time';
-import { MONTHLY_METRICS } from '@/data/insights';
 import { tokens } from '@/theme/tokens';
 import { AREAS } from '@/components/layout/nav';
 import { DiagnosisDialog } from '@/features/insights/DiagnosisDialog';
@@ -32,33 +33,47 @@ function Kpi({ label, value, prev, unit = '', decimals = 0 }: { label: string; v
   );
 }
 
+const HEADER = { eyebrow: 'お客様ポータル', title: 'レポート', description: '公開後は 4 か月ごとに AI がサイトを診断し、改善レポートをお届けします。レポートは HTML でダウンロードできます。' };
+
+/** レポートと数値は案件ごと（0.30.0）。サイトの公開前の案件は案内だけ出す（2026-11-13 ユーザー指示） */
 export default function PortalReportsPage() {
+  const { state } = useDemo();
+  const project = currentProject(state);
+  if (!isSiteLive(project.stage)) {
+    return (
+      <>
+        <PageHeader {...HEADER} icon={<ScrollText size={15} />} />
+        <SiteNotLive icon={<ScrollText size={26} />} feature="レポート" />
+      </>
+    );
+  }
+  return <Reports key={project.id} projectId={project.id} />;
+}
+
+function Reports({ projectId }: { projectId: string }) {
   const { state } = useDemo();
   const toast = useToast();
   const [open, setOpen] = useState<DiagnosisReport | null>(null);
   const reports = state.diagnoses;
   const latest = reports[0];
-  const cur = MONTHLY_METRICS[MONTHLY_METRICS.length - 1];
-  const prev = MONTHLY_METRICS[MONTHLY_METRICS.length - 2] ?? cur;
+  // 数値の見本が無い案件（新しく作った案件など）は、数値の欄を出さない
+  const monthly = metricsOf(projectId)?.monthly ?? [];
+  const cur = monthly[monthly.length - 1];
+  const prev = monthly[monthly.length - 2] ?? cur;
 
   return (
     <>
-      <PageHeader
-        eyebrow="お客様ポータル"
-        icon={<ScrollText size={15} />}
-        title="レポート"
-        description="公開後は 4 か月ごとに AI がサイトを診断し、改善レポートをお届けします。レポートは HTML でダウンロードできます。"
-      />
+      <PageHeader {...HEADER} icon={<ScrollText size={15} />} />
 
       <Stack spacing={{ xs: 2.5, md: 3 }}>
-        <Box>
+        {cur && <Box>
           <SectionTitle title={`${cur.month} のサイトの状況`} sub={<Typography variant="caption">デモデータ</Typography>} />
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0,1fr))' }, gap: { xs: 1.5, md: 2 } }}>
             <Kpi label="訪問数" value={cur.sessions} prev={prev.sessions} unit="回" />
             <Kpi label="問い合わせ" value={cur.inquiries} prev={prev.inquiries} unit="件" />
             <Kpi label="問い合わせ率" value={cur.cvr} prev={prev.cvr} unit="%" decimals={2} />
           </Box>
-        </Box>
+        </Box>}
 
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0,1.4fr) minmax(0,1fr)' }, gap: { xs: 2.5, md: 3 }, alignItems: 'start' }}>
           <Surface>

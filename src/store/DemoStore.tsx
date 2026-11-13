@@ -5,7 +5,10 @@ import { createSeedState, isDemoState } from './seed';
 import { seedProjects } from '@/data/projects';
 import { reducer, type Action } from './reducer';
 import { syncDemoProject } from './demoProject';
-import { seedWorkFor, switchWork } from './projectWork';
+import { seedWorkFor, switchWork, withContent } from './projectWork';
+import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
+import { seedContentFor } from '@/data/projectContent';
+import { seedSignage } from '@/data/signage';
 import { moveDesignAnswers } from '@/features/design/designReq';
 import { emptySitemap, sitemapCreated } from '@/data/sitemap';
 
@@ -57,6 +60,37 @@ function withoutEarlySitemap(state: DemoState): DemoState {
   };
 }
 
+/**
+ * 公開後のデータ（ページ・お知らせ、AI 診断、サイネージ）を案件ごとにする（0.30.0。2026-11-13 ユーザー指示。版は上げない）。
+ * 0.29 までの保存データは、上の pages・diagnoses・signage が 1 組だけで、中身は MINAMO COFFEE（p1）のもの。
+ * - 制作データの持ち主（requirements.projectId）が p1 なら、そのまま p1 の分として使う（サイネージが無ければ見本を入れる）
+ * - 持ち主が p1 以外なら、その 1 組を projectWork.p1 へ移し、上には持ち主の案件の初期データを置く
+ * - projectWork の公開後のデータが無い案件は、その案件の初期データで補う
+ * withCurrentWork（選んでいる案件への入れ替え）より前に行う（入れ替えで p1 の分が別の案件へ渡らないように）
+ */
+function withProjectContent(state: DemoState): DemoState {
+  const work = state.projectWork ?? {};
+  const old = !state.projectWork || Object.values(work).some((w) => !w.pages);
+  if (!old) return state.signage ? state : { ...state, signage: seedContentFor(state.requirements.projectId).signage };
+  const owner = state.requirements.projectId;
+  let s: DemoState = state;
+  if (owner === CLIENT_PROJECT_ID) {
+    if (!s.signage) s = { ...s, signage: seedSignage() };
+  } else {
+    const p1 = state.projects.find((p) => p.id === CLIENT_PROJECT_ID);
+    const base = work[CLIENT_PROJECT_ID] ?? seedWorkFor(CLIENT_PROJECT_ID, p1?.stage ?? 'hearing');
+    const mine = seedContentFor(owner);
+    s = {
+      ...s,
+      projectWork: { ...work, [CLIENT_PROJECT_ID]: { ...base, pages: state.pages, diagnoses: state.diagnoses, signage: state.signage ?? seedSignage() } },
+      pages: mine.pages, diagnoses: mine.diagnoses, signage: mine.signage,
+    };
+  }
+  const rest = s.projectWork ?? {};
+  const lacking = Object.keys(rest).filter((id) => !rest[id].pages || !rest[id].diagnoses || !rest[id].signage);
+  return lacking.length ? { ...s, projectWork: { ...rest, ...Object.fromEntries(lacking.map((id) => [id, withContent(id, rest[id])])) } } : s;
+}
+
 /** 初期データに後から足した見本の案件（p7 など）を、保存済みのデータにも加える（無い id だけ。制作データは withCurrentWork が段階から補う） */
 function withSeedProjects(state: DemoState): DemoState {
   const missing = seedProjects().filter((p) => !state.projects.some((x) => x.id === p.id));
@@ -67,7 +101,8 @@ function init(): DemoState {
   // 保存済みのデータに古い進捗が残っていても、デモのデータに合わせ直す。
   // 0.27 までのヒアリングにあったデザインの 3 問の回答は、デザイン要件定義へ移す（0.28.0。版は上げない）
   // 要件定義書の承認前に持っているサイトマップは外す（0.29.4。版は上げない）
-  return syncDemoProject(withoutEarlySitemap(withCurrentWork(withSeedProjects(moveDesignAnswers(withAfroMode(loadJson(STORAGE_KEY, isDemoState) ?? createSeedState()))))));
+  // 公開後のデータ（ページ・診断・サイネージ）を案件ごとに分ける（0.30.0。版は上げない）
+  return syncDemoProject(withoutEarlySitemap(withCurrentWork(withProjectContent(withSeedProjects(moveDesignAnswers(withAfroMode(loadJson(STORAGE_KEY, isDemoState) ?? createSeedState())))))));
 }
 
 export function DemoStoreProvider({ children }: { children: ReactNode }) {

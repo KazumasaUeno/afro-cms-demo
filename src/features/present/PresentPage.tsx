@@ -1,4 +1,6 @@
 import { Box, Button, ButtonBase, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import { workOf } from '@/store/projectWork';
+import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { useForceLightMode } from '@/theme/ThemeMode';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowRight, Check, ChevronLeft, ChevronRight, Maximize2, Minimize2, Play, RotateCcw, X } from 'lucide-react';
@@ -263,7 +265,8 @@ function BeforeAfterSlide() {
 /* 6. 改善 */
 function ImproveSlide() {
   const { state } = useDemo();
-  const latest = state.diagnoses[0];
+  // 営業資料の見本は MINAMO COFFEE のまま（診断は 0.30.0 から案件ごとなので、選んでいる案件ではなく p1 の分を読む）
+  const latest = workOf(state, CLIENT_PROJECT_ID).diagnoses[0];
   const cycles = ['リニューアル', '4か月後', '8か月後', '12か月後'];
   return (
     <SlideFrame eyebrow="⑥ 改善" title="4か月ごとに、AIが自動で改善提案" lead="8カテゴリー60問でサイトを診断し、改善レポートを自動でお届け。実数値を含む詳しい分析もご相談いただけます。">

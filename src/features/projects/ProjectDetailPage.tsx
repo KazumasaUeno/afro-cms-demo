@@ -16,7 +16,6 @@ import { MemberAvatar, ProgressRing, Reveal, StatusPill, Surface } from '@/compo
 import { formatDate, formatDateTime, relativeTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
 import { TOUCH } from '@/theme/media';
-import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { DevProjectGate } from '@/features/dev/DevProjectGate';
 import { useDevProjects } from '@/features/dev/useDevUser';
 import { nextBestAction, qualityCompletion } from './projectHelpers';
@@ -125,15 +124,13 @@ function Detail({ p }: { p: Project }) {
   const scheduled = state.pages.filter((x) => x.status === 'scheduled').length;
   const latest = state.diagnoses[0];
   const reqStatus = { draft: '入力中', analyzed: 'AI分析済み', approved: '承認済み' }[req.status];
-  /** お客様ポータル・運用（ページ）・改善（診断）のデモのデータは MINAMO COFFEE の 1 案件分だけ。制作の段階（ヒアリング〜品質管理）は案件ごとに持つ */
-  const isDemo = p.id === CLIENT_PROJECT_ID;
-  const hasFacts = (stage: Stage) => isDemo || (stage !== 'operation' && stage !== 'improvement');
+  // 運用（ページ）・改善（診断）も案件ごと（0.30.0）なので、どの案件でもその案件の数値と次の作業を出す
   const demoAction = nextBestAction(state);
   // 開発者画面はダッシュボードのカードと同じ「次の作業」（行き先は開発者画面の中だけ）
   const devWork = routes.dev ? devNextWork(p, state) : null;
   const next = devWork
     ? { label: devWork.next, to: devWork.to }
-    : hasFacts(p.stage) ? { label: demoAction.cta, to: demoAction.to } : { label: p.nextAction, to: routes.stageLinks[p.stage][0].to };
+    : { label: demoAction.cta, to: demoAction.to };
 
   const facts: Record<Stage, ReactNode> = {
     hearing: (
@@ -280,12 +277,8 @@ function Detail({ p }: { p: Project }) {
                     <Typography variant="caption" sx={{ display: 'block', py: 0.75, borderTop: `1px solid ${tokens.color.border}` }}>
                       前の段階が終わると始まります
                     </Typography>
-                  ) : hasFacts(s.id) ? (
-                    <Box>{facts[s.id]}</Box>
                   ) : (
-                    <Typography variant="caption" sx={{ display: 'block', py: 0.75, borderTop: `1px solid ${tokens.color.border}` }}>
-                      詳しい数値は MINAMO COFFEE のデモでご覧いただけます
-                    </Typography>
+                    <Box>{facts[s.id]}</Box>
                   )}
                   <Stack spacing={0.75} sx={{ mt: 'auto' }}>
                     {routes.stageLinks[s.id].map((l) => (

@@ -12,7 +12,7 @@ import { useThemeMode } from '@/theme/ThemeMode';
 import { navIndicatorSx } from './navIndicator';
 import { Sidebar, SidebarContent } from './Sidebar';
 import { LogoMark } from './Logo';
-import { AREA_ORDER, AREAS, areaOf, CLIENT_PROJECT_ID, isActive, SETTINGS_ITEM, type AreaDef } from './nav';
+import { AREA_ORDER, AREAS, areaOf, isActive, SETTINGS_ITEM, type AreaDef } from './nav';
 import { ResetDemoDialog } from './ResetDemoDialog';
 import { RouteLoader } from './RouteLoader';
 import { LOGIN_PATH, logoutArea, useSessions } from '@/services/session';
@@ -345,13 +345,8 @@ export function AppShell() {
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
   const area = AREAS[areaOf(pathname)];
-  const { projects } = useRepositories();
-  const currentId = projects.useCurrentId();
-  // お客様ポータルは MINAMO COFFEE の案件として表示する（データはこの 1 案件分だけ持っている）。
-  // 開発者画面は固定せず、担当のプロジェクトから選ぶ（担当外・データの無い案件は DevProjectGate が理由を出す）
-  useEffect(() => {
-    if (area.id === 'portal' && currentId !== CLIENT_PROJECT_ID) projects.select(CLIENT_PROJECT_ID);
-  }, [area.id, currentId, projects]);
+  // お客様ポータルは選んでいる案件をそのまま表示する（0.30.0。2026-11-13 ユーザー指示。以前は MINAMO COFFEE に固定）。
+  // 開発者画面は担当のプロジェクトから選ぶ（担当外・開発データの無い案件は DevProjectGate が理由を出す）
   return (
     <Box sx={{ minHeight: '100dvh', bgcolor: tokens.color.bg }}>
       <a href="#main" className="skip-link">本文へスキップ</a>

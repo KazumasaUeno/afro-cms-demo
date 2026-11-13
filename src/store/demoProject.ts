@@ -32,14 +32,20 @@ export function derivedDemoProject(state: DemoState): Pick<Project, 'stage' | 'p
 
 /**
  * 案件の表示用の値（段階・進捗・次の作業・承認待ちの数）を、それぞれの案件の制作データに合わせる（0.29.0 から全案件。変わらなければ同じ state を返す）。
- * 運用・改善の段階は制作データからは導けない（品質チェックの完了の先）ので、全ページ構築まで済んでいれば段階をそのまま保つ
+ * 運用・改善の段階は制作データからは導けない（品質チェックの完了の先）ので、全ページ構築まで済んでいれば段階をそのまま保つ。
+ * その段階の承認待ちの数は、その案件のページ・お知らせの承認待ち（公開承認）の数にする（0.30.0。ページが案件ごとになったため）
  */
 export function syncDemoProject(state: DemoState): DemoState {
   let changed = false;
   const projects = state.projects.map((cur) => {
     const view = workView(state, cur.id);
     // 品質チェックを後から外しても段階は下げない（下げると付け直しても運用・改善へ戻せないため）
-    if ((cur.stage === 'operation' || cur.stage === 'improvement') && view.design.buildCompletedAt) return cur;
+    if ((cur.stage === 'operation' || cur.stage === 'improvement') && view.design.buildCompletedAt) {
+      const pendingApprovals = view.pages.filter((p) => p.status === 'review').length;
+      if (cur.pendingApprovals === pendingApprovals) return cur;
+      changed = true;
+      return { ...cur, pendingApprovals };
+    }
     const d = derivedDemoProject(view);
     if (cur.stage === d.stage && cur.progress === d.progress && cur.nextAction === d.nextAction && cur.pendingApprovals === d.pendingApprovals) return cur;
     changed = true;

@@ -423,8 +423,18 @@ export interface DevUser {
 
 /* ---------- ストア全体 ---------- */
 
-/** 1 案件分の制作データ（ヒアリング・要件定義・サイトマップ・デザイン・品質チェック） */
-export interface ProjectWork {
+/** 1 案件分の公開後のデータ（ページ・お知らせ、AI 診断、サイネージ。0.30.0 から案件ごと。2026-11-13 ユーザー指示） */
+export interface ProjectContent {
+  pages: CmsPage[];
+  diagnoses: DiagnosisReport[];
+  signage: SignageState;
+}
+
+/**
+ * 1 案件分の制作データ（ヒアリング・要件定義・サイトマップ・デザイン・品質チェック）と公開後のデータ。
+ * 公開後のデータは 0.30.0 で足したので、0.29 までの保存データには無い（読み込み時に補う。store/DemoStore.tsx。版は上げない）
+ */
+export interface ProjectWork extends Partial<ProjectContent> {
   requirements: RequirementSession;
   sitemap: SitemapState;
   design: DesignState;
@@ -446,13 +456,17 @@ export interface DemoState {
    */
   projectWork?: Record<string, ProjectWork>;
   approvalLogs: ApprovalLog[];
+  /** ページ・お知らせと AI 診断（選んでいる案件の分。持ち主は requirements.projectId。ほかの案件の分は projectWork。0.30.0） */
   pages: CmsPage[];
   diagnoses: DiagnosisReport[];
   activities: Activity[];
   settings: { reducedMotion: 'system' | 'on' | 'off'; companyName: string };
   /** 開発者画面のデータ。0.5.0 で追加したため、それ以前の保存データには無い（devState() で補う） */
   dev?: DevState;
-  /** デジタルサイネージ。0.11.0 で追加したため、それ以前の保存データには無い（signageState() で補う） */
+  /**
+   * デジタルサイネージ（選んでいる案件の分。0.30.0 から案件ごと）。0.11.0 で追加したため、それ以前の保存データには無い
+   * （読み込み時に補う。store/DemoStore.tsx）
+   */
   signage?: SignageState;
   /** お客様アカウント。0.13.0 で追加したため、それ以前の保存データには無い（clientAccountsState() で補う） */
   clientAccounts?: ClientAccount[];

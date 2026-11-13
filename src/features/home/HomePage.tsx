@@ -4,7 +4,8 @@ import { type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useRepositories } from '@/repositories';
 import { useDemo, currentProject } from '@/store/DemoStore';
-import { MONTHLY_METRICS } from '@/data/insights';
+import { isSiteLive, metricsOf } from '@/data/projectContent';
+import { workOf } from '@/store/projectWork';
 import { AiBadge, AiMark, CountUp, MemberAvatar, Reveal, SectionTitle, StageTrack, Surface } from '@/components/ui';
 import { formatDate, nowIso, relativeTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
@@ -19,13 +20,13 @@ function greeting(): string {
 }
 
 /** KPI 帯の 1 項目（ラベル／数値／補足） */
-function KpiItem({ label, value, suffix, foot }: { label: string; value: number; suffix?: string; foot: ReactNode }) {
+function KpiItem({ label, value, suffix, foot }: { label: string; value: number | null; suffix?: string; foot: ReactNode }) {
   return (
     <Box>
       <Typography component="dt" variant="caption" sx={{ display: 'block', color: tokens.color.inkSoft, fontWeight: 600 }}>{label}</Typography>
       <Typography component="dd" sx={{ m: 0, mt: 0.5, fontSize: 22, fontWeight: 700, lineHeight: 1.2, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
-        <CountUp value={value} />
-        {suffix && <Box component="span" sx={{ fontSize: 13, fontWeight: 600, color: tokens.color.muted, ml: 0.5 }}>{suffix}</Box>}
+        {value === null ? '—' : <CountUp value={value} />}
+        {value !== null && suffix && <Box component="span" sx={{ fontSize: 13, fontWeight: 600, color: tokens.color.muted, ml: 0.5 }}>{suffix}</Box>}
       </Typography>
       <Typography component="dd" variant="caption" sx={{ m: 0, mt: 0.25, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{foot}</Typography>
     </Box>
@@ -41,10 +42,15 @@ export default function HomePage() {
 
   const active = state.projects.filter((p) => p.progress < 100);
   const pendingTotal = state.projects.reduce((s, p) => s + p.pendingApprovals, 0);
-  const scheduled = state.pages.filter((p) => p.status === 'scheduled');
-  const last = MONTHLY_METRICS[MONTHLY_METRICS.length - 1];
-  const prev = MONTHLY_METRICS[MONTHLY_METRICS.length - 2];
-  const inquiryDelta = Math.round(((last.inquiries - prev.inquiries) / prev.inquiries) * 100);
+  // ページ・お知らせは案件ごと（0.30.0）。公開予定はサイトを公開済み（運用・改善の段階）の全案件の分を、近い順に数える
+  const scheduled = state.projects.filter((p) => isSiteLive(p.stage))
+    .flatMap((p) => workOf(state, p.id).pages.filter((x) => x.status === 'scheduled'))
+    .sort((a, b) => (a.scheduledAt ?? '').localeCompare(b.scheduledAt ?? ''));
+  // 問い合わせの数値は選んでいる案件の分（公開前・見本の無い案件は出さない）
+  const monthly = isSiteLive(project.stage) ? metricsOf(project.id)?.monthly ?? [] : [];
+  const last = monthly[monthly.length - 1];
+  const prev = monthly[monthly.length - 2];
+  const inquiryDelta = last && prev ? Math.round(((last.inquiries - prev.inquiries) / prev.inquiries) * 100) : null;
   const action = nextBestAction(state);
 
   const open = (projectId: string, to: string) => {
@@ -114,8 +120,10 @@ export default function HomePage() {
             <KpiItem label="承認待ち" value={pendingTotal} suffix="件" foot="顧客・社内の承認を含む" />
             <KpiItem label="公開予定ページ" value={scheduled.length} suffix="件" foot={scheduled[0] ? `次回 ${relativeTime(scheduled[0].scheduledAt)}` : '予約はありません'} />
             <KpiItem
-              label="今月の問い合わせ" value={last.inquiries} suffix="件"
-              foot={<><Box component="span" sx={{ color: tokens.color.success, fontWeight: 700 }}>{inquiryDelta >= 0 ? '+' : ''}{inquiryDelta}%</Box> 前月比（デモデータ）</>}
+              label="今月の問い合わせ" value={last ? last.inquiries : null} suffix="件"
+              foot={inquiryDelta !== null
+                ? <><Box component="span" sx={{ color: inquiryDelta >= 0 ? tokens.color.success : tokens.color.danger, fontWeight: 700 }}>{inquiryDelta >= 0 ? '+' : ''}{inquiryDelta}%</Box> {project.siteName}・前月比（デモデータ）</>
+                : `${project.siteName} は公開後に表示`}
             />
           </Box>
         </Surface>

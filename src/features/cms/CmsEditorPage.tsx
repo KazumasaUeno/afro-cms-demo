@@ -3,7 +3,9 @@ import { ArrowLeft, ChevronDown, Eye, GitCompare, LayoutTemplate, Plus, Search, 
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { CmsPage, PageType } from '@/types';
-import { useDemo } from '@/store/DemoStore';
+import { currentProject, useDemo } from '@/store/DemoStore';
+import { isSiteLive } from '@/data/projectContent';
+import { SiteNotLive } from '@/features/projects/SiteNotLive';
 import { useToast } from '@/hooks/useToast';
 import { useBreakpoints } from '@/hooks/useMediaQueries';
 import { tokens } from '@/theme/tokens';
@@ -90,7 +92,26 @@ function ScheduleDialog({ open, onClose, onConfirm, initial }: { open: boolean; 
   );
 }
 
+/**
+ * ページ・お知らせは案件ごと（0.30.0）。サイトの公開前（運用の段階より前）の案件は、編集の代わりに案内を出す（2026-11-13 ユーザー指示）。
+ * 案件を切り替えたら編集中の状態を持ち越さないよう、案件ごとに作り直す（key）
+ */
 export default function CmsEditorPage() {
+  const { state } = useDemo();
+  const { dev } = useProjectRoutes();
+  const project = currentProject(state);
+  if (!isSiteLive(project.stage)) {
+    return (
+      <>
+        <PageHeader eyebrow={dev ? '⑤ 運用' : 'お客様ポータル'} icon={<LayoutTemplate size={15} />} title="ページ・お知らせ" description="ページとお知らせを編集し、承認を経て公開します。" />
+        <SiteNotLive icon={<LayoutTemplate size={26} />} feature="ページ編集" />
+      </>
+    );
+  }
+  return <CmsEditor key={project.id} />;
+}
+
+function CmsEditor() {
   const { state, dispatch } = useDemo();
   const toast = useToast();
   const { isDesktop, isMobile } = useBreakpoints();

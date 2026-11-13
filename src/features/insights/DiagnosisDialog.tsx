@@ -3,7 +3,8 @@ import { X, ScanSearch } from 'lucide-react';
 import gsap from 'gsap';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { DiagnosisReport } from '@/types';
-import { DIAGNOSIS_CATEGORIES, NEXT_DIAGNOSIS_TEMPLATE, TOTAL_DIAGNOSIS_QUESTIONS } from '@/data/insights';
+import { DIAGNOSIS_CATEGORIES, TOTAL_DIAGNOSIS_QUESTIONS } from '@/data/insights';
+import { nextDiagnosisFor } from '@/data/projectContent';
 import { useDemo, currentProject } from '@/store/DemoStore';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useFullScreenDialog } from '@/hooks/useMediaQueries';
@@ -91,7 +92,8 @@ export function DiagnosisDialog({ open, onClose, report }: Props) {
     if (open) setPhase(report ? 'report' : 'scan');
   }, [open, report]);
   const shown = report ?? state.diagnoses[0];
-  const siteName = currentProject(state).siteName;
+  const project = currentProject(state);
+  const siteName = project.siteName;
 
   return (
     <Dialog open={open} onClose={onClose} fullScreen={fullScreen} maxWidth="md" fullWidth aria-labelledby="diag-title">
@@ -109,13 +111,17 @@ export function DiagnosisDialog({ open, onClose, report }: Props) {
         {phase === 'scan' && open ? (
           <Scanner
             onDone={() => {
-              dispatch({ type: 'addDiagnosis', report: NEXT_DIAGNOSIS_TEMPLATE });
+              // 診断結果のひな形は案件ごと（ほかの案件で MINAMO COFFEE の提案が出ないように。0.30.0）
+              dispatch({ type: 'addDiagnosis', report: nextDiagnosisFor(project.id) });
               setPhase('report');
             }}
           />
         ) : shown ? (
           <DiagnosisReportView report={shown} siteName={siteName} />
-        ) : null}
+        ) : (
+          // 診断がまだ無い案件（0.30.0 から案件ごと）
+          <Typography variant="body2" color="text.secondary">まだ診断がありません。</Typography>
+        )}
       </DialogContent>
     </Dialog>
   );

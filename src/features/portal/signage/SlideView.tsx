@@ -2,6 +2,7 @@ import { Box, type SxProps, type Theme } from '@mui/material';
 import type { SignageOrientation, Slide } from '@/types';
 import { accentOf, formatPrice, imageOf, TEMPLATE_LABEL } from '@/data/signage';
 import { tokens } from '@/theme/tokens';
+import { currentProject, useDemoOptional } from '@/store/DemoStore';
 
 /** 行数で切る（長い文でも枠からはみ出さない） */
 const clamp = (lines: number) => ({ display: '-webkit-box', WebkitLineClamp: lines, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden', overflowWrap: 'anywhere' as const });
@@ -20,10 +21,13 @@ export function SlideView({ slide, orientation, sx, decorative = false }: { slid
   const fs = (n: number) => `${(n * k).toFixed(2)}cqw`;
   const a = accentOf(slide.accent);
   const img = imageOf(slide.image);
+  // 右下のサイト名は選んでいる案件のもの（サイネージは 0.30.0 から案件ごと）
+  const store = useDemoOptional();
+  const siteName = store ? currentProject(store.state).siteName.toUpperCase() : 'MINAMO COFFEE';
 
   const brand = (
     <Box sx={{ position: 'absolute', right: fs(2.2), bottom: fs(1.6), fontSize: fs(1.3), fontWeight: 700, letterSpacing: '0.12em', opacity: 0.7 }}>
-      MINAMO COFFEE
+      {siteName}
     </Box>
   );
   const label = (light: boolean) => (

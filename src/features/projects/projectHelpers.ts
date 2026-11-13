@@ -74,6 +74,23 @@ export function nextBestAction(state: DemoState): { title: string; detail: strin
       to: '/quality', cta: '品質チェックへ',
     };
   }
+  // 品質チェックの後は段階で分ける（0.30.0。ページ・診断が案件ごとになったため）。持ち主の案件は requirements.projectId
+  const stage = state.projects.find((p) => p.id === state.requirements.projectId)?.stage;
+  if (stage === 'operation') {
+    const review = state.pages.filter((p) => p.status === 'review').length;
+    return {
+      title: review ? `お客様の公開承認を待っている更新が ${review} 件あります` : 'ページ・お知らせを更新しましょう',
+      detail: '公開後の運用の段階です。お知らせの追加や予約公開で、サイトを新しく保ちます。',
+      to: STAGE_LINKS.operation[0].to, cta: 'CMSで更新',
+    };
+  }
+  if (stage !== 'improvement') {
+    return {
+      title: '品質チェックが完了しました',
+      detail: 'アフロとお客様の双方の確認が済みました。公開の準備ができています。',
+      to: '/quality', cta: '品質チェックを見る',
+    };
+  }
   return {
     title: '次回のAIサイト診断を実行できます',
     detail: '公開後4か月ごとの改善診断。8カテゴリー60問でサイトを評価し、改善提案を作ります。',
