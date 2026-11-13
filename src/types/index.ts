@@ -247,6 +247,11 @@ export interface CmsPage {
   publishedAt?: ISODate;
   scheduledAt?: ISODate;
   authorId: string;
+  /**
+   * 最後に保存・状態の変更をした人の表示名（0.30.2 から。2026-11-13 ユーザー指示）。
+   * エディタの「保存済み・○○」が作成者（authorId）のままで、ポータルから保存しても「上野 航」と出ていたため。無い古い記録は authorId の人を出す
+   */
+  updatedBy?: string;
   parentPath?: string;
 }
 

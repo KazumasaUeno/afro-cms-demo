@@ -4,6 +4,7 @@ import { QUALITY_ITEMS } from '@/data/quality';
 import { daysAgo, hoursAgo } from '@/services/time';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { emptyContent, emptySignage, seedContentFor } from '@/data/projectContent';
+import { clientActorName, seedProjects } from '@/data/projects';
 
 /**
  * 案件ごとの制作データ（ヒアリング・要件定義・サイトマップ・デザイン・品質チェック。0.29.0。2026-11-12 ユーザー決定）。
@@ -217,17 +218,20 @@ const DESIGN: Record<string, Answers> = {
 const answerMetaOf = (answers: Answers, at: string) =>
   Object.fromEntries(Object.keys(answers).map((id) => [id, { by: 'afro' as const, at }]));
 
-/** 品質チェック。partial は品質管理の途中（A 区分を中心に一部だけ）、そうでなければ全項目をアフロ・お客様の双方が確認済み */
-function qualityChecks(partial: boolean): Record<string, QualityCheck> {
+/**
+ * 品質チェック。partial は品質管理の途中（A 区分を中心に一部だけ）、そうでなければ全項目をアフロ・お客様の双方が確認済み。
+ * clientBy は案件のお客様の担当者（以前は「お客様 担当者」「Lumière Atelier 担当者」の固定。0.30.2）
+ */
+function qualityChecks(partial: boolean, clientBy: string): Record<string, QualityCheck> {
   const checks: Record<string, QualityCheck> = {};
   QUALITY_ITEMS.forEach((item, i) => {
     if (!partial) {
       // 全ページ構築（運用＝20 日前・改善＝10 日前）の後に確認した日付にする
-      checks[item.id] = { afroAt: daysAgo(8 - i * 0.05), afroBy: '藤井 慎', clientAt: daysAgo(6 - i * 0.05), clientBy: 'お客様 担当者' };
+      checks[item.id] = { afroAt: daysAgo(8 - i * 0.05), afroBy: '藤井 慎', clientAt: daysAgo(6 - i * 0.05), clientBy };
     } else if (item.categoryId === 'qc1' || item.categoryId === 'qc2') {
       checks[item.id] = {
         afroAt: daysAgo(2 - i * 0.05), afroBy: '藤井 慎',
-        ...(i % 3 !== 2 ? { clientAt: hoursAgo(20 - i), clientBy: 'Lumière Atelier 担当者' } : {}),
+        ...(i % 3 !== 2 ? { clientAt: hoursAgo(20 - i), clientBy } : {}),
       };
     } else if (item.categoryId === 'qc5' && item.priority === 'A') {
       checks[item.id] = { afroAt: hoursAgo(9), afroBy: '黒田 蓮' };
@@ -269,7 +273,8 @@ export function seedWorkFor(projectId: string, stage: Stage): FullWork {
   if (at >= 3) {
     const built = daysAgo(60 - at * 10);
     work.design = { ...work.design, selected: 'premium', approvedAt: daysAgo(62 - at * 10), buildStartedAt: built, buildCompletedAt: built };
-    work.qualityChecks = qualityChecks(at === 3);
+    const client = seedProjects().find((p) => p.id === projectId)?.clientName;
+    work.qualityChecks = qualityChecks(at === 3, client ? clientActorName(client) : 'お客様 担当者');
   }
   return work;
 }

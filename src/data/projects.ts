@@ -12,6 +12,31 @@ export const STAGES: { id: Stage; no: number; label: string; en: string; descrip
 
 export const stageIndex = (s: Stage) => STAGES.findIndex((x) => x.id === s);
 
+/** 会社名の前後に付く法人の種類（担当者の表示名では外す） */
+const LEGAL_ENTITY_WORDS = [
+  '特定非営利活動法人', '一般社団法人', '公益社団法人', '一般財団法人', '公益財団法人', '社会福祉法人', '医療法人', '学校法人', 'NPO法人',
+  '株式会社', '有限会社', '合同会社', '合資会社', '合名会社', '（株）', '(株)', '（有）', '(有)',
+];
+
+/** 会社名から前後の法人の種類を外す（例: 株式会社ミナモ珈琲 → ミナモ珈琲、ソラノ精機株式会社 → ソラノ精機） */
+export function shortClientName(clientName: string): string {
+  let name = clientName.trim();
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const w of LEGAL_ENTITY_WORDS) {
+      if (name.startsWith(w)) { name = name.slice(w.length).trim(); changed = true; }
+      if (name.endsWith(w)) { name = name.slice(0, -w.length).trim(); changed = true; }
+    }
+  }
+  return name || clientName.trim();
+}
+
+/**
+ * お客様側の操作者の表示名（案件ごと。例: ミナモ珈琲 担当者 / Lumière Atelier 担当者）。
+ * 以前はどの案件でも「ミナモ珈琲 担当者」だった（0.30.2。2026-11-13 ユーザー指示）
+ */
+export const clientActorName = (clientName: string) => `${shortClientName(clientName)} 担当者`;
+
 /** デモ用の架空の顧客・サイト（実在の企業ではない） */
 export const seedProjects = (): Project[] => [
   {

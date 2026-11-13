@@ -149,7 +149,7 @@ function CmsEditor() {
   // 保存・状態変更で store 側が変わったら、編集中でなければ追従
   useEffect(() => {
     if (!stored) return;
-    setDraft((d) => (!d || d.id !== stored.id ? stored : { ...d, status: stored.status, updatedAt: stored.updatedAt, publishedAt: stored.publishedAt, publishedContent: stored.publishedContent, scheduledAt: stored.scheduledAt }));
+    setDraft((d) => (!d || d.id !== stored.id ? stored : { ...d, status: stored.status, updatedAt: stored.updatedAt, publishedAt: stored.publishedAt, publishedContent: stored.publishedContent, scheduledAt: stored.scheduledAt, updatedBy: stored.updatedBy }));
   }, [stored]);
 
   const dirty = !!draft && !!stored && !samePage(draft, stored);
@@ -248,7 +248,7 @@ function CmsEditor() {
                 <StatusPill tone="neutral" dot={false}>{TYPE_LABEL[draft.type]}</StatusPill>
                 <StatusPill tone={STATUS_META[draft.status].tone}>{STATUS_META[draft.status].label}</StatusPill>
                 <Typography variant="caption" aria-live="polite" sx={{ color: dirty ? tokens.color.warning : tokens.color.muted, fontWeight: dirty ? 650 : 500 }} noWrap>
-                  {dirty ? '● 未保存の変更があります' : `保存済み・${memberById(draft.authorId).name}`}
+                  {dirty ? '● 未保存の変更があります' : `保存済み・${draft.updatedBy ?? memberById(draft.authorId).name}`}
                 </Typography>
               </Stack>
               {/* スマホは「プレビュー・比較・保存・承認依頼」を1行、主操作の「公開」を幅いっぱいの2行目に置く */}

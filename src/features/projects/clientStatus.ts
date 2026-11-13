@@ -1,5 +1,5 @@
 import type { DemoState, ISODate, Project } from '@/types';
-import { ACTOR } from '@/store/reducer';
+import { clientActorOf } from '@/store/reducer';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { workView } from '@/store/projectWork';
 import { approvalSteps, type ApprovalKey, type ApprovalStatus } from '@/features/portal/portalSteps';
@@ -63,9 +63,11 @@ export function clientStatus(state: DemoState, project: Project): ClientStatus {
   const publishWaiting = project.stage === 'operation' || project.stage === 'improvement'
     ? w.pages.filter((p) => p.status === 'review').length
     : 0;
-  // お客様の操作 = この案件のアクティビティ・承認の記録（お客様の担当者）と、品質チェックのお客様側の確認
-  const lastClient = state.activities.find((a) => ofProject(a.projectId) && a.actor === ACTOR.client)?.at;
-  const lastLog = state.approvalLogs.find((l) => ofProject(l.projectId) && l.side === 'client' && l.actor === ACTOR.client)?.at;
+  // お客様の操作 = この案件のアクティビティ・承認の記録（その案件のお客様の担当者）と、品質チェックのお客様側の確認。
+  // 担当者名は案件ごと（0.30.2）。MINAMO COFFEE（p1）は従来の「ミナモ珈琲 担当者」と同じ文字列なので、保存済みの記録もそのまま一致する
+  const clientActor = clientActorOf(state, pid);
+  const lastClient = state.activities.find((a) => ofProject(a.projectId) && a.actor === clientActor)?.at;
+  const lastLog = state.approvalLogs.find((l) => ofProject(l.projectId) && l.side === 'client' && l.actor === clientActor)?.at;
   const lastCheck = Object.values(w.qualityChecks).map((c) => c.clientAt).filter((v): v is string => !!v).sort().pop();
   return {
     approvals, waiting, done, next, publishWaiting,

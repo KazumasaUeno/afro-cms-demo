@@ -114,7 +114,7 @@ export default function QualityPage() {
         actions={
           <>
             {devBy && canLaunch && (
-              <Button variant="contained" color="success" startIcon={<Rocket size={16} />} onClick={launch}>サイトを公開して運用へ進む</Button>
+              <Button variant="contained" startIcon={<Rocket size={16} />} onClick={launch}>サイトを公開して運用へ進む</Button>
             )}
             <BulkMenu side="afro" />
           </>

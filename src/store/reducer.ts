@@ -10,6 +10,7 @@ import { blankRequirements, demoDesignApprovedAt, switchWork } from './projectWo
 import { syncDemoProject } from './demoProject';
 import { DEV_ENVS, DEV_TASK_STATUSES, DEV_USER_ID, deployGate, seedDev } from '@/data/dev';
 import { memberById } from '@/data/members';
+import { clientActorName } from '@/data/projects';
 import { devUsersState, personById } from '@/data/people';
 import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
 import { DESIGN_QUESTIONS } from '@/data/designRequirements';
@@ -86,16 +87,27 @@ export type Action =
   /** 登録した開発者を無効にする / 有効に戻す（固定のメンバーは対象外） */
   | { type: 'setDevUserStatus'; id: string; enabled: boolean };
 
-/** 操作した人の表示名（デモでは固定）。お客様の操作かどうかの判定にも使う */
+/** 操作した人の表示名（デモでは固定）。client は MINAMO COFFEE（p1）の担当者で、ほかの案件は clientActorOf を使う */
 export const ACTOR = { afro: '上野 航', client: 'ミナモ珈琲 担当者' } as const;
+/**
+ * お客様側の操作者の表示名（案件ごと。既定は承認・制作データの持ち主の案件）。お客様の操作かどうかの判定にも使う。
+ * 以前はどの案件でも「ミナモ珈琲 担当者」で残っていた（0.30.2。2026-11-13 ユーザー指示）。案件が見つからなければ従来の ACTOR.client。
+ * 保存済みの記録は書き換えない（p1 は同じ文字列なので従来の記録もそのまま一致する）
+ */
+export function clientActorOf(state: DemoState, projectId: string = state.requirements.projectId): string {
+  const p = state.projects.find((x) => x.id === projectId);
+  return p ? clientActorName(p.clientName) : ACTOR.client;
+}
+/** 操作した側の表示名（アフロは ACTOR.afro、お客様はその案件の担当者） */
+const actorOf = (state: DemoState, side: Side, projectId?: string) => (side === 'client' ? clientActorOf(state, projectId) : ACTOR.afro);
 /** 承認したときにアクティビティへ残す文（管理者画面の「お客様の対応状況」が承認した人を探すのにも使う） */
 export const APPROVE_TEXT = {
   requirements: '要件定義書を承認しました', sitemap: '改善後のサイトマップを承認しました', design: 'トップデザイン案を採用・承認しました',
 } as const;
 /** 開発者画面の操作者の名前（ログイン中の人。登録した開発者も含む。省略時・見つからないときは DEV_USER_ID） */
 const devActor = (state: DemoState, by?: string) => (personById(state, by) ?? memberById(DEV_USER_ID)).name;
-/** 品質チェックの確認者。開発者画面のアフロ側の確認はログイン中の開発者、それ以外は従来どおり ACTOR（顧客側は開発者画面から操作しない） */
-const qualityActor = (state: DemoState, side: 'afro' | 'client', devBy?: string) => (side === 'afro' && devBy ? devActor(state, devBy) : ACTOR[side]);
+/** 品質チェックの確認者。開発者画面のアフロ側の確認はログイン中の開発者、それ以外は actorOf（顧客側は開発者画面から操作しない） */
+const qualityActor = (state: DemoState, side: 'afro' | 'client', devBy?: string) => (side === 'afro' && devBy ? devActor(state, devBy) : actorOf(state, side));
 
 let seq = 0;
 const uid = (p: string) => `${p}-${Date.now().toString(36)}-${(seq++).toString(36)}`;
@@ -105,7 +117,7 @@ function log(state: DemoState, text: string, kind: Activity['kind'], actor: stri
   return { ...state, activities: [a, ...state.activities].slice(0, 60) };
 }
 
-function approval(state: DemoState, side: 'afro' | 'client', action: string, target: string, actor: string = ACTOR[side]): DemoState {
+function approval(state: DemoState, side: 'afro' | 'client', action: string, target: string, actor: string = actorOf(state, side)): DemoState {
   // 承認の記録は後で示す証跡なので件数で消さない。承認の対象（要件・制作・品質・CMS）はデモのデータを持つ案件のもの
   const l: ApprovalLog = { id: uid('log'), at: nowIso(), actor, side, action, target, projectId: state.requirements.projectId };
   return { ...state, approvalLogs: [l, ...state.approvalLogs] };
@@ -201,7 +213,7 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       if (st.state !== 'proxy' || st.assignee !== action.by || !st.meta) return state;
       const meta = { ...state.requirements.answerMeta, [q.id]: { ...st.meta, confirmedAt: nowIso() } };
       const s = { ...state, requirements: { ...state.requirements, answerMeta: meta } };
-      return log(s, `回答「${q.text}」の内容を確認しました`, 'approve', ACTOR[action.by], state.requirements.projectId);
+      return log(s, `回答「${q.text}」の内容を確認しました`, 'approve', actorOf(state, action.by), state.requirements.projectId);
     }
 
     case 'setCompetitors':
@@ -220,7 +232,7 @@ function baseReducer(state: DemoState, action: Action): DemoState {
         {},
       );
       // 承認の記録には実際に操作した人を残す（アフロが代わりに承認した場合はアフロの名前）
-      const approved = log(approval(s, 'client', '要件定義書を承認', '要件定義', ACTOR[action.by ?? 'afro']), APPROVE_TEXT.requirements, 'approve', ACTOR[action.by ?? 'afro'], state.requirements.projectId);
+      const approved = log(approval(s, 'client', '要件定義書を承認', '要件定義', actorOf(state, action.by ?? 'afro')), APPROVE_TEXT.requirements, 'approve', actorOf(state, action.by ?? 'afro'), state.requirements.projectId);
       // サイトマップは初めは無く、要件定義書の承認のときに作る（0.29.4。2026-11-12 ユーザー指示）
       if (sitemapCreated(approved.sitemap)) return approved;
       return log({ ...approved, sitemap: sitemapFor(state.requirements.projectId) }, 'AI がサイトマップ案を作成しました', 'ai', 'AI', state.requirements.projectId);
@@ -247,7 +259,7 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       // ウォーターフォール: 要件定義書の承認の後だけ（画面でも止めている）
       if (state.requirements.status !== 'approved' || state.sitemap.approvedAt || !sitemapCreated(state.sitemap)) return state;
       const s = patchOwner({ ...state, sitemap: { ...state.sitemap, approvedAt: nowIso() } }, {});
-      return log(approval(s, 'client', 'サイトマップを承認', '制作 / サイトマップ', ACTOR[action.by ?? 'afro']), APPROVE_TEXT.sitemap, 'approve', ACTOR[action.by ?? 'afro'], state.requirements.projectId);
+      return log(approval(s, 'client', 'サイトマップを承認', '制作 / サイトマップ', actorOf(state, action.by ?? 'afro')), APPROVE_TEXT.sitemap, 'approve', actorOf(state, action.by ?? 'afro'), state.requirements.projectId);
     }
 
     case 'selectDesign':
@@ -265,7 +277,7 @@ function baseReducer(state: DemoState, action: Action): DemoState {
     case 'approveDesign': {
       if (!state.design.selected || !state.sitemap.approvedAt) return state;
       const s = patchOwner({ ...state, design: { ...state.design, approvedAt: nowIso() } }, {});
-      return log(approval(s, 'client', 'トップデザインを承認', `制作 / デザイン（${state.design.selected}）`, ACTOR[action.by ?? 'afro']), APPROVE_TEXT.design, 'approve', ACTOR[action.by ?? 'afro'], state.requirements.projectId);
+      return log(approval(s, 'client', 'トップデザインを承認', `制作 / デザイン（${state.design.selected}）`, actorOf(state, action.by ?? 'afro')), APPROVE_TEXT.design, 'approve', actorOf(state, action.by ?? 'afro'), state.requirements.projectId);
     }
 
     case 'startBuild':
@@ -326,9 +338,11 @@ function baseReducer(state: DemoState, action: Action): DemoState {
 
     case 'savePage': {
       const exists = state.pages.some((p) => p.id === action.page.id);
-      const page = { ...action.page, updatedAt: nowIso() };
+      const actor = action.devBy ? devActor(state, action.devBy) : actorOf(state, action.by ?? 'afro');
+      // 最後に保存・状態を変えた人をページにも持つ（エディタの「保存済み・○○」が作成者のままで、ポータルから保存しても「上野 航」と出ていた。0.30.2・2026-11-13 ユーザー指示）
+      const page = { ...action.page, updatedAt: nowIso(), updatedBy: actor };
       const pages = exists ? state.pages.map((p) => (p.id === page.id ? page : p)) : [page, ...state.pages];
-      return log({ ...state, pages }, `「${page.title}」を${exists ? '保存' : '作成'}しました`, 'edit', action.devBy ? devActor(state, action.devBy) : ACTOR[action.by ?? 'afro']);
+      return log({ ...state, pages }, `「${page.title}」を${exists ? '保存' : '作成'}しました`, 'edit', actor);
     }
 
     case 'setPageStatus': {
@@ -336,10 +350,11 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       if (!page) return state;
       // 公開・予約公開はお客様の操作。開発者画面からは下書き・承認依頼だけ（画面でも出さない。0.27.0）
       if (action.devBy && (action.status === 'published' || action.status === 'scheduled')) return state;
-      const updated = withStatus(page, action.status, action.scheduledAt);
+      const actor = action.devBy ? devActor(state, action.devBy) : actorOf(state, action.by ?? 'afro');
+      const updated = { ...withStatus(page, action.status, action.scheduledAt), updatedBy: actor };
       const s = { ...state, pages: state.pages.map((p) => (p.id === page.id ? updated : p)) };
       const kind: Activity['kind'] = action.status === 'published' || action.status === 'scheduled' ? 'publish' : 'edit';
-      return log(s, `「${page.title}」を${STATUS_LABEL[action.status]}しました`, kind, action.devBy ? devActor(state, action.devBy) : ACTOR[action.by ?? 'afro']);
+      return log(s, `「${page.title}」を${STATUS_LABEL[action.status]}しました`, kind, actor);
     }
 
     case 'reviewPage': {
@@ -347,15 +362,16 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       if (!page || page.status !== 'review') return state;
       const side = action.by ?? 'afro';
       const approve = action.decision === 'approve';
-      const updated = withStatus(page, approve ? 'published' : 'draft');
+      const actor = actorOf(state, side);
+      const updated = { ...withStatus(page, approve ? 'published' : 'draft'), updatedBy: actor };
       const s = approval(
         { ...state, pages: state.pages.map((p) => (p.id === page.id ? updated : p)) },
-        side, approve ? '承認して公開' : '差し戻し', `CMS / ${page.title}`,
+        side, approve ? '承認して公開' : '差し戻し', `CMS / ${page.title}`, actor,
       );
       const note = action.comment?.trim();
       return approve
-        ? log(s, `「${page.title}」を承認して公開しました`, 'publish', ACTOR[side])
-        : log(s, `「${page.title}」を差し戻しました${note ? `（${note}）` : ''}`, 'comment', ACTOR[side]);
+        ? log(s, `「${page.title}」を承認して公開しました`, 'publish', actor)
+        : log(s, `「${page.title}」を差し戻しました${note ? `（${note}）` : ''}`, 'comment', actor);
     }
 
     case 'addDiagnosis': {
@@ -421,7 +437,7 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       if (prev && JSON.stringify({ ...normalized, updatedAt: '' }) === JSON.stringify({ ...normalizeSlide(prev), updatedAt: '' })) return state;
       const slide = { ...normalized, updatedAt: nowIso() };
       const slides = exists ? sg.slides.map((x) => (x.id === slide.id ? slide : x)) : [slide, ...sg.slides];
-      return log({ ...state, signage: { ...sg, slides } }, `サイネージのコンテンツ「${slide.title}」を${exists ? '保存' : '作成'}しました`, 'edit', ACTOR.client, state.requirements.projectId);
+      return log({ ...state, signage: { ...sg, slides } }, `サイネージのコンテンツ「${slide.title}」を${exists ? '保存' : '作成'}しました`, 'edit', clientActorOf(state), state.requirements.projectId);
     }
 
     case 'deleteSlide': {
@@ -431,7 +447,7 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       // 編集中の再生順からは外す。配信済みの内容（写し）は残し、再配信するまで端末は流し続ける
       const displays = sg.displays.map((d) => (d.slideIds.includes(slide.id) ? { ...d, slideIds: d.slideIds.filter((id) => id !== slide.id) } : d));
       const s = { ...state, signage: { displays, slides: sg.slides.filter((x) => x.id !== slide.id) } };
-      return log(s, `サイネージのコンテンツ「${slide.title}」を削除しました`, 'edit', ACTOR.client, state.requirements.projectId);
+      return log(s, `サイネージのコンテンツ「${slide.title}」を削除しました`, 'edit', clientActorOf(state), state.requirements.projectId);
     }
 
     case 'setDisplaySlides': {
@@ -443,7 +459,7 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       const ids = [...new Set(action.slideIds)].filter((id) => known.has(id)).slice(0, DISPLAY_SLIDES_MAX);
       if (ids.length === display.slideIds.length && ids.every((id, i) => id === display.slideIds[i])) return state;
       const displays = sg.displays.map((d) => (d.id === display.id ? { ...d, slideIds: ids } : d));
-      return log({ ...state, signage: { ...sg, displays } }, `サイネージ「${display.name}」の再生内容を変更しました`, 'edit', ACTOR.client, state.requirements.projectId);
+      return log({ ...state, signage: { ...sg, displays } }, `サイネージ「${display.name}」の再生内容を変更しました`, 'edit', clientActorOf(state), state.requirements.projectId);
     }
 
     case 'deliverDisplay': {
@@ -462,7 +478,7 @@ function baseReducer(state: DemoState, action: Action): DemoState {
         deliveredAt: at,
       } : d));
       const note = display.online ? '' : '（オフラインのため、オンラインになったら反映・シミュレーション）';
-      return log({ ...state, signage: { ...sg, displays } }, `サイネージ「${display.name}」へ ${delivered.length} 件を配信しました${note}`, 'publish', ACTOR.client, state.requirements.projectId);
+      return log({ ...state, signage: { ...sg, displays } }, `サイネージ「${display.name}」へ ${delivered.length} 件を配信しました${note}`, 'publish', clientActorOf(state), state.requirements.projectId);
     }
 
     case 'saveClientAccount': {
