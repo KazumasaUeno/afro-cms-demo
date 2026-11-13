@@ -32,6 +32,7 @@ const PortalQualityPage = lazy(() => import('@/features/portal/PortalQualityPage
 const PortalReportsPage = lazy(() => import('@/features/portal/PortalReportsPage'));
 const PortalSignagePage = lazy(() => import('@/features/portal/PortalSignagePage'));
 const PresentPage = lazy(() => import('@/features/present/PresentPage'));
+const PetitPage = lazy(() => import('@/features/present/PetitPage'));
 
 /** 旧 CMS画面の URL（0.4.0）はポータルのページ編集へ。?page= / ?new= はそのまま引き継ぐ */
 function LegacyCmsRedirect() {
@@ -106,6 +107,15 @@ const router = createBrowserRouter([
     element: (
       <Suspense fallback={<RouteLoader label="営業プレゼンモード" />}>
         <PresentPage />
+      </Suspense>
+    ),
+  },
+  {
+    // 営業プレゼンのプチ要件定義（0.32.0）。プレゼンと同じく全画面
+    path: '/present/petit',
+    element: (
+      <Suspense fallback={<RouteLoader label="プチ要件定義" />}>
+        <PetitPage />
       </Suspense>
     ),
   },

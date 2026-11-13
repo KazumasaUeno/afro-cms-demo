@@ -52,7 +52,8 @@ export const seedSitemap = (): SitemapState => ({
 /* ---------- 案件ごとのサイトマップ（0.29.5。2026-11-12 ユーザー決定「デザイン案は案件ごと」） ---------- */
 
 /** [キー, ページ名, パス, 種類, AI の理由, 親のキー（省略 = トップの直下）]。先頭はトップ */
-type Spec = [string, string, string, SitemapNode['data']['kind'], string?, string?];
+export type SitemapSpec = [string, string, string, SitemapNode['data']['kind'], string?, string?];
+type Spec = SitemapSpec;
 
 /** 仕様の並びから、トップ → 第1階層 → 第2階層の木に配置する（第1階層は 220px 間隔、子は親の下に 160px 間隔） */
 function tree(prefix: 'b' | 'a', specs: Spec[]): { nodes: SitemapNode[]; edges: SitemapEdge[] } {
@@ -78,6 +79,9 @@ function tree(prefix: 'b' | 'a', specs: Spec[]): { nodes: SitemapNode[]; edges: 
 }
 
 const plan = (before: Spec[], after: Spec[]): SitemapState => ({ before: tree('b', before), after: tree('a', after) });
+
+/** 改善後だけのサイトマップ（現行サイトは空）。営業プレゼンのプチ要件定義（0.32.0）で使う */
+export const sitemapFromSpecs = (after: SitemapSpec[]): SitemapState => ({ before: { nodes: [], edges: [] }, after: tree('a', after) });
 
 /** 業種に合わせた、seed の案件ごとのサイトマップ（現行サイト → 改善後）。第1階層の並びがデザイン案の画面の選び方に効く */
 const PLANS: Record<string, () => SitemapState> = {

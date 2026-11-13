@@ -107,7 +107,8 @@ const P1_PRESET: Partial<DesignContext> = {
   },
 };
 
-const firstLevel = (sm: SitemapState): SitemapNode[] => {
+/** 改善後サイトマップの第1階層（トップの直下） */
+export const firstLevel = (sm: SitemapState): SitemapNode[] => {
   const g = sm.after;
   const home = g.nodes.find((x) => x.data.kind === 'home');
   const ids = g.edges.filter((x) => x.source === home?.id).map((x) => x.target);
@@ -128,26 +129,29 @@ function choosePages(sm: SitemapState, ctaLabel: string, strength: string): Desi
   const content = top.filter((x) => x.data.kind === 'new' || x.data.kind === 'section');
   const cta = top.find((x) => x.data.kind === 'cta');
   const picked = [content[0], cta ?? content[1]].filter((x): x is SitemapNode => !!x);
-  return picked.map((node) => {
-    const isCta = node.data.kind === 'cta';
-    const kids = childrenOf(sm, node.id).map((k) => ({ title: k.data.label, text: k.data.reason ?? `${k.data.label}の内容を、写真と短い文章で紹介します。` }));
-    const filler: DesignBlock[] = isCta
-      ? [
-          { title: `${ctaLabel}のフォーム`, text: '必要なことだけを入力して送信できます（3 項目・約 1 分）。' },
-          { title: 'お電話でも', text: '受付時間内は、お電話でもご相談いただけます。' },
-          { title: 'お返事の目安', text: '2 営業日以内に担当からご連絡します。' },
-        ]
-      : [
-          { title: '概要', text: node.data.reason ?? `${node.data.label}を、写真と短い文章で分かりやすく紹介します。` },
-          { title: '私たちの強み', text: strength || '選ばれる理由を、数字と事例で伝えます。' },
-          { title: 'よくあるご質問', text: 'お客様からよくいただく質問に、先回りしてお答えします。' },
-        ];
-    return {
-      key: node.id, label: node.data.label, path: node.data.path, cta: isCta,
-      lead: node.data.reason ?? (isCta ? '迷わず 1 クリックでたどり着けるページです。' : `${node.data.label}のページです。`),
-      blocks: [...kids, ...filler].slice(0, 3),
-    };
-  });
+  return picked.map((node) => designPageOf(sm, node, ctaLabel, strength));
+}
+
+/** サイトマップの 1 ページを、デザイン案でプレビューする画面にする（0.32.0 で choosePages から切り出し。出力は同じ） */
+export function designPageOf(sm: SitemapState, node: SitemapNode, ctaLabel: string, strength: string): DesignPage {
+  const isCta = node.data.kind === 'cta';
+  const kids = childrenOf(sm, node.id).map((k) => ({ title: k.data.label, text: k.data.reason ?? `${k.data.label}の内容を、写真と短い文章で紹介します。` }));
+  const filler: DesignBlock[] = isCta
+    ? [
+        { title: `${ctaLabel}のフォーム`, text: '必要なことだけを入力して送信できます（3 項目・約 1 分）。' },
+        { title: 'お電話でも', text: '受付時間内は、お電話でもご相談いただけます。' },
+        { title: 'お返事の目安', text: '2 営業日以内に担当からご連絡します。' },
+      ]
+    : [
+        { title: '概要', text: node.data.reason ?? `${node.data.label}を、写真と短い文章で分かりやすく紹介します。` },
+        { title: '私たちの強み', text: strength || '選ばれる理由を、数字と事例で伝えます。' },
+        { title: 'よくあるご質問', text: 'お客様からよくいただく質問に、先回りしてお答えします。' },
+      ];
+  return {
+    key: node.id, label: node.data.label, path: node.data.path, cta: isCta,
+    lead: node.data.reason ?? (isCta ? '迷わず 1 クリックでたどり着けるページです。' : `${node.data.label}のページです。`),
+    blocks: [...kids, ...filler].slice(0, 3),
+  };
 }
 
 /** 案件と制作データから、デザイン案に流し込む中身を作る（project が無いときは p1 の見本） */

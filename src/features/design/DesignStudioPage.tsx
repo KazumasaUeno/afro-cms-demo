@@ -23,7 +23,8 @@ const DEVICES: { id: Device; label: string; icon: typeof Monitor }[] = [
   { id: 'phone', label: 'スマホ', icon: Smartphone },
 ];
 
-function DeviceToggle({ value, onChange }: { value: Device; onChange: (d: Device) => void }) {
+/** 表示する端末の切替（営業プレゼンのプチ要件定義でも使う。0.32.0） */
+export function DeviceToggle({ value, onChange }: { value: Device; onChange: (d: Device) => void }) {
   return (
     <ToggleButtonGroup exclusive size="small" value={value} onChange={(_, v) => v && onChange(v)} aria-label="表示する端末">
       {DEVICES.map(({ id, label, icon: Icon }) => (

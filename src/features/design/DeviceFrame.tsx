@@ -8,7 +8,7 @@ import { DEVICE_HEIGHT, DEVICE_WIDTH, type Device, type PreviewProps } from './p
 import { MinimalPreview } from './previews/MinimalPreview';
 import { CreativePreview } from './previews/CreativePreview';
 import { PremiumPreview } from './previews/PremiumPreview';
-import { useDesignContext } from './designContext';
+import { useDesignContext, type DesignContext } from './designContext';
 
 export const PREVIEWS: Record<DesignId, ComponentType<PreviewProps>> = {
   minimal: MinimalPreview,
@@ -28,17 +28,20 @@ interface Props {
   screen?: number;
   /** 案件（省略時は選んでいる案件） */
   projectId?: string;
+  /** 中身を直接渡す（ストアに無い見込み客のプチ要件定義。0.32.0）。省略時は projectId の案件 */
+  ctx?: DesignContext;
 }
 
 /**
  * 実寸（1280/820/390px）でレンダリングし、置き場所の幅に合わせて縮小表示する。
  * プレビュー自体は device によってレイアウトを切り替える（実際の HTML/CSS）。
  */
-export function DeviceFrame({ design, device, thumbnail, viewportHeight, label, screen = 0, projectId }: Props) {
+export function DeviceFrame({ design, device, thumbnail, viewportHeight, label, screen = 0, projectId, ctx: ctxProp }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [avail, setAvail] = useState(0);
   const reduced = useReducedMotion();
-  const ctx = useDesignContext(projectId);
+  const storeCtx = useDesignContext(projectId);
+  const ctx = ctxProp ?? storeCtx;
   const page = screen > 0 ? ctx.pages[screen - 1] : undefined;
   const w = DEVICE_WIDTH[device];
   const h = viewportHeight ?? DEVICE_HEIGHT[device];

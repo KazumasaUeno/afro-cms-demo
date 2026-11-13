@@ -3,7 +3,7 @@ import { workOf } from '@/store/projectWork';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { useForceLightMode } from '@/theme/ThemeMode';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowRight, Check, ChevronLeft, ChevronRight, Maximize2, Minimize2, Play, RotateCcw, X } from 'lucide-react';
+import { ArrowRight, Check, ChevronLeft, ChevronRight, ClipboardList, Maximize2, Minimize2, Play, RotateCcw, X } from 'lucide-react';
 import gsap from 'gsap';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -389,6 +389,10 @@ export default function PresentPage() {
         <Typography sx={{ fontWeight: 700, fontSize: 14 }} noWrap>アフロCMS</Typography>
         <Typography variant="caption" sx={{ display: { xs: 'none', sm: 'block' } }} noWrap>{index + 1} / {total}・{TITLES[index]}</Typography>
         <Box sx={{ flex: 1 }} />
+        {/* その場で要件定義とデザインまで見せる（0.32.0。スライドとは別の画面） */}
+        <Button variant="contained" size="small" startIcon={<ClipboardList size={16} />} onClick={() => navigate('/present/petit')} aria-label="プチ要件定義を始める" sx={{ flexShrink: 0, minWidth: { xs: 44, sm: 64 }, px: { xs: 1.25, sm: 2 }, '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 }, ml: { xs: 0, sm: -0.5 } } }}>
+          <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>プチ要件定義</Box>
+        </Button>
         <Tooltip title={full ? '全画面を終了' : '全画面表示'}>
           <IconButton onClick={toggleFull} aria-label={full ? '全画面を終了' : '全画面表示'}>{full ? <Minimize2 size={18} /> : <Maximize2 size={18} />}</IconButton>
         </Tooltip>
