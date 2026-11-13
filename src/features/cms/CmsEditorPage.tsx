@@ -1,5 +1,5 @@
 import { Box, Button, ButtonBase, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, InputAdornment, Menu, MenuItem, Stack, Tab, Tabs, TextField, Typography, ListItemText } from '@mui/material';
-import { ArrowLeft, ChevronDown, Eye, GitCompare, LayoutTemplate, Plus, Search, Send, SlidersHorizontal, Save, Rocket, CalendarClock, Trash2, Undo2 } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Eye, GitCompare, History, LayoutTemplate, Plus, Search, Send, SlidersHorizontal, Save, Rocket, CalendarClock, Trash2, Undo2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { CmsPage, PageType } from '@/types';
@@ -19,6 +19,9 @@ import { Inspector } from './Inspector';
 import { NewPageDialog } from './NewPageDialog';
 import { PreviewDialog } from './PreviewDialog';
 import { CompareDialog } from './CompareDialog';
+import { PageHistoryDialog } from './PageHistoryDialog';
+import { historyOf } from '@/data/pageHistory';
+import { assetsOf } from '@/data/assets';
 import { hasLiveVersion, pageDeleteBlock, samePage, STATUS_META, toLocalInput, TYPE_LABEL, validateSlug, validateTitle, TITLE_MAX } from './cmsUtils';
 
 /** 上部バーの下に追従する列の最大高さ（上下の余白 16px ずつ） */
@@ -172,6 +175,9 @@ function CmsEditor() {
   const [pending, setPending] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
   const [compare, setCompare] = useState(false);
+  // ページの履歴（0.35.0）。restoredFrom: 履歴の版を読み込んだ後の保存で「復元して保存」と残すための版の id
+  const [history, setHistory] = useState(false);
+  const [restoredFrom, setRestoredFrom] = useState<string | null>(null);
   const [schedule, setSchedule] = useState(false);
   const [publishAnchor, setPublishAnchor] = useState<HTMLElement | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -193,6 +199,7 @@ function CmsEditor() {
   const patch = (p: Partial<CmsPage>) => setDraft((d) => (d ? { ...d, ...p } : d));
 
   const open = (id: string) => {
+    setRestoredFrom(null);
     setSelectedId(id);
     setDraft(pages.find((p) => p.id === id));
     setMobileView('editor');
@@ -209,7 +216,8 @@ function CmsEditor() {
       toast(titleErr ?? slugErr ?? '入力内容を確認してください', 'info');
       return false;
     }
-    if (dirty) dispatch({ type: 'savePage', page: draft, ...actor });
+    if (dirty) dispatch({ type: 'savePage', page: draft, ...actor, ...(restoredFrom ? { restoredFrom } : {}) });
+    setRestoredFrom(null);
     if (!silent) toast('下書きを保存しました');
     return true;
   };
@@ -304,6 +312,8 @@ function CmsEditor() {
                 <Typography variant="caption" aria-live="polite" sx={{ color: dirty ? tokens.color.warning : tokens.color.muted, fontWeight: dirty ? 650 : 500, flex: 1, minWidth: 0 }} noWrap>
                   {dirty ? '● 未保存の変更があります' : `保存済み・${draft.updatedBy ?? memberById(draft.authorId).name}`}
                 </Typography>
+                {/* ページの履歴（0.35.0）。スマホの操作バーは 1 行に収まらないので、状態の行に置く */}
+                <IconButton onClick={() => setHistory(true)} aria-label="ページの履歴" sx={{ flexShrink: 0, color: tokens.color.muted, '&:hover': { color: tokens.color.primary } }}><History size={17} /></IconButton>
                 {/* 削除（0.33.0）。消せないページ（公開中・予約公開・トップページ）でも押せて、理由を出す */}
                 <IconButton onClick={() => setDeleteOpen(true)} aria-label={`「${draft.title}」を削除`} sx={{ flexShrink: 0, color: tokens.color.muted, '&:hover': { color: tokens.color.danger } }}><Trash2 size={17} /></IconButton>
               </Stack>
@@ -379,6 +389,21 @@ function CmsEditor() {
       <DeleteDialog open={deleteOpen} page={deleteOpen ? draft : deleteSnap ?? draft} dirty={dirty} dev={dev} onClose={() => setDeleteOpen(false)} onDelete={remove} />
       <PreviewDialog page={draft} open={preview} onClose={() => setPreview(false)} />
       <CompareDialog page={draft} open={compare} onClose={() => setCompare(false)} />
+      <PageHistoryDialog
+        open={history}
+        page={draft}
+        dirty={dirty}
+        versions={historyOf(state, draft.id)}
+        assets={assetsOf(state).items}
+        onClose={() => setHistory(false)}
+        onRestore={(snap, versionId) => {
+          // エディタに読み込むだけ（状態・公開中の内容は変えない。保存すると「復元して保存」の版が残る）
+          patch({ title: snap.title, content: snap.content, seoTitle: snap.seoTitle, seoDescription: snap.seoDescription, coverImage: snap.coverImage });
+          setRestoredFrom(versionId);
+          setHistory(false);
+          toast('この版をエディタに読み込みました。「下書き保存」で確定します', 'info');
+        }}
+      />
       <ScheduleDialog open={schedule} initial={draft.scheduledAt} onClose={() => setSchedule(false)} onConfirm={(iso) => { setSchedule(false); setStatus('scheduled', iso); }} />
     </>
   );

@@ -25,6 +25,10 @@ import { applyProjectPatch, DEFAULT_NEXT_ACTION, projectFromDraft, projectPatchF
 import { followUpName } from '@/features/projects/followUp';
 import { hasLiveVersion, pageDeleteBlock } from '@/features/cms/cmsUtils';
 import { REPORT_SEND_HISTORY_MAX, reportRecipients, reportSendOf } from '@/data/reportSend';
+import { withoutPage, withVersion } from '@/data/pageHistory';
+import { ASSET_LIMITS, assetDeleteBlock, assetsOf, overStorageBudget, uploadCount, validateAssetName, validThumb } from '@/data/assets';
+import { formsOf, validateForm, type FormDraft } from '@/data/forms';
+import type { Asset, PageVersionKind } from '@/types';
 
 /** 操作した側。省略時はアフロ（管理者画面）。お客様の画面（CMS・ポータル）からは client を渡す */
 export type Side = AnswerSide;
@@ -67,7 +71,8 @@ export type Action =
   | { type: 'toggleQuality'; itemId: string; side: 'afro' | 'client'; devBy?: string }
   | { type: 'bulkQuality'; side: 'afro' | 'client'; priority: QuestionPriority | 'all'; categoryId?: string; devBy?: string }
   // devBy: 開発者画面（/dev/cms。0.27.0）で操作したメンバーの id（操作者の名前に使う。by より優先）
-  | { type: 'savePage'; page: CmsPage; by?: Side; devBy?: string }
+  // restoredFrom: 履歴の版を読み込んで保存したとき、その版の id（0.35.0。履歴に「復元して保存」と残す）
+  | { type: 'savePage'; page: CmsPage; by?: Side; devBy?: string; restoredFrom?: string }
   | { type: 'setPageStatus'; id: string; status: PageStatus; scheduledAt?: string; by?: Side; devBy?: string }
   /** 承認ワークフロー: 承認依頼中のページを承認して公開する / コメントを付けて差し戻す */
   | { type: 'reviewPage'; id: string; decision: 'approve' | 'reject'; comment?: string; by?: Side }
@@ -84,6 +89,20 @@ export type Action =
    */
   | { type: 'setReportSend'; enabled: boolean; devBy?: string }
   | { type: 'testReportSend'; devBy?: string }
+  /**
+   * 素材ドライブ（0.36.0。選んでいる案件の分）。管理は開発者画面だけ（devBy が無ければ何もしない）。
+   * 画像は縮小済みの JPEG（24KB 以下）だけ受け付け、資料は中身を持たない。件数・保存データの大きさの上限もここで確かめる
+   */
+  | { type: 'addAsset'; asset: Pick<Asset, 'name' | 'kind' | 'folder' | 'mime' | 'size' | 'src'>; devBy?: string }
+  | { type: 'renameAsset'; id: string; name: string; folder: string; devBy?: string }
+  | { type: 'deleteAsset'; id: string; devBy?: string }
+  /**
+   * フォーム管理（0.37.0。選んでいる案件の分）。フォームの作成・編集・受付の停止は開発者画面だけ（devBy）。
+   * 受信した問い合わせの対応状況はお客様ポータルだけ（by: 'client'）。管理者画面は見るだけ
+   */
+  | { type: 'saveForm'; form: FormDraft; devBy?: string }
+  | { type: 'setFormEnabled'; id: string; enabled: boolean; devBy?: string }
+  | { type: 'setSubmissionStatus'; id: string; status: 'open' | 'done'; by?: Side; devBy?: string }
   /** 開発者画面（操作者は制作エンジニア） */
   // by: 操作したメンバーの id（ログイン中の人。省略時は DEV_USER_ID）
   | { type: 'setDevTaskStatus'; id: string; status: DevTaskStatus; by?: string }
@@ -183,6 +202,12 @@ function recordReportSend(state: DemoState, kind: 'diagnosis' | 'test', by: stri
   const what = cycle ? `第${cycle}回の改善レポート` : '改善レポート';
   const to = recipients.map((r) => r.name).join('・');
   return log(s, kind === 'test' ? `${what}をテスト送信しました（宛先 ${to}・シミュレーション）` : `${what}を${to}へ自動送信しました（シミュレーション）`, kind === 'test' ? 'edit' : 'ai', by === '自動' ? 'AI' : by, projectId);
+}
+
+/** ページの履歴に 1 件残す（0.35.0。選んでいる案件の分。素材ドライブの画像は参照で残す） */
+function recordVersion(state: DemoState, page: CmsPage, kind: PageVersionKind, by: string): DemoState {
+  const pageHistory = withVersion(state.pageHistory, page, kind, by, nowIso(), uid('ver'), assetsOf(state).items);
+  return pageHistory === state.pageHistory ? state : { ...state, pageHistory };
 }
 
 /** 段階・進捗・次の作業・承認待ちの数は、patchOwner で書かず syncDemoProject がデモのデータから導く */
@@ -407,7 +432,9 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       // 最後に保存・状態を変えた人をページにも持つ（エディタの「保存済み・○○」が作成者のままで、ポータルから保存しても「上野 航」と出ていた。0.30.2・2026-11-13 ユーザー指示）
       const page = { ...action.page, updatedAt: nowIso(), updatedBy: actor };
       const pages = exists ? state.pages.map((p) => (p.id === page.id ? page : p)) : [page, ...state.pages];
-      return log({ ...state, pages }, `「${page.title}」を${exists ? '保存' : '作成'}しました`, 'edit', actor);
+      const restored = !!action.restoredFrom && exists;
+      const s = recordVersion({ ...state, pages }, page, !exists ? 'create' : restored ? 'restore' : 'save', actor);
+      return log(s, `「${page.title}」を${!exists ? '作成' : restored ? '以前の版から復元して保存' : '保存'}しました`, 'edit', actor);
     }
 
     case 'setPageStatus': {
@@ -422,7 +449,8 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       const actor = action.devBy ? devActor(state, action.devBy) : actorOf(state, action.by ?? 'afro');
       const base = withStatus(page, action.status, action.scheduledAt);
       const updated = { ...(unpublish ? { ...base, publishedContent: undefined, publishedAt: undefined } : base), updatedBy: actor };
-      const s = { ...state, pages: state.pages.map((p) => (p.id === page.id ? updated : p)) };
+      const vkind: PageVersionKind = unpublish ? 'unpublish' : action.status === 'published' ? 'publish' : action.status === 'scheduled' ? 'schedule' : action.status === 'review' ? 'review' : 'save';
+      const s = recordVersion({ ...state, pages: state.pages.map((p) => (p.id === page.id ? updated : p)) }, updated, vkind, actor);
       const kind: Activity['kind'] = action.status === 'published' || action.status === 'scheduled' ? 'publish' : 'edit';
       // 公開中・予約公開を下書きに戻すのは「公開の取り消し」（0.33.0。削除の前にお客様が行う）
       if (unpublish) {
@@ -438,8 +466,9 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       const approve = action.decision === 'approve';
       const actor = actorOf(state, side);
       const updated = { ...withStatus(page, approve ? 'published' : 'draft'), updatedBy: actor };
+      const paged = { ...state, pages: state.pages.map((p) => (p.id === page.id ? updated : p)) };
       const s = approval(
-        { ...state, pages: state.pages.map((p) => (p.id === page.id ? updated : p)) },
+        approve ? recordVersion(paged, updated, 'publish', actor) : paged,
         side, approve ? '承認して公開' : '差し戻し', `CMS / ${page.title}`, actor,
       );
       const note = action.comment?.trim();
@@ -455,7 +484,9 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       const actor = action.devBy ? devActor(state, action.devBy) : actorOf(state, action.by ?? 'afro');
       const kind = page.type === 'news' ? 'お知らせ' : 'ページ';
       const note = page.status === 'review' ? '（承認待ちを取り下げ）' : '';
-      return log({ ...state, pages: state.pages.filter((p) => p.id !== page.id) }, `${kind}「${page.title}」を削除しました${note}`, 'edit', actor);
+      // 消したページの履歴も消す（0.35.0）
+      const pageHistory = withoutPage(state.pageHistory, page.id);
+      return log({ ...state, pages: state.pages.filter((p) => p.id !== page.id), ...(pageHistory !== state.pageHistory ? { pageHistory } : {}) }, `${kind}「${page.title}」を削除しました${note}`, 'edit', actor);
     }
 
     case 'addDiagnosis': {
@@ -488,6 +519,90 @@ function baseReducer(state: DemoState, action: Action): DemoState {
     case 'testReportSend':
       if (!action.devBy) return state;
       return recordReportSend(state, 'test', devActor(state, action.devBy), state.diagnoses[0]?.cycle);
+
+    case 'addAsset': {
+      if (!action.devBy) return state;
+      const a = action.asset;
+      const items = assetsOf(state).items;
+      const name = a.name.trim();
+      const folder = a.folder.trim();
+      if (validateAssetName(name, folder) || uploadCount(items) >= ASSET_LIMITS.uploads) return state;
+      if (a.kind === 'image' ? !validThumb(a.src) : a.src !== undefined) return state;
+      // 保存データが上限を超えるなら受け付けない（画面では先に確かめてエラーを出す）
+      if (overStorageBudget(state, (a.src?.length ?? 0) + 300)) return state;
+      const actor = devActor(state, action.devBy);
+      const asset: Asset = { id: uid('asset'), name, kind: a.kind, folder, mime: a.mime, size: a.size, ...(a.src ? { src: a.src } : {}), createdAt: nowIso(), createdBy: actor };
+      return log({ ...state, assets: { items: [asset, ...items] } }, `素材「${name}」をアップロードしました`, 'edit', actor, state.requirements.projectId);
+    }
+
+    case 'renameAsset': {
+      if (!action.devBy) return state;
+      const items = assetsOf(state).items;
+      const cur = items.find((x) => x.id === action.id);
+      const name = action.name.trim();
+      const folder = action.folder.trim();
+      if (!cur || validateAssetName(name, folder) || (cur.name === name && cur.folder === folder)) return state;
+      const actor = devActor(state, action.devBy);
+      const s = { ...state, assets: { items: items.map((x) => (x.id === cur.id ? { ...x, name, folder } : x)) } };
+      return log(s, cur.name === name ? `素材「${cur.name}」をフォルダ「${folder || 'なし'}」へ移しました` : `素材「${cur.name}」の名前を「${name}」に変更しました`, 'edit', actor, state.requirements.projectId);
+    }
+
+    case 'deleteAsset': {
+      if (!action.devBy) return state;
+      const items = assetsOf(state).items;
+      const cur = items.find((x) => x.id === action.id);
+      // 公開中のページで使っている素材は消さない（画面でも止めている）
+      if (!cur || assetDeleteBlock(cur, state.pages)) return state;
+      const actor = devActor(state, action.devBy);
+      return log({ ...state, assets: { items: items.filter((x) => x.id !== cur.id) } }, `素材「${cur.name}」を削除しました`, 'edit', actor, state.requirements.projectId);
+    }
+
+    case 'saveForm': {
+      if (!action.devBy) return state;
+      const cur = formsOf(state);
+      if (Object.keys(validateForm(action.form, cur.forms)).length > 0) return state;
+      const prev = action.form.id ? cur.forms.find((f) => f.id === action.form.id) : undefined;
+      if (action.form.id && !prev) return state;
+      const actor = devActor(state, action.devBy);
+      const f = action.form;
+      const form = {
+        id: prev?.id ?? uid('form'), name: f.name.trim(), enabled: prev?.enabled ?? true, updatedAt: nowIso(), updatedBy: actor,
+        recipients: f.recipients.map((r) => normalizeEmail(r)).filter(Boolean),
+        fields: f.fields.map((x) => ({
+          id: x.id || uid('fld'), label: x.label.trim(), type: x.type, required: x.required,
+          ...(x.type === 'select' ? { options: (x.options ?? []).map((o) => o.trim()).filter(Boolean) } : {}),
+        })),
+      };
+      const forms = prev ? cur.forms.map((x) => (x.id === prev.id ? form : x)) : [...cur.forms, form];
+      return log({ ...state, forms: { ...cur, forms } }, `フォーム「${form.name}」を${prev ? '保存' : '作成'}しました`, 'edit', actor, state.requirements.projectId);
+    }
+
+    case 'setFormEnabled': {
+      if (!action.devBy) return state;
+      const cur = formsOf(state);
+      const form = cur.forms.find((f) => f.id === action.id);
+      if (!form || form.enabled === action.enabled) return state;
+      const actor = devActor(state, action.devBy);
+      const forms = cur.forms.map((f) => (f.id === form.id ? { ...f, enabled: action.enabled, updatedAt: nowIso(), updatedBy: actor } : f));
+      return log({ ...state, forms: { ...cur, forms } }, `フォーム「${form.name}」の受付を${action.enabled ? '再開' : '停止'}しました`, 'edit', actor, state.requirements.projectId);
+    }
+
+    case 'setSubmissionStatus': {
+      // 問い合わせへの対応はお客様の業務なので、お客様ポータルからだけ受け付ける（開発者画面・管理者画面は見るだけ）
+      if (action.devBy || action.by !== 'client') return state;
+      const cur = formsOf(state);
+      const sub = cur.submissions.find((x) => x.id === action.id);
+      if (!sub || sub.status === action.status) return state;
+      const actor = actorOf(state, 'client');
+      const done = action.status === 'done';
+      const submissions = cur.submissions.map((x) => {
+        if (x.id !== sub.id) return x;
+        const { handledBy: _by, handledAt: _at, ...rest } = x;
+        return done ? { ...rest, status: 'done' as const, handledBy: actor, handledAt: nowIso() } : { ...rest, status: 'open' as const };
+      });
+      const form = cur.forms.find((f) => f.id === sub.formId);
+      return log({ ...state, forms: { ...cur, submissions } }, `「${form?.name ?? 'フォーム'}」の問い合わせを${done ? '対応済み' : '未対応'}にしました`, 'edit', actor, state.requirements.projectId);
+    }
 
     case 'setDevTaskStatus': {
       const dev = devState(state);

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { StatusPill, Surface } from '@/components/ui';
 import { useRepositories } from '@/repositories';
 import { downloadText } from '@/services/download';
+import { jstStamp as stamp, toCsv } from '@/services/csv';
 import { tokens } from '@/theme/tokens';
 
 /**
@@ -14,15 +15,6 @@ import { tokens } from '@/theme/tokens';
 const SIDE = { client: { label: 'お客様', tone: 'success' }, afro: { label: 'アフロ', tone: 'info' } } as const;
 const SHOW = 8;
 
-/** 秒まで・日本時間で出す（証跡なので分単位に丸めず、見る端末のタイムゾーンで変わらないようにする） */
-const stamp = (iso: string) => new Date(iso).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-/** Excel で数式として動かないよう、先頭が = + - @ タブ CR の値には ' を付ける */
-const cell = (v: string) => {
-  const g = /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;
-  return /[",\r\n]/.test(g) ? `"${g.replace(/"/g, '""')}"` : g;
-};
-
 export function ApprovalHistory({ projectId, siteName }: { projectId: string; siteName: string }) {
   const { data: logs } = useRepositories().approvals.useHistory(projectId);
   const [all, setAll] = useState(false);
@@ -30,7 +22,7 @@ export function ApprovalHistory({ projectId, siteName }: { projectId: string; si
 
   const download = () => {
     const rows = [['日時（日本時間）', '立場', '操作した人', '操作', '対象'], ...logs.map((l) => [stamp(l.at), SIDE[l.side].label, l.actor, l.action, l.target])];
-    downloadText(`承認履歴_${siteName}.csv`, `﻿${rows.map((r) => r.map(cell).join(',')).join('\r\n')}\r\n`, 'text/csv;charset=utf-8');
+    downloadText(`承認履歴_${siteName}.csv`, toCsv(rows), 'text/csv;charset=utf-8');
   };
 
   return (

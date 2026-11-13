@@ -1,6 +1,6 @@
 import { tokens } from '@/theme/tokens';
 import {
-  Building2, ClipboardCheck, Code2, FileText, FolderKanban, House, LayoutDashboard, ListChecks, ListTodo, Monitor,
+  Building2, ClipboardCheck, Code2, FileText, FolderKanban, House, Inbox, LayoutDashboard, ListChecks, ListTodo, Monitor,
   Palette, Rocket, ScrollText, Settings, Stamp, UserRound, UsersRound, type LucideIcon,
 } from 'lucide-react';
 
@@ -50,7 +50,7 @@ const ADMIN_ITEMS: NavItem[] = [
   { to: '/', label: 'ホーム', icon: House, match: ['/'], exact: true, hint: '今日の状況' },
   // AI Studio（要件・サイトマップ・デザイン）・品質チェック・インサイトはプロジェクトの中の画面なので、メニューには出さず
   // プロジェクト詳細の段階ごとのボタンから開く。開いている間は「プロジェクト」を選択中にする
-  { to: '/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/projects', '/ai-studio', '/site', '/quality', '/insights'], hint: '制作案件の一覧' },
+  { to: '/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/projects', '/ai-studio', '/site', '/quality', '/insights', '/assets', '/forms'], hint: '制作案件の一覧' },
   { to: '/users', label: 'ユーザー管理', icon: UsersRound, match: ['/users'], hint: 'お客様の登録・開発者画面の権限' },
 ];
 
@@ -64,6 +64,8 @@ const PORTAL_ITEMS: NavItem[] = [
   { to: '/portal/reports', label: 'レポート', icon: ScrollText, match: ['/portal/reports'], hint: '改善診断' },
   // 下部タブは添字 [0,1,3,5] で選んでいるため、新しい項目は末尾に足す
   { to: '/portal/signage', label: 'サイネージ', icon: Monitor, match: ['/portal/signage'], hint: '店頭の画面' },
+  // フォームの問い合わせ（0.37.0）。下部タブの添字が変わらないよう末尾に足す
+  { to: '/portal/forms', label: 'フォーム', icon: Inbox, match: ['/portal/forms'], hint: '問い合わせの確認' },
 ];
 
 const DEV_ITEMS: NavItem[] = [
@@ -72,7 +74,7 @@ const DEV_ITEMS: NavItem[] = [
   // 選択中の規則: URL が属するメニュー項目を選択中にし、どこから開いたかでは変えない。
   //   メニューに項目が無いサイトマップ（/dev/sitemap）・品質（/dev/quality）・ページ編集（/dev/cms）・改善（/dev/insights。0.27.0）は、
   //   常に「プロジェクト」を選択中にする（下の match）
-  { to: '/dev/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/dev/projects', '/dev/hearing', '/dev/requirements', '/dev/sitemap', '/dev/quality', '/dev/cms', '/dev/insights'], hint: '担当案件の6段階' },
+  { to: '/dev/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/dev/projects', '/dev/hearing', '/dev/requirements', '/dev/sitemap', '/dev/quality', '/dev/cms', '/dev/insights', '/dev/assets', '/dev/forms'], hint: '担当案件の6段階' },
   // ヒアリング（/dev/hearing・/dev/requirements）はメニューから外した（2026-11-12 ユーザー指示）。プロジェクト詳細・担当案件から開き、「プロジェクト」を選択中にする
   { to: '/dev/tasks', label: '構築タスク', icon: ListTodo, match: ['/dev/tasks'], hint: 'ページごとの実装状況' },
   // 自動チェック（/dev/checks）は 0.19.0 でメニューから外した（11/10 レビュー）。URL はダッシュボードへ転送する

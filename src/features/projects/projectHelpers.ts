@@ -16,8 +16,9 @@ export const STAGE_LINKS: Record<Stage, { label: string; to: string }[]> = {
     { label: 'デザインスタジオ', to: '/ai-studio/design' },
   ],
   quality: [{ label: '品質チェック', to: '/quality' }],
-  operation: [{ label: 'CMSで更新', to: '/portal/pages' }],
-  improvement: [{ label: 'インサイト・改善提案', to: '/insights' }],
+  // 素材ドライブ・フォーム（0.36.0・0.37.0。管理者画面は見るだけ）。[0] は次の作業の行き先に使うので末尾に足す
+  operation: [{ label: 'CMSで更新', to: '/portal/pages' }, { label: '素材ドライブ', to: '/assets' }, { label: 'フォーム', to: '/forms' }],
+  improvement: [{ label: 'インサイト・改善提案', to: '/insights' }, { label: '素材ドライブ', to: '/assets' }, { label: 'フォーム', to: '/forms' }],
 };
 
 export const stageLabel = (s: Stage): string => STAGES.find((x) => x.id === s)?.label ?? s;

@@ -306,6 +306,99 @@ export interface ReportSendEntry {
   by: string;
 }
 
+/* ---------- ページの履歴（0.35.0） ---------- */
+
+/** 版に残すページの内容。アップロードした画像は画像データを持たず「asset:<id>」で残す（data/pageHistory.ts） */
+export interface PageSnapshot {
+  title: string;
+  content: string;
+  seoTitle: string;
+  seoDescription: string;
+  coverImage?: string;
+}
+
+export type PageVersionKind = 'create' | 'save' | 'restore' | 'review' | 'schedule' | 'publish' | 'unpublish';
+
+/**
+ * ページの履歴の 1 件（新しい順。案件ごと・ページごと。0.35.0）。
+ * snap は内容が直前の版と同じときは持たない（状態だけ変えた記録）。比較・復元はそれより古い一番近い snap を使う
+ */
+export interface PageVersion {
+  id: string;
+  at: ISODate;
+  by: string;
+  kind: PageVersionKind;
+  snap?: PageSnapshot;
+}
+
+/* ---------- 素材ドライブ（0.36.0） ---------- */
+
+/**
+ * 素材ドライブの 1 件（案件ごと）。
+ * - preset: 見本の画像（data/cms の DEMO_IMAGES の id）。画像データは保存せず表示のときに作る
+ * - アップロードした画像: ブラウザで縮小した JPEG（24KB 以下）を src に持つ。ページの本文はこれを埋め込む（履歴には asset:<id> で残す）
+ * - 資料（PDF など）: 名前・種類・大きさだけ（デモのため中身は保存しない）
+ */
+export interface Asset {
+  id: string;
+  name: string;
+  kind: 'image' | 'doc';
+  /** フォルダ名（空文字 = フォルダなし） */
+  folder: string;
+  mime: string;
+  /** 元のファイルの大きさ（バイト） */
+  size: number;
+  preset?: string;
+  src?: string;
+  createdAt: ISODate;
+  createdBy: string;
+}
+
+export interface AssetState {
+  items: Asset[];
+}
+
+/* ---------- フォーム管理（0.37.0） ---------- */
+
+export type FormFieldType = 'text' | 'email' | 'tel' | 'textarea' | 'select' | 'checkbox';
+
+export interface FormField {
+  id: string;
+  label: string;
+  type: FormFieldType;
+  required: boolean;
+  /** select のときだけ（1〜10 件） */
+  options?: string[];
+}
+
+export interface FormDef {
+  id: string;
+  name: string;
+  fields: FormField[];
+  /** 受信の通知先（メールアドレス。デモのため実際のメールは送らない） */
+  recipients: string[];
+  enabled: boolean;
+  updatedAt: ISODate;
+  updatedBy: string;
+}
+
+export interface FormSubmission {
+  id: string;
+  formId: string;
+  at: ISODate;
+  /** 項目の id → 値（削除した項目の値も残す） */
+  values: Record<string, string>;
+  status: 'open' | 'done';
+  handledBy?: string;
+  handledAt?: ISODate;
+}
+
+export interface FormsState {
+  forms: FormDef[];
+  /** 新しい順 */
+  submissions: FormSubmission[];
+}
+
 /* ---------- アクティビティ ---------- */
 
 export interface Activity {
@@ -478,6 +571,12 @@ export interface ProjectContent {
 export interface ProjectWork extends Partial<ProjectContent> {
   /** 改善レポートの自動送信（0.34.0。無ければオン・履歴なし） */
   reportSend?: ReportSendState;
+  /** ページの履歴（0.35.0。ページ id → 新しい順。無ければ履歴なし） */
+  pageHistory?: Record<string, PageVersion[]>;
+  /** 素材ドライブ（0.36.0。無ければ見本の画像 4 点） */
+  assets?: AssetState;
+  /** フォーム管理（0.37.0。無ければ公開中の案件は「お問い合わせ」の見本） */
+  forms?: FormsState;
   requirements: RequirementSession;
   sitemap: SitemapState;
   design: DesignState;
@@ -504,6 +603,10 @@ export interface DemoState {
   diagnoses: DiagnosisReport[];
   /** 改善レポートの自動送信（選んでいる案件の分。ほかの案件の分は projectWork。0.34.0 で追加。無ければオン・履歴なし） */
   reportSend?: ReportSendState;
+  /** ページの履歴・素材ドライブ・フォーム（選んでいる案件の分。ほかの案件の分は projectWork。0.35.0〜0.37.0。無ければ既定値） */
+  pageHistory?: Record<string, PageVersion[]>;
+  assets?: AssetState;
+  forms?: FormsState;
   activities: Activity[];
   settings: { reducedMotion: 'system' | 'on' | 'off'; companyName: string };
   /** 開発者画面のデータ。0.5.0 で追加したため、それ以前の保存データには無い（devState() で補う） */

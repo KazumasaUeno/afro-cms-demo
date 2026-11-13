@@ -286,7 +286,13 @@ const currentWork = (state: DemoState): FullWork => ({
   requirements: state.requirements, sitemap: state.sitemap, design: state.design, qualityChecks: state.qualityChecks,
   pages: state.pages, diagnoses: state.diagnoses, signage: state.signage ?? emptySignage(),
   ...(state.reportSend ? { reportSend: state.reportSend } : {}),
+  ...(state.pageHistory ? { pageHistory: state.pageHistory } : {}),
+  ...(state.assets ? { assets: state.assets } : {}),
+  ...(state.forms ? { forms: state.forms } : {}),
 });
+
+/** 無い案件もある案件ごとのデータ（自動送信 0.34.0・履歴 0.35.0・素材 0.36.0・フォーム 0.37.0）。前の案件の分が残らないよう必ず置き換える */
+const optionalWork = (work: ProjectWork) => ({ reportSend: work.reportSend, pageHistory: work.pageHistory, assets: work.assets, forms: work.forms });
 
 /** 保存した制作データに公開後のデータが無ければ（0.29 までの保存データ）、その案件の初期データで補う。そろっていれば同じものを返す */
 export function withContent(projectId: string, work: ProjectWork): FullWork {
@@ -308,8 +314,8 @@ export function workOf(state: DemoState, projectId: string): FullWork {
 export function workView(state: DemoState, projectId: string): DemoState {
   if (projectId === state.requirements.projectId) return state;
   const work = workOf(state, projectId);
-  // 自動送信の設定（0.34.0）は無い案件もあるので、選んでいる案件の分が残らないよう必ず置き換える
-  return { ...state, ...work, reportSend: work.reportSend };
+  // 自動送信の設定（0.34.0）・履歴・素材・フォームは無い案件もあるので、選んでいる案件の分が残らないよう必ず置き換える
+  return { ...state, ...work, ...optionalWork(work) };
 }
 
 /**
@@ -325,6 +331,6 @@ export function switchWork(state: DemoState, projectId: string): DemoState {
   const next = workOf(state, projectId);
   const rest = { ...(state.projectWork ?? {}), [cur]: currentWork(state) };
   delete rest[projectId];
-  // 自動送信の設定（0.34.0）は無い案件もあるので、前の案件の分が残らないよう必ず置き換える
-  return { ...state, ...next, reportSend: next.reportSend, projectWork: rest };
+  // 自動送信の設定（0.34.0）・履歴・素材・フォームは無い案件もあるので、前の案件の分が残らないよう必ず置き換える
+  return { ...state, ...next, ...optionalWork(next), projectWork: rest };
 }

@@ -21,6 +21,9 @@ const CmsEditorPage = lazy(() => import('@/features/cms/CmsEditorPage'));
 const InsightsPage = lazy(() => import('@/features/insights/InsightsPage'));
 const SettingsPage = lazy(() => import('@/features/settings/SettingsPage'));
 const UsersPage = lazy(() => import('@/features/users/UsersPage'));
+// 素材ドライブ（0.36.0）・フォーム管理（0.37.0）
+const AssetDrivePage = lazy(() => import('@/features/assets/AssetDrivePage'));
+const FormsPage = lazy(() => import('@/features/forms/FormsPage'));
 // お客様ポータル・開発者画面
 const PublishApprovalsPage = lazy(() => import('@/features/portal/PublishApprovalsPage'));
 const DevDashboardPage = lazy(() => import('@/features/dev/DevDashboardPage'));
@@ -81,6 +84,9 @@ const router = createBrowserRouter([
       { path: 'dev/quality', element: <QualityPage /> },
       { path: 'dev/cms', element: <CmsEditorPage /> },
       { path: 'dev/insights', element: <InsightsPage /> },
+      // 運用の段階の素材ドライブ（0.36.0）・フォーム（0.37.0）。管理は開発者画面（担当案件だけ。DevProjectGate）。管理者画面の /assets・/forms は見るだけ
+      { path: 'dev/assets', element: <AssetDrivePage /> },
+      { path: 'dev/forms', element: <FormsPage /> },
       // 開発者画面のヒアリング（0.25.0）。管理者画面の /ai-studio・/ai-studio/hearing と同じ画面を開発者画面の中で開く（担当案件だけ。DevProjectGate）
       { path: 'dev/hearing', element: <RequirementsPage /> },
       { path: 'dev/hearing/answers', element: <HearingAnswersPage /> },
@@ -96,7 +102,11 @@ const router = createBrowserRouter([
       { path: 'portal/quality', element: <PortalQualityPage /> },
       { path: 'portal/reports', element: <PortalReportsPage /> },
       { path: 'portal/signage', element: <PortalSignagePage /> },
+      // 問い合わせの確認・対応状況（0.37.0）。フォームの定義は見るだけ
+      { path: 'portal/forms', element: <FormsPage /> },
       { path: 'insights', element: <InsightsPage /> },
+      { path: 'assets', element: <AssetDrivePage /> },
+      { path: 'forms', element: <FormsPage /> },
       { path: 'users', element: <UsersPage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: '*', element: <Navigate to="/" replace /> },

@@ -10,7 +10,7 @@ import { diffBlocks } from './cmsUtils';
 import { sanitizeHtml } from './sanitize';
 import { proseSx } from './SitePreview';
 
-function Pane({ label, sub, html, tone }: { label: string; sub: string; html: string; tone: 'before' | 'after' }) {
+function Pane({ label, sub, html, tone, empty = 'まだ公開されていません（新規ページ）' }: { label: string; sub: string; html: string; tone: 'before' | 'after'; empty?: string }) {
   return (
     <Box sx={{ minWidth: 0, borderRadius: '16px', border: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface, overflow: 'hidden' }}>
       <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2, py: 1.25, borderBottom: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surfaceMuted }}>
@@ -18,18 +18,23 @@ function Pane({ label, sub, html, tone }: { label: string; sub: string; html: st
         <Typography variant="caption" noWrap>{sub}</Typography>
       </Stack>
       <Box sx={{ p: { xs: 2, md: 3 }, ...proseSx, fontSize: 15, color: tokens.color.ink }}>
-        {html ? <div dangerouslySetInnerHTML={{ __html: html }} /> : <Typography variant="body2" color="text.secondary">まだ公開されていません（新規ページ）</Typography>}
+        {html ? <div dangerouslySetInnerHTML={{ __html: html }} /> : <Typography variant="body2" color="text.secondary">{empty}</Typography>}
       </Box>
     </Box>
   );
 }
 
-export function CompareDialog({ page, open, onClose }: { page: CmsPage; open: boolean; onClose: () => void }) {
+/** 比較する片側（ページの履歴から開くとき。0.35.0）。無ければ従来どおり 公開中の内容 / 編集中の内容 */
+export interface CompareSide { html: string | undefined; label: string; sub: string }
+
+export function CompareDialog({ page, open, onClose, before: beforeSide, after: afterSide }: { page: CmsPage; open: boolean; onClose: () => void; before?: CompareSide; after?: CompareSide }) {
   const fullScreen = useFullScreenDialog();
   const [tab, setTab] = useState<'side' | 'diff'>('side');
-  const before = useMemo(() => sanitizeHtml(page.publishedContent), [page.publishedContent]);
-  const after = useMemo(() => sanitizeHtml(page.content), [page.content]);
-  const diff = useMemo(() => (open ? diffBlocks(page.publishedContent, page.content) : []), [open, page.publishedContent, page.content]);
+  const beforeRaw = beforeSide ? beforeSide.html : page.publishedContent;
+  const afterRaw = afterSide ? afterSide.html : page.content;
+  const before = useMemo(() => sanitizeHtml(beforeRaw), [beforeRaw]);
+  const after = useMemo(() => sanitizeHtml(afterRaw), [afterRaw]);
+  const diff = useMemo(() => (open ? diffBlocks(beforeRaw, afterRaw) : []), [open, beforeRaw, afterRaw]);
   const added = diff.filter((d) => d.kind === 'added').length;
   const removed = diff.filter((d) => d.kind === 'removed').length;
 
@@ -55,8 +60,8 @@ export function CompareDialog({ page, open, onClose }: { page: CmsPage; open: bo
       <DialogContent sx={{ bgcolor: tokens.color.bgSubtle, mt: 1, p: { xs: 2, md: 3 } }}>
         {tab === 'side' ? (
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
-            <Pane label="Before" sub={page.publishedAt ? `公開中の内容（${formatDateTime(page.publishedAt)}）` : '公開履歴なし'} html={before} tone="before" />
-            <Pane label="After" sub="編集中の内容" html={after} tone="after" />
+            <Pane label={beforeSide?.label ?? 'Before'} sub={beforeSide?.sub ?? (page.publishedAt ? `公開中の内容（${formatDateTime(page.publishedAt)}）` : '公開履歴なし')} html={before} tone="before" {...(beforeSide ? { empty: '本文がありません' } : {})} />
+            <Pane label={afterSide?.label ?? 'After'} sub={afterSide?.sub ?? '編集中の内容'} html={after} tone="after" {...(afterSide ? { empty: '本文がありません' } : {})} />
           </Box>
         ) : (
           <Stack spacing={1} sx={{ maxWidth: 760, mx: 'auto' }}>
