@@ -11,6 +11,31 @@ export const STATUS_META: Record<PageStatus, { label: string; tone: PillTone }> 
 
 export const TYPE_LABEL: Record<PageType, string> = { page: 'ページ', news: 'お知らせ' };
 
+/**
+ * ページ・お知らせを削除できない理由（0.33.0）。削除できるときは null。画面（削除ボタン・確認）と reducer の両方で使う。
+ * - トップページ（URL が「/」）は消せない
+ * - 公開中の版がある（公開中・予約公開・公開中の変更の承認待ちなど。hasLiveVersion）ページは消せない。公開・公開の取り消しはお客様の操作なので、お客様が「公開を取り消す」で下書きに戻してから消す
+ *   （承認の流れに「削除の承認」は足さない。開発者画面では取り消しの操作も出さない）
+ * - 下書き・承認待ちはそのまま消せる（承認待ちは公開承認の一覧からも消える）
+ */
+/**
+ * 公開中の版があるか（0.33.0）。公開中・予約公開に加え、公開中のページを直して承認依頼中・差し戻し後の下書き（publishedContent が残る）も含む。
+ * 「公開を取り消す」で publishedContent を消すと false になる
+ */
+export const hasLiveVersion = (page: Pick<CmsPage, 'status' | 'publishedContent'>): boolean =>
+  page.status === 'published' || page.status === 'scheduled' || !!page.publishedContent;
+
+export function pageDeleteBlock(page: Pick<CmsPage, 'slug' | 'status' | 'type' | 'publishedContent'>, dev: boolean): string | null {
+  if (page.type === 'page' && page.slug === '/') return 'トップページは削除できません';
+  if (hasLiveVersion(page)) {
+    const what = page.status === 'scheduled' ? '予約公開中' : page.status === 'published' ? '公開中' : page.status === 'review' ? '公開中（変更の承認待ち）' : '公開中（変更を編集中）';
+    return dev
+      ? `${what}のため削除できません。お客様がポータルで公開を取り消すと削除できます`
+      : `${what}のため削除できません。先に「公開」メニューの「公開を取り消す」で下書きに戻してください`;
+  }
+  return null;
+}
+
 export const SEO_TITLE_MAX = 60;
 export const SEO_DESC_MAX = 120;
 export const TITLE_MAX = 60;

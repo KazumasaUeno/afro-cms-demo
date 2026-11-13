@@ -285,6 +285,7 @@ export function seedWorkFor(projectId: string, stage: Stage): FullWork {
 const currentWork = (state: DemoState): FullWork => ({
   requirements: state.requirements, sitemap: state.sitemap, design: state.design, qualityChecks: state.qualityChecks,
   pages: state.pages, diagnoses: state.diagnoses, signage: state.signage ?? emptySignage(),
+  ...(state.reportSend ? { reportSend: state.reportSend } : {}),
 });
 
 /** 保存した制作データに公開後のデータが無ければ（0.29 までの保存データ）、その案件の初期データで補う。そろっていれば同じものを返す */
@@ -305,7 +306,10 @@ export function workOf(state: DemoState, projectId: string): FullWork {
 
 /** その案件の制作データを差し込んだ state（読み取り専用。選んでいる案件と違う案件を表示するときに使う） */
 export function workView(state: DemoState, projectId: string): DemoState {
-  return projectId === state.requirements.projectId ? state : { ...state, ...workOf(state, projectId) };
+  if (projectId === state.requirements.projectId) return state;
+  const work = workOf(state, projectId);
+  // 自動送信の設定（0.34.0）は無い案件もあるので、選んでいる案件の分が残らないよう必ず置き換える
+  return { ...state, ...work, reportSend: work.reportSend };
 }
 
 /**
@@ -321,5 +325,6 @@ export function switchWork(state: DemoState, projectId: string): DemoState {
   const next = workOf(state, projectId);
   const rest = { ...(state.projectWork ?? {}), [cur]: currentWork(state) };
   delete rest[projectId];
-  return { ...state, ...next, projectWork: rest };
+  // 自動送信の設定（0.34.0）は無い案件もあるので、前の案件の分が残らないよう必ず置き換える
+  return { ...state, ...next, reportSend: next.reportSend, projectWork: rest };
 }

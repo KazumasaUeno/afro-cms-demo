@@ -9,12 +9,15 @@ import { useNavigate } from 'react-router-dom';
 import { useProjectRoutes } from '@/features/projects/projectRoutes';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { tokens } from '@/theme/tokens';
-import { daysFromNow, formatDate, formatDateTime } from '@/services/time';
+import { formatDate, formatDateTime } from '@/services/time';
+import { isSiteLive } from '@/data/projectContent';
+import { nextDiagnosisAt } from '@/data/reportSend';
 import { AiBadge, CountUp, NotYetPanel, PageHeader, Reveal, SectionTitle, StatusPill, Surface } from '@/components/ui';
 import { useToast } from '@/hooks/useToast';
 import { useDevUser } from '@/features/dev/useDevUser';
 import { DiagnosisDialog } from './DiagnosisDialog';
 import { FollowUpDialog } from './FollowUpDialog';
+import { ReportSendPanel } from './ReportSendPanel';
 
 /** 今月の値とリニューアル前月の値（数値は案件ごと。0.30.0） */
 const pointsOf = (m: ProjectMetrics) => ({
@@ -140,6 +143,8 @@ export default function InsightsPage() {
           )}
           {/* アクセスの見本の数値が無い改善の段階の案件も、診断の提案から追加開発を起こせる */}
           {followUpButton && <Stack alignItems="center" sx={{ mt: 2 }}>{followUpButton}</Stack>}
+          {/* 公開後（運用・改善）の案件は、自動送信の設定と履歴をここでも見られる（0.34.0。第1回の診断の後に送る） */}
+          {isSiteLive(project.stage) && <Box sx={{ mt: 3 }}><ReportSendPanel /></Box>}
         </Box>
       ) : (
         <InsightsBody key={project.id} metrics={metrics} followUpButton={followUpButton} />
@@ -168,7 +173,7 @@ function InsightsBody({ metrics, followUpButton }: { metrics: ProjectMetrics; fo
     { label: '12か月後', sub: '第3回 診断' },
   ];
   const doneCycles = Math.min(state.diagnoses.length, 3);
-  const nextAt = formatDate(daysFromNow(state.diagnoses.length > 1 ? 120 : 18));
+  const nextAt = formatDate(nextDiagnosisAt(state.diagnoses));
 
   return (
     <>
@@ -326,6 +331,9 @@ function InsightsBody({ metrics, followUpButton }: { metrics: ProjectMetrics; fo
           </Stack>
         </Surface>
       </Box>
+
+      {/* 改善レポートの自動送信（0.34.0） */}
+      <Box sx={{ mt: 3 }}><ReportSendPanel /></Box>
 
       <DiagnosisDialog open={dialog.open} report={dialog.report} onClose={() => setDialog({ open: false, report: null })} />
     </>

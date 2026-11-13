@@ -1,5 +1,5 @@
 import { Box, Button, ButtonBase, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, InputAdornment, Menu, MenuItem, Stack, Tab, Tabs, TextField, Typography, ListItemText } from '@mui/material';
-import { ArrowLeft, ChevronDown, Eye, GitCompare, LayoutTemplate, Plus, Search, Send, SlidersHorizontal, Save, Rocket, CalendarClock } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Eye, GitCompare, LayoutTemplate, Plus, Search, Send, SlidersHorizontal, Save, Rocket, CalendarClock, Trash2, Undo2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { CmsPage, PageType } from '@/types';
@@ -19,7 +19,7 @@ import { Inspector } from './Inspector';
 import { NewPageDialog } from './NewPageDialog';
 import { PreviewDialog } from './PreviewDialog';
 import { CompareDialog } from './CompareDialog';
-import { samePage, STATUS_META, toLocalInput, TYPE_LABEL, validateSlug, validateTitle, TITLE_MAX } from './cmsUtils';
+import { hasLiveVersion, pageDeleteBlock, samePage, STATUS_META, toLocalInput, TYPE_LABEL, validateSlug, validateTitle, TITLE_MAX } from './cmsUtils';
 
 /** 上部バーの下に追従する列の最大高さ（上下の余白 16px ずつ） */
 const STICKY_MAX_HEIGHT = `calc(100dvh - ${tokens.layout.topbar + 32}px)`;
@@ -92,6 +92,36 @@ function ScheduleDialog({ open, onClose, onConfirm, initial }: { open: boolean; 
   );
 }
 
+/** 削除の確認（0.33.0）。消せないページは理由と次にすることだけ出す */
+function DeleteDialog({ open, page, dirty, dev, onClose, onDelete }: { open: boolean; page: CmsPage; dirty: boolean; dev: boolean; onClose: () => void; onDelete: () => void }) {
+  const block = pageDeleteBlock(page, dev);
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth aria-labelledby="page-delete-title">
+      <DialogTitle id="page-delete-title">{block ? `「${page.title}」は削除できません` : `「${page.title}」を削除しますか？`}</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary">
+          {block ?? [
+            `${TYPE_LABEL[page.type]}「${page.title}」（${page.slug}）を削除します。`,
+            page.status === 'review' ? '承認待ちの依頼も取り下げられ、公開承認の一覧から消えます。' : '',
+            dirty ? '保存していない変更も破棄されます。' : '',
+            '削除は元に戻せません（デモではこのブラウザのデータから消えます）。',
+          ].join('')}
+        </Typography>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 3 }}>
+        {block ? (
+          <Button variant="contained" onClick={onClose}>閉じる</Button>
+        ) : (
+          <>
+            <Button variant="outlined" onClick={onClose}>キャンセル</Button>
+            <Button variant="contained" color="error" onClick={onDelete}>削除する</Button>
+          </>
+        )}
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 /**
  * ページ・お知らせは案件ごと（0.30.0）。サイトの公開前（運用の段階より前）の案件は、編集の代わりに案内を出す（2026-11-13 ユーザー指示）。
  * 案件を切り替えたら編集中の状態を持ち越さないよう、案件ごとに作り直す（key）
@@ -145,6 +175,9 @@ function CmsEditor() {
   const [schedule, setSchedule] = useState(false);
   const [publishAnchor, setPublishAnchor] = useState<HTMLElement | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  // 削除の確認（0.33.0）。消せないページは理由だけ出す
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteSnap, setDeleteSnap] = useState<CmsPage | null>(null);
 
   // 保存・状態変更で store 側が変わったら、編集中でなければ追従
   useEffect(() => {
@@ -184,6 +217,27 @@ function CmsEditor() {
     if (!draft || !save(true)) return;
     dispatch({ type: 'setPageStatus', id: draft.id, status, scheduledAt, ...actor });
     toast(status === 'published' ? '公開しました（シミュレーション）' : status === 'review' ? (dev ? 'お客様に承認を依頼しました' : '承認を依頼しました') : '予約公開を設定しました', status === 'review' ? 'info' : 'success');
+  };
+
+  // 公開の取り消し（0.33.0。お客様だけ）。公開中・予約公開のページを下書きに戻す（削除の前に行う）
+  const unpublish = () => {
+    if (!draft || !save(true)) return;
+    dispatch({ type: 'setPageStatus', id: draft.id, status: 'draft', ...actor });
+    toast(`${dirty ? '変更を保存し、' : ''}${draft.status === 'scheduled' && !draft.publishedContent ? '予約公開' : '公開'}を取り消して下書きに戻しました（シミュレーション）`, 'info');
+  };
+  const remove = () => {
+    if (!draft) return;
+    const gone = draft;
+    // 閉じる動きの間もダイアログの見出しが消えたページのままになるよう、写しを残す
+    setDeleteSnap(gone);
+    setDeleteOpen(false);
+    dispatch({ type: 'deletePage', id: gone.id, ...actor });
+    // 残りのページの先頭を開く（無ければ空の一覧と作成の入口になる）
+    const next = pages.find((p) => p.id !== gone.id);
+    setSelectedId(next?.id ?? '');
+    setDraft(next);
+    setMobileView('list');
+    toast(`「${gone.title}」を削除しました`, 'info');
   };
 
   const header = (
@@ -247,9 +301,11 @@ function CmsEditor() {
               <Stack direction="row" spacing={1} alignItems="center" sx={{ flex: 1, minWidth: 0 }}>
                 <StatusPill tone="neutral" dot={false}>{TYPE_LABEL[draft.type]}</StatusPill>
                 <StatusPill tone={STATUS_META[draft.status].tone}>{STATUS_META[draft.status].label}</StatusPill>
-                <Typography variant="caption" aria-live="polite" sx={{ color: dirty ? tokens.color.warning : tokens.color.muted, fontWeight: dirty ? 650 : 500 }} noWrap>
+                <Typography variant="caption" aria-live="polite" sx={{ color: dirty ? tokens.color.warning : tokens.color.muted, fontWeight: dirty ? 650 : 500, flex: 1, minWidth: 0 }} noWrap>
                   {dirty ? '● 未保存の変更があります' : `保存済み・${draft.updatedBy ?? memberById(draft.authorId).name}`}
                 </Typography>
+                {/* 削除（0.33.0）。消せないページ（公開中・予約公開・トップページ）でも押せて、理由を出す */}
+                <IconButton onClick={() => setDeleteOpen(true)} aria-label={`「${draft.title}」を削除`} sx={{ flexShrink: 0, color: tokens.color.muted, '&:hover': { color: tokens.color.danger } }}><Trash2 size={17} /></IconButton>
               </Stack>
               {/* スマホは「プレビュー・比較・保存・承認依頼」を1行、主操作の「公開」を幅いっぱいの2行目に置く */}
               <Box sx={{
@@ -271,6 +327,12 @@ function CmsEditor() {
                     <CalendarClock size={16} style={{ marginRight: 12 }} />
                     <ListItemText primary="予約公開…" secondary="日時を指定して公開" primaryTypographyProps={{ fontWeight: 600, fontSize: 14 }} secondaryTypographyProps={{ fontSize: 12 }} />
                   </MenuItem>
+                  {hasLiveVersion(draft) && (
+                    <MenuItem onClick={() => { setPublishAnchor(null); unpublish(); }}>
+                      <Undo2 size={16} style={{ marginRight: 12 }} />
+                      <ListItemText primary="公開を取り消す" secondary="下書きに戻します（削除の前に必要）" primaryTypographyProps={{ fontWeight: 600, fontSize: 14 }} secondaryTypographyProps={{ fontSize: 12 }} />
+                    </MenuItem>
+                  )}
                 </Menu>
               </Box>
             </Stack>
@@ -314,6 +376,7 @@ function CmsEditor() {
           <Button variant="contained" onClick={() => { const id = pending; setPending(null); if (id && save()) open(id); }}>保存して移動</Button>
         </DialogActions>
       </Dialog>
+      <DeleteDialog open={deleteOpen} page={deleteOpen ? draft : deleteSnap ?? draft} dirty={dirty} dev={dev} onClose={() => setDeleteOpen(false)} onDelete={remove} />
       <PreviewDialog page={draft} open={preview} onClose={() => setPreview(false)} />
       <CompareDialog page={draft} open={compare} onClose={() => setCompare(false)} />
       <ScheduleDialog open={schedule} initial={draft.scheduledAt} onClose={() => setSchedule(false)} onConfirm={(iso) => { setSchedule(false); setStatus('scheduled', iso); }} />

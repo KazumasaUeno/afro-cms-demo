@@ -1,12 +1,17 @@
 import { Box, Button, FormControlLabel, Stack, Switch, Typography } from '@mui/material';
 import { Download, Mail } from 'lucide-react';
-import { useState } from 'react';
 import type { DiagnosisReport } from '@/types';
 import { tokens } from '@/theme/tokens';
 import { formatDateTime } from '@/services/time';
 import { useToast } from '@/hooks/useToast';
 import { AiBadge, ProgressRing, StatusPill } from '@/components/ui';
 import { TOTAL_DIAGNOSIS_QUESTIONS } from '@/data/insights';
+import { reportSendOf } from '@/data/reportSend';
+import { useDemo } from '@/store/DemoStore';
+import { useProjectRoutes } from '@/features/projects/projectRoutes';
+import { useDevUser } from '@/features/dev/useDevUser';
+import { useLocation } from 'react-router-dom';
+import { areaOf } from '@/components/layout/nav';
 
 export const DISCLAIMER = [
   '本レポートは、公開Webサイトの情報をもとにAIが分析したものです。',
@@ -42,7 +47,13 @@ function download(report: DiagnosisReport, siteName: string) {
 
 export function DiagnosisReportView({ report, siteName }: { report: DiagnosisReport; siteName: string }) {
   const toast = useToast();
-  const [auto, setAuto] = useState(true);
+  // 自動送信の設定（0.34.0。以前はこの画面だけの見た目のスイッチで、何も残らなかった）。変えられるのは開発者画面だけ。
+  // 管理者画面・お客様ポータルは状態だけ出す
+  const { state, dispatch } = useDemo();
+  const { dev } = useProjectRoutes();
+  const me = useDevUser();
+  const auto = reportSendOf(state).enabled;
+  const portal = areaOf(useLocation().pathname) === 'portal';
   const sorted = [...report.findings].sort((a, b) => ['high', 'medium', 'low'].indexOf(a.priority) - ['high', 'medium', 'low'].indexOf(b.priority));
   return (
     <Stack spacing={3}>
@@ -93,10 +104,18 @@ export function DiagnosisReportView({ report, siteName }: { report: DiagnosisRep
       </Box>
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }} justifyContent="space-between">
-        <FormControlLabel
-          control={<Switch checked={auto} onChange={(e) => { setAuto(e.target.checked); toast(e.target.checked ? '4か月ごとの自動送信をオンにしました（シミュレーション）' : '自動送信をオフにしました', 'info'); }} />}
-          label={<Stack direction="row" spacing={0.75} alignItems="center"><Mail size={15} /><Typography variant="body2">次回から顧客へ自動送信</Typography></Stack>}
-        />
+        {dev ? (
+          <FormControlLabel
+            control={<Switch checked={auto} onChange={(e) => { dispatch({ type: 'setReportSend', enabled: e.target.checked, devBy: me.id }); toast(e.target.checked ? '4か月ごとの自動送信をオンにしました（シミュレーション）' : '自動送信をオフにしました', 'info'); }} />}
+            label={<Stack direction="row" spacing={0.75} alignItems="center"><Mail size={15} /><Typography variant="body2">次回から顧客へ自動送信</Typography></Stack>}
+          />
+        ) : (
+          <Stack direction="row" spacing={0.75} alignItems="center">
+            <Mail size={15} />
+            <Typography variant="body2">{portal ? '診断のたびにメールでお届け（デモ）' : '顧客への自動送信'}</Typography>
+            <StatusPill tone={auto ? 'success' : 'neutral'}>{auto ? 'オン' : 'オフ'}</StatusPill>
+          </Stack>
+        )}
         <Button variant="contained" startIcon={<Download size={16} />} onClick={() => { download(report, siteName); toast('レポートをダウンロードしました'); }}>レポートをダウンロード</Button>
       </Stack>
     </Stack>

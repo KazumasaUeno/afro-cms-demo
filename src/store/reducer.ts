@@ -23,6 +23,8 @@ import {
 } from '@/data/users';
 import { applyProjectPatch, DEFAULT_NEXT_ACTION, projectFromDraft, projectPatchFromDraft, validateProject, type ProjectDraft } from '@/features/projects/projectForm';
 import { followUpName } from '@/features/projects/followUp';
+import { hasLiveVersion, pageDeleteBlock } from '@/features/cms/cmsUtils';
+import { REPORT_SEND_HISTORY_MAX, reportRecipients, reportSendOf } from '@/data/reportSend';
 
 /** 操作した側。省略時はアフロ（管理者画面）。お客様の画面（CMS・ポータル）からは client を渡す */
 export type Side = AnswerSide;
@@ -69,8 +71,19 @@ export type Action =
   | { type: 'setPageStatus'; id: string; status: PageStatus; scheduledAt?: string; by?: Side; devBy?: string }
   /** 承認ワークフロー: 承認依頼中のページを承認して公開する / コメントを付けて差し戻す */
   | { type: 'reviewPage'; id: string; decision: 'approve' | 'reject'; comment?: string; by?: Side }
+  /**
+   * ページ・お知らせの削除（0.33.0。2026-11-13 ユーザー指示）。下書き・承認待ちだけ。公開中・予約公開は先にお客様が公開を取り消す（下書きに戻す）。
+   * トップページ（/）は消せない。ほかの案件のページは選んでいる案件ではないので触らない（state.pages は選んでいる案件の分）
+   */
+  | { type: 'deletePage'; id: string; by?: Side; devBy?: string }
   | { type: 'addDiagnosis'; report: Omit<DiagnosisReport, 'id' | 'at' | 'cycle'> }
   | { type: 'updateSettings'; patch: Partial<DemoState['settings']> }
+  /**
+   * 改善レポートの自動送信（0.34.0。選んでいる案件の分。開発者画面のインサイトから。管理者画面・お客様ポータルは見るだけ）。
+   * オンの間は addDiagnosis のたびに送信の記録を残す。テスト送信は記録だけ残す（どちらも実際のメールは送らない）
+   */
+  | { type: 'setReportSend'; enabled: boolean; devBy?: string }
+  | { type: 'testReportSend'; devBy?: string }
   /** 開発者画面（操作者は制作エンジニア） */
   // by: 操作したメンバーの id（ログイン中の人。省略時は DEV_USER_ID）
   | { type: 'setDevTaskStatus'; id: string; status: DevTaskStatus; by?: string }
@@ -158,6 +171,18 @@ function withStatus(page: CmsPage, status: PageStatus, scheduledAt?: string): Cm
     ...(status === 'published' ? { publishedAt: at, publishedContent: page.content, scheduledAt: undefined } : {}),
     ...(status === 'scheduled' ? { scheduledAt } : { ...(status !== 'published' ? { scheduledAt: undefined } : {}) }),
   };
+}
+
+/** 改善レポートの送信の記録（選んでいる案件の分。宛先は送った時点のもの）とアクティビティを残す。実際のメールは送らない */
+function recordReportSend(state: DemoState, kind: 'diagnosis' | 'test', by: string, cycle?: number): DemoState {
+  const projectId = state.requirements.projectId;
+  const cur = reportSendOf(state);
+  const recipients = reportRecipients(clientAccountsState(state), state.projects.find((p) => p.id === projectId));
+  const entry = { id: uid('send'), at: nowIso(), kind, recipients, by, ...(cycle ? { cycle } : {}) };
+  const s = { ...state, reportSend: { ...cur, history: [entry, ...cur.history].slice(0, REPORT_SEND_HISTORY_MAX) } };
+  const what = cycle ? `第${cycle}回の改善レポート` : '改善レポート';
+  const to = recipients.map((r) => r.name).join('・');
+  return log(s, kind === 'test' ? `${what}をテスト送信しました（宛先 ${to}・シミュレーション）` : `${what}を${to}へ自動送信しました（シミュレーション）`, kind === 'test' ? 'edit' : 'ai', by === '自動' ? 'AI' : by, projectId);
 }
 
 /** 段階・進捗・次の作業・承認待ちの数は、patchOwner で書かず syncDemoProject がデモのデータから導く */
@@ -390,10 +415,19 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       if (!page) return state;
       // 公開・予約公開はお客様の操作。開発者画面からは下書き・承認依頼だけ（画面でも出さない。0.27.0）
       if (action.devBy && (action.status === 'published' || action.status === 'scheduled')) return state;
+      // 公開中の版があるページを下書きに戻す = 公開の取り消し（0.33.0）。お客様の操作なので開発者画面からは受け付けない。
+      // 公開版（publishedContent・publishedAt）も消して「下書き = 公開されていない」にする（削除の前に行う）
+      const unpublish = action.status === 'draft' && hasLiveVersion(page);
+      if (unpublish && action.devBy) return state;
       const actor = action.devBy ? devActor(state, action.devBy) : actorOf(state, action.by ?? 'afro');
-      const updated = { ...withStatus(page, action.status, action.scheduledAt), updatedBy: actor };
+      const base = withStatus(page, action.status, action.scheduledAt);
+      const updated = { ...(unpublish ? { ...base, publishedContent: undefined, publishedAt: undefined } : base), updatedBy: actor };
       const s = { ...state, pages: state.pages.map((p) => (p.id === page.id ? updated : p)) };
       const kind: Activity['kind'] = action.status === 'published' || action.status === 'scheduled' ? 'publish' : 'edit';
+      // 公開中・予約公開を下書きに戻すのは「公開の取り消し」（0.33.0。削除の前にお客様が行う）
+      if (unpublish) {
+        return log(s, `「${page.title}」の${page.status === 'scheduled' && !page.publishedContent ? '予約公開' : '公開'}を取り消しました（下書きに戻しました）`, 'publish', actor);
+      }
       return log(s, `「${page.title}」を${STATUS_LABEL[action.status]}しました`, kind, actor);
     }
 
@@ -414,9 +448,21 @@ function baseReducer(state: DemoState, action: Action): DemoState {
         : log(s, `「${page.title}」を差し戻しました${note ? `（${note}）` : ''}`, 'comment', actor);
     }
 
+    case 'deletePage': {
+      const page = state.pages.find((p) => p.id === action.id);
+      // 画面でも止めているが、公開中・予約公開・トップページはここでも消さない
+      if (!page || pageDeleteBlock(page, !!action.devBy)) return state;
+      const actor = action.devBy ? devActor(state, action.devBy) : actorOf(state, action.by ?? 'afro');
+      const kind = page.type === 'news' ? 'お知らせ' : 'ページ';
+      const note = page.status === 'review' ? '（承認待ちを取り下げ）' : '';
+      return log({ ...state, pages: state.pages.filter((p) => p.id !== page.id) }, `${kind}「${page.title}」を削除しました${note}`, 'edit', actor);
+    }
+
     case 'addDiagnosis': {
       const report: DiagnosisReport = { ...action.report, id: uid('diag'), at: nowIso(), cycle: state.diagnoses.length + 1 };
       let s = log({ ...state, diagnoses: [report, ...state.diagnoses] }, `第${report.cycle}回 AIサイト診断を作成（スコア ${report.score}・デモデータ）`, 'ai', 'AI');
+      // 自動送信がオンなら、診断の後にお客様へ送った記録を残す（0.34.0。実際のメールは送らない）
+      if (reportSendOf(state).enabled) s = recordReportSend(s, 'diagnosis', '自動', report.cycle);
       // 運用の段階の案件は、最初の診断で改善の段階へ進める（運用から先へ進む手段が無かった。2026-11-13 ユーザー指示。0.30.1）
       const ownerId = state.requirements.projectId;
       if (state.projects.find((p) => p.id === ownerId)?.stage === 'operation') {
@@ -428,6 +474,20 @@ function baseReducer(state: DemoState, action: Action): DemoState {
 
     case 'updateSettings':
       return { ...state, settings: { ...state.settings, ...action.patch } };
+
+    case 'setReportSend': {
+      // 設定は開発者画面だけ（管理者画面・お客様ポータルは見るだけ。画面でも出さない）
+      if (!action.devBy) return state;
+      const cur = reportSendOf(state);
+      if (cur.enabled === action.enabled) return state;
+      const actor = devActor(state, action.devBy);
+      const s = { ...state, reportSend: { ...cur, enabled: action.enabled, updatedAt: nowIso(), updatedBy: actor } };
+      return log(s, `改善レポートの自動送信を${action.enabled ? 'オン' : 'オフ'}にしました`, 'edit', actor, state.requirements.projectId);
+    }
+
+    case 'testReportSend':
+      if (!action.devBy) return state;
+      return recordReportSend(state, 'test', devActor(state, action.devBy), state.diagnoses[0]?.cycle);
 
     case 'setDevTaskStatus': {
       const dev = devState(state);

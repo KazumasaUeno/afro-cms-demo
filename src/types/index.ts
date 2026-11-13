@@ -282,6 +282,30 @@ export interface DiagnosisReport {
   isDemo: true;
 }
 
+/**
+ * 改善レポートの自動送信（0.34.0。2026-11-13 ユーザー指示）。案件ごと。デモのため実際のメールは送らず、送信の記録だけ残す。
+ * 無い保存データ・初期データは reportSendOf() で「オン・履歴なし」とみなす（以前の画面のスイッチの初期値がオンだったため）
+ */
+export interface ReportSendState {
+  enabled: boolean;
+  /** 新しい順。診断の後の自動送信（diagnosis）と、画面からのテスト送信（test） */
+  history: ReportSendEntry[];
+  updatedAt?: ISODate;
+  updatedBy?: string;
+}
+
+export interface ReportSendEntry {
+  id: string;
+  at: ISODate;
+  kind: 'diagnosis' | 'test';
+  /** 送ったレポートの回（テスト送信は最新の回。診断が無ければ無し） */
+  cycle?: number;
+  /** 送った時点の宛先（お客様アカウント。未登録の案件は案件のお客様の担当者名だけ） */
+  recipients: { name: string; email?: string }[];
+  /** 操作した人（自動送信は「自動」） */
+  by: string;
+}
+
 /* ---------- アクティビティ ---------- */
 
 export interface Activity {
@@ -452,6 +476,8 @@ export interface ProjectContent {
  * 公開後のデータは 0.30.0 で足したので、0.29 までの保存データには無い（読み込み時に補う。store/DemoStore.tsx。版は上げない）
  */
 export interface ProjectWork extends Partial<ProjectContent> {
+  /** 改善レポートの自動送信（0.34.0。無ければオン・履歴なし） */
+  reportSend?: ReportSendState;
   requirements: RequirementSession;
   sitemap: SitemapState;
   design: DesignState;
@@ -476,6 +502,8 @@ export interface DemoState {
   /** ページ・お知らせと AI 診断（選んでいる案件の分。持ち主は requirements.projectId。ほかの案件の分は projectWork。0.30.0） */
   pages: CmsPage[];
   diagnoses: DiagnosisReport[];
+  /** 改善レポートの自動送信（選んでいる案件の分。ほかの案件の分は projectWork。0.34.0 で追加。無ければオン・履歴なし） */
+  reportSend?: ReportSendState;
   activities: Activity[];
   settings: { reducedMotion: 'system' | 'on' | 'off'; companyName: string };
   /** 開発者画面のデータ。0.5.0 で追加したため、それ以前の保存データには無い（devState() で補う） */
