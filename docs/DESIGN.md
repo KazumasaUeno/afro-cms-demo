@@ -62,7 +62,7 @@ M3 Expressive の spring: `tokens.motion.spring`（fast 800/34・default 380/31�
 
 `Surface`（M3 Outlined card）／ `PageHeader` ／ `SectionTitle` ／ `CountUp` ／ `ProgressRing` ／ `StatusPill` ／ `AiBadge`・`AiMark` ／ `MemberAvatar` ／ `Reveal` ／ `StageTrack`（6段階: ヒアリング→要件定義→制作→品質管理→運用→改善）
 
-レイアウト（`src/components/layout`）: `AppShell`（PC は M3 Expressive Navigation rail 幅 96〔ロゴ・メニュー・プレゼン・設定・ログイン中の情報の Popover〕、lg 未満はモーダルの Navigation drawer、スマホは Navigation bar、Top app bar）／ `BuildFlowNav`（要件定義→サイトマップ→デザイン）／ `ResetDemoDialog`
+レイアウト（`src/components/layout`）: `AppShell`（PC は M3 Expressive Navigation rail 幅 96。面は `navBg` で本文の地 `bg` と区別し右端に罫線〔ロゴ・メニュー・プレゼン・設定・ログイン中の情報の Popover〕、lg 未満はモーダルの Navigation drawer、スマホは Navigation bar、Top app bar）／ `BuildFlowNav`（要件定義→サイトマップ→デザイン）／ `ResetDemoDialog`
 
 ## M3 にしていないもの（意図）
 

@@ -359,7 +359,7 @@ export function AppShell() {
         open={open}
         onClose={() => setOpen(false)}
         sx={{ display: { lg: 'none' } }}
-        PaperProps={{ sx: { width: 280, bgcolor: tokens.color.bg, borderRadius: '0 16px 16px 0' } }}
+        PaperProps={{ sx: { width: 280, bgcolor: tokens.color.navBg, borderRadius: '0 16px 16px 0' } }}
       >
         <SidebarContent onNavigate={() => setOpen(false)} />
       </Drawer>

@@ -226,7 +226,7 @@ export function Sidebar() {
       sx={{
         display: { xs: 'none', lg: 'flex' }, flexDirection: 'column', alignItems: 'center', gap: 1.5,
         position: 'fixed', inset: '0 auto 0 0', width: tokens.layout.sidebar, py: 2, px: 1,
-        bgcolor: tokens.color.bg, zIndex: 20, overflowY: 'auto', overflowX: 'hidden', // M3 Navigation rail は罫線なし
+        bgcolor: tokens.color.navBg, borderRight: `1px solid ${tokens.color.outlineVariant}`, zIndex: 20, overflowY: 'auto', overflowX: 'hidden', // 本文の地と区別するため面の色を変え、境目に罫線
       }}
     >
       <ButtonBase
