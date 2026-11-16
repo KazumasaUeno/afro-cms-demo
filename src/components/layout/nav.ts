@@ -76,7 +76,7 @@ const DEV_ITEMS: NavItem[] = [
   // 選択中の規則: URL が属するメニュー項目を選択中にし、どこから開いたかでは変えない。
   //   メニューに項目が無いサイトマップ（/dev/sitemap）・品質（/dev/quality）・ページ編集（/dev/cms）・改善（/dev/insights。0.27.0）は、
   //   常に「プロジェクト」を選択中にする（下の match）
-  { to: '/dev/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/dev/projects', '/dev/hearing', '/dev/requirements', '/dev/sitemap', '/dev/quality', '/dev/cms', '/dev/insights', '/dev/assets', '/dev/forms', '/dev/chat', '/dev/client-view'], hint: '担当案件の6段階' },
+  { to: '/dev/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/dev/projects', '/dev/hearing', '/dev/requirements', '/dev/sitemap', '/dev/quality', '/dev/cms', '/dev/insights', '/dev/assets', '/dev/forms', '/dev/client-view'], hint: '担当案件の6段階' },
   // ヒアリング（/dev/hearing・/dev/requirements）はメニューから外した（2026-11-12 ユーザー指示）。プロジェクト詳細・担当案件から開き、「プロジェクト」を選択中にする
   { to: '/dev/tasks', label: '構築タスク', icon: ListTodo, match: ['/dev/tasks'], hint: 'ページごとの実装状況' },
   // 自動チェック（/dev/checks）は 0.19.0 でメニューから外した（11/10 レビュー）。URL はダッシュボードへ転送する
@@ -85,6 +85,8 @@ const DEV_ITEMS: NavItem[] = [
   // デザイン（2026-11-13 ユーザー指示「左メニューに追加して、ほかと違う色に」）。デザイン要件定義（/dev/design/requirements）もここを選択中にする。
   // 下部タブの添字が変わらないよう末尾に足す（スマホは「メニュー」から開く）
   { to: '/dev/design', label: 'デザイン', icon: Palette, match: ['/dev/design'], hint: 'デザイン要件定義とデザインスタジオ', tone: 'info' },
+  // 相談チャット（0.38.1。2026-11-16 ユーザー指示「開発者画面からも開く」）。表示中の案件の会話。下部タブの添字が変わらないよう末尾に足す
+  { to: '/dev/chat', label: '相談', icon: MessageSquare, match: ['/dev/chat'], hint: 'お客様からの相談に返信' },
 ];
 
 export const SETTINGS_ITEM: NavItem = { to: '/settings', label: '設定', icon: Settings, match: ['/settings'], hint: 'デモの設定' };
