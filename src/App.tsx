@@ -24,6 +24,8 @@ const UsersPage = lazy(() => import('@/features/users/UsersPage'));
 // 素材ドライブ（0.36.0）・フォーム管理（0.37.0）
 const AssetDrivePage = lazy(() => import('@/features/assets/AssetDrivePage'));
 const FormsPage = lazy(() => import('@/features/forms/FormsPage'));
+// 担当者への相談チャット（0.38.0）
+const ChatPage = lazy(() => import('@/features/chat/ChatPage'));
 // お客様ポータル・開発者画面
 const PublishApprovalsPage = lazy(() => import('@/features/portal/PublishApprovalsPage'));
 const DevDashboardPage = lazy(() => import('@/features/dev/DevDashboardPage'));
@@ -87,6 +89,9 @@ const router = createBrowserRouter([
       // 運用の段階の素材ドライブ（0.36.0）・フォーム（0.37.0）。管理は開発者画面（担当案件だけ。DevProjectGate）。管理者画面の /assets・/forms は見るだけ
       { path: 'dev/assets', element: <AssetDrivePage /> },
       { path: 'dev/forms', element: <FormsPage /> },
+      // 相談チャット・お客様の確認・承認画面の説明用の表示（0.38.0。担当案件だけ。DevProjectGate）
+      { path: 'dev/chat', element: <ChatPage /> },
+      { path: 'dev/client-view/approvals', element: <PortalApprovalsPage preview /> },
       // 開発者画面のヒアリング（0.25.0）。管理者画面の /ai-studio・/ai-studio/hearing と同じ画面を開発者画面の中で開く（担当案件だけ。DevProjectGate）
       { path: 'dev/hearing', element: <RequirementsPage /> },
       { path: 'dev/hearing/answers', element: <HearingAnswersPage /> },
@@ -104,9 +109,14 @@ const router = createBrowserRouter([
       { path: 'portal/signage', element: <PortalSignagePage /> },
       // 問い合わせの確認・対応状況（0.37.0）。フォームの定義は見るだけ
       { path: 'portal/forms', element: <FormsPage /> },
+      // 担当者への相談（0.38.0）。管理者画面の /chat・開発者画面の /dev/chat と同じ会話
+      { path: 'portal/chat', element: <ChatPage /> },
       { path: 'insights', element: <InsightsPage /> },
       { path: 'assets', element: <AssetDrivePage /> },
       { path: 'forms', element: <FormsPage /> },
+      // 相談チャット（0.38.0）・お客様の確認・承認画面を説明用に見るだけで開く（0.38.0。承認は記録しない）
+      { path: 'chat', element: <ChatPage /> },
+      { path: 'client-view/approvals', element: <PortalApprovalsPage preview /> },
       { path: 'users', element: <UsersPage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: '*', element: <Navigate to="/" replace /> },

@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { MemberAvatar, PageHeader, ProgressRing, Reveal, SectionTitle, StageTrack, StatusPill, Surface } from '@/components/ui';
 import { useDemo, currentProject } from '@/store/DemoStore';
 import { isSiteLive } from '@/data/projectContent';
-import { useToast } from '@/hooks/useToast';
 import { formatDate, formatDateTime, relativeTime } from '@/services/time';
 import { memberById } from '@/data/members';
 import { STAGES, stageIndex } from '@/data/projects';
@@ -28,7 +27,6 @@ const SITE_STATUSES: { id: PageStatus; label: string; tone: PillTone }[] = [
 export default function PortalHomePage() {
   const { state } = useDemo();
   const navigate = useNavigate();
-  const toast = useToast();
   const project = currentProject(state);
   const owner = memberById(project.ownerId);
   const steps = approvalSteps(state);
@@ -172,7 +170,7 @@ export default function PortalHomePage() {
                   <Typography variant="caption">アフロ株式会社・{owner.role}</Typography>
                 </Box>
               </Stack>
-              <Button fullWidth variant="outlined" startIcon={<MessageSquare size={16} />} sx={{ mt: 2 }} onClick={() => toast('デモのため、メッセージは送信されません', 'info')}>
+              <Button fullWidth variant="outlined" startIcon={<MessageSquare size={16} />} sx={{ mt: 2 }} onClick={() => navigate('/portal/chat')}>
                 担当者に相談する
               </Button>
             </Surface>

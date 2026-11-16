@@ -1,6 +1,6 @@
 import { Box, Button, Stack, Typography } from '@mui/material';
-import { ArrowRight, FileSearch, ListChecks, Sparkles } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, ArrowRight, FileSearch, ListChecks, Sparkles } from 'lucide-react';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { AiBadge, PageHeader, Reveal, Surface } from '@/components/ui';
 import { RouteLoader } from '@/components/layout/RouteLoader';
 import { useCurrentRequirements } from '@/repositories';
@@ -43,6 +43,10 @@ export default function RequirementsDocPage() {
 
   return (
     <Box>
+      {/* 改善提案の表示後にプロジェクト詳細へ戻る導線（0.38.0。2026-11-16 ユーザー指示。プロジェクト詳細の「プロジェクト一覧」と同じ形） */}
+      <Button component={RouterLink} to={routes.project(req.projectId)} size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>
+        プロジェクト詳細
+      </Button>
       <PageHeader
         eyebrow="② 要件定義"
         icon={<Sparkles size={14} />}

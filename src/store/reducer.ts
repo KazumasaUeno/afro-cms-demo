@@ -28,6 +28,7 @@ import { REPORT_SEND_HISTORY_MAX, reportRecipients, reportSendOf } from '@/data/
 import { withoutPage, withVersion } from '@/data/pageHistory';
 import { ASSET_LIMITS, assetDeleteBlock, assetsOf, overStorageBudget, uploadCount, validateAssetName, validThumb } from '@/data/assets';
 import { formsOf, validateForm, type FormDraft } from '@/data/forms';
+import { CHAT_LIMITS, chatOf, validateChat } from '@/data/chat';
 import type { Asset, PageVersionKind } from '@/types';
 
 /** 操作した側。省略時はアフロ（管理者画面）。お客様の画面（CMS・ポータル）からは client を渡す */
@@ -96,6 +97,8 @@ export type Action =
   | { type: 'addAsset'; asset: Pick<Asset, 'name' | 'kind' | 'folder' | 'mime' | 'size' | 'src'>; devBy?: string }
   | { type: 'renameAsset'; id: string; name: string; folder: string; devBy?: string }
   | { type: 'deleteAsset'; id: string; devBy?: string }
+  /** 担当者への相談チャット（0.38.0。表示中の案件の会話）。by: client = お客様ポータル、afro = 管理者画面。devBy があれば開発者画面のその人 */
+  | { type: 'sendChat'; text: string; by: Side; devBy?: string }
   /**
    * フォーム管理（0.37.0。選んでいる案件の分）。フォームの作成・編集・受付の停止は開発者画面だけ（devBy）。
    * 受信した問い合わせの対応状況はお客様ポータルだけ（by: 'client'）。管理者画面は見るだけ
@@ -555,6 +558,18 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       if (!cur || assetDeleteBlock(cur, state.pages)) return state;
       const actor = devActor(state, action.devBy);
       return log({ ...state, assets: { items: items.filter((x) => x.id !== cur.id) } }, `素材「${cur.name}」を削除しました`, 'edit', actor, state.requirements.projectId);
+    }
+
+    case 'sendChat': {
+      // アクティビティには残さない（「最近の動き」・お客様の最後の操作の表示を相談で動かさないため）
+      if (validateChat(action.text)) return state;
+      // 画面の表示（currentProject）と同じ案件に保存する（currentProjectId が無効なときの補いも同じ）
+      const projectId = currentProject(state).id;
+      const side: 'client' | 'afro' = action.devBy ? 'afro' : action.by;
+      const author = side === 'client' ? clientActorOf(state, projectId) : action.devBy ? devActor(state, action.devBy) : ACTOR.afro;
+      const msg = { id: uid('chat'), at: nowIso(), side, author, text: action.text.trim() };
+      const messages = [...chatOf(state, projectId), msg].slice(-CHAT_LIMITS.messages);
+      return { ...state, chats: { ...(state.chats ?? {}), [projectId]: messages } };
     }
 
     case 'saveForm': {

@@ -1,9 +1,9 @@
 import { Box, Button, ButtonBase, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography } from '@mui/material';
-import { ArrowRight, BadgeCheck, Check, CheckCircle2, ClipboardCheck, Download, Lock, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BadgeCheck, Check, CheckCircle2, ClipboardCheck, Download, Eye, Lock, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { PageHeader, Reveal, StatusPill, Surface } from '@/components/ui';
-import { useDemo } from '@/store/DemoStore';
+import { currentProject, useDemo } from '@/store/DemoStore';
 import { useCurrentRequirements, useRepositories } from '@/repositories';
 import { useWrite } from '@/hooks/useWrite';
 import { useToast } from '@/hooks/useToast';
@@ -19,6 +19,7 @@ import { approvalSteps, type ApprovalKey, type ApprovalStep } from './portalStep
 import { sitemapCreated } from '@/data/sitemap';
 import { pendingConfirmations } from '@/features/requirements/assignment';
 import { downloadRequirementsDoc } from '@/features/requirements/requirementsDoc';
+import { useProjectRoutes } from '@/features/projects/projectRoutes';
 
 const AREA = AREAS.portal;
 
@@ -72,7 +73,11 @@ const CONFIRM: Record<Exclude<ApprovalKey, 'quality'>, { title: string; body: st
   design: { title: 'このデザインで承認しますか？', body: '承認すると、採用したデザインで全ページの制作に進みます。承認後は案を変更できません。', done: 'トップデザインを承認しました' },
 };
 
-export default function PortalApprovalsPage() {
+/**
+ * preview: 管理者画面・開発者画面から、お客様への画面説明のために同じ画面を見るだけで開く（/client-view/approvals・/dev/client-view/approvals。
+ * 0.38.0。2026-11-16 ユーザー指示）。承認・デザインの選択は記録しない（選択はこの画面の中だけの仮の表示）。表示の出し分けで、セキュリティ境界ではない
+ */
+export default function PortalApprovalsPage({ preview = false }: { preview?: boolean }) {
   // サイトマップ・デザインの承認は repository の範囲外（live では隠す。§14）なので DemoStore のまま
   const { state, dispatch } = useDemo();
   // デザイン案は案件ごと（ポータルは MINAMO COFFEE。0.29.5）
@@ -83,6 +88,10 @@ export default function PortalApprovalsPage() {
   const write = useWrite();
   const navigate = useNavigate();
   const { hash } = useLocation();
+  const projectRoutes = useProjectRoutes();
+  // 説明用の表示でのデザインの仮の選択（保存しない）
+  const [previewDesign, setPreviewDesign] = useState<DesignId | null>(null);
+  const selectedDesign = preview ? (previewDesign ?? state.design.selected) : state.design.selected;
   const [confirm, setConfirm] = useState<Exclude<ApprovalKey, 'quality'> | null>(null);
   // 閉じるアニメーションの間も文言を残す（null にすると一瞬空になる）
   const lastConfirm = useRef<Exclude<ApprovalKey, 'quality'>>('requirements');
@@ -104,6 +113,11 @@ export default function PortalApprovalsPage() {
 
   const approve = () => {
     if (!confirm) return;
+    if (preview) {
+      toast('説明用の表示のため、承認は記録されません', 'info');
+      setConfirm(null);
+      return;
+    }
     if (confirm === 'requirements') void write(approvals.approveRequirements(req.projectId, 'client'), CONFIRM.requirements.done);
     else {
       if (confirm === 'sitemap') dispatch({ type: 'approveSitemap', by: 'client' });
@@ -121,8 +135,21 @@ export default function PortalApprovalsPage() {
 
   return (
     <>
+      {preview && (
+        <Button component={RouterLink} to={projectRoutes.detail(currentProject(state).id)} size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>
+          プロジェクト詳細
+        </Button>
+      )}
+      {preview && (
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }} role="note" sx={{ mb: 3, px: 2, py: 1.5, borderRadius: 3, bgcolor: tokens.color.infoSoft, color: tokens.color.infoInk }}>
+          <Eye size={18} style={{ flexShrink: 0 }} aria-hidden />
+          <Typography variant="body2" sx={{ flex: 1, color: 'inherit', fontWeight: 600 }}>
+            お客様ポータルの画面を、説明用に表示しています。承認・デザインの選択をしても記録されません。
+          </Typography>
+        </Stack>
+      )}
       <PageHeader
-        eyebrow="お客様ポータル"
+        eyebrow={preview ? 'お客様ポータル（説明用の表示）' : 'お客様ポータル'}
         icon={<ClipboardCheck size={15} />}
         title="確認・承認"
         description="制作の節目ごとに、内容をご確認のうえ承認をお願いします。承認した日時はアフロの管理画面にも記録されます。"
@@ -215,11 +242,11 @@ export default function PortalApprovalsPage() {
 
         {/* 3. トップデザイン */}
         <Reveal delay={0.08}>
-          <StepCard step={byKey.design} action={approveBtn('design', !state.design.selected)}>
+          <StepCard step={byKey.design} action={approveBtn('design', !selectedDesign)}>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0,1fr))' }, gap: 1.5 }} role="radiogroup" aria-label="採用するデザイン">
               {DESIGN_VARIANTS.map((v0) => {
                 const v = personalize(v0, designCtx);
-                const selected = state.design.selected === v.id;
+                const selected = selectedDesign === v.id;
                 const locked = !!state.design.approvedAt;
                 return (
                   <ButtonBase
@@ -227,7 +254,7 @@ export default function PortalApprovalsPage() {
                     role="radio"
                     aria-checked={selected}
                     disabled={locked && !selected}
-                    onClick={() => !locked && dispatch({ type: 'selectDesign', id: v.id as DesignId })}
+                    onClick={() => { if (locked) return; if (preview) setPreviewDesign(v.id as DesignId); else dispatch({ type: 'selectDesign', id: v.id as DesignId }); }}
                     sx={{
                       display: 'block', textAlign: 'left', p: 1, borderRadius: 3,
                       border: `2px solid ${selected ? AREA.color : tokens.color.border}`,
@@ -249,7 +276,7 @@ export default function PortalApprovalsPage() {
                 );
               })}
             </Box>
-            {!state.design.selected && <Typography variant="caption" sx={{ display: 'block', mt: 1.5 }}>案を 1 つ選ぶと承認できます。</Typography>}
+            {!selectedDesign && <Typography variant="caption" sx={{ display: 'block', mt: 1.5 }}>案を 1 つ選ぶと承認できます。</Typography>}
           </StepCard>
         </Reveal>
 
@@ -257,7 +284,7 @@ export default function PortalApprovalsPage() {
         <Reveal delay={0.12}>
           <StepCard
             step={byKey.quality}
-            action={<Button variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate('/portal/quality')} sx={{ flexShrink: 0, alignSelf: { xs: 'stretch', sm: 'auto' } }}>チェックする</Button>}
+            action={<Button variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => (preview ? toast('説明用の表示では、品質チェックの画面は開けません（お客様ポータルで開きます）', 'info') : navigate('/portal/quality'))} sx={{ flexShrink: 0, alignSelf: { xs: 'stretch', sm: 'auto' } }}>チェックする</Button>}
           >
             {byKey.quality.progress && (
               <Box>

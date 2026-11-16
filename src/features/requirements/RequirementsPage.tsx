@@ -1,6 +1,6 @@
 import { Box, Button, Stack, useMediaQuery, useTheme } from '@mui/material';
-import { ListChecks, Sparkles } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, ListChecks, Sparkles } from 'lucide-react';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { AiBadge, PageHeader, Reveal } from '@/components/ui';
 import { RouteLoader } from '@/components/layout/RouteLoader';
@@ -41,6 +41,12 @@ export default function RequirementsPage() {
 
   return (
     <Box>
+      {/* 改善提案の表示後にプロジェクト詳細へ戻る導線（0.38.0。2026-11-16 ユーザー指示。プロジェクト詳細の「プロジェクト一覧」と同じ形） */}
+      {view === 'result' && (
+        <Button component={RouterLink} to={routes.project(req.projectId)} size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>
+          プロジェクト詳細
+        </Button>
+      )}
       {/* 要件定義の段階では、サイトマップ・デザインの段階ナビを出さない（2026-11-10 決定。承認後は提案書の「サイトマップへ進む」から進む） */}
       <PageHeader
         eyebrow={view === 'result' ? '② 要件定義' : '① ヒアリング'}

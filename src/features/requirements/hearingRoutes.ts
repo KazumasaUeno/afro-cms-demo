@@ -10,10 +10,12 @@ export interface HearingRoutes {
   answers: string;
   /** 要件定義書の画面（0.28.0。AI 分析の前は「まだ作成されていません」、分析後は要件定義書）。demo だけ（live の router には無い） */
   doc: string;
+  /** その案件のプロジェクト詳細（改善提案の「プロジェクトに戻る」。0.38.0。live の router にもある） */
+  project: (projectId: string) => string;
 }
 
-const ADMIN: HearingRoutes = { dev: false, input: '/ai-studio', answers: '/ai-studio/hearing', doc: '/ai-studio/requirements' };
-const DEV: HearingRoutes = { dev: true, input: '/dev/hearing', answers: '/dev/hearing/answers', doc: '/dev/requirements' };
+const ADMIN: HearingRoutes = { dev: false, input: '/ai-studio', answers: '/ai-studio/hearing', doc: '/ai-studio/requirements', project: (id) => `/projects/${id}` };
+const DEV: HearingRoutes = { dev: true, input: '/dev/hearing', answers: '/dev/hearing/answers', doc: '/dev/requirements', project: (id) => `/dev/projects/${id}` };
 
 /**
  * ヒアリング・要件定義の画面は、管理者画面（/ai-studio）と開発者画面（/dev/hearing。0.25.0）で同じ部品を使う。

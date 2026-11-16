@@ -28,6 +28,9 @@ export interface ProjectRoutes {
   quality: string;
   cms: string;
   insights: string;
+  /** 相談チャット（0.38.0）と、お客様の確認・承認画面の説明用の表示（0.38.0） */
+  chat: string;
+  clientApprovals: string;
   /** お客様の対応状況の行から開く先（開発者画面に無い画面は null = 押せない行） */
   approval: Record<ApprovalKey, string | null>;
 }
@@ -44,6 +47,8 @@ const ADMIN: ProjectRoutes = {
   quality: '/quality',
   cms: '/portal/pages',
   insights: '/insights',
+  chat: '/chat',
+  clientApprovals: '/client-view/approvals',
   approval: { requirements: '/ai-studio/requirements', sitemap: '/site', design: '/ai-studio/design', quality: '/quality' },
 };
 
@@ -57,7 +62,7 @@ function devRoutes(h: HearingRoutes): ProjectRoutes {
   return {
     dev: true,
     list: '/dev/projects',
-    detail: (id) => `/dev/projects/${id}`,
+    detail: h.project,
     // 品質・運用・改善も開発者画面の中で開く（2026-11-11 ユーザー決定。0.27.0）
     stageLinks: {
       hearing: [{ label: 'ヒアリングを入力', to: h.answers }],
@@ -74,6 +79,8 @@ function devRoutes(h: HearingRoutes): ProjectRoutes {
     quality,
     cms,
     insights,
+    chat: '/dev/chat',
+    clientApprovals: '/dev/client-view/approvals',
     approval: { requirements: h.doc, sitemap, design, quality },
   };
 }

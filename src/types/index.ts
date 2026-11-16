@@ -399,6 +399,18 @@ export interface FormsState {
   submissions: FormSubmission[];
 }
 
+/* ---------- 担当者への相談チャット（0.38.0） ---------- */
+
+export interface ChatMessage {
+  id: string;
+  at: ISODate;
+  /** client = お客様（ポータル）、afro = アフロ（管理者画面・開発者画面） */
+  side: 'client' | 'afro';
+  /** 送った人の表示名（送った時点の名前で残す） */
+  author: string;
+  text: string;
+}
+
 /* ---------- アクティビティ ---------- */
 
 export interface Activity {
@@ -607,6 +619,8 @@ export interface DemoState {
   pageHistory?: Record<string, PageVersion[]>;
   assets?: AssetState;
   forms?: FormsState;
+  /** 担当者への相談チャット（案件 id → 古い順。0.38.0。無い案件は見本のあいさつ。data/chat.ts） */
+  chats?: Record<string, ChatMessage[]>;
   activities: Activity[];
   settings: { reducedMotion: 'system' | 'on' | 'off'; companyName: string };
   /** 開発者画面のデータ。0.5.0 で追加したため、それ以前の保存データには無い（devState() で補う） */

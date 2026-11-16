@@ -13,3 +13,6 @@ dist-live
 
 # エミュレータ用のビルド出力（npm run build:emulator）
 dist-emulator
+
+# TypeScript のビルド情報（生成物）
+*.tsbuildinfo

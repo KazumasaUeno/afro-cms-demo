@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react';
-import { Box, ButtonBase, Stack, Typography } from '@mui/material';
-import { ArrowRight, CheckCircle2, CircleDot, Clock, UserRound } from 'lucide-react';
+import { Box, Button, ButtonBase, Stack, Typography } from '@mui/material';
+import { ArrowRight, CheckCircle2, CircleDot, Clock, Eye, MessageSquare, UserRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { ISODate, Project } from '@/types';
 import { useDemo } from '@/store/DemoStore';
-import { useRepositories } from '@/repositories';
+import { DATA_MODE, useRepositories } from '@/repositories';
 import { StatusPill, Surface } from '@/components/ui';
 import { relativeTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
@@ -71,6 +71,11 @@ export function ClientStatusPanel({ project }: { project: Project }) {
       <Typography variant="caption" sx={{ display: 'block', mb: 2 }}>
         {project.clientName}・最後の操作 {s.lastClientAt ? relativeTime(s.lastClientAt) : 'まだありません'}
       </Typography>
+      {/* お客様への画面説明（承認は記録しない）と相談チャット（0.38.0。2026-11-16 ユーザー指示）。demo だけ（live の router に無い） */}
+      {DATA_MODE === 'demo' && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 2 }}>
+        <Button size="small" variant="outlined" startIcon={<Eye size={15} />} onClick={() => go(routes.clientApprovals)}>お客様の確認・承認画面を見る</Button>
+        <Button size="small" variant="outlined" startIcon={<MessageSquare size={15} />} onClick={() => go(routes.chat)}>相談チャット</Button>
+      </Stack>}
 
       {/* いまお願いしていること */}
       <Box component="section" aria-labelledby="client-status-now" sx={{ mb: 2 }}>
