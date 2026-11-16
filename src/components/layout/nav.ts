@@ -1,6 +1,7 @@
 import { tokens } from '@/theme/tokens';
+import type { DemoState } from '@/types';
 import {
-  Building2, ClipboardCheck, MessageSquare, Code2, FileText, FolderKanban, House, Inbox, LayoutDashboard, ListChecks, ListTodo, Monitor,
+  Building2, ClipboardCheck, MessageSquare, Code2, FolderKanban, House, LayoutDashboard, ListTodo, Monitor,
   Palette, Rocket, ScrollText, Settings, Stamp, UserRound, UsersRound, type LucideIcon,
 } from 'lucide-react';
 
@@ -15,6 +16,13 @@ export interface NavItem {
   exact?: boolean;
   /** ほかの項目と色を変えて目立たせる（info = 青。開発者画面の「デザイン」。2026-11-13 ユーザー指示） */
   tone?: 'info';
+  /** 'designApproved': 選んでいる案件のトップデザインをお客様が承認するまでメニューに出さない（お客様ポータル。2026-11-16 ユーザー指示） */
+  requires?: 'designApproved';
+}
+
+/** いま出すメニュー項目（requires の条件を満たすものだけ）。表示の出し分けで、画面（URL）自体は止めない */
+export function visibleItems(items: NavItem[], state: Pick<DemoState, 'design'>): NavItem[] {
+  return items.filter((i) => i.requires !== 'designApproved' || !!state.design.approvedAt);
 }
 
 /**
@@ -59,15 +67,15 @@ const ADMIN_ITEMS: NavItem[] = [
 const PORTAL_ITEMS: NavItem[] = [
   { to: '/portal', label: 'ホーム', icon: House, match: ['/portal'], exact: true, hint: '制作の進み具合' },
   // ヒアリング（/portal/requirements）は 0.18.0 で廃止（受託開発ではアフロが入力する）。URL は確認・承認へ転送する
-  { to: '/portal/approvals', label: '確認・承認', icon: ClipboardCheck, match: ['/portal/approvals'], hint: '要件・サイトマップ・デザイン' },
-  { to: '/portal/quality', label: '品質確認', icon: ListChecks, match: ['/portal/quality'], hint: 'お客様側のチェック' },
-  { to: '/portal/pages', label: 'ページ・お知らせ', icon: FileText, match: ['/portal/pages'], hint: '編集と公開' },
-  { to: '/portal/publish', label: '公開承認', icon: Stamp, match: ['/portal/publish'], hint: '更新の承認ワークフロー' },
-  { to: '/portal/reports', label: 'レポート', icon: ScrollText, match: ['/portal/reports'], hint: '改善診断' },
-  // 下部タブは添字 [0,1,3,5] で選んでいるため、新しい項目は末尾に足す
-  { to: '/portal/signage', label: 'サイネージ', icon: Monitor, match: ['/portal/signage'], hint: '店頭の画面' },
-  // フォームの問い合わせ（0.37.0）。下部タブの添字が変わらないよう末尾に足す
-  { to: '/portal/forms', label: 'フォーム', icon: Inbox, match: ['/portal/forms'], hint: '問い合わせの確認' },
+  // 品質確認（/portal/quality）はメニューから外した（2026-11-16 ユーザー指示）。画面は残し、確認・承認の「品質チェック」から開く。開いている間は確認・承認を選択中にする
+  { to: '/portal/approvals', label: '確認・承認', icon: ClipboardCheck, match: ['/portal/approvals', '/portal/quality'], hint: '要件・サイトマップ・デザイン' },
+  // 公開承認・レポート・サイネージはトップデザインの承認後に出す（requires。2026-11-16 ユーザー指示）
+  // ページ・お知らせ（/portal/pages）はメニューから外した（2026-11-16 ユーザー指示）。画面は残し、ホームの「サイトの更新」から開く
+  { to: '/portal/publish', label: '公開承認', icon: Stamp, match: ['/portal/publish'], hint: '更新の承認ワークフロー', requires: 'designApproved' },
+  { to: '/portal/reports', label: 'レポート', icon: ScrollText, match: ['/portal/reports'], hint: '改善診断', requires: 'designApproved' },
+  // 下部タブは添字で選んでいるため（下の bottom）、新しい項目は末尾に足す
+  { to: '/portal/signage', label: 'サイネージ', icon: Monitor, match: ['/portal/signage'], hint: '店頭の画面', requires: 'designApproved' },
+  // フォームの問い合わせ（0.37.0）はメニューから外した（2026-11-16 ユーザー指示）。画面（/portal/forms）は残す
   // 担当者への相談（0.38.0）。下部タブの添字が変わらないよう末尾に足す
   { to: '/portal/chat', label: '相談', icon: MessageSquare, match: ['/portal/chat'], hint: '担当者に相談' },
 ];

@@ -3,7 +3,7 @@ import { ExternalLink, Presentation, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { tokens } from '@/theme/tokens';
-import { AREAS, areaOf, isActive, type AreaDef, type NavItem } from './nav';
+import { AREAS, areaOf, isActive, visibleItems, type AreaDef, type NavItem } from './nav';
 import { Logo, LogoMark } from './Logo';
 import { navIndicatorSx, navToneSx, toneIndicator } from './navIndicator';
 import { MemberAvatar } from '@/components/ui';
@@ -156,6 +156,7 @@ function AreaFooter({ area }: { area: AreaDef }) {
 export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { pathname } = useLocation();
   const area = AREAS[areaOf(pathname)];
+  const { state } = useDemo();
   return (
     <Stack sx={{ height: '100%', p: 2, gap: 2, overflowY: 'auto' }}>
       <Stack spacing={1.5} sx={{ px: 1, py: 0.5 }}>
@@ -165,7 +166,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       <Box component="nav" aria-label={`${area.label}のメニュー`}>
         <Stack spacing={0.5}>
-          {area.items.map((item) => <NavRow key={item.to} item={item} color={area.color} onNavigate={onNavigate} />)}
+          {visibleItems(area.items, state).map((item) => <NavRow key={item.to} item={item} color={area.color} onNavigate={onNavigate} />)}
         </Stack>
       </Box>
 
@@ -220,6 +221,7 @@ function AccountButton({ area }: { area: AreaDef }) {
 export function Sidebar() {
   const { pathname } = useLocation();
   const area = AREAS[areaOf(pathname)];
+  const { state } = useDemo();
   return (
     <Box
       component="aside"
@@ -243,7 +245,7 @@ export function Sidebar() {
 
       <Box component="nav" aria-label={`${area.label}のメニュー`} sx={{ width: '100%' }}>
         <Stack spacing={1.5}>
-          {area.items.map((item) => (
+          {visibleItems(area.items, state).map((item) => (
             <RailItem key={item.to} to={item.to} label={item.label} icon={item.icon} hint={item.hint} active={isActive(item, pathname)} color={area.color} tone={item.tone} />
           ))}
         </Stack>

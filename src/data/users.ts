@@ -97,14 +97,28 @@ export function seedClientAccounts(): ClientAccount[] {
   ];
 }
 
-/** 初期の開発者画面の権限（上野・黒田のみ） */
+/** 初期は全メンバーが開発者画面を開ける（デモで全員の開発者画面を見られるように。2026-11-16 ユーザー指示。以前は上野・黒田だけ） */
 export function seedDevAccess(): Record<string, boolean> {
-  return Object.fromEntries(MEMBERS.map((m) => [m.id, m.id === 'm1' || m.id === 'm3']));
+  return Object.fromEntries(MEMBERS.map((m) => [m.id, true]));
 }
 
-/** 初期の開発担当（黒田は MINAMO COFFEE と北条建設、上野は MINAMO COFFEE。ほかは未担当） */
+/**
+ * 初期の開発担当（2026-11-16 ユーザー指示「各開発者に担当案件を割り振って」。以前は上野・黒田だけ）。
+ * 役割に合う段階の案件を持たせる: ディレクター＝ヒアリング中、デザイナー＝デザイン〜制作、エンジニア＝要件定義〜制作、コンテンツ編集＝運用・改善、品質管理＝制作〜品質管理。
+ * MINAMO COFFEE（p1。開発データがある唯一の案件）は上野・黒田・佐倉の 3 人で持つ
+ */
+const SEED_DEV_PROJECTS: Record<string, string[]> = {
+  m1: ['p1', 'p7'],
+  m2: ['p1', 'p3', 'p4'],
+  m3: ['p1', 'p2', 'p3'],
+  m4: ['p5', 'p6', 'p8'],
+  m5: ['p3', 'p4'],
+};
+/** 初期データの版（DemoState.devSeed）と、版 1（0.39.5 まで）の担当。保存データが版 1 のままの人だけ新しい担当に置き換える */
+export const DEV_SEED_REV = 2;
+export const OLD_SEED_DEV_PROJECTS: Record<string, string[]> = { m1: ['p1'], m2: [], m3: ['p1', 'p2'], m4: [], m5: [] };
 export function seedDevProjects(): Record<string, string[]> {
-  return Object.fromEntries(MEMBERS.map((m) => [m.id, m.id === 'm3' ? ['p1', 'p2'] : m.id === 'm1' ? ['p1'] : []]));
+  return Object.fromEntries(MEMBERS.map((m) => [m.id, [...(SEED_DEV_PROJECTS[m.id] ?? [])]]));
 }
 
 export const accountByEmail = (accounts: ClientAccount[], email: string) => {

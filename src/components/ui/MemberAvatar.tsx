@@ -23,13 +23,11 @@ function readableOn(bg: string): string {
 }
 
 /** id は固定のメンバー（MEMBERS）。登録した開発者など MEMBERS に無い人は person で渡す */
-export function MemberAvatar({ id, person, size = 28 }: { id: string; person?: Member; size?: number }) {
+/** tooltip=false: 名前が横に出ている所（開発者の切り替えなど）では、役職つきの吹き出しを出さない（2026-11-16 ユーザー指示「役職は要らない」） */
+export function MemberAvatar({ id, person, size = 28, tooltip = true }: { id: string; person?: Member; size?: number; tooltip?: boolean }) {
   const m = person ?? memberById(id);
-  return (
-    <Tooltip title={`${m.name}（${m.role}）`}>
-      <Avatar sx={{ width: size, height: size, bgcolor: m.color, color: readableOn(m.color), fontSize: Math.max(12, size * 0.42), letterSpacing: '-0.02em' }} alt={m.name}>{m.initials}</Avatar>
-    </Tooltip>
-  );
+  const avatar = <Avatar sx={{ width: size, height: size, bgcolor: m.color, color: readableOn(m.color), fontSize: Math.max(12, size * 0.42), letterSpacing: '-0.02em' }} alt={m.name}>{m.initials}</Avatar>;
+  return tooltip ? <Tooltip title={`${m.name}（${m.role}）`}>{avatar}</Tooltip> : avatar;
 }
 
 export function MemberStack({ ids, size = 26 }: { ids: string[]; size?: number }) {

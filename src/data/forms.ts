@@ -76,11 +76,48 @@ const SEED_FIELDS: FormField[] = [
   { id: 'f-body', label: 'お問い合わせ内容', type: 'textarea', required: true },
 ];
 
-const SEED_SUBMISSIONS: { name: string; email: string; tel: string; kind: string; body: string; hours: number; done?: boolean }[] = [
-  { name: '山田 花子', email: 'hanako.yamada@example.com', tel: '090-0000-0001', kind: '商品・サービスについて', body: '営業時間と定休日を教えてください。', hours: 5 },
-  { name: '佐藤 健', email: 'ken.sato@example.com', tel: '', kind: '法人のご相談', body: '社内イベント向けに 50 名分の注文を検討しています。見積をお願いできますか。', hours: 26 },
+type SeedSubmission = { name: string; email: string; tel: string; kind: string; body: string; hours: number; done?: boolean };
+
+/**
+ * 問い合わせの見本（架空）。案件の業種に合わせた文面にする（0.39.2。2026-11-16 ユーザー指示。以前は全案件で喫茶店向けの同じ文面だった）。
+ * 種類は SEED_FIELDS の選択肢（商品・サービスについて / 法人のご相談 / 取材・その他）から選ぶ。ここに無い案件は GENERIC
+ */
+const SEED_SUBMISSIONS: Record<string, SeedSubmission[]> = {
+  // MINAMO COFFEE（飲食・EC）
+  p1: [
+    { name: '山田 花子', email: 'hanako.yamada@example.com', tel: '090-0000-0001', kind: '商品・サービスについて', body: '営業時間と定休日を教えてください。', hours: 5 },
+    { name: '佐藤 健', email: 'ken.sato@example.com', tel: '', kind: '法人のご相談', body: '社内イベント向けに 50 名分のコーヒーの注文を検討しています。見積をお願いできますか。', hours: 26 },
+    { name: '鈴木 美咲', email: 'misaki.suzuki@example.com', tel: '080-0000-0002', kind: '取材・その他', body: '地域情報誌の取材のご相談です。来月の掲載を予定しています。', hours: 74, done: true },
+    { name: 'Emily Clark', email: 'emily.clark@example.com', tel: '', kind: '商品・サービスについて', body: 'Do you have an English menu? （英語での問い合わせの見本）', hours: 150, done: true },
+  ],
+  // SORANO Precision（製造業）
+  p5: [
+    { name: '高橋 誠', email: 'makoto.takahashi@example.com', tel: '03-0000-0001', kind: '法人のご相談', body: 'アルミ部品の試作（10 個）をお願いしたいです。図面を送るので、納期と概算をいただけますか。', hours: 4 },
+    { name: '伊藤 由美', email: 'yumi.ito@example.com', tel: '', kind: '商品・サービスについて', body: '5 軸加工機での加工に対応している材質の一覧はありますか。', hours: 30 },
+    { name: '渡辺 剛', email: 'tsuyoshi.watanabe@example.com', tel: '090-0000-0003', kind: '取材・その他', body: '工場見学（10 名程度）の受け入れは可能でしょうか。', hours: 80, done: true },
+    { name: '中村 亮', email: 'ryo.nakamura@example.com', tel: '', kind: '取材・その他', body: '技術職の中途採用の募集はありますか。', hours: 160, done: true },
+  ],
+  // Machi no Manabiya（教育・NPO）
+  p6: [
+    { name: '小林 さくら', email: 'sakura.kobayashi@example.com', tel: '080-0000-0004', kind: '商品・サービスについて', body: '小学 3 年生の子どもが参加できる講座はありますか。申し込み方法も教えてください。', hours: 6 },
+    { name: '加藤 浩', email: 'hiroshi.kato@example.com', tel: '', kind: '取材・その他', body: '週末のボランティアに参加したいです。説明会の日程はありますか。', hours: 28 },
+    { name: '吉田 恵', email: 'megumi.yoshida@example.com', tel: '090-0000-0005', kind: '法人のご相談', body: '地元企業として、子ども向け講座への協賛を検討しています。', hours: 90, done: true },
+    { name: '山本 翔', email: 'sho.yamamoto@example.com', tel: '', kind: '商品・サービスについて', body: '先週の講座の資料をいただくことはできますか。', hours: 170, done: true },
+  ],
+  // Hanami Ryokan（宿泊・観光）
+  p8: [
+    { name: '松本 亜希', email: 'aki.matsumoto@example.com', tel: '090-0000-0006', kind: '商品・サービスについて', body: '来月の土曜日に 2 名で 1 泊したいです。露天風呂付きの客室は空いていますか。', hours: 3 },
+    { name: '井上 大輔', email: 'daisuke.inoue@example.com', tel: '', kind: '法人のご相談', body: '社員旅行（20 名・1 泊 2 食）の団体プランの見積をお願いします。', hours: 22 },
+    { name: '木村 優子', email: 'yuko.kimura@example.com', tel: '080-0000-0007', kind: '商品・サービスについて', body: '小麦アレルギーがあります。夕食の対応は可能でしょうか。', hours: 70, done: true },
+    { name: 'Lucas Martin', email: 'lucas.martin@example.com', tel: '', kind: '商品・サービスについて', body: 'Is there a shuttle bus from the station? （英語での問い合わせの見本）', hours: 140, done: true },
+  ],
+};
+
+/** 業種の決まっていない案件（新しく作った案件など）の見本 */
+const GENERIC: SeedSubmission[] = [
+  { name: '山田 花子', email: 'hanako.yamada@example.com', tel: '090-0000-0001', kind: '商品・サービスについて', body: 'サービスの料金と、申し込みまでの流れを教えてください。', hours: 5 },
+  { name: '佐藤 健', email: 'ken.sato@example.com', tel: '', kind: '法人のご相談', body: '法人での利用を検討しています。資料をお送りいただけますか。', hours: 26 },
   { name: '鈴木 美咲', email: 'misaki.suzuki@example.com', tel: '080-0000-0002', kind: '取材・その他', body: '地域情報誌の取材のご相談です。来月の掲載を予定しています。', hours: 74, done: true },
-  { name: 'Emily Clark', email: 'emily.clark@example.com', tel: '', kind: '商品・サービスについて', body: 'Do you have an English menu? （英語での問い合わせの見本）', hours: 150, done: true },
 ];
 
 /** 通知先の初期値。その案件のお客様アカウントのメール（無ければサイトの info@） */
@@ -98,7 +135,7 @@ function seedForms(state: Pick<DemoState, 'clientAccounts'>, project: Project): 
     id: formId, name: 'お問い合わせ', fields: SEED_FIELDS, recipients: seedRecipients(state, project), enabled: true,
     updatedAt: daysAgo(20), updatedBy: 'アフロ',
   };
-  const submissions: FormSubmission[] = SEED_SUBMISSIONS.map((x, i) => ({
+  const submissions: FormSubmission[] = (SEED_SUBMISSIONS[project.id] ?? GENERIC).map((x, i) => ({
     id: `sub-${project.id}-${i + 1}`, formId, at: hoursAgo(x.hours),
     values: { 'f-name': x.name, 'f-email': x.email, 'f-tel': x.tel, 'f-kind': x.kind, 'f-body': x.body },
     status: x.done ? 'done' : 'open',

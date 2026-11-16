@@ -9,6 +9,8 @@ import { seedWorkFor, switchWork, withContent } from './projectWork';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { seedContentFor } from '@/data/projectContent';
 import { seedSignage } from '@/data/signage';
+import { MEMBERS } from '@/data/members';
+import { DEV_SEED_REV, OLD_SEED_DEV_PROJECTS, seedDevProjects } from '@/data/users';
 import { moveDesignAnswers } from '@/features/design/designReq';
 import { emptySitemap, sitemapCreated } from '@/data/sitemap';
 import { useToast } from '@/hooks/useToast';
@@ -114,12 +116,28 @@ export function withClientMarks(state: DemoState): DemoState {
   return changed ? { ...state, activities } : state;
 }
 
+/**
+ * 開発者画面の権限は全員にある（2026-11-16 ユーザー指示）。0.39.5 までの保存データ（devSeed なし）に 1 回だけ当てる（版は上げない）:
+ * - 固定のメンバー全員に開発者画面の権限を付ける（登録した開発者の権限はそのまま）
+ * - 担当が初期のまま（OLD_SEED_DEV_PROJECTS と同じ）の人だけ、新しい初期の担当にする（管理者が変えた担当は残す）
+ * 当てたら devSeed を付け、以後は管理者の変更（権限を外すなど）を上書きしない
+ */
+function withDevSeed(state: DemoState): DemoState {
+  if (state.devSeed === DEV_SEED_REV) return state;
+  const access = { ...(state.devAccess ?? {}), ...Object.fromEntries(MEMBERS.map((m) => [m.id, true])) };
+  const saved = state.devProjects ?? {};
+  const fresh = seedDevProjects();
+  const same = (a: string[] | undefined, b: string[] | undefined) => JSON.stringify(a ?? []) === JSON.stringify(b ?? []);
+  const devProjects = { ...saved, ...Object.fromEntries(MEMBERS.filter((m) => same(saved[m.id], OLD_SEED_DEV_PROJECTS[m.id])).map((m) => [m.id, fresh[m.id]])) };
+  return { ...state, devAccess: access, devProjects, devSeed: DEV_SEED_REV };
+}
+
 function init(): DemoState {
   // 保存済みのデータに古い進捗が残っていても、デモのデータに合わせ直す。
   // 0.27 までのヒアリングにあったデザインの 3 問の回答は、デザイン要件定義へ移す（0.28.0。版は上げない）
   // 要件定義書の承認前に持っているサイトマップは外す（0.29.4。版は上げない）
   // 公開後のデータ（ページ・診断・サイネージ）を案件ごとに分ける（0.30.0。版は上げない）
-  return syncDemoProject(withClientMarks(withoutEarlySitemap(withCurrentWork(withProjectContent(withSeedProjects(moveDesignAnswers(withAfroMode(loadJson(STORAGE_KEY, isDemoState) ?? createSeedState()))))))));
+  return syncDemoProject(withDevSeed(withClientMarks(withoutEarlySitemap(withCurrentWork(withProjectContent(withSeedProjects(moveDesignAnswers(withAfroMode(loadJson(STORAGE_KEY, isDemoState) ?? createSeedState())))))))));
 }
 
 export function DemoStoreProvider({ children }: { children: ReactNode }) {

@@ -130,7 +130,7 @@ export const TOPICS: Topic[] = [
   // 「お知らせを公開したい」を公開日の質問と取り違えないよう、launch より先に判定する
   {
     id: 'news', label: 'お知らせを出したい', keywords: ['お知らせ', 'ニュース', '記事', '更新', 'ページ'],
-    answer: (state) => !live(state) ? notYet(state, 'お知らせの更新') : ({ text: '「ページ・お知らせ」から書けます。タイトルと本文を書いて、すぐ公開するか、日時を決めて予約公開できます。', action: { label: 'お知らせを書く', to: '/portal/pages?new=news' } }),
+    answer: (state) => !live(state) ? notYet(state, 'お知らせの更新') : ({ text: 'ホームの「サイトの更新」の「お知らせを書く」から書けます。タイトルと本文を書いて、すぐ公開するか、日時を決めて予約公開できます。', action: { label: 'お知らせを書く', to: '/portal/pages?new=news' } }),
   },
   {
     id: 'launch', label: '公開はいつ？', keywords: ['公開', 'いつ', '予定', '納期', 'リリース'],

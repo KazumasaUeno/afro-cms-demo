@@ -636,6 +636,8 @@ export interface DemoState {
   devAccess?: Record<string, boolean>;
   /** 開発者が担当するプロジェクト（Member.id → Project.id の一覧）。0.14.0 で追加（devProjectsState() で補う） */
   devProjects?: Record<string, string[]>;
+  /** 開発者の権限・担当の初期データの版（2 = 全員に権限と担当。0.39.6）。古い保存データに 1 回だけ新しい初期データを当てる印 */
+  devSeed?: number;
   /** 管理者が登録した開発者。0.15.0 で追加（devUsersState() で補う） */
   devUsers?: DevUser[];
 }

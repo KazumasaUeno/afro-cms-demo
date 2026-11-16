@@ -1,5 +1,5 @@
 import { Box, Button, Collapse, FormControlLabel, Stack, Switch, Typography } from '@mui/material';
-import { BadgeCheck, ChevronDown, ListChecks } from 'lucide-react';
+import { BadgeCheck, ChevronDown, ListChecks, Lock } from 'lucide-react';
 import { useState } from 'react';
 import { PageHeader, ProgressRing, Surface } from '@/components/ui';
 import { useDemo } from '@/store/DemoStore';
@@ -24,6 +24,8 @@ export default function PortalQualityPage() {
   const done = QUALITY_ITEMS.filter((i) => !!checks[i.id]?.clientAt).length;
   const total = QUALITY_ITEMS.length;
   const pct = total ? Math.round((done / total) * 100) : 0;
+  // 全項目を確認した＝品質チェックを承認した後は、チェックを変えられない（2026-11-16 ユーザー指示。reducer でも止めている）
+  const approved = total > 0 && done === total;
 
   return (
     <>
@@ -35,6 +37,11 @@ export default function PortalQualityPage() {
       />
 
       <Stack spacing={{ xs: 2, md: 2.5 }}>
+        {approved && (
+          <Box role="note" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 1, borderRadius: 2, bgcolor: tokens.color.surfaceMuted, color: tokens.color.inkSoft, fontSize: 13.5 }}>
+            <Lock size={15} aria-hidden /> 品質チェックは承認済みのため、チェックを変更できません
+          </Box>
+        )}
         <Surface>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }}>
             <Stack direction="row" spacing={2} alignItems="center" sx={{ flex: 1 }}>
@@ -89,7 +96,7 @@ export default function PortalQualityPage() {
                           <Typography variant="body2" sx={{ fontWeight: 550 }}>{item.text}</Typography>
                           {checks[item.id]?.afroAt && <Typography variant="caption" sx={{ color: tokens.color.primary }}>アフロ確認済み</Typography>}
                         </Box>
-                        <CheckToggle side="client" label="お客様" check={checks[item.id]} itemText={item.text} onToggle={() => dispatch({ type: 'toggleQuality', itemId: item.id, side: 'client' })} />
+                        <CheckToggle side="client" label="お客様" check={checks[item.id]} itemText={item.text} readOnly={approved} onToggle={() => dispatch({ type: 'toggleQuality', itemId: item.id, side: 'client' })} />
                       </Stack>
                     ))}
                   </Stack>

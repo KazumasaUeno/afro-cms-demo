@@ -1,6 +1,6 @@
 import { Box, Button, IconButton, Stack, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography, ButtonBase } from '@mui/material';
 import {
-  addEdge, Background, BackgroundVariant, Controls, MarkerType, MiniMap, Panel, ReactFlow, ReactFlowProvider,
+  addEdge, Background, BackgroundVariant, Controls, MiniMap, Panel, ReactFlow, ReactFlowProvider,
   useEdgesState, useNodesState, useReactFlow, type Connection, type Edge, type EdgeChange, type NodeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -15,20 +15,13 @@ import { tokens } from '@/theme/tokens';
 import { useThemeMode } from '@/theme/ThemeMode';
 import { LANDSCAPE_PHONE, TOUCH } from '@/theme/media';
 import type { SitemapEdge, SitemapNode, SitemapVariant } from '@/types';
-import { PageNode, KIND_META, type PageFlowNode } from './PageNode';
+import { KIND_META, type PageFlowNode } from './PageNode';
+import { defaultEdgeOptions, nodeTypes, toFlow } from './flowConfig';
 import { AddPageDialog, type NewPageInput } from './AddPageDialog';
 import { sitemapMetrics, validateLabel } from './metrics';
 import { useProjectRoutes } from '@/features/projects/projectRoutes';
 import { sitemapCreated } from '@/data/sitemap';
 
-const nodeTypes = { page: PageNode };
-const defaultEdgeOptions = {
-  type: 'smoothstep',
-  style: { stroke: tokens.color.outline, strokeWidth: 1.5 },
-  markerEnd: { type: MarkerType.ArrowClosed, color: tokens.color.outline, width: 16, height: 16 },
-};
-
-const toFlow = (n: SitemapNode): PageFlowNode => ({ id: n.id, type: 'page', position: n.position, data: n.data, deletable: n.data.kind !== 'home' });
 const toStoreNodes = (ns: PageFlowNode[]): SitemapNode[] =>
   ns.map((n) => ({ id: n.id, position: { x: Math.round(n.position.x), y: Math.round(n.position.y) }, data: n.data }));
 const toStoreEdges = (es: Edge[]): SitemapEdge[] => es.map((e) => ({ id: e.id, source: e.source, target: e.target }));

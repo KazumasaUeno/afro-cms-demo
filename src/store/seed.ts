@@ -3,7 +3,7 @@ import { seedActivities, seedProjects } from '@/data/projects';
 import { emptySitemap } from '@/data/sitemap';
 import { seedDev } from '@/data/dev';
 import { seedContentFor } from '@/data/projectContent';
-import { seedClientAccounts, seedDevAccess, seedDevProjects } from '@/data/users';
+import { DEV_SEED_REV, seedClientAccounts, seedDevAccess, seedDevProjects } from '@/data/users';
 import { blankRequirements, seedWorkFor } from './projectWork';
 
 /** dev（0.5.0）・requirements.mode / answerMeta（0.9.0）・signage（0.11.0）・clientAccounts / devAccess（0.13.0）・devProjects（0.14.0）は任意項目のため版を上げていない。古い保存データは既定値で補う */
@@ -38,6 +38,7 @@ export const createSeedState = (): DemoState => ({
   clientAccounts: seedClientAccounts(),
   devAccess: seedDevAccess(),
   devProjects: seedDevProjects(),
+  devSeed: DEV_SEED_REV,
 });
 
 export function isDemoState(v: unknown): v is DemoState {

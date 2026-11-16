@@ -179,7 +179,7 @@ function NewsPickerDialog({ open, pages, onClose, onPick }: { open: boolean; pag
           </Stack>
         ) : (
           <Typography variant="body2" sx={{ px: 1.5, py: 1.25, borderRadius: 2, bgcolor: tokens.color.bgSubtle }}>
-            公開中のお知らせがありません。「ページ・お知らせ」でお知らせを公開すると、ここから選べます。
+            公開中のお知らせがありません。ホームの「サイトの更新」からお知らせを公開すると、ここから選べます。
           </Typography>
         )}
       </DialogContent>

@@ -36,8 +36,8 @@ export function DeviceToggle({ value, onChange }: { value: Device; onChange: (d:
   );
 }
 
-/** 表示する画面（トップ＋改善後サイトマップの主要ページ最大 2 つ。0.29.5） */
-function ScreenToggle({ ctx, value, onChange }: { ctx: DesignContext; value: number; onChange: (n: number) => void }) {
+/** 表示する画面（トップ＋改善後サイトマップの主要ページ最大 2 つ。0.29.5。お客様ポータルの承認でも使う。0.39.3） */
+export function ScreenToggle({ ctx, value, onChange }: { ctx: DesignContext; value: number; onChange: (n: number) => void }) {
   const screens = ['トップ', ...ctx.pages.map((p) => p.label)];
   return (
     <ToggleButtonGroup exclusive size="small" value={value} onChange={(_, v) => v !== null && onChange(v)} aria-label="表示する画面" sx={{ flexWrap: 'wrap' }}>

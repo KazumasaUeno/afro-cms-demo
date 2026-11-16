@@ -5,20 +5,22 @@ import { Suspense, lazy, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useOutlet } from 'react-router-dom';
 import { tokens } from '@/theme/tokens';
 import { LANDSCAPE_PHONE } from '@/theme/media';
-import { useRepositories } from '@/repositories';
-import { useDemo, currentProject } from '@/store/DemoStore';
+import { DATA_MODE, useRepositories } from '@/repositories';
+import { useDemo, currentProject, devAccessState } from '@/store/DemoStore';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useThemeMode } from '@/theme/ThemeMode';
 import { navIndicatorSx } from './navIndicator';
 import { Sidebar, SidebarContent } from './Sidebar';
 import { LogoMark } from './Logo';
-import { AREA_ORDER, AREAS, areaOf, isActive, SETTINGS_ITEM, type AreaDef } from './nav';
+import { AREA_ORDER, AREAS, areaOf, isActive, SETTINGS_ITEM, visibleItems, type AreaDef } from './nav';
 import { ResetDemoDialog } from './ResetDemoDialog';
 import { RouteLoader } from './RouteLoader';
-import { LOGIN_PATH, logoutArea, useSessions } from '@/services/session';
+import { LOGIN_PATH, loginArea, logoutArea, useSessions } from '@/services/session';
+import { MemberAvatar } from '@/components/ui';
+import { allDevPeople } from '@/data/people';
+import { devProjectsOf, useDevProjects, useDevUser } from '@/features/dev/useDevUser';
 import type { Project } from '@/types';
 import { DevProjectGate } from '@/features/dev/DevProjectGate';
-import { useDevProjects } from '@/features/dev/useDevUser';
 
 /** プロジェクトの切替。projects を渡すとその中だけを出す（開発者画面: 担当のプロジェクトだけ） */
 function ProjectSwitcher({ projects, emptyText, onSelect }: { projects?: Project[]; emptyText?: string; onSelect?: (id: string) => void }) {
@@ -126,6 +128,69 @@ function AreaSwitcher({ area }: { area: AreaDef }) {
 }
 
 
+/**
+ * デモ用: 開発者画面を、どの開発者として表示するかを切り替える（2026-11-16 ユーザー指示「全ての開発者の画面が見れるように」）。
+ * 開発者画面のログイン（メールアドレス）を選んだ人に付け替えるだけで、担当プロジェクト・名前・操作者の記録はその人のものになる。
+ * 表示中の案件が新しい人の担当外なら、その人の最初の担当案件へ切り替える（担当外の案内画面で止めない）。無効の開発者・開発者画面の権限が無い人はログインできないので選べない
+ */
+function DevUserSwitcher() {
+  const { state } = useDemo();
+  const { projects: projectsRepo } = useRepositories();
+  const me = useDevUser();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const people = allDevPeople(state);
+  const access = devAccessState(state);
+  const choose = (id: string) => {
+    setAnchor(null);
+    const person = people.find((p) => p.id === id);
+    if (!person || person.id === me.id) return;
+    loginArea('dev', person.email);
+    const mine = devProjectsOf(state, person.id);
+    if (mine.length && !mine.some((p) => p.id === currentProject(state).id)) projectsRepo.select(mine[0].id);
+    // プロジェクト詳細は URL の案件で開いているので、担当外になったら一覧へ戻す
+    const m = /^\/dev\/projects\/([^/]+)/.exec(pathname);
+    if (m && !mine.some((p) => p.id === m[1])) navigate('/dev/projects');
+  };
+  return (
+    <>
+      <Tooltip title="デモ用: どの開発者として開発者画面を表示するかを切り替えます">
+        <ButtonBase
+          onClick={(e) => setAnchor(e.currentTarget)}
+          aria-haspopup="menu"
+          aria-label={`表示する開発者を切り替える（現在: ${me.name}）`}
+          sx={{ gap: 1, px: 1, height: { xs: 44, md: 36 }, minWidth: 0, borderRadius: '10px', border: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface, flexShrink: 0, '&:hover': { borderColor: tokens.color.borderStrong } }}
+        >
+          <Box component="span" sx={{ display: 'flex' }} aria-hidden><MemberAvatar id={me.id} person={me} size={22} tooltip={false} /></Box>
+          <Typography variant="body2" noWrap sx={{ fontWeight: 600, display: { xs: 'none', md: 'block' }, maxWidth: 120 }}>{me.name}</Typography>
+          <ChevronDown size={15} color={tokens.color.muted} style={{ flexShrink: 0 }} />
+        </ButtonBase>
+      </Tooltip>
+      <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)} slotProps={{ paper: { sx: { minWidth: 280 } } }}>
+        <MenuItem disabled sx={{ opacity: '1 !important' }}><Typography variant="caption">デモ用: 表示する開発者</Typography></MenuItem>
+        {people.map((p) => {
+          const count = devProjectsOf(state, p.id).length;
+          // 権限の無い人を選ぶと、ログインの確認（isRevoked）でログイン画面へ戻されるので選べなくする
+          const blocked = p.disabled || !access[p.id];
+          return (
+            <MenuItem key={p.id} selected={p.id === me.id} disabled={blocked} onClick={() => choose(p.id)}>
+              <ListItemIcon><MemberAvatar id={p.id} person={p} size={24} tooltip={false} /></ListItemIcon>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{p.name}</Typography>
+                <Typography variant="caption" noWrap sx={{ display: 'block' }}>
+                  {p.disabled ? '無効（ログインできません）' : !access[p.id] ? '開発者画面の権限なし' : `担当 ${count} 件`}{p.partnerCompany ? `・${p.partnerCompany}` : ''}
+                </Typography>
+              </Box>
+              {p.id === me.id && <Check size={16} color={tokens.color.primary} />}
+            </MenuItem>
+          );
+        })}
+      </Menu>
+    </>
+  );
+}
+
 /** 開発者画面: ログイン中のメンバーの担当プロジェクトだけを切り替えられる */
 function DevProjectSwitcher() {
   const projects = useDevProjects();
@@ -189,6 +254,7 @@ function TopBar({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
       <Box sx={{ display: { xs: 'none', sm: 'block', lg: 'none' } }}><LogoMark size={28} /></Box>
       {/* 管理者画面は案件をプロジェクト一覧・詳細で選ぶので、上部バーに案件名を置かない。開発者画面は担当案件を切り替える。
           お客様ポータルは本来その会社の案件だけだが、デモでは全案件のポータルを見せるため切り替えられる（0.39.0。2026-11-16 ユーザー指示） */}
+      {area.id === 'dev' && DATA_MODE === 'demo' && <DevUserSwitcher />}
       {area.id === 'dev' && <DevProjectSwitcher />}
       {area.id === 'portal' && (
         <Tooltip placement="right" title="デモ用: どのお客様のポータルを表示するかを切り替えます（本番のお客様は自社の案件だけ）">
@@ -236,7 +302,8 @@ function TopBar({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
 /** スマホ・タブレット下部のタブ（よく使う4画面＋メニュー） */
 function BottomTabs({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
   const { pathname } = useLocation();
-  const items = area.bottom;
+  const { state } = useDemo();
+  const items = visibleItems(area.bottom, state);
   return (
     <Box
       component="nav"
@@ -294,6 +361,10 @@ function routeLabel(pathname: string): string {
   if (pathname === '/dev/forms') return '開発者画面・フォーム';
   if (pathname === '/assets') return '素材ドライブ';
   if (pathname === '/forms') return 'フォーム';
+  // メニューから外したお客様ポータルの画面（2026-11-16）。メニューの項目名を使えないので、ここで名前を付ける
+  if (pathname === '/portal/forms') return 'お客様ポータル・フォーム';
+  if (pathname === '/portal/quality') return 'お客様ポータル・品質確認';
+  if (pathname === '/portal/pages') return 'お客様ポータル・ページ・お知らせ';
   if (pathname === '/chat') return '相談チャット';
   if (pathname === '/dev/chat') return '開発者画面・相談チャット';
   if (pathname === '/client-view/approvals' || pathname === '/dev/client-view/approvals') return 'お客様の確認・承認（説明用）';

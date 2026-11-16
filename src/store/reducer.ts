@@ -396,6 +396,8 @@ function baseReducer(state: DemoState, action: Action): DemoState {
     }
 
     case 'toggleQuality': {
+      // お客様が全項目を確認した（品質チェックを承認した）後は、お客様側のチェックを変えられない（2026-11-16 ユーザー指示）
+      if (action.side === 'client' && clientQualityApproved(state)) return state;
       const prev = state.qualityChecks[action.itemId] ?? {};
       const atKey = action.side === 'afro' ? 'afroAt' : 'clientAt';
       const byKey = action.side === 'afro' ? 'afroBy' : 'clientBy';
@@ -409,6 +411,7 @@ function baseReducer(state: DemoState, action: Action): DemoState {
     }
 
     case 'bulkQuality': {
+      if (action.side === 'client' && clientQualityApproved(state)) return state;
       const at = nowIso();
       const atKey = action.side === 'afro' ? 'afroAt' : 'clientAt';
       const byKey = action.side === 'afro' ? 'afroBy' : 'clientBy';
@@ -835,6 +838,11 @@ export function devAccessState(state: DemoState): Record<string, boolean> {
 }
 
 /** 開発者の担当プロジェクト（0.14.0 より前の保存データには無いので初期値で補う。描画のたびに作り直さないよう 1 回だけ作る） */
+/** 品質チェックの承認（お客様が全項目を確認済み。portalSteps の「承認済み」と同じ条件） */
+export function clientQualityApproved(state: Pick<DemoState, 'qualityChecks'>): boolean {
+  return QUALITY_ITEMS.every((i) => !!state.qualityChecks[i.id]?.clientAt);
+}
+
 let devProjectsFallback: Record<string, string[]> | null = null;
 export function devProjectsState(state: DemoState): Record<string, string[]> {
   return state.devProjects ?? (devProjectsFallback ??= seedDevProjects());

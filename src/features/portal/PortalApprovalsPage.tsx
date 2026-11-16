@@ -1,7 +1,7 @@
-import { Box, Button, ButtonBase, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography } from '@mui/material';
-import { ArrowLeft, ArrowRight, BadgeCheck, Check, CheckCircle2, ClipboardCheck, Download, Eye, Lock, Sparkles } from 'lucide-react';
+import { Box, Button, ButtonBase, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography } from '@mui/material';
+import { ArrowLeft, ArrowRight, BadgeCheck, Check, CheckCircle2, ClipboardCheck, Download, ExternalLink, Eye, FileText, Lock, Network, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useHref, useLocation, useNavigate } from 'react-router-dom';
 import { PageHeader, Reveal, StatusPill, Surface } from '@/components/ui';
 import { currentProject, useDemo } from '@/store/DemoStore';
 import { useCurrentRequirements, useRepositories } from '@/repositories';
@@ -14,11 +14,13 @@ import type { DesignId } from '@/types';
 import { AREAS } from '@/components/layout/nav';
 import { DeviceFrame } from '@/features/design/DeviceFrame';
 import { personalize, useDesignContext } from '@/features/design/designContext';
+import { ScreenToggle } from '@/features/design/DesignStudioPage';
 import { buildProposal } from '@/features/requirements/buildProposal';
 import { approvalSteps, type ApprovalKey, type ApprovalStep } from './portalSteps';
 import { sitemapCreated } from '@/data/sitemap';
 import { pendingConfirmations } from '@/features/requirements/assignment';
-import { downloadRequirementsDoc } from '@/features/requirements/requirementsDoc';
+import { buildRequirementsDocHtml, downloadRequirementsDoc } from '@/features/requirements/requirementsDoc';
+import { SitemapViewer } from '@/features/sitemap/SitemapViewer';
 import { useProjectRoutes } from '@/features/projects/projectRoutes';
 
 const AREA = AREAS.portal;
@@ -82,6 +84,23 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
   const { state, dispatch } = useDemo();
   // デザイン案は案件ごと（ポータルは MINAMO COFFEE。0.29.5）
   const designCtx = useDesignContext();
+  // 見本で表示する画面（0 = トップ、1・2 = 主要ページ。デザイン作成画面と同じ 3 画面。0.39.3）
+  const [screenNo, setScreen] = useState(0);
+  const screen = Math.min(screenNo, designCtx.pages.length);
+  // サイトマップの図（閲覧だけ）を開いているか（0.39.5）
+  const [showSitemap, setShowSitemap] = useState(false);
+  // 要件定義書の全文を新しいタブで開く（ダウンロードと同じ HTML。中の文字列は esc 済み。0.39.5）
+  const openRequirementsDoc = () => {
+    const url = URL.createObjectURL(new Blob([buildRequirementsDocHtml(state)], { type: 'text/html;charset=utf-8' }));
+    // 'noopener' を付けると戻り値が常に null になり開けたか分からないため、開いた後に opener を外す
+    const win = window.open(url, '_blank');
+    if (win) win.opener = null;
+    else toast('新しいタブを開けませんでした。ブラウザのポップアップの設定をご確認ください（「要件定義書をダウンロード」でも全文を見られます）', 'info');
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+  // 全画面プレビュー（新しいタブ）の URL。basename つきにする（0.39.4）
+  const previewBase = useHref('/design-preview');
+  const previewHref = (design: string) => `${previewBase}?${new URLSearchParams({ project: designCtx.projectId, design, screen: String(screen) })}`;
   const { approvals } = useRepositories();
   const { data: req } = useCurrentRequirements();
   const toast = useToast();
@@ -167,9 +186,14 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
               </Stack>
             )}
             {req.status !== 'draft' && (
-              <Button size="small" variant="outlined" startIcon={<Download size={15} />} onClick={() => { downloadRequirementsDoc(state); toast('要件定義書をダウンロードしました'); }} sx={{ mb: 2 }}>
-                要件定義書をダウンロード
-              </Button>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 2 }}>
+                <Button size="small" variant="outlined" startIcon={<FileText size={15} />} endIcon={<ExternalLink size={14} />} onClick={openRequirementsDoc}>
+                  全文を新しいタブで見る
+                </Button>
+                <Button size="small" variant="outlined" startIcon={<Download size={15} />} onClick={() => { downloadRequirementsDoc(state); toast('要件定義書をダウンロードしました'); }}>
+                  要件定義書をダウンロード
+                </Button>
+              </Stack>
             )}
             {req.status === 'draft' ? (
               <Typography variant="caption" component="p" sx={{ px: 1.5, py: 1, borderRadius: 2, bgcolor: tokens.color.bgSubtle }}>
@@ -226,6 +250,12 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
                     </Box>
                   ))}
                 </Box>
+                <Button size="small" variant="outlined" startIcon={<Network size={15} />} aria-expanded={showSitemap} onClick={() => setShowSitemap((v) => !v)} sx={{ mt: 2 }}>
+                  {showSitemap ? 'サイトマップの図を閉じる' : 'サイトマップの図を見る'}
+                </Button>
+                <Collapse in={showSitemap} unmountOnExit>
+                  <Box sx={{ mt: 1.5 }}><SitemapViewer sitemap={state.sitemap} /></Box>
+                </Collapse>
                 {newPages.some((n) => n.data.reason) && (
                   <Stack spacing={0.75} sx={{ mt: 2 }}>
                     {newPages.filter((n) => n.data.reason).slice(0, 3).map((n) => (
@@ -243,14 +273,20 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
         {/* 3. トップデザイン */}
         <Reveal delay={0.08}>
           <StepCard step={byKey.design} action={approveBtn('design', !selectedDesign)}>
+            {designCtx.pages.length > 0 && (
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'flex-start', sm: 'center' }} sx={{ mb: 1.5 }}>
+                <ScreenToggle ctx={designCtx} value={screen} onChange={setScreen} />
+                <Typography variant="caption">トップと主要ページの {designCtx.pages.length + 1} 画面を切り替えて確認できます。</Typography>
+              </Stack>
+            )}
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0,1fr))' }, gap: 1.5 }} role="radiogroup" aria-label="採用するデザイン">
               {DESIGN_VARIANTS.map((v0) => {
                 const v = personalize(v0, designCtx);
                 const selected = selectedDesign === v.id;
                 const locked = !!state.design.approvedAt;
                 return (
+                  <Box key={v.id} sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                   <ButtonBase
-                    key={v.id}
                     role="radio"
                     aria-checked={selected}
                     disabled={locked && !selected}
@@ -262,7 +298,7 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
                     }}
                   >
                     <Box sx={{ position: 'relative', borderRadius: '10px', overflow: 'hidden', bgcolor: tokens.color.bgSubtle }}>
-                      <DeviceFrame design={v.id} device="pc" thumbnail viewportHeight={720} />
+                      <DeviceFrame design={v.id} device="pc" screen={screen} thumbnail viewportHeight={720} />
                       {selected && (
                         <Box sx={{ position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: '50%', bgcolor: AREA.color, color: tokens.color.onSuccess, display: 'grid', placeItems: 'center' }}>
                           <Check size={14} strokeWidth={3} />
@@ -273,6 +309,19 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
                     <Typography variant="body2" sx={{ fontWeight: 650 }}>{v.name}</Typography>
                     <Typography variant="caption">{v.tagline}</Typography>
                   </ButtonBase>
+                  <Button
+                    component="a"
+                    href={previewHref(v.id)}
+                    target="_blank"
+                    rel="noopener"
+                    size="small"
+                    endIcon={<ExternalLink size={14} />}
+                    aria-label={`${v.name}を新しいタブで全画面表示`}
+                    sx={{ alignSelf: 'flex-start', mt: 0.5 }}
+                  >
+                    新しいタブで全画面表示
+                  </Button>
+                  </Box>
                 );
               })}
             </Box>
