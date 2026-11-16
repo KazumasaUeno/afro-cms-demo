@@ -50,8 +50,10 @@ const ADMIN_ITEMS: NavItem[] = [
   { to: '/', label: 'ホーム', icon: House, match: ['/'], exact: true, hint: '今日の状況' },
   // AI Studio（要件・サイトマップ・デザイン）・品質チェック・インサイトはプロジェクトの中の画面なので、メニューには出さず
   // プロジェクト詳細の段階ごとのボタンから開く。開いている間は「プロジェクト」を選択中にする
-  { to: '/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/projects', '/ai-studio', '/site', '/quality', '/insights', '/assets', '/forms', '/chat', '/client-view'], hint: '制作案件の一覧' },
+  { to: '/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/projects', '/ai-studio', '/site', '/quality', '/insights', '/assets', '/forms', '/client-view'], hint: '制作案件の一覧' },
   { to: '/users', label: 'ユーザー管理', icon: UsersRound, match: ['/users'], hint: 'お客様の登録・開発者画面の権限' },
+  // 相談チャット（0.38.2。2026-11-16 ユーザー指示）。表示中の案件の会話。下部タブの添字が変わらないよう末尾に足す
+  { to: '/chat', label: '相談', icon: MessageSquare, match: ['/chat'], hint: 'お客様からの相談に返信' },
 ];
 
 const PORTAL_ITEMS: NavItem[] = [
@@ -96,7 +98,7 @@ export const AREAS: Record<AreaId, AreaDef> = {
     id: 'admin', label: '管理者画面', short: '管理者', audience: 'アフロ社内',
     description: '案件・要件・制作・品質・改善を進める', home: '/', icon: Building2,
     color: tokens.color.primary, soft: tokens.color.primaryContainer,
-    items: ADMIN_ITEMS, bottom: [ADMIN_ITEMS[0], ADMIN_ITEMS[1], ADMIN_ITEMS[2]], settings: SETTINGS_ITEM,
+    items: ADMIN_ITEMS, bottom: [ADMIN_ITEMS[0], ADMIN_ITEMS[1], ADMIN_ITEMS[2], ADMIN_ITEMS[3]], settings: SETTINGS_ITEM,
   },
   portal: {
     id: 'portal', label: 'お客様ポータル', short: 'ポータル', audience: 'お客様',
