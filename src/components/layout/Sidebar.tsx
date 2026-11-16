@@ -27,7 +27,7 @@ function NavRow({ item, color, onNavigate }: { item: NavItem; color: string; onN
         width: '100%', justifyContent: 'flex-start', gap: 1.5, px: 2, height: 56, borderRadius: `${tokens.radius.full}px`,
         color: active ? tokens.color.onSecondaryContainer : tokens.color.onSurfaceVariant, fontWeight: active ? 700 : 500, fontSize: 14,
         transition: 'color .2s',
-        ...navIndicatorSx(active, { fill: true, indicator: toneIndicator(item.tone) }),
+        ...navIndicatorSx(active, { fill: true, indicator: toneIndicator(item.tone) ?? tokens.color.navIndicator }),
         ...(item.tone && navToneSx(item.tone)),
       }}
     >
@@ -52,7 +52,7 @@ function RailItem({ to, label, icon: Icon, active, color, hint, tone }: { to: st
           // 96px のレールで語の途中で折れないよう、M3 Label small（11px）で 1 行に収める
           fontSize: 11, lineHeight: '16px', fontWeight: active ? 700 : 500, letterSpacing: 0, textAlign: 'center', whiteSpace: 'nowrap',
           transition: 'color .2s',
-          ...navIndicatorSx(active, { indicator: toneIndicator(tone) }),
+          ...navIndicatorSx(active, { indicator: toneIndicator(tone) ?? tokens.color.navIndicator }),
           // キーボードのフォーカスは印の外側に輪郭線を出す（ButtonBase は outline を消すので明示する）
           '&.Mui-focusVisible, &:focus-visible': { outline: 'none' },
           '&.Mui-focusVisible .nav-ind, &:focus-visible .nav-ind': { outline: `3px solid ${tokens.color.secondary}`, outlineOffset: 2 },

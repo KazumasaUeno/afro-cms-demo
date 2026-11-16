@@ -81,7 +81,8 @@ function build(m: typeof m3Light, mode: 'light' | 'dark') {
     m3Surface: light ? '#FEF7FF' : '#141218',
     // ── 旧キー（既存画面の互換）→ M3 の役割 ──
     bg: light ? m.surfaceContainerLow : '#141218', // 画面の地（ダークは M3 surface）
-    navBg: light ? m.surfaceContainerHigh : m.surfaceContainer, // サイドバー（レール・ドロワー）の面。本文の地 bg と区別する段
+    navBg: light ? '#DDD3EA' : m.surfaceContainerHighest, // サイドバー（レール・ドロワー）の面。本文の地 bg とはっきり区別する（上の文字 onSurfaceVariant は 6:1 以上）
+    navIndicator: light ? m.surfaceContainerLowest : m.primaryContainer, // サイドバーの選択中の印（navBg の上で見える色。secondaryContainer は navBg に埋もれる）
     bgSubtle: m.surfaceContainerHighest, // セグメント・トラック（Dialog の面 = High と区別できる段）
     surface: light ? m.surfaceContainerLowest : m.surfaceContainerLow, // カード・入力欄（ダークは地より一段明るい）
     surfaceMuted: m.surfaceContainer,
