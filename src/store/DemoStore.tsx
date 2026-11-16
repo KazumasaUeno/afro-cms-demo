@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import type { DemoState } from '@/types';
 import { loadJson, removeKey, saveJson, STORAGE_KEY } from '@/services/storage';
 import { createSeedState, isDemoState } from './seed';
@@ -11,6 +11,7 @@ import { seedContentFor } from '@/data/projectContent';
 import { seedSignage } from '@/data/signage';
 import { moveDesignAnswers } from '@/features/design/designReq';
 import { emptySitemap, sitemapCreated } from '@/data/sitemap';
+import { useToast } from '@/hooks/useToast';
 
 interface StoreValue {
   state: DemoState;
@@ -18,6 +19,8 @@ interface StoreValue {
   resetDemo: () => void;
   /** いまの状態をすぐに保存する（「保存」ボタン用）。保存できたら true（プライベートモード・容量超過では false） */
   flush: () => boolean;
+  /** 自動保存（操作のたびの書き込み）に失敗している間 true（0.39.1。容量超過・プライベートモード）。次に保存できたら false に戻る */
+  saveFailed: boolean;
 }
 
 const StoreContext = createContext<StoreValue | null>(null);
@@ -122,11 +125,13 @@ function init(): DemoState {
 export function DemoStoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, init);
   const timer = useRef<number | undefined>(undefined);
+  const [saveFailed, setSaveFailed] = useState(false);
 
-  // 書き込みはまとめて行う（ドラッグ中などの連続更新で localStorage を叩きすぎない）
+  // 書き込みはまとめて行う（ドラッグ中などの連続更新で localStorage を叩きすぎない）。
+  // 失敗は黙って捨てず、画面へ知らせる（SaveFailureNotice。0.39.1。2026-11-16）
   useEffect(() => {
     window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => saveJson(STORAGE_KEY, state), 250);
+    timer.current = window.setTimeout(() => setSaveFailed(!saveJson(STORAGE_KEY, state)), 250);
     return () => window.clearTimeout(timer.current);
   }, [state]);
 
@@ -147,12 +152,31 @@ export function DemoStoreProvider({ children }: { children: ReactNode }) {
         removeKey(STORAGE_KEY);
         dispatch({ type: 'reset' });
       },
-      flush: () => saveJson(STORAGE_KEY, latest.current),
+      // 手動の保存の結果も通知の状態へ反映する（成功で解除し、次の失敗でまた知らせる）
+      flush: () => {
+        const ok = saveJson(STORAGE_KEY, latest.current);
+        setSaveFailed(!ok);
+        return ok;
+      },
+      saveFailed,
     }),
-    [state],
+    [state, saveFailed],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
+}
+
+/**
+ * 自動保存に失敗したら 1 回だけ知らせる（0.39.1。2026-11-16）。失敗が続く間は繰り返さず、保存できた後にまた失敗したら再び出す。
+ * トーストは DemoStoreProvider の内側（ToastProvider）で使うので、別の部品にしている（main.tsx）
+ */
+export function SaveFailureNotice() {
+  const { saveFailed } = useDemo();
+  const toast = useToast();
+  useEffect(() => {
+    if (saveFailed) toast('このブラウザに保存できませんでした（保存容量の上限を超えたか、プライベートモードです）。使っていない素材や記録を削除してください', 'error');
+  }, [saveFailed, toast]);
+  return null;
 }
 
 /** DemoStoreProvider の外（live モード）では null。モードに関係なく使う部品（動きを減らす設定など）だけが使う */

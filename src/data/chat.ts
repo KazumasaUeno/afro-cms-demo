@@ -19,7 +19,8 @@ export function validateChat(text: string): string | null {
   return null;
 }
 
-// 見本は描画のたびに作り直さない（日時・id を同じにする）。案件ごとに 1 回だけ作る
+// 見本は描画のたびに作り直さない（日時・id を同じにする）。
+// 文面に会社名・担当者を使うので、キーに含める（案件の編集で変えても古い名前のまま残らない。0.39.1。2026-11-16）
 const seedCache = new Map<string, ChatMessage[]>();
 
 function seedChat(state: Pick<DemoState, 'projects'>, projectId: string): ChatMessage[] {
@@ -36,10 +37,14 @@ function seedChat(state: Pick<DemoState, 'projects'>, projectId: string): ChatMe
 export function chatOf(state: Pick<DemoState, 'chats' | 'projects'>, projectId: string): ChatMessage[] {
   const saved = state.chats?.[projectId];
   if (saved) return saved;
-  let seeded = seedCache.get(projectId);
+  const p = state.projects.find((x) => x.id === projectId);
+  const key = `${projectId}
+${p?.clientName ?? ''}
+${p?.ownerId ?? ''}`;
+  let seeded = seedCache.get(key);
   if (!seeded) {
     seeded = seedChat(state, projectId);
-    seedCache.set(projectId, seeded);
+    seedCache.set(key, seeded);
   }
   return seeded;
 }

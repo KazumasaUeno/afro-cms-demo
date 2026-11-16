@@ -60,9 +60,14 @@ export function snapAt(versions: PageVersion[], index: number): PageSnapshot | u
   return undefined;
 }
 
-/** 件数の上限（全体 15 件・内容つき 8 件）を超えた古い記録を落とす */
+/**
+ * 件数の上限（全体 15 件・内容つき 8 件）を超えた古い記録を落とす。
+ * 内容を持たない記録（承認依頼・公開など）が続いても、内容つきの一番新しい版は必ず残す（落とすのは古い方から。0.39.1。2026-11-16）
+ */
 function capped(list: PageVersion[]): PageVersion[] {
   let out = list.slice(0, HISTORY_MAX_ENTRIES);
+  const newest = list.findIndex((v) => v.snap);
+  if (newest >= HISTORY_MAX_ENTRIES) out = [...out.slice(0, HISTORY_MAX_ENTRIES - 1), list[newest]];
   let snaps = 0;
   const cut = out.findIndex((v) => (v.snap ? ++snaps > HISTORY_MAX_SNAPS : false));
   if (cut >= 0) out = out.slice(0, cut);

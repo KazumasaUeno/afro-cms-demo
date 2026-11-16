@@ -162,6 +162,8 @@ function CmsEditor() {
   });
   const stored = pages.find((p) => p.id === selectedId) ?? pages[0];
   const [draft, setDraft] = useState<CmsPage | undefined>(stored);
+  // 履歴の版を読み込んだらエディタを作り直す（RichEditor は最初の content だけを読むため。0.39.1。2026-11-16 QA で発見）
+  const [editorRev, setEditorRev] = useState(0);
   const [mobileView, setMobileView] = useState<'list' | 'editor'>(() => (params.get('page') ? 'editor' : 'list'));
   const [newType, setNewType] = useState<PageType | null>(() => {
     const q = params.get('new');
@@ -357,7 +359,7 @@ function CmsEditor() {
               inputProps={{ 'aria-label': 'タイトル' }}
               InputProps={{ disableUnderline: true, sx: { fontSize: { xs: 24, md: 30 }, fontWeight: 720, letterSpacing: '-0.02em' } }}
             />
-            <RichEditor key={draft.id} content={draft.content} onChange={(html) => patch({ content: html })} />
+            <RichEditor key={`${draft.id}-${editorRev}`} content={draft.content} onChange={(html) => patch({ content: html })} />
 
             {!isDesktop && (
               <Box>
@@ -400,6 +402,7 @@ function CmsEditor() {
           // エディタに読み込むだけ（状態・公開中の内容は変えない。保存すると「復元して保存」の版が残る）
           patch({ title: snap.title, content: snap.content, seoTitle: snap.seoTitle, seoDescription: snap.seoDescription, coverImage: snap.coverImage });
           setRestoredFrom(versionId);
+          setEditorRev((n) => n + 1);
           setHistory(false);
           toast('この版をエディタに読み込みました。「下書き保存」で確定します', 'info');
         }}

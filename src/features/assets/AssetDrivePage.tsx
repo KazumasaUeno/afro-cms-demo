@@ -3,7 +3,7 @@ import {
   ToggleButton, ToggleButtonGroup, Typography,
 } from '@mui/material';
 import { FileText, FolderOpen, LayoutGrid, List, Pencil, Search, Trash2, Upload } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import type { Asset } from '@/types';
 import { PageHeader, StatusPill, Surface } from '@/components/ui';
@@ -56,6 +56,12 @@ function AssetDrive({ dev }: { dev: boolean }) {
   const [edit, setEdit] = useState<Asset | null>(null);
   const [del, setDel] = useState<Asset | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // 縮小の途中で案件を切り替えると、この画面は作り直される（key=案件）。古い画面からは保存しない（0.39.1。2026-11-16）
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; };
+  }, []);
 
   const folders = useMemo(() => Array.from(new Set(items.map((a) => a.folder))).sort((a, b) => a.localeCompare(b, 'ja')), [items]);
   const q = query.trim().toLowerCase();
@@ -67,18 +73,21 @@ function AssetDrive({ dev }: { dev: boolean }) {
     if ('error' in check) return toast(check.error, 'error');
     const name = file.name.replace(/\.[^.]+$/, '').slice(0, ASSET_LIMITS.name) || '無題';
     const into = folder === ALL || folder === '見本' ? '' : folder;
+    // 保存先の案件は縮小を始める前に決める（縮小の途中で案件を切り替えても、別の案件へ保存しない。0.39.1。2026-11-16）
+    const projectId = state.requirements.projectId;
     let src: string | undefined;
     if (check.kind === 'image') {
       setBusy(true);
       src = (await makeThumbnail(file)) ?? undefined;
       setBusy(false);
+      if (!alive.current) return toast('縮小の途中で画面を離れた（または案件が切り替わった）ため、アップロードを取り消しました。もう一度アップロードしてください', 'error');
       if (!src) return toast('この画像は読み込めませんでした（壊れているか、対応していない形式です）', 'error');
     }
     // 保存データの上限（localStorage）を超えるなら保存しない。黙って保存に失敗しないよう、ここで理由を出す
     if (overStorageBudget(state, (src?.length ?? 0) + 300)) {
       return toast('保存できる容量の上限に達しました。使っていない素材を削除してからアップロードしてください', 'error');
     }
-    dispatch({ type: 'addAsset', asset: { name, kind: check.kind, folder: into, mime: file.type, size: file.size, ...(src ? { src } : {}) }, devBy: me.id });
+    dispatch({ type: 'addAsset', asset: { name, kind: check.kind, folder: into, mime: file.type, size: file.size, ...(src ? { src } : {}) }, projectId, devBy: me.id });
     toast(check.kind === 'image' ? `「${name}」をアップロードしました（縮小して保存）` : `「${name}」を登録しました（デモのため中身は保存しません）`);
   };
 

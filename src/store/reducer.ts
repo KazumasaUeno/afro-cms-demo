@@ -92,9 +92,10 @@ export type Action =
   | { type: 'testReportSend'; devBy?: string }
   /**
    * 素材ドライブ（0.36.0。選んでいる案件の分）。管理は開発者画面だけ（devBy が無ければ何もしない）。
-   * 画像は縮小済みの JPEG（24KB 以下）だけ受け付け、資料は中身を持たない。件数・保存データの大きさの上限もここで確かめる
+   * 画像は縮小済みの JPEG（24KB 以下）だけ受け付け、資料は中身を持たない。件数・保存データの大きさの上限もここで確かめる。
+   * addAsset の projectId: 画面がアップロードを始めたときの案件（0.39.1。いまの案件と違えば受け付けない＝縮小の途中で切り替えた分を別の案件へ保存しない）
    */
-  | { type: 'addAsset'; asset: Pick<Asset, 'name' | 'kind' | 'folder' | 'mime' | 'size' | 'src'>; devBy?: string }
+  | { type: 'addAsset'; asset: Pick<Asset, 'name' | 'kind' | 'folder' | 'mime' | 'size' | 'src'>; projectId: string; devBy?: string }
   | { type: 'renameAsset'; id: string; name: string; folder: string; devBy?: string }
   | { type: 'deleteAsset'; id: string; devBy?: string }
   /** 担当者への相談チャット（0.38.0。表示中の案件の会話）。by: client = お客様ポータル、afro = 管理者画面。devBy があれば開発者画面のその人 */
@@ -524,7 +525,7 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       return recordReportSend(state, 'test', devActor(state, action.devBy), state.diagnoses[0]?.cycle);
 
     case 'addAsset': {
-      if (!action.devBy) return state;
+      if (!action.devBy || action.projectId !== state.requirements.projectId) return state;
       const a = action.asset;
       const items = assetsOf(state).items;
       const name = a.name.trim();

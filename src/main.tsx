@@ -6,7 +6,7 @@ import '@fontsource/noto-sans-jp/500.css';
 import '@fontsource/noto-sans-jp/700.css';
 import './global.css';
 import { ThemeModeProvider } from '@/theme/ThemeMode';
-import { DemoStoreProvider } from '@/store/DemoStore';
+import { DemoStoreProvider, SaveFailureNotice } from '@/store/DemoStore';
 import { ToastProvider } from '@/hooks/useToast';
 import App from './App';
 
@@ -16,6 +16,7 @@ createRoot(document.getElementById('root')!).render(
     <DemoStoreProvider>
       <ThemeModeProvider>
         <ToastProvider>
+          <SaveFailureNotice />
           <App />
         </ToastProvider>
       </ThemeModeProvider>

@@ -187,8 +187,14 @@ function TopBar({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
         <MenuIcon size={20} />
       </IconButton>
       <Box sx={{ display: { xs: 'none', sm: 'block', lg: 'none' } }}><LogoMark size={28} /></Box>
-      {/* 管理者画面は案件をプロジェクト一覧・詳細で選び、お客様ポータルは案件が固定なので、上部バーに案件名を置かない（開発者画面だけ担当案件を切り替える） */}
+      {/* 管理者画面は案件をプロジェクト一覧・詳細で選ぶので、上部バーに案件名を置かない。開発者画面は担当案件を切り替える。
+          お客様ポータルは本来その会社の案件だけだが、デモでは全案件のポータルを見せるため切り替えられる（0.39.0。2026-11-16 ユーザー指示） */}
       {area.id === 'dev' && <DevProjectSwitcher />}
+      {area.id === 'portal' && (
+        <Tooltip placement="right" title="デモ用: どのお客様のポータルを表示するかを切り替えます（本番のお客様は自社の案件だけ）">
+          <Box sx={{ display: 'flex', minWidth: 0 }}><ProjectSwitcher /></Box>
+        </Tooltip>
+      )}
       <AreaSwitcher area={area} />
       <Box sx={{ flex: 1 }} />
       <Typography variant="caption" sx={{ display: { xs: 'none', md: 'block' }, px: 1.5, py: 0.5, borderRadius: 2, bgcolor: tokens.color.warningSoft, color: tokens.color.warningInk, fontWeight: 500 }}>

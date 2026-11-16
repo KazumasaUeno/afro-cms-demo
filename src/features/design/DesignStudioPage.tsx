@@ -170,7 +170,8 @@ export default function DesignStudioPage() {
               <Network size={36} color={tokens.color.faint} aria-hidden />
               <Typography variant="h3" component="h2">サイトマップのお客様承認の後に作成します</Typography>
               <Typography variant="body2" color="text.secondary">
-                トップ以外の画面は、承認済みサイトマップの主要ページから選びます。{!reqOk && `デザイン要件定義の必須（A）の質問もあと ${missing} 問あります。`}
+                {/* この案内は未承認のときだけ出るので「承認済み」と書かない（0.39.1。2026-11-16） */}
+                トップ以外の画面は、サイトマップが承認された後に、その主要ページから選びます。{!reqOk && `デザイン要件定義の必須（A）の質問もあと ${missing} 問あります。`}
               </Typography>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ pt: 1 }}>
                 <Button variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate(sitemapRoute)}>サイトマップへ</Button>

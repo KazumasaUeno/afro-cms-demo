@@ -108,7 +108,8 @@ function seedForms(state: Pick<DemoState, 'clientAccounts'>, project: Project): 
 }
 
 const EMPTY: FormsState = { forms: [], submissions: [] };
-// 見本は描画のたびに作り直さない（日時・id を同じにする）。案件ごとに 1 回だけ作る
+// 見本は描画のたびに作り直さない（日時・id を同じにする）。
+// 宛先はお客様アカウント・サイトの URL から作るので、キーに宛先を含める（後から担当者を足しても古い宛先のまま残らない。0.39.1。2026-11-16）
 const seedCache = new Map<string, FormsState>();
 
 /** 選んでいる案件のフォーム（保存に無ければ見本） */
@@ -116,10 +117,12 @@ export function formsOf(state: Pick<DemoState, 'forms' | 'projects' | 'requireme
   if (state.forms) return state.forms;
   const project = state.projects.find((p) => p.id === state.requirements.projectId);
   if (!project || !isSiteLive(project.stage)) return EMPTY;
-  let seeded = seedCache.get(project.id);
+  const key = `${project.id}
+${seedRecipients(state, project).join(',')}`;
+  let seeded = seedCache.get(key);
   if (!seeded) {
     seeded = seedForms(state, project);
-    seedCache.set(project.id, seeded);
+    seedCache.set(key, seeded);
   }
   return seeded;
 }
