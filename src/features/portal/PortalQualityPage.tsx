@@ -28,7 +28,10 @@ export default function PortalQualityPage() {
   // 全項目にチェックしたら「完了」を押す。押した後はチェックを変えられない（0.39.7。2026-11-16 ユーザー指示。reducer でも止めている）
   const approvedAt = state.design.qualityApprovedAt;
   const approved = !!approvedAt;
-  const canComplete = !approved && total > 0 && done === total && !!state.design.buildCompletedAt;
+  // 完了の後はアフロ側も変えられないので、アフロ側の確認が全部済んでから完了できる（reducer と同じ条件）
+  const afroDone = QUALITY_ITEMS.every((i) => !!checks[i.id]?.afroAt);
+  const allChecked = !approved && total > 0 && done === total && !!state.design.buildCompletedAt;
+  const canComplete = allChecked && afroDone;
   const [confirm, setConfirm] = useState(false);
   const completeQuality = () => {
     dispatch({ type: 'approveQuality', by: 'client' });
@@ -49,6 +52,11 @@ export default function PortalQualityPage() {
         {approved && (
           <Box role="note" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 1, borderRadius: 2, bgcolor: tokens.color.surfaceMuted, color: tokens.color.inkSoft, fontSize: 13.5 }}>
             <Lock size={15} aria-hidden /> 品質チェックは完了済み（{formatDateTime(approvedAt)}）のため、チェックを変更できません
+          </Box>
+        )}
+        {allChecked && !afroDone && (
+          <Box role="status" sx={{ px: 2, py: 1.5, borderRadius: 3, bgcolor: tokens.color.bgSubtle }}>
+            <Typography variant="body2">すべての項目を確認しました。アフロの確認が終わると「完了する」を押せます（いまアフロ確認済み {QUALITY_ITEMS.filter((i) => !!checks[i.id]?.afroAt).length} / {total}）。</Typography>
           </Box>
         )}
         {canComplete && (

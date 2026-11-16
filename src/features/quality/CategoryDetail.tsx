@@ -75,6 +75,8 @@ function DetailBody({ category, onClose }: { category: QualityCategory; onClose:
   const [openOnly, setOpenOnly] = useState(false);
   const items = QUALITY_ITEMS.filter((i) => i.categoryId === category.id);
   const stats = computeStats(items, state.qualityChecks);
+  // お客様が品質チェックを完了した後は、アフロ側も変えられない（2026-11-16 ユーザー指示。reducer でも止めている）
+  const locked = !!state.design.qualityApprovedAt;
   const shown = openOnly ? items.filter((i) => !isComplete(state.qualityChecks[i.id])) : items;
 
   const bulk = (side: 'afro', priority: 'A' | 'B') => {
@@ -105,6 +107,9 @@ function DetailBody({ category, onClose }: { category: QualityCategory; onClose:
           <SideBar label="アフロ確認" value={stats.afroRate} color={tokens.color.primary} />
           <SideBar label="顧客承認" value={stats.clientRate} color={tokens.color.success} />
         </Stack>
+        {locked ? (
+          <Typography variant="caption" sx={{ display: 'block', mt: 2 }}>お客様が品質チェックを完了済みのため、変更できません</Typography>
+        ) : (
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr', gap: 1, mt: 2 }}>
           {(['afro'] as const).map((side) => (
             <Stack key={side} direction="row" spacing={0.75} sx={{ p: 0.75, borderRadius: '12px', bgcolor: tokens.color.bgSubtle }}>
@@ -121,6 +126,7 @@ function DetailBody({ category, onClose }: { category: QualityCategory; onClose:
             </Stack>
           ))}
         </Box>
+        )}
       </Box>
 
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: { xs: 2, sm: 3 }, py: 1 }}>
@@ -158,7 +164,7 @@ function DetailBody({ category, onClose }: { category: QualityCategory; onClose:
                 </Stack>
                 {/* スマホは2者のチェックを縦に並べ、日時と担当者を省略させない */}
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                  <CheckToggle side="afro" check={check} itemText={item.text} onToggle={() => dispatch({ type: 'toggleQuality', itemId: item.id, side: 'afro', devBy })} />
+                  <CheckToggle side="afro" check={check} itemText={item.text} readOnly={locked} onToggle={() => dispatch({ type: 'toggleQuality', itemId: item.id, side: 'afro', devBy })} />
                   <CheckToggle side="client" check={check} itemText={item.text} readOnly onToggle={() => undefined} />
                 </Stack>
               </Box>

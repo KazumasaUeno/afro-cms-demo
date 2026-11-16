@@ -1,5 +1,5 @@
 import { Box, Button, Menu, MenuItem, Stack, Typography, ListItemText } from '@mui/material';
-import { ArrowUpRight, CheckCheck, ShieldCheck, Building2, UserRound, History, Rocket } from 'lucide-react';
+import { ArrowUpRight, CheckCheck, ShieldCheck, Building2, UserRound, History, Lock, Rocket } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { QualityCategory } from '@/types';
 import { QUALITY_CATEGORIES, QUALITY_ITEMS, TOTAL_QUALITY_QUESTIONS } from '@/data/quality';
@@ -119,11 +119,17 @@ export default function QualityPage() {
             {devBy && canLaunch && (
               <Button variant="contained" startIcon={<Rocket size={16} />} onClick={launch}>サイトを公開して運用へ進む</Button>
             )}
-            <BulkMenu side="afro" />
+            {!clientCompleted && <BulkMenu side="afro" />}
           </>
         }
       />
 
+      {/* お客様が品質チェックを完了した後は、アフロ側も変更できない（2026-11-16 ユーザー指示。reducer でも止めている） */}
+      {clientCompleted && (
+        <Box role="note" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, px: 1.5, py: 1, borderRadius: 2, bgcolor: tokens.color.surfaceMuted, color: tokens.color.inkSoft, fontSize: 13.5 }}>
+          <Lock size={15} aria-hidden /> お客様が品質チェックを完了済み（{formatDateTime(state.design.qualityApprovedAt)}）のため、チェックを変更できません
+        </Box>
+      )}
       <Reveal>
         <Surface padding={{ xs: 2.5, md: 3 }} sx={{ mb: 3 }}>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'auto 1fr' }, gap: { xs: 3, md: 5 }, alignItems: 'center' }}>

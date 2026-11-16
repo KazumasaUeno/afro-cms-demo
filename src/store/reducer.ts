@@ -400,15 +400,16 @@ function baseReducer(state: DemoState, action: Action): DemoState {
     }
 
     case 'approveQuality': {
-      if (clientQualityApproved(state) || !state.design.buildCompletedAt || !QUALITY_ITEMS.every((i) => !!state.qualityChecks[i.id]?.clientAt)) return state;
+      // 完了の後はアフロ側も変えられないので、アフロ側の確認も全部済んでから完了できる（公開できなくならないように）
+      if (clientQualityApproved(state) || !state.design.buildCompletedAt || !QUALITY_ITEMS.every((i) => !!state.qualityChecks[i.id]?.clientAt && !!state.qualityChecks[i.id]?.afroAt)) return state;
       const actor = actorOf(state, action.by ?? 'client');
       const s = { ...state, design: { ...state.design, qualityApprovedAt: nowIso() } };
       return log(approval(s, 'client', '品質チェックを完了', '品質チェック（全項目）', actor), APPROVE_TEXT.quality, 'approve', actor, state.requirements.projectId);
     }
 
     case 'toggleQuality': {
-      // お客様が品質チェックの「完了」を押した後は、お客様側のチェックを変えられない（2026-11-16 ユーザー指示）
-      if (action.side === 'client' && clientQualityApproved(state)) return state;
+      // お客様が品質チェックの「完了」を押した後は、お客様側もアフロ側（管理者・開発者画面）もチェックを変えられない（2026-11-16 ユーザー指示）
+      if (clientQualityApproved(state)) return state;
       const prev = state.qualityChecks[action.itemId] ?? {};
       const atKey = action.side === 'afro' ? 'afroAt' : 'clientAt';
       const byKey = action.side === 'afro' ? 'afroBy' : 'clientBy';
@@ -422,7 +423,7 @@ function baseReducer(state: DemoState, action: Action): DemoState {
     }
 
     case 'bulkQuality': {
-      if (action.side === 'client' && clientQualityApproved(state)) return state;
+      if (clientQualityApproved(state)) return state;
       const at = nowIso();
       const atKey = action.side === 'afro' ? 'afroAt' : 'clientAt';
       const byKey = action.side === 'afro' ? 'afroBy' : 'clientBy';
