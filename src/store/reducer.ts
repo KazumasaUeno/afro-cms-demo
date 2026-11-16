@@ -68,6 +68,8 @@ export type Action =
   | { type: 'completeBuild' }
   /** サイトの公開（0.30.1。開発者画面だけ）。品質チェックが双方とも済んだ案件を運用の段階へ進める */
   | { type: 'launchSite'; devBy?: string }
+  /** 品質チェックの完了（0.39.7。お客様ポータルだけ）。お客様側の全項目の確認が済んでいるときだけ。以後お客様側のチェックは変えられない */
+  | { type: 'approveQuality'; by?: Side }
   // devBy: 開発者画面（0.27.0）で操作したメンバーの id。アフロ側の確認者をその人の名前で残す（省略時は従来どおり ACTOR）
   | { type: 'toggleQuality'; itemId: string; side: 'afro' | 'client'; devBy?: string }
   | { type: 'bulkQuality'; side: 'afro' | 'client'; priority: QuestionPriority | 'all'; categoryId?: string; devBy?: string }
@@ -145,7 +147,7 @@ export function clientActorOf(state: DemoState, projectId: string = state.requir
 const actorOf = (state: DemoState, side: Side, projectId?: string) => (side === 'client' ? clientActorOf(state, projectId) : ACTOR.afro);
 /** 承認したときにアクティビティへ残す文（管理者画面の「お客様の対応状況」が承認した人を探すのにも使う） */
 export const APPROVE_TEXT = {
-  requirements: '要件定義書を承認しました', sitemap: '改善後のサイトマップを承認しました', design: 'トップデザイン案を採用・承認しました',
+  requirements: '要件定義書を承認しました', sitemap: '改善後のサイトマップを承認しました', design: 'トップデザイン案を採用・承認しました', quality: '品質チェックを完了しました',
 } as const;
 /** 開発者画面の操作者の名前（ログイン中の人。登録した開発者も含む。省略時・見つからないときは DEV_USER_ID） */
 const devActor = (state: DemoState, by?: string) => (personById(state, by) ?? memberById(DEV_USER_ID)).name;
@@ -391,12 +393,21 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       const owner = state.projects.find((p) => p.id === id);
       if (id !== state.currentProjectId || owner?.stage !== 'quality' || !state.design.buildCompletedAt) return state;
       if (!QUALITY_ITEMS.every((i) => state.qualityChecks[i.id]?.afroAt && state.qualityChecks[i.id]?.clientAt)) return state;
+      // お客様が品質チェックの「完了」を押してから公開する（0.39.7）
+      if (!state.design.qualityApprovedAt) return state;
       const s = patchOwner(state, { stage: 'operation', progress: 88, nextAction: 'ページ・お知らせを更新する' });
       return log(s, 'サイトを公開しました（運用の段階へ）', 'publish', action.devBy ? devActor(state, action.devBy) : ACTOR.afro, id);
     }
 
+    case 'approveQuality': {
+      if (clientQualityApproved(state) || !state.design.buildCompletedAt || !QUALITY_ITEMS.every((i) => !!state.qualityChecks[i.id]?.clientAt)) return state;
+      const actor = actorOf(state, action.by ?? 'client');
+      const s = { ...state, design: { ...state.design, qualityApprovedAt: nowIso() } };
+      return log(approval(s, 'client', '品質チェックを完了', '品質チェック（全項目）', actor), APPROVE_TEXT.quality, 'approve', actor, state.requirements.projectId);
+    }
+
     case 'toggleQuality': {
-      // お客様が全項目を確認した（品質チェックを承認した）後は、お客様側のチェックを変えられない（2026-11-16 ユーザー指示）
+      // お客様が品質チェックの「完了」を押した後は、お客様側のチェックを変えられない（2026-11-16 ユーザー指示）
       if (action.side === 'client' && clientQualityApproved(state)) return state;
       const prev = state.qualityChecks[action.itemId] ?? {};
       const atKey = action.side === 'afro' ? 'afroAt' : 'clientAt';
@@ -838,9 +849,9 @@ export function devAccessState(state: DemoState): Record<string, boolean> {
 }
 
 /** 開発者の担当プロジェクト（0.14.0 より前の保存データには無いので初期値で補う。描画のたびに作り直さないよう 1 回だけ作る） */
-/** 品質チェックの承認（お客様が全項目を確認済み。portalSteps の「承認済み」と同じ条件） */
-export function clientQualityApproved(state: Pick<DemoState, 'qualityChecks'>): boolean {
-  return QUALITY_ITEMS.every((i) => !!state.qualityChecks[i.id]?.clientAt);
+/** 品質チェックの完了（お客様が「完了」を押した。0.39.7。portalSteps の「承認済み」と同じ条件） */
+export function clientQualityApproved(state: Pick<DemoState, 'design'>): boolean {
+  return !!state.design.qualityApprovedAt;
 }
 
 let devProjectsFallback: Record<string, string[]> | null = null;

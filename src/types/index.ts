@@ -195,6 +195,8 @@ export interface DesignState {
   approvedAt?: ISODate;
   buildStartedAt?: ISODate;
   buildCompletedAt?: ISODate;
+  /** お客様が品質チェックの「完了」を押した日時（0.39.7）。以後お客様側のチェックは変えられない。制作の進み具合と一緒に案件ごとに入れ替わるので design に置く */
+  qualityApprovedAt?: ISODate;
 }
 
 /* ---------- 品質管理（12項目110問） ---------- */

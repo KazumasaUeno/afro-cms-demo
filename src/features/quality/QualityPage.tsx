@@ -89,13 +89,16 @@ export default function QualityPage() {
 
   // 公開（0.30.1。2026-11-13 ユーザー指示）: 双方確認が済んだら開発者画面から運用の段階へ進める。管理者画面は見るだけ（文言だけ出す）
   const ownerStage = state.projects.find((p) => p.id === state.requirements.projectId)?.stage;
-  const canLaunch = openItems.length === 0 && !!state.design.buildCompletedAt && ownerStage === 'quality' && state.requirements.projectId === state.currentProjectId;
+  // お客様が品質チェックの「完了」を押してから公開できる（0.39.7）
+  const clientCompleted = !!state.design.qualityApprovedAt;
+  const canLaunch = openItems.length === 0 && clientCompleted && !!state.design.buildCompletedAt && ownerStage === 'quality' && state.requirements.projectId === state.currentProjectId;
   const launch = () => {
     dispatch({ type: 'launchSite', devBy });
     toast('サイトを公開しました。運用の段階へ進みます', 'success');
   };
   const doneText = ownerStage === 'operation' || ownerStage === 'improvement'
     ? 'すべての項目が完了し、サイトを公開しました（運用の段階）。'
+    : !clientCompleted ? 'すべての項目にチェックが付きました。お客様がポータルで品質チェックの「完了」を押すと、サイトを公開できます。'
     : devBy ? 'すべての項目が完了しました。サイトを公開すると運用の段階へ進みます。' : 'すべての項目が完了しました。開発者がサイトを公開すると運用の段階へ進みます。';
 
   const kpis = [

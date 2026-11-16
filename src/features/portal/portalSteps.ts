@@ -27,7 +27,6 @@ export function approvalSteps(state: DemoState): ApprovalStep[] {
   const req = state.requirements;
   const clientDone = QUALITY_ITEMS.filter((i) => !!state.qualityChecks[i.id]?.clientAt).length;
   const total = QUALITY_ITEMS.length;
-  const lastClientAt = QUALITY_ITEMS.map((i) => state.qualityChecks[i.id]?.clientAt).filter(Boolean).sort().pop();
   return [
     {
       key: 'requirements', no: 1, title: '要件定義書', ask: '改善提案と要件の内容をご確認ください',
@@ -48,9 +47,10 @@ export function approvalSteps(state: DemoState): ApprovalStep[] {
     },
     {
       key: 'quality', no: 4, title: '品質チェック', ask: '公開前の確認項目をチェックしてください',
-      status: clientDone === total ? 'approved' : state.design.buildCompletedAt ? 'waiting' : 'locked',
+      // 承認済みはお客様が「完了」を押したとき（0.39.7。全項目にチェックしただけでは承認にしない）
+      status: state.design.qualityApprovedAt ? 'approved' : state.design.buildCompletedAt ? 'waiting' : 'locked',
       lockedReason: '全ページの構築が終わると、公開前の確認をお願いします。',
-      approvedAt: clientDone === total ? lastClientAt : undefined,
+      approvedAt: state.design.qualityApprovedAt,
       progress: { done: clientDone, total },
     },
   ];

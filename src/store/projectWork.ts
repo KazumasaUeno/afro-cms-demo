@@ -222,6 +222,11 @@ const answerMetaOf = (answers: Answers, at: string) =>
  * 品質チェック。partial は品質管理の途中（A 区分を中心に一部だけ）、そうでなければ全項目をアフロ・お客様の双方が確認済み。
  * clientBy は案件のお客様の担当者（以前は「お客様 担当者」「Lumière Atelier 担当者」の固定。0.30.2）
  */
+/** いちばん新しいお客様側のチェックの日時 */
+export function lastClientCheck(checks: Record<string, QualityCheck>): string | undefined {
+  return Object.values(checks).map((c) => c.clientAt).filter((v): v is string => !!v).sort().pop();
+}
+
 function qualityChecks(partial: boolean, clientBy: string): Record<string, QualityCheck> {
   const checks: Record<string, QualityCheck> = {};
   QUALITY_ITEMS.forEach((item, i) => {
@@ -275,6 +280,8 @@ export function seedWorkFor(projectId: string, stage: Stage): FullWork {
     work.design = { ...work.design, selected: 'premium', approvedAt: daysAgo(62 - at * 10), buildStartedAt: built, buildCompletedAt: built };
     const client = seedProjects().find((p) => p.id === projectId)?.clientName;
     work.qualityChecks = qualityChecks(at === 3, client ? clientActorName(client) : 'お客様 担当者');
+    // 公開済み（運用・改善）の案件は、お客様が品質チェックを完了済み（0.39.7）
+    if (at > 3) work.design = { ...work.design, qualityApprovedAt: lastClientCheck(work.qualityChecks) };
   }
   return work;
 }

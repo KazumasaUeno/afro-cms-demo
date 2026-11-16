@@ -5,7 +5,8 @@ import { createSeedState, isDemoState } from './seed';
 import { seedProjects } from '@/data/projects';
 import { ACTOR, clientActorOf, reducer, type Action } from './reducer';
 import { syncDemoProject } from './demoProject';
-import { seedWorkFor, switchWork, withContent } from './projectWork';
+import { lastClientCheck, seedWorkFor, switchWork, withContent } from './projectWork';
+import { QUALITY_ITEMS } from '@/data/quality';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { seedContentFor } from '@/data/projectContent';
 import { seedSignage } from '@/data/signage';
@@ -132,12 +133,29 @@ function withDevSeed(state: DemoState): DemoState {
   return { ...state, devAccess: access, devProjects, devSeed: DEV_SEED_REV };
 }
 
+/**
+ * 品質チェックの「完了」（0.39.7）より前の保存データ: 公開済み（運用・改善）の案件で、お客様側の全項目が済んでいるのに完了の日時が無いものは、
+ * いちばん新しいお客様のチェックの日時で完了済みにする（品質管理の段階の案件は、お客様が「完了」を押す）。版は上げない
+ */
+function withQualityApproval(state: DemoState): DemoState {
+  const live = (id: string) => ['operation', 'improvement'].includes(state.projects.find((p) => p.id === id)?.stage ?? '');
+  const fix = <T extends { design: DemoState['design']; qualityChecks: DemoState['qualityChecks'] }>(w: T, id: string): T => {
+    if (w.design.qualityApprovedAt || !live(id) || !QUALITY_ITEMS.every((i) => !!w.qualityChecks[i.id]?.clientAt)) return w;
+    return { ...w, design: { ...w.design, qualityApprovedAt: lastClientCheck(w.qualityChecks) } };
+  };
+  const top = fix(state, state.requirements.projectId);
+  const work = state.projectWork;
+  if (!work) return top;
+  const next = Object.fromEntries(Object.entries(work).map(([id, w]) => [id, fix(w, id)]));
+  return Object.keys(next).some((id) => next[id] !== work[id]) ? { ...top, projectWork: next } : top;
+}
+
 function init(): DemoState {
   // 保存済みのデータに古い進捗が残っていても、デモのデータに合わせ直す。
   // 0.27 までのヒアリングにあったデザインの 3 問の回答は、デザイン要件定義へ移す（0.28.0。版は上げない）
   // 要件定義書の承認前に持っているサイトマップは外す（0.29.4。版は上げない）
   // 公開後のデータ（ページ・診断・サイネージ）を案件ごとに分ける（0.30.0。版は上げない）
-  return syncDemoProject(withDevSeed(withClientMarks(withoutEarlySitemap(withCurrentWork(withProjectContent(withSeedProjects(moveDesignAnswers(withAfroMode(loadJson(STORAGE_KEY, isDemoState) ?? createSeedState())))))))));
+  return syncDemoProject(withQualityApproval(withDevSeed(withClientMarks(withoutEarlySitemap(withCurrentWork(withProjectContent(withSeedProjects(moveDesignAnswers(withAfroMode(loadJson(STORAGE_KEY, isDemoState) ?? createSeedState()))))))))));
 }
 
 export function DemoStoreProvider({ children }: { children: ReactNode }) {

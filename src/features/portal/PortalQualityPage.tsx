@@ -1,11 +1,12 @@
-import { Box, Button, Collapse, FormControlLabel, Stack, Switch, Typography } from '@mui/material';
-import { BadgeCheck, ChevronDown, ListChecks, Lock } from 'lucide-react';
+import { Box, Button, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Stack, Switch, Typography } from '@mui/material';
+import { BadgeCheck, CheckCircle2, ChevronDown, ListChecks, Lock } from 'lucide-react';
 import { useState } from 'react';
 import { PageHeader, ProgressRing, Surface } from '@/components/ui';
 import { useDemo } from '@/store/DemoStore';
 import { useToast } from '@/hooks/useToast';
 import { QUALITY_CATEGORIES, QUALITY_ITEMS } from '@/data/quality';
 import { tokens } from '@/theme/tokens';
+import { formatDateTime } from '@/services/time';
 import { AREAS } from '@/components/layout/nav';
 import { CheckToggle } from '@/features/quality/CheckToggle';
 
@@ -24,8 +25,16 @@ export default function PortalQualityPage() {
   const done = QUALITY_ITEMS.filter((i) => !!checks[i.id]?.clientAt).length;
   const total = QUALITY_ITEMS.length;
   const pct = total ? Math.round((done / total) * 100) : 0;
-  // 全項目を確認した＝品質チェックを承認した後は、チェックを変えられない（2026-11-16 ユーザー指示。reducer でも止めている）
-  const approved = total > 0 && done === total;
+  // 全項目にチェックしたら「完了」を押す。押した後はチェックを変えられない（0.39.7。2026-11-16 ユーザー指示。reducer でも止めている）
+  const approvedAt = state.design.qualityApprovedAt;
+  const approved = !!approvedAt;
+  const canComplete = !approved && total > 0 && done === total && !!state.design.buildCompletedAt;
+  const [confirm, setConfirm] = useState(false);
+  const completeQuality = () => {
+    dispatch({ type: 'approveQuality', by: 'client' });
+    setConfirm(false);
+    toast('品質チェックを完了しました', 'success');
+  };
 
   return (
     <>
@@ -39,8 +48,14 @@ export default function PortalQualityPage() {
       <Stack spacing={{ xs: 2, md: 2.5 }}>
         {approved && (
           <Box role="note" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 1, borderRadius: 2, bgcolor: tokens.color.surfaceMuted, color: tokens.color.inkSoft, fontSize: 13.5 }}>
-            <Lock size={15} aria-hidden /> 品質チェックは承認済みのため、チェックを変更できません
+            <Lock size={15} aria-hidden /> 品質チェックは完了済み（{formatDateTime(approvedAt)}）のため、チェックを変更できません
           </Box>
+        )}
+        {canComplete && (
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }} role="status" sx={{ px: 2, py: 1.5, borderRadius: 3, bgcolor: AREA.soft }}>
+            <Typography variant="body2" sx={{ flex: 1, fontWeight: 600 }}>すべての項目を確認しました。内容に問題がなければ「完了する」を押してください。</Typography>
+            <Button variant="contained" startIcon={<CheckCircle2 size={16} />} onClick={() => setConfirm(true)} sx={{ flexShrink: 0 }}>完了する</Button>
+          </Stack>
         )}
         <Surface>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }}>
@@ -114,6 +129,17 @@ export default function PortalQualityPage() {
           );
         })}
       </Stack>
+
+      <Dialog open={confirm} onClose={() => setConfirm(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>品質チェックを完了しますか？</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">完了すると、チェックの取り消し・変更はできなくなります。アフロが公開の準備に進みます。</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirm(false)}>キャンセル</Button>
+          <Button variant="contained" onClick={completeQuality}>完了する</Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 }
