@@ -1,9 +1,11 @@
 import { Box, Button, Menu, MenuItem, Stack, Typography, ListItemText } from '@mui/material';
-import { ArrowUpRight, CheckCheck, ShieldCheck, Building2, UserRound, History, Lock, Rocket } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, CheckCheck, ShieldCheck, Building2, UserRound, History, Lock, Rocket } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import type { QualityCategory } from '@/types';
 import { QUALITY_CATEGORIES, QUALITY_ITEMS, TOTAL_QUALITY_QUESTIONS } from '@/data/quality';
-import { useDemo } from '@/store/DemoStore';
+import { currentProject, useDemo } from '@/store/DemoStore';
+import { useProjectRoutes } from '@/features/projects/projectRoutes';
 import { approvalLogsOf } from '@/repositories/demo';
 import { useToast } from '@/hooks/useToast';
 import { tokens } from '@/theme/tokens';
@@ -71,6 +73,7 @@ export default function QualityPage() {
   const { state, dispatch } = useDemo();
   const toast = useToast();
   const devBy = useQualityDevBy();
+  const routes = useProjectRoutes();
   // 管理者・開発者画面ではアフロ側の確認だけを行う。顧客側の承認はお客様ポータルだけ（開発者 0.27.0・管理者 2026-11-12）
   const [selected, setSelected] = useState<QualityCategory | null>(null);
   const overall = computeStats(QUALITY_ITEMS, state.qualityChecks);
@@ -109,6 +112,10 @@ export default function QualityPage() {
 
   return (
     <>
+      {/* 戻る導線（2026-11-16 ユーザー指示） */}
+      <Button component={RouterLink} to={routes.detail(currentProject(state).id)} size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>
+        プロジェクト詳細
+      </Button>
       <PageHeader
         eyebrow="④ 品質管理"
         icon={<ShieldCheck size={15} />}

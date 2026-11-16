@@ -1,6 +1,7 @@
 import { Box, Button, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Stack, Switch, Typography } from '@mui/material';
-import { BadgeCheck, CheckCircle2, ChevronDown, ListChecks, Lock } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, CheckCircle2, ChevronDown, ListChecks, Lock } from 'lucide-react';
 import { useState } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import { PageHeader, ProgressRing, Surface } from '@/components/ui';
 import { useDemo } from '@/store/DemoStore';
 import { useToast } from '@/hooks/useToast';
@@ -41,6 +42,10 @@ export default function PortalQualityPage() {
 
   return (
     <>
+      {/* 戻る導線（2026-11-16 ユーザー指示）。メニューから外し、確認・承認の「品質チェック」から開く画面なので確認・承認へ戻す */}
+      <Button component={RouterLink} to="/portal/approvals" size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>
+        確認・承認
+      </Button>
       <PageHeader
         eyebrow="お客様ポータル"
         icon={<ListChecks size={15} />}

@@ -24,6 +24,10 @@ export default function RequirementsDocPage() {
   if (req.status === 'draft') {
     return (
       <Box>
+        {/* 戻る導線（2026-11-16 ユーザー指示） */}
+        <Button component={RouterLink} to={routes.project(req.projectId)} size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>
+          プロジェクト詳細
+        </Button>
         <PageHeader eyebrow="② 要件定義" icon={<Sparkles size={14} />} title="要件定義書" />
         <Reveal>
           <Surface sx={{ textAlign: 'center', py: { xs: 5, md: 7 }, px: { xs: 2.5, md: 4 }, maxWidth: 600, mx: 'auto' }}>

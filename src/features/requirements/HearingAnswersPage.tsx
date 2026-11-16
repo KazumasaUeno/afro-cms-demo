@@ -1,6 +1,6 @@
 import { Box, Button, Stack } from '@mui/material';
-import { ArrowRight, MessageSquareText } from 'lucide-react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { ArrowLeft, ArrowRight, MessageSquareText } from 'lucide-react';
+import { Link as RouterLink, Navigate, useNavigate } from 'react-router-dom';
 import { PageHeader, Reveal, StatusPill } from '@/components/ui';
 import { RouteLoader } from '@/components/layout/RouteLoader';
 import { DATA_MODE, useCurrentRequirements, useRepositories } from '@/repositories';
@@ -30,6 +30,10 @@ export default function HearingAnswersPage() {
 
   return (
     <Box>
+      {/* 戻る導線（2026-11-16 ユーザー指示） */}
+      <Button component={RouterLink} to={routes.project(req.projectId)} size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>
+        プロジェクト詳細
+      </Button>
       <PageHeader
         eyebrow="① ヒアリング"
         icon={<MessageSquareText size={14} />}

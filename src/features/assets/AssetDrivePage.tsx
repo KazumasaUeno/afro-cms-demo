@@ -2,9 +2,9 @@ import {
   Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, InputAdornment, Stack, TextField,
   ToggleButton, ToggleButtonGroup, Typography,
 } from '@mui/material';
-import { FileText, FolderOpen, LayoutGrid, List, Pencil, Search, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, FileText, FolderOpen, LayoutGrid, List, Pencil, Search, Trash2, Upload } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Link as RouterLink, useLocation } from 'react-router-dom';
 import type { Asset } from '@/types';
 import { PageHeader, StatusPill, Surface } from '@/components/ui';
 import { areaOf } from '@/components/layout/nav';
@@ -22,8 +22,20 @@ import {
   uploadCount, validateAssetName,
 } from '@/data/assets';
 import { makeThumbnail } from './thumbnail';
+import { useProjectRoutes } from '@/features/projects/projectRoutes';
 
 const ALL = '__all__';
+
+/** 戻る導線（2026-11-16 ユーザー指示）。管理者・開発者画面ともプロジェクト詳細へ */
+function BackButton() {
+  const { state } = useDemo();
+  const routes = useProjectRoutes();
+  return (
+    <Button component={RouterLink} to={routes.detail(currentProject(state).id)} size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>
+      プロジェクト詳細
+    </Button>
+  );
+}
 
 /**
  * 素材ドライブ（0.36.0。案件ごと）。開発者画面（/dev/assets）はアップロード・名前とフォルダの変更・削除、管理者画面（/assets）は見るだけ。
@@ -36,6 +48,7 @@ export default function AssetDrivePage() {
   if (!isSiteLive(project.stage)) {
     return (
       <>
+        <BackButton />
         <PageHeader eyebrow={dev ? '⑤ 運用' : 'プロジェクト'} icon={<FolderOpen size={15} />} title="素材ドライブ" description="ページ・お知らせで使う画像と資料を管理します。" />
         <SiteNotLive icon={<FolderOpen size={26} />} feature="素材ドライブ" />
       </>
@@ -93,6 +106,7 @@ function AssetDrive({ dev }: { dev: boolean }) {
 
   return (
     <>
+      <BackButton />
       <PageHeader
         eyebrow={dev ? '⑤ 運用' : 'プロジェクト'}
         icon={<FolderOpen size={15} />}

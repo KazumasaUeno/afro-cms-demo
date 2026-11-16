@@ -1,11 +1,11 @@
 import { Box, Button, ButtonBase, Stack, Typography } from '@mui/material';
-import { BarChart3, GitBranchPlus, Info, ScanSearch, TrendingDown, TrendingUp, ArrowUpRight } from 'lucide-react';
+import { BarChart3, GitBranchPlus, Info, ScanSearch, TrendingDown, TrendingUp, ArrowUpRight, ArrowLeft } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { DiagnosisReport } from '@/types';
 import { metricsOf, type ProjectMetrics } from '@/data/projectContent';
 import { currentProject, useDemo } from '@/store/DemoStore';
-import { useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useProjectRoutes } from '@/features/projects/projectRoutes';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { tokens } from '@/theme/tokens';
@@ -157,6 +157,7 @@ export default function InsightsPage() {
 
 function InsightsBody({ metrics, followUpButton }: { metrics: ProjectMetrics; followUpButton: ReactNode }) {
   const { state } = useDemo();
+  const routes = useProjectRoutes();
   const { last, before } = pointsOf(metrics);
   const TRAFFIC_SOURCES = metrics.traffic;
   const PAGE_PERFORMANCE = metrics.pagePerformance;
@@ -177,6 +178,10 @@ function InsightsBody({ metrics, followUpButton }: { metrics: ProjectMetrics; fo
 
   return (
     <>
+      {/* 戻る導線（2026-11-16 ユーザー指示）。まだインサイトが無い案件の案内には「プロジェクト詳細を開く」がある */}
+      <Button component={RouterLink} to={routes.detail(currentProject(state).id)} size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>
+        プロジェクト詳細
+      </Button>
       <PageHeader
         eyebrow="⑥ 改善"
         icon={<BarChart3 size={15} />}

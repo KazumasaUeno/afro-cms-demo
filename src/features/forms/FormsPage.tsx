@@ -1,9 +1,9 @@
 import {
   Box, Button, ButtonBase, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, Stack, Switch, Tab, Tabs, Typography,
 } from '@mui/material';
-import { CheckCircle2, Download, Inbox, Pencil, Plus, X } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Download, Inbox, Pencil, Plus, X } from 'lucide-react';
 import { useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Link as RouterLink, useLocation } from 'react-router-dom';
 import type { FormDef, FormSubmission } from '@/types';
 import { PageHeader, SectionTitle, StatusPill, Surface } from '@/components/ui';
 import { areaOf } from '@/components/layout/nav';
@@ -21,6 +21,7 @@ import { fieldTypeLabel, formsOf, openCount, submissionRows } from '@/data/forms
 import { reportRecipients } from '@/data/reportSend';
 import { clientAccountsState } from '@/store/reducer';
 import { FormEditorDialog } from './FormEditorDialog';
+import { useProjectRoutes } from '@/features/projects/projectRoutes';
 
 type Mode = 'dev' | 'portal' | 'admin';
 
@@ -29,6 +30,14 @@ const HEADER: Record<Mode, { eyebrow: string; description: string }> = {
   portal: { eyebrow: 'お客様ポータル', description: 'サイトのフォームから届いた問い合わせを確認し、対応状況を記録します。CSV で保存できます（受信の見本は架空のデータです）。' },
   admin: { eyebrow: 'プロジェクト', description: 'フォームと受信件数の一覧です（管理者画面は見るだけ）。' },
 };
+
+/** 戻る導線（2026-11-16 ユーザー指示）。お客様ポータルはメニューから外したのでホームへ、管理者・開発者画面はプロジェクト詳細へ */
+function BackButton({ mode }: { mode: Mode }) {
+  const { state } = useDemo();
+  const routes = useProjectRoutes();
+  const back = mode === 'portal' ? { to: '/portal', label: 'ホーム' } : { to: routes.detail(currentProject(state).id), label: 'プロジェクト詳細' };
+  return <Button component={RouterLink} to={back.to} size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>{back.label}</Button>;
+}
 
 /**
  * フォーム管理（0.37.0。案件ごと）。1 つの部品を画面ごとに出し分ける（表示の出し分けで、セキュリティ境界ではない。reducer でも確かめる）。
@@ -44,6 +53,7 @@ export default function FormsPage() {
   if (!isSiteLive(project.stage)) {
     return (
       <>
+        <BackButton mode={mode} />
         <PageHeader eyebrow={HEADER[mode].eyebrow} icon={<Inbox size={15} />} title="フォーム" description={HEADER[mode].description} />
         <SiteNotLive icon={<Inbox size={26} />} feature="フォーム" />
       </>
@@ -74,6 +84,7 @@ function Forms({ mode }: { mode: Mode }) {
 
   return (
     <>
+      <BackButton mode={mode} />
       <PageHeader
         eyebrow={HEADER[mode].eyebrow}
         icon={<Inbox size={15} />}

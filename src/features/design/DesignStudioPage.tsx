@@ -1,11 +1,11 @@
 import { Box, Button, ButtonBase, Dialog, IconButton, Stack, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
-import { ArrowRight, BadgeCheck, Check, Columns3, Expand, LayoutTemplate, Monitor, Network, Palette, ShieldCheck, Smartphone, Square, Tablet, Wand2, X, PenLine, ListTodo } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BadgeCheck, Check, Columns3, Expand, LayoutTemplate, Monitor, Network, Palette, ShieldCheck, Smartphone, Square, Tablet, Wand2, X, PenLine, ListTodo } from 'lucide-react';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { BuildFlowNav } from '@/components/layout/BuildFlowNav';
 import { AiBadge, PageHeader, Reveal, StatusPill, Surface } from '@/components/ui';
 import { BUILD_PAGES, DESIGN_VARIANTS } from '@/data/designs';
-import { useDemo } from '@/store/DemoStore';
+import { currentProject, useDemo } from '@/store/DemoStore';
 import { useToast } from '@/hooks/useToast';
 import { formatDateTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
@@ -117,7 +117,7 @@ function VariantCard({ v, selected, adopted, locked, onSelect }: { v: DesignVari
  */
 export default function DesignStudioPage() {
   const { state, dispatch } = useDemo();
-  const { dev, quality: qualityRoute, cms: cmsRoute, designRequirements: designReqRoute, sitemap: sitemapRoute } = useProjectRoutes();
+  const { dev, detail: detailRoute, quality: qualityRoute, cms: cmsRoute, designRequirements: designReqRoute, sitemap: sitemapRoute } = useProjectRoutes();
   const navigate = useNavigate();
   const toast = useToast();
   const design = state.design;
@@ -145,6 +145,15 @@ export default function DesignStudioPage() {
 
   return (
     <Box>
+      {/* 戻る導線（2026-11-16 ユーザー指示）。開発者画面の /dev/design はメニュー項目「デザイン」の画面なので出さない。
+          制作フローの段階ナビと同じ行に並ばないよう Box で包む */}
+      {!dev && (
+        <Box>
+          <Button component={RouterLink} to={detailRoute(currentProject(state).id)} size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>
+            プロジェクト詳細
+          </Button>
+        </Box>
+      )}
       <BuildFlowNav />
       <PageHeader
         eyebrow="③ 制作"

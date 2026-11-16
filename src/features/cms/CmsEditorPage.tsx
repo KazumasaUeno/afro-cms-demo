@@ -1,7 +1,7 @@
 import { Box, Button, ButtonBase, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, InputAdornment, Menu, MenuItem, Stack, Tab, Tabs, TextField, Typography, ListItemText } from '@mui/material';
 import { ArrowLeft, ChevronDown, Eye, GitCompare, History, LayoutTemplate, Plus, Search, Send, SlidersHorizontal, Save, Rocket, CalendarClock, Trash2, Undo2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 import type { CmsPage, PageType } from '@/types';
 import { currentProject, useDemo } from '@/store/DemoStore';
 import { isSiteLive } from '@/data/projectContent';
@@ -129,13 +129,22 @@ function DeleteDialog({ open, page, dirty, dev, onClose, onDelete }: { open: boo
  * ページ・お知らせは案件ごと（0.30.0）。サイトの公開前（運用の段階より前）の案件は、編集の代わりに案内を出す（2026-11-13 ユーザー指示）。
  * 案件を切り替えたら編集中の状態を持ち越さないよう、案件ごとに作り直す（key）
  */
+/** 戻る先（2026-11-16 ユーザー指示「ページ・お知らせから戻るボタンがない」。ポータルはメニューから外したのでホームの「サイトの更新」へ、開発者画面はプロジェクト詳細へ） */
+function useBackTarget(): { to: string; label: string } {
+  const { state } = useDemo();
+  const routes = useProjectRoutes();
+  return routes.dev ? { to: routes.detail(currentProject(state).id), label: 'プロジェクト詳細' } : { to: '/portal', label: 'ホーム' };
+}
+
 export default function CmsEditorPage() {
   const { state } = useDemo();
   const { dev } = useProjectRoutes();
   const project = currentProject(state);
+  const back = useBackTarget();
   if (!isSiteLive(project.stage)) {
     return (
       <>
+        <Button component={RouterLink} to={back.to} size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>{back.label}</Button>
         <PageHeader eyebrow={dev ? '⑤ 運用' : 'お客様ポータル'} icon={<LayoutTemplate size={15} />} title="ページ・お知らせ" description="ページとお知らせを編集し、承認を経て公開します。" />
         <SiteNotLive icon={<LayoutTemplate size={26} />} feature="ページ編集" />
       </>
@@ -250,7 +259,21 @@ function CmsEditor() {
     toast(`「${gone.title}」を削除しました`, 'info');
   };
 
+  // 戻る: 未保存の変更があれば確かめてから離れる
+  const back = useBackTarget();
+  const navigate = useNavigate();
+  const [leaving, setLeaving] = useState(false);
   const header = (
+    <>
+    <Button size="small" startIcon={<ArrowLeft size={16} />} onClick={() => (dirty ? setLeaving(true) : navigate(back.to))} sx={{ mb: 2, ml: -1 }}>{back.label}</Button>
+    <Dialog open={leaving} onClose={() => setLeaving(false)} maxWidth="xs" fullWidth>
+      <DialogTitle>保存していない変更があります</DialogTitle>
+      <DialogContent><Typography variant="body2">このまま戻ると、保存していない変更は破棄されます。</Typography></DialogContent>
+      <DialogActions>
+        <Button onClick={() => setLeaving(false)}>編集を続ける</Button>
+        <Button color="error" onClick={() => { setLeaving(false); navigate(back.to); }}>破棄して戻る</Button>
+      </DialogActions>
+    </Dialog>
     <PageHeader
       eyebrow={dev ? '⑤ 運用' : 'お客様ポータル'}
       icon={<LayoutTemplate size={15} />}
@@ -259,6 +282,7 @@ function CmsEditor() {
         ? 'お客様サイトのページとお知らせの下書きを編集し、お客様に承認を依頼します。公開はお客様がポータルの「公開承認」で行います。'
         : 'ページとお知らせを編集し、承認を経て公開します。公開はデモ上の状態変更のみで、実際のサーバーには反映されません。'}
     />
+    </>
   );
   const newPageDialog = (
     <NewPageDialog

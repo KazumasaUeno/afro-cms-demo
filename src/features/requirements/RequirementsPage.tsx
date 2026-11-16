@@ -42,7 +42,8 @@ export default function RequirementsPage() {
   return (
     <Box>
       {/* 改善提案の表示後にプロジェクト詳細へ戻る導線（0.38.0。2026-11-16 ユーザー指示。プロジェクト詳細の「プロジェクト一覧」と同じ形） */}
-      {view === 'result' && (
+      {/* 入力中も戻れるようにした（戻る導線（2026-11-16 ユーザー指示）。入力は自動で保存される）。AI 分析の演出中だけ出さない */}
+      {view !== 'analyzing' && (
         <Button component={RouterLink} to={routes.project(req.projectId)} size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>
           プロジェクト詳細
         </Button>

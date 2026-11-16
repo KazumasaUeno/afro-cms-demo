@@ -1,10 +1,10 @@
 import { Box, Button, LinearProgress, Stack, Typography } from '@mui/material';
-import { ArrowRight, Palette } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, ArrowRight, Palette } from 'lucide-react';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { BuildFlowNav } from '@/components/layout/BuildFlowNav';
 import { PageHeader, Reveal, StatusPill, Surface } from '@/components/ui';
 import { DESIGN_QUESTIONS } from '@/data/designRequirements';
-import { useDemo } from '@/store/DemoStore';
+import { currentProject, useDemo } from '@/store/DemoStore';
 import { formatDateTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
 import type { AnswerValue } from '@/types';
@@ -22,7 +22,7 @@ import { DESIGN_REQUIRED, designAnsweredCount, designBlockers } from './designRe
  */
 export default function DesignRequirementsPage() {
   const { state, dispatch, flush } = useDemo();
-  const { design: designRoute } = useProjectRoutes();
+  const { design: designRoute, detail: detailRoute } = useProjectRoutes();
   const navigate = useNavigate();
   const answers = state.design.answers ?? {};
   const meta = state.design.answerMeta ?? {};
@@ -35,6 +35,12 @@ export default function DesignRequirementsPage() {
 
   return (
     <Box>
+      {/* 戻る導線（2026-11-16 ユーザー指示）。制作フローの段階ナビと同じ行に並ばないよう Box で包む */}
+      <Box>
+        <Button component={RouterLink} to={detailRoute(currentProject(state).id)} size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>
+          プロジェクト詳細
+        </Button>
+      </Box>
       <BuildFlowNav />
       <PageHeader
         eyebrow="③ 制作"

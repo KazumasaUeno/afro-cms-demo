@@ -4,12 +4,12 @@ import {
   useEdgesState, useNodesState, useReactFlow, type Connection, type Edge, type EdgeChange, type NodeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { ArrowRight, BadgeCheck, Lightbulb, Lock, Maximize2, Network, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BadgeCheck, Lightbulb, Lock, Maximize2, Network, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { BuildFlowNav } from '@/components/layout/BuildFlowNav';
 import { AiBadge, PageHeader, Reveal, StatusPill, Surface } from '@/components/ui';
-import { useDemo } from '@/store/DemoStore';
+import { currentProject, useDemo } from '@/store/DemoStore';
 import { formatDateTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
 import { useThemeMode } from '@/theme/ThemeMode';
@@ -278,6 +278,12 @@ export default function SitemapPage() {
 
   return (
     <Box>
+      {/* 戻る導線（2026-11-16 ユーザー指示）。制作フローの段階ナビと同じ行に並ばないよう Box で包む */}
+      <Box>
+        <Button component={RouterLink} to={routes.detail(currentProject(state).id)} size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>
+          プロジェクト詳細
+        </Button>
+      </Box>
       <BuildFlowNav />
       <PageHeader
         eyebrow="③ 制作"
