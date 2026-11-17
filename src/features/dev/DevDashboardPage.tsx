@@ -2,10 +2,9 @@ import { Box, Button, ButtonBase, Stack, Typography } from '@mui/material';
 import { ArrowRight, CircleCheck, FolderKanban, FolderLock, LayoutDashboard, Rocket } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader, SectionTitle, StatusPill, Surface } from '@/components/ui';
-import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { useRepositories } from '@/repositories';
-import { useDemo, devState } from '@/store/DemoStore';
-import { demoDesignApprovedAt } from '@/store/projectWork';
+import { useDemo } from '@/store/DemoStore';
+import { devOf, workView } from '@/store/projectWork';
 import { formatDateTime, relativeTime } from '@/services/time';
 import { DEV_TASK_STATUSES } from '@/data/dev';
 import { devNextWork } from '@/features/projects/projectRoutes';
@@ -23,7 +22,7 @@ const MINE_ORDER: Record<DevTaskStatus, number> = { doing: 0, review: 1, todo: 2
  * 開発者画面のダッシュボード（11/10 レビュー）。
  * 1. 担当している案件（進捗・段階・次の作業・公開予定日。押すとその案件のプロジェクト詳細 /dev/projects/:id を開く。0.26.0）
  * 2. お客様の承認待ち・対応状況
- * 3. 構築状況（タスク・環境・デプロイ・エラー。開発データはデモの案件の分だけ）
+ * 3. 構築状況（タスク・環境・デプロイ。表示中の案件。担当外なら担当の最初の案件。2026-11-17 から全案件に開発データがある）
  * このページは DevProjectGate を通さない（表示中の案件が担当外でも、担当案件の一覧は出す）
  */
 export default function DevDashboardPage() {
@@ -33,8 +32,8 @@ export default function DevDashboardPage() {
   const me = useDevUser();
   const projects = useDevProjects();
   const navigate = useNavigate();
-  // 開発データ・お客様の承認のデータがあるのはデモの案件（MINAMO COFFEE）だけ
-  const demo = projects.find((p) => p.id === CLIENT_PROJECT_ID);
+  // 構築状況を出す案件（表示中の案件が担当なら、その案件）
+  const shown = projects.find((p) => p.id === state.currentProjectId) ?? projects[0];
 
   // 作業画面（ヒアリング・構築タスクなど）は表示中の案件で動くので、案件を切り替えてから開く
   const open = (id: string, to: string) => {
@@ -48,7 +47,7 @@ export default function DevDashboardPage() {
         icon={<LayoutDashboard size={15} />}
         title="担当案件"
         description={projects.length
-          ? `担当している案件は ${projects.length} 件です。案件を押すと、その案件のプロジェクト詳細（制作の6段階）を開きます。`
+          ? `担当している案件は ${projects.length} 件です。案件を押すと、その案件のプロジェクト詳細（制作の8段階）を開きます。`
           : '担当している案件はまだありません。'}
       />
 
@@ -73,7 +72,7 @@ export default function DevDashboardPage() {
             />
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0,1fr)', sm: 'repeat(2, minmax(0,1fr))' }, gap: 2 }}>
               {projects.map((p) => {
-                // カードはプロジェクト詳細（管理者画面と同じ 6 段階。0.26.0）を開く。次の作業の行き先は詳細の「次に必要な作業」から
+                // カードはプロジェクト詳細（管理者画面と同じ 8 段階。0.26.0）を開く。次の作業の行き先は詳細の「次に必要な作業」から
                 return <DevProjectCard key={p.id} p={p} next={devNextWork(p, state).next} onOpen={() => open(p.id, `/dev/projects/${p.id}`)} />;
               })}
             </Box>
@@ -82,28 +81,28 @@ export default function DevDashboardPage() {
         </Box>
       )}
 
-      {demo && <BuildStatus project={demo} meId={me.id} openWork={(to) => open(demo.id, to)} />}
+      {shown && <BuildStatus project={shown} meId={me.id} openWork={(to) => open(shown.id, to)} />}
     </>
   );
 }
 
 /**
- * デモの案件の構築状況（タスク・環境・デプロイ・エラー）。担当案件の下に、件数を絞って控えめに出す。
+ * 案件の構築状況（タスク・環境・デプロイ）。担当案件の下に、件数を絞って控えめに出す。
  * 構築タスク・環境の画面は表示中の案件で動くので、openWork で案件を切り替えてから開く
  */
 function BuildStatus({ project, meId, openWork }: { project: Project; meId: string; openWork: (to: string) => void }) {
   const { state } = useDemo();
-  const dev = devState(state);
+  const dev = devOf(state, project.id);
   const mineAll = dev.tasks.filter((t) => t.assigneeId === meId && t.status !== 'done');
   const mine = [...mineAll].sort((a, b) => MINE_ORDER[a.status] - MINE_ORDER[b.status]).slice(0, 3);
-  const next = nextDevAction(dev, !!demoDesignApprovedAt(state), meId);
+  const next = nextDevAction(dev, !!workView(state, project.id).design.approvedAt, meId);
 
   return (
     <Box component="section" aria-labelledby="build-status-title" sx={{ mt: { xs: 4, md: 5 }, pt: { xs: 3, md: 4 }, borderTop: `1px solid ${tokens.color.border}` }}>
       <Box sx={{ mb: 2 }}>
         <Typography id="build-status-title" variant="h4" component="h2">構築状況 — {project.siteName}</Typography>
         <Typography variant="caption" sx={{ display: 'block', mt: 0.25 }}>
-          開発データはこの案件の分だけです。あなたの担当で未完了のタスクは {mineAll.length} 件です。
+          あなたの担当で未完了のタスクは {mineAll.length} 件です。ほかの案件は、上の案件を開くと切り替わります。
         </Typography>
       </Box>
 

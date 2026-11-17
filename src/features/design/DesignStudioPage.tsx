@@ -1,10 +1,10 @@
-import { Box, Button, ButtonBase, Dialog, IconButton, Stack, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
+import { Box, Button, ButtonBase, Dialog, IconButton, Stack, Tab, Tabs, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
 import { ArrowLeft, ArrowRight, BadgeCheck, Check, Columns3, Expand, LayoutTemplate, Monitor, Network, Palette, ShieldCheck, Smartphone, Square, Tablet, Wand2, X, PenLine, ListTodo } from 'lucide-react';
 import { useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { BuildFlowNav } from '@/components/layout/BuildFlowNav';
 import { AiBadge, PageHeader, Reveal, StatusPill, Surface } from '@/components/ui';
-import { BUILD_PAGES, DESIGN_VARIANTS } from '@/data/designs';
+import { BUILD_PAGES, offeredVariants } from '@/data/designs';
 import { currentProject, useDemo } from '@/store/DemoStore';
 import { useToast } from '@/hooks/useToast';
 import { formatDateTime } from '@/services/time';
@@ -14,6 +14,8 @@ import { DeviceFrame } from './DeviceFrame';
 import { BuildSequence } from './BuildSequence';
 import type { Device } from './previews/shared';
 import { useProjectRoutes } from '@/features/projects/projectRoutes';
+import { RequestApprovalButton } from '@/features/portal/RequestApprovalButton';
+import { useQualityDevBy } from '@/features/quality/useQualityDevBy';
 import { DESIGN_REQUIRED, designBlockers, designReady } from './designReq';
 import { personalize, useDesignContext, type DesignContext } from './designContext';
 
@@ -50,6 +52,44 @@ export function ScreenToggle({ ctx, value, onChange }: { ctx: DesignContext; val
   );
 }
 
+/** ページの名前（0 = トップ、1〜 = 主要ページ） */
+export const screenLabelOf = (ctx: DesignContext, screen: number) => (screen === 0 ? 'トップ' : ctx.pages[screen - 1]?.label ?? 'トップ');
+
+/**
+ * 先にページを選ぶタブ（2026-11-17 会議: 人は左上から Z・F の順に見るので、ページの選択を最初に目に入る位置に置き、
+ * そのページについてデザイン案を並べて比べる）。デザインスタジオとお客様ポータルの承認で使う
+ */
+export function PageTabs({ ctx, value, onChange, heading = 'ページを選ぶ' }: { ctx: DesignContext; value: number; onChange: (n: number) => void; heading?: string }) {
+  const screens = ['トップ', ...ctx.pages.map((p) => p.label)];
+  return (
+    <Box>
+      <Typography variant="overline" component="p" sx={{ color: tokens.color.primary, mb: 0.25 }}>{heading}</Typography>
+      <Tabs
+        value={Math.min(value, screens.length - 1)}
+        onChange={(_, v: number) => onChange(v)}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
+        aria-label="表示するページ"
+        sx={{ borderBottom: `1px solid ${tokens.color.border}`, '& .MuiTab-root': { minHeight: 56, alignItems: 'flex-start', textAlign: 'left', textTransform: 'none', px: 2 } }}
+      >
+        {screens.map((label, i) => (
+          <Tab
+            key={`${i}-${label}`}
+            value={i}
+            label={
+              <Box component="span" sx={{ display: 'block', maxWidth: 220 }}>
+                <Box component="span" sx={{ display: 'block', fontSize: 12, fontWeight: 600, color: tokens.color.muted }}>{i === 0 ? 'トップページ' : '下層ページ'}</Box>
+                <Box component="span" sx={{ display: 'block', fontSize: 16, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</Box>
+              </Box>
+            }
+          />
+        ))}
+      </Tabs>
+    </Box>
+  );
+}
+
 function ScoreBar({ label, value }: { label: string; value: number }) {
   return (
     <Stack direction="row" alignItems="center" spacing={1}>
@@ -62,7 +102,7 @@ function ScoreBar({ label, value }: { label: string; value: number }) {
   );
 }
 
-function VariantCard({ v, selected, adopted, locked, onSelect }: { v: DesignVariant; selected: boolean; adopted: boolean; locked: boolean; onSelect: () => void }) {
+function VariantCard({ v, selected, adopted, locked, screen, onSelect }: { v: DesignVariant; selected: boolean; adopted: boolean; locked: boolean; screen: number; onSelect: () => void }) {
   return (
     <ButtonBase
       onClick={onSelect}
@@ -79,7 +119,8 @@ function VariantCard({ v, selected, adopted, locked, onSelect }: { v: DesignVari
       }}
     >
       <Box sx={{ position: 'relative', borderRadius: '10px', overflow: 'hidden', bgcolor: tokens.color.bgSubtle }}>
-        <DeviceFrame design={v.id} device="pc" thumbnail viewportHeight={760} />
+        {/* 選んだページの見本（2026-11-17 会議: ページを先に選び、そのページで案を比べる） */}
+        <DeviceFrame design={v.id} device="pc" screen={screen} thumbnail viewportHeight={760} />
         {/* チェック印は採用済みの案だけ（表示中の案は青枠のみ） */}
         {adopted && (
           <Box sx={{ position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: '50%', bgcolor: tokens.color.primary, color: tokens.color.onPrimary, display: 'grid', placeItems: 'center', boxShadow: tokens.shadow.sm }}>
@@ -123,20 +164,24 @@ export default function DesignStudioPage() {
   const design = state.design;
   const [focus, setFocus] = useState<DesignId>(design.selected ?? 'creative');
   const [device, setDevice] = useState<Device>('pc');
-  const [mode, setMode] = useState<'single' | 'compare'>('single');
+  // 既定は比較（2026-11-17 会議: ページを選んでから、そのページの案を並べて比べる）
+  const [mode, setMode] = useState<'single' | 'compare'>('compare');
   const [expanded, setExpanded] = useState(false);
   const [building, setBuilding] = useState(false);
   const [screenNo, setScreen] = useState(0);
   const locked = !!design.approvedAt;
   // 案は案件ごと（ヒアリング・要件定義書・サイトマップ・デザイン要件定義から。0.29.5）
   const ctx = useDesignContext();
-  const variants = DESIGN_VARIANTS.map((v) => personalize(v, ctx));
+  // 新しく出す案は A・B の 2 つ（2026-11-17 会議）。選択済みの C（premium）は消さずに出す
+  const variants = offeredVariants(design.selected).map((v) => personalize(v, ctx));
   const screen = Math.min(screenNo, ctx.pages.length);
   const current = variants.find((v) => v.id === focus) ?? variants[0];
   const selectedVariant = variants.find((v) => v.id === design.selected);
-  // サイトマップのお客様承認と、デザイン要件定義（0.28.0）の必須の質問がそろうまでは 3 案を出さず、足りないものへ案内する（採用済みの保存データはそのまま出す）
+  // サイトマップのお客様承認と、デザイン要件定義（0.28.0）の必須の質問がそろうまでは案を出さず、足りないものへ案内する（採用済みの保存データはそのまま出す）
   const sitemapOk = !!state.sitemap.approvedAt || locked;
   const reqOk = designReady(state);
+  // 開発者画面で操作した人（全ページの構築の承認履歴に残す。2026-11-17）
+  const devBy = useQualityDevBy();
   const ready = sitemapOk && reqOk;
   const missing = designBlockers(design.answers).length;
 
@@ -156,14 +201,16 @@ export default function DesignStudioPage() {
       )}
       <BuildFlowNav />
       <PageHeader
-        eyebrow="③ 制作"
+        eyebrow="④ 制作"
         icon={<Wand2 size={14} />}
-        title="3つの方向性から、デザインを選ぶ"
-        description="ヒアリング・要件定義書・サイトマップ・デザイン要件定義をもとに、AI が 3 つのデザイン案（各最大 3 画面）を作ります"
+        title="ページごとに、2つのデザイン案を比べる"
+        description="ヒアリング・要件定義書・サイトマップ・デザイン要件定義をもとに、AI が 2 つのデザイン案（各最大 3 画面）を作ります。先にページを選び、そのページで案を並べて比べます"
         actions={!ready ? <AiBadge /> : (
           <>
             <Button variant="outlined" size="small" startIcon={<Palette size={15} />} onClick={() => navigate(designReqRoute)}>デザイン要件定義</Button>
             <AiBadge />
+            {/* デザイン案ができたらお客様へ採用・承認を依頼する（2026-11-17 会議。依頼するまでお客様の画面では「準備中」） */}
+            <RequestApprovalButton approvalKey="design" blockedReason={reqOk ? undefined : 'デザイン要件定義の必須（A）の質問に答えると依頼できます'} />
             <ToggleButtonGroup exclusive size="small" value={mode} onChange={(_, v) => v && setMode(v)} aria-label="表示モード">
               <ToggleButton value="single" sx={{ gap: 0.75 }}><Square size={14} />単体</ToggleButton>
               <ToggleButton value="compare" sx={{ gap: 0.75 }}><Columns3 size={14} />比較</ToggleButton>
@@ -196,7 +243,7 @@ export default function DesignStudioPage() {
               <Palette size={36} color={tokens.color.faint} aria-hidden />
               <Typography variant="h3" component="h2">先にデザイン要件定義を入力してください</Typography>
               <Typography variant="body2" color="text.secondary">
-                必須（A）の {DESIGN_REQUIRED.length} 問に答えると、3つのデザイン案を作れます（あと {missing} 問）。
+                必須（A）の {DESIGN_REQUIRED.length} 問に答えると、2つのデザイン案を作れます（あと {missing} 問）。
               </Typography>
               <Box sx={{ pt: 1 }}>
                 <Button variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate(designReqRoute)}>デザイン要件定義へ</Button>
@@ -206,12 +253,18 @@ export default function DesignStudioPage() {
         </Reveal>
       ) : (<>
 
-      {/* 案の選択 */}
-      <Box sx={{ display: { xs: 'flex', md: 'grid' }, gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, mb: 3, overflowX: { xs: 'auto', md: 'visible' }, scrollSnapType: 'x mandatory', mx: { xs: -2, md: 0 }, px: { xs: 2, md: 0 }, pb: { xs: 1, md: 0 } }}>
+      {/* 1. ページを選ぶ（2026-11-17 会議: 左上から見るので最初に置く。トップ／下層ページ） */}
+      <Surface padding={{ xs: 1.5, md: 2 }} sx={{ mb: 2.5 }}>
+        <PageTabs ctx={ctx} value={screen} onChange={setScreen} heading="1. ページを選ぶ" />
+      </Surface>
+
+      {/* 2. 選んだページについて、案を比べる */}
+      <Typography variant="overline" component="p" sx={{ color: tokens.color.primary, mb: 1 }}>2. 「{screenLabelOf(ctx, screen)}」のデザイン案を比べる</Typography>
+      <Box sx={{ display: { xs: 'flex', md: 'grid' }, gridTemplateColumns: `repeat(${variants.length}, minmax(0, 1fr))`, gap: 2, mb: 3, overflowX: { xs: 'auto', md: 'visible' }, scrollSnapType: 'x mandatory', mx: { xs: -2, md: 0 }, px: { xs: 2, md: 0 }, pb: { xs: 1, md: 0 } }}>
         {variants.map((v, i) => (
           <Box key={v.id} sx={{ flex: { xs: '0 0 78%', sm: '0 0 46%' }, scrollSnapAlign: 'start', minWidth: 0 }}>
             <Reveal delay={i * 0.07}>
-              <VariantCard v={v} selected={focus === v.id} adopted={locked && design.selected === v.id} locked={locked} onSelect={() => choose(v.id)} />
+              <VariantCard v={v} selected={focus === v.id} adopted={locked && design.selected === v.id} locked={locked} screen={screen} onSelect={() => choose(v.id)} />
             </Reveal>
           </Box>
         ))}
@@ -227,7 +280,7 @@ export default function DesignStudioPage() {
                 <Typography variant="body2" color="text.secondary">{current.description}</Typography>
               </>
             ) : (
-              <Typography variant="h4" component="h2">3案を並べて比較</Typography>
+              <Typography variant="h4" component="h2">{screenLabelOf(ctx, screen)}を {variants.length} 案で比較</Typography>
             )}
             {/* 案に使った案件の情報（ブランド色・イメージ） */}
             <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
@@ -237,7 +290,7 @@ export default function DesignStudioPage() {
             </Typography>
           </Box>
           <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
-            <ScreenToggle ctx={ctx} value={screen} onChange={setScreen} />
+            {/* ページの選択は上のタブ（2026-11-17 会議）。ここは端末だけ */}
             <DeviceToggle value={device} onChange={setDevice} />
             {mode === 'single' && (
               <Tooltip title="大きくプレビュー">
@@ -250,7 +303,7 @@ export default function DesignStudioPage() {
         {mode === 'single' ? (
           <DeviceFrame design={current.id} device={device} screen={screen} viewportHeight={device === 'pc' ? 720 : undefined} label={`${current.name}のプレビュー`} />
         ) : (
-          <Box sx={{ display: { xs: 'flex', lg: 'grid' }, gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, overflowX: { xs: 'auto', lg: 'visible' }, scrollSnapType: 'x mandatory' }}>
+          <Box sx={{ display: { xs: 'flex', md: 'grid' }, gridTemplateColumns: `repeat(${variants.length}, minmax(0, 1fr))`, gap: 2, overflowX: { xs: 'auto', md: 'visible' }, scrollSnapType: 'x mandatory' }}>
             {variants.map((v) => (
               <Box key={v.id} sx={{ flex: { xs: '0 0 86%', sm: '0 0 60%' }, scrollSnapAlign: 'center', minWidth: 0 }}>
                 <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
@@ -292,7 +345,7 @@ export default function DesignStudioPage() {
             ) : building ? (
               <BuildSequence
                 accent={selectedVariant?.palette[2] ?? tokens.color.primary}
-                onDone={() => { dispatch({ type: 'completeBuild' }); setBuilding(false); toast('全ページを構築しました', 'ai'); }}
+                onDone={() => { dispatch({ type: 'completeBuild', devBy }); setBuilding(false); toast('全ページを構築しました', 'ai'); }}
               />
             ) : (
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
@@ -323,7 +376,7 @@ export default function DesignStudioPage() {
               <Typography variant="h4" component="h2" sx={{ fontSize: { xs: 16, md: undefined } }}>デザイン案の採用</Typography>
               <Typography variant="body2" color="text.secondary">
                 {state.sitemap.approvedAt
-                  ? 'お客様がお客様ポータルで 3 案から選んで承認します。承認されると、このデザインで全ページを構築できます。'
+                  ? 'お客様がお客様ポータルで 2 案から選んで承認します。承認されると、このデザインで全ページを構築できます。'
                   : 'サイトマップの承認の後に、お客様がお客様ポータルで選びます（ここでは案の比較だけできます）。'}
               </Typography>
             </Box>

@@ -1,5 +1,5 @@
 import { Box, Button, Stack, Typography } from '@mui/material';
-import { ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Clock, Code2, FolderSearch, Globe, Pencil, User } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Clock, Code2, FolderSearch, Globe, Mail, MapPin, Pencil, Phone, User, UserRound } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import type { Project, Stage } from '@/types';
@@ -26,7 +26,8 @@ import { sitemapCreated } from '@/data/sitemap';
 import { useWrite } from '@/hooks/useWrite';
 import { EditProjectDialog } from './EditProjectDialog';
 import { FollowUpLinks } from './FollowUpLinks';
-import type { ProjectDraft } from './projectForm';
+import { ymdToIso, type ProjectDraft } from './projectForm';
+import { releaseDateOf } from '@/data/schedule';
 
 function Fact({ label, value, ok }: { label: string; value: ReactNode; ok?: boolean }) {
   return (
@@ -56,7 +57,7 @@ function NotFound({ list }: { list: string }) {
 }
 
 /**
- * プロジェクト詳細（ヘッダーの直下に6段階のパイプライン、その下にお客様の対応状況）。
+ * プロジェクト詳細（ヘッダーの直下に8段階のパイプライン、その下にお客様の対応状況）。
  * 管理者画面（/projects/:id）と開発者画面（/dev/projects/:id。0.26.0）で同じ画面。開発者画面では
  * URL の案件が担当かを確かめ（担当外は DevProjectGate の案内。転送はしない）、行き先は開発者画面の中だけにする（useProjectRoutes）
  */
@@ -146,6 +147,13 @@ function Detail({ p }: { p: Project }) {
         <Fact label="承認日時" value={formatDateTime(req.approvedAt)} />
       </>
     ),
+    // 制作〜公開の日程（2026-11-17 会議）
+    schedule: (
+      <>
+        <Fact label="納品予定日" value={state.schedule ? formatDate(ymdToIso(state.schedule.deliveryDate) ?? undefined) : '未入力'} ok={!!state.schedule} />
+        <Fact label="公開予定日" value={state.schedule ? formatDate(ymdToIso(state.schedule.releaseDate) ?? undefined) : '未入力'} ok={!!state.schedule} />
+      </>
+    ),
     build: (
       <>
         <Fact label="サイトマップ" value={state.sitemap.approvedAt ? '承認済み' : sitemapCreated(state.sitemap) ? '未承認' : '未作成'} ok={!!state.sitemap.approvedAt} />
@@ -158,6 +166,13 @@ function Detail({ p }: { p: Project }) {
         <Fact label="双方確認済み" value={`${q.done} / ${q.total}項目`} ok={q.percent === 100} />
         <Fact label="完了率" value={`${q.percent}%`} />
         <Fact label="資料上の問数" value={`${TOTAL_QUALITY_QUESTIONS}問`} />
+      </>
+    ),
+    // リリース（公開。2026-11-17 会議）
+    release: (
+      <>
+        <Fact label="納品検収" value={state.design.qualityApprovedAt ? `完了 ${formatDateTime(state.design.qualityApprovedAt)}` : '未完了'} ok={!!state.design.qualityApprovedAt} />
+        <Fact label="公開予定日" value={formatDate(releaseDateOf(state, p))} />
       </>
     ),
     operation: (
@@ -212,8 +227,20 @@ function Detail({ p }: { p: Project }) {
                 <Stack direction="row" spacing={0.75} alignItems="center"><User size={15} /><Typography variant="body2">{owner.name}（{owner.role}）</Typography></Stack>
                 <Stack direction="row" spacing={0.75} alignItems="center"><Code2 size={15} aria-hidden /><Typography variant="body2">開発担当: {devNames.length ? devNames.join('・') : 'なし'}</Typography></Stack>
                 <Stack direction="row" spacing={0.75} alignItems="center"><Clock size={15} /><Typography variant="body2">更新 {relativeTime(p.updatedAt)}</Typography></Stack>
-                {p.launchDate && <Stack direction="row" spacing={0.75} alignItems="center"><CalendarDays size={15} /><Typography variant="body2">公開予定 {formatDate(p.launchDate)}</Typography></Stack>}
+                {releaseDateOf(state, p) && <Stack direction="row" spacing={0.75} alignItems="center"><CalendarDays size={15} /><Typography variant="body2">公開予定 {formatDate(releaseDateOf(state, p))}</Typography></Stack>}
               </Stack>
+              {/* お客様の連絡先（2026-11-17 会議。管理者が作成・編集で入れる。無い案件は出さない） */}
+              {p.client && (
+                <Box sx={{ mt: 1.5, pt: 1.5, borderTop: `1px dashed ${tokens.color.border}` }}>
+                  <Typography variant="caption" component="p" sx={{ fontWeight: 600, mb: 0.75 }}>お客様の連絡先</Typography>
+                  <Stack direction="row" sx={{ flexWrap: 'wrap', gap: { xs: 1, sm: 2.5 }, color: tokens.color.muted }}>
+                    {p.client.contactName && <Stack direction="row" spacing={0.75} alignItems="center" sx={{ minWidth: 0 }}><UserRound size={15} aria-hidden /><Typography variant="body2">{p.client.contactName} 様</Typography></Stack>}
+                    {p.client.email && <Stack direction="row" spacing={0.75} alignItems="center" sx={{ minWidth: 0 }}><Mail size={15} aria-label="メールアドレス" /><Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{p.client.email}</Typography></Stack>}
+                    {p.client.phone && <Stack direction="row" spacing={0.75} alignItems="center" sx={{ minWidth: 0 }}><Phone size={15} aria-label="電話番号" /><Typography variant="body2">{p.client.phone}</Typography></Stack>}
+                    {p.client.address && <Stack direction="row" spacing={0.75} alignItems="center" sx={{ minWidth: 0 }}><MapPin size={15} aria-label="住所" /><Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{p.client.address}</Typography></Stack>}
+                  </Stack>
+                </Box>
+              )}
             </Box>
             <Stack direction="row" spacing={2} alignItems="center">
               <ProgressRing value={p.progress} size={88} stroke={8} color={p.accent} label="全体の進捗" />
@@ -240,13 +267,13 @@ function Detail({ p }: { p: Project }) {
       {/* 追加開発のつながり（0.31.0）。元の案件・追加開発の詳細を開く（開発者画面では詳細を開くと上部の案件も揃う） */}
       <FollowUpLinks p={p} projects={allProjects} onOpen={(id) => navigate(routes.detail(id))} />
 
-      <Typography variant="h3" component="h2" sx={{ mb: 0.5 }}>制作の6段階</Typography>
+      <Typography variant="h3" component="h2" sx={{ mb: 0.5 }}>制作の8段階</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
         作る「まえ」「なか」「あと」をひとつの流れで管理します。各段階から関連する作業画面を開けます。
       </Typography>
 
       {/* パイプライン */}
-      <Box component="ol" sx={{ listStyle: 'none', m: 0, p: 0, display: 'grid', gridTemplateColumns: { xs: 'minmax(0,1fr)', sm: 'repeat(2, minmax(0,1fr))', lg: 'repeat(6, minmax(0,1fr))' }, gap: { xs: 1.5, md: 2 } }}>
+      <Box component="ol" sx={{ listStyle: 'none', m: 0, p: 0, display: 'grid', gridTemplateColumns: { xs: 'minmax(0,1fr)', sm: 'repeat(2, minmax(0,1fr))', lg: 'repeat(4, minmax(0,1fr))', xl: 'repeat(8, minmax(0,1fr))' }, gap: { xs: 1.5, md: 2 } }}>
         {STAGES.map((s, i) => {
           const done = i < cur;
           const active = i === cur;

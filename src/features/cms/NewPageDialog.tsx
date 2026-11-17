@@ -1,14 +1,17 @@
-import { Box, Button, ButtonBase, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from '@mui/material';
+import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from '@mui/material';
 import { FileText, Megaphone } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { CmsPage, PageType } from '@/types';
 import { tokens } from '@/theme/tokens';
 import { useFullScreenDialog } from '@/hooks/useMediaQueries';
 import { nowIso } from '@/services/time';
-import { suggestSlug, TITLE_MAX, validateSlug, validateTitle } from './cmsUtils';
+import { suggestSlug, TITLE_MAX, TYPE_LABEL, validateSlug, validateTitle } from './cmsUtils';
+import { NEWS_CATEGORY_DEFAULTS } from './newsCategories';
+import { NewsCategoryField } from './NewsCategoryField';
 
 interface Props {
   open: boolean;
+  /** 作る種類。押したボタン（「お知らせを作成」「お知らせを書く」など）で決まる */
   initialType: PageType;
   pages: CmsPage[];
   parentOptions: string[];
@@ -16,21 +19,30 @@ interface Props {
   onCreate: (page: CmsPage) => void;
 }
 
+/**
+ * 新しいページ・お知らせ。
+ * 2026-11-17 会議: 「お知らせを作成」を押した後に、もう一度「ページ / お知らせ」を選ぶ欄があって手順が 1 つ多かったので、種類の選択を外した
+ * （どの入口も種類が決まった状態で開く。ポータルのホームの「お知らせを書く」も ?new=news でお知らせとして開く）。お知らせはカテゴリーも選ぶ
+ */
 export function NewPageDialog({ open, initialType, pages, parentOptions, onClose, onCreate }: Props) {
   const fullScreen = useFullScreenDialog();
-  const [type, setType] = useState<PageType>(initialType);
+  const type = initialType;
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
   const [slugTouched, setSlugTouched] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [category, setCategory] = useState<string | undefined>(NEWS_CATEGORY_DEFAULTS[0]);
+  // カテゴリーの入力欄は開くたびに作り直す（最初の値だけを読むため）
+  const [rev, setRev] = useState(0);
 
   useEffect(() => {
     if (open) {
-      setType(initialType);
       setTitle('');
       setSlug(suggestSlug(initialType, ''));
       setSlugTouched(false);
       setSubmitted(false);
+      setCategory(NEWS_CATEGORY_DEFAULTS[0]);
+      setRev((n) => n + 1);
     }
   }, [open, initialType]);
 
@@ -51,12 +63,22 @@ export function NewPageDialog({ open, initialType, pages, parentOptions, onClose
       content: type === 'news' ? '<p></p>' : `<h2>${title.trim().replace(/[<>&"]/g, '')}</h2><p></p>`,
       seoTitle: '', seoDescription: '', status: 'draft', updatedAt: nowIso(), authorId: 'm1',
       parentPath: type === 'news' ? '/journal' : parentOptions[0],
+      ...(type === 'news' && category ? { newsCategory: category } : {}),
     });
   };
+  const Icon = type === 'news' ? Megaphone : FileText;
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth fullScreen={fullScreen} aria-labelledby="new-page-title">
-      <DialogTitle id="new-page-title">新しく作成する</DialogTitle>
+      <DialogTitle id="new-page-title">
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Icon size={20} color={tokens.color.primary} aria-hidden />
+          <span>{TYPE_LABEL[type]}を作成</span>
+        </Stack>
+        <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
+          {type === 'news' ? 'ニュース・キャンペーン・イベントの告知など。作成すると下書きとして本文の編集に進みます。' : 'サービス紹介・会社情報など。作成すると下書きとして本文の編集に進みます。'}
+        </Typography>
+      </DialogTitle>
       <DialogContent>
         <Box
           component="form"
@@ -66,34 +88,8 @@ export function NewPageDialog({ open, initialType, pages, parentOptions, onClose
             e.preventDefault();
             submit();
           }}
+          sx={{ pt: 1 }}
         >
-          <Box role="radiogroup" aria-label="種類" sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mb: 3 }}>
-            {([
-              { t: 'page' as const, icon: FileText, label: 'ページ', sub: 'サービス紹介・会社情報など' },
-              { t: 'news' as const, icon: Megaphone, label: 'お知らせ', sub: 'ニュース・キャンペーン' },
-            ]).map(({ t, icon: Icon, label, sub }) => {
-              const active = type === t;
-              return (
-                <ButtonBase
-                  key={t}
-                  role="radio"
-                  aria-checked={active}
-                  onClick={() => setType(t)}
-                  sx={{
-                    flexDirection: 'column', alignItems: 'flex-start', gap: 1, p: 2, borderRadius: '14px', textAlign: 'left',
-                    border: `1.5px solid ${active ? tokens.color.primary : tokens.color.border}`,
-                    bgcolor: active ? tokens.color.primarySoft : tokens.color.surface, transition: 'all .16s',
-                  }}
-                >
-                  <Icon size={20} color={active ? tokens.color.primary : tokens.color.muted} />
-                  <Box>
-                    <Typography variant="h5">{label}</Typography>
-                    <Typography variant="caption">{sub}</Typography>
-                  </Box>
-                </ButtonBase>
-              );
-            })}
-          </Box>
           <Stack spacing={2.5}>
             <TextField
               label="タイトル"
@@ -106,6 +102,7 @@ export function NewPageDialog({ open, initialType, pages, parentOptions, onClose
               inputProps={{ maxLength: TITLE_MAX + 20 }}
               placeholder={type === 'news' ? '例：冬季限定ブレンド発売のお知らせ' : '例：法人のお客さまへ'}
             />
+            {type === 'news' && <NewsCategoryField key={rev} value={category} pages={pages} onChange={setCategory} />}
             <TextField
               label="URL（スラッグ）"
               value={slug}

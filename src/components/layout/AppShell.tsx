@@ -14,6 +14,7 @@ import { Sidebar, SidebarContent } from './Sidebar';
 import { LogoMark } from './Logo';
 import { AREA_ORDER, AREAS, areaOf, isActive, SETTINGS_ITEM, visibleItems, type AreaDef } from './nav';
 import { ResetDemoDialog } from './ResetDemoDialog';
+import { badgeLabel, NavCountBadge, useNavBadge } from './navBadge';
 import { RouteLoader } from './RouteLoader';
 import { LOGIN_PATH, loginArea, logoutArea, useSessions } from '@/services/session';
 import { MemberAvatar } from '@/components/ui';
@@ -304,6 +305,9 @@ function BottomTabs({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
   const { pathname } = useLocation();
   const { state } = useDemo();
   const items = visibleItems(area.bottom, state);
+  // 件数バッジ（2026-11-17 会議）。下部タブに無い項目（開発者の「相談」など）の件数は「メニュー」に合計して出す
+  const badge = useNavBadge();
+  const inMenu = visibleItems(area.items, state).filter((i) => !items.some((b) => b.to === i.to)).reduce((n, i) => n + badge(i), 0);
   return (
     <Box
       component="nav"
@@ -324,17 +328,19 @@ function BottomTabs({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
           <ButtonBase
             // 選択中の判定は item.match で行う（NavLink だと aria-current が上書きされる）
             key={item.to} component={Link} to={item.to} aria-current={active ? 'page' : undefined}
+            aria-label={badge(item) > 0 ? `${item.label}${badgeLabel(badge(item))}` : undefined}
             sx={{ flex: 1, flexDirection: 'column', gap: 0.5, height: 64, fontSize: 12, lineHeight: 1.2, whiteSpace: 'nowrap', fontWeight: active ? 700 : 500, color: active ? tokens.color.onSurface : tokens.color.onSurfaceVariant, ...navIndicatorSx(active) }}
           >
-            <Box component="span" className="nav-ind" sx={{ display: 'grid', placeItems: 'center', width: 56, height: 28, color: active ? tokens.color.onSecondaryContainer : 'inherit' }}>
+            <Box component="span" className="nav-ind" sx={{ position: 'relative', display: 'grid', placeItems: 'center', width: 56, height: 28, color: active ? tokens.color.onSecondaryContainer : 'inherit' }}>
               <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
+              <NavCountBadge count={badge(item)} />
             </Box>
             {item.label}
           </ButtonBase>
         );
       })}
-      <ButtonBase onClick={onMenu} aria-label="すべてのメニュー" sx={{ flex: 1, flexDirection: 'column', gap: 0.5, height: 64, fontSize: 12, lineHeight: 1.2, whiteSpace: 'nowrap', fontWeight: 500, color: tokens.color.onSurfaceVariant, ...navIndicatorSx(false) }}>
-        <Box component="span" className="nav-ind" sx={{ display: 'grid', placeItems: 'center', width: 56, height: 28 }}><MenuIcon size={20} /></Box>
+      <ButtonBase onClick={onMenu} aria-label={`すべてのメニュー${badgeLabel(inMenu)}`} sx={{ flex: 1, flexDirection: 'column', gap: 0.5, height: 64, fontSize: 12, lineHeight: 1.2, whiteSpace: 'nowrap', fontWeight: 500, color: tokens.color.onSurfaceVariant, ...navIndicatorSx(false) }}>
+        <Box component="span" className="nav-ind" sx={{ position: 'relative', display: 'grid', placeItems: 'center', width: 56, height: 28 }}><MenuIcon size={20} /><NavCountBadge count={inMenu} /></Box>
         メニュー
       </ButtonBase>
     </Box>
@@ -378,7 +384,8 @@ function routeLabel(pathname: string): string {
 /** 開発者画面で DevProjectGate（表示中の案件で確かめる）を通さないページ */
 function devGateFree(pathname: string): boolean {
   const p = pathname.replace(/\/+$/, '');
-  return p === '/dev' || p === '/dev/projects' || p.startsWith('/dev/projects/');
+  // 相談（/dev/chat）は担当案件だけの受信箱なので、表示中の案件で止めない（2026-11-17 会議）
+  return p === '/dev' || p === '/dev/projects' || p.startsWith('/dev/projects/') || p === '/dev/chat';
 }
 
 /** ページ切り替え: ローディング画面（約0.5秒）→ ページ（Motion。位置は M3 Expressive の spring、不透明度は 300ms） */

@@ -10,7 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { useDemo } from '@/store/DemoStore';
 import { STAGES } from '@/data/projects';
 import { ANALYSIS_STEPS, PROPOSAL_LIBRARY } from '@/data/requirements';
-import { DESIGN_VARIANTS } from '@/data/designs';
+import { DESIGN_VARIANTS, offeredVariants } from '@/data/designs';
 import { MONTHLY_METRICS, RENEWAL_MONTH } from '@/data/insights';
 import { AiBadge, ProgressRing, StatusPill } from '@/components/ui';
 import { LogoMark } from '@/components/layout/Logo';
@@ -51,12 +51,12 @@ function TitleSlide() {
   );
 }
 
-/* 2. 6段階 */
+/* 2. 8段階（2026-11-17 会議） */
 function FlowSlide() {
   const groups = ['まえ', 'まえ', 'なか', 'なか', 'あと', 'あと'];
   return (
-    <SlideFrame eyebrow="全体の流れ" title="6つの段階を、ひとつのプラットフォームで" lead="段階ごとに「承認」を挟むので、顧客と制作者の認識がずれません。">
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(6, 1fr)' }, gap: 2 }}>
+    <SlideFrame eyebrow="全体の流れ" title="8つの段階を、ひとつのプラットフォームで" lead="段階ごとに「承認」を挟むので、顧客と制作者の認識がずれません。">
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2 }}>
         {STAGES.map((s, i) => (
           <motion.div key={s.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.1, duration: 0.4, ease: tokens.motion.ease }}>
             <Box sx={{ p: 2.5, borderRadius: 4, bgcolor: '#fff', border: `1px solid ${c.border}`, boxShadow: tokens.shadow.sm, height: '100%' }}>
@@ -186,9 +186,10 @@ function DesignSlide() {
   const [sel, setSel] = useState<DesignId>('creative');
   const ctx = useDesignContext();
   return (
-    <SlideFrame eyebrow="③ 制作" title="要件から、3つのデザイン案を生成" lead="色違いではなく、レイアウト・書体・構成まで異なる3案。顧客と並べて比べ、その場で採用できます。（クリックで選択）">
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2.5 }}>
-        {DESIGN_VARIANTS.map((d) => {
+    <SlideFrame eyebrow="④ 制作" title="要件から、2つのデザイン案を生成" lead="色違いではなく、レイアウト・書体・構成まで異なる2案。ページごとに顧客と並べて比べ、その場で採用できます。（クリックで選択）">
+      {/* 案は A・B の 2 つ（2026-11-17 会議: 3 画面 × 3 案は多すぎる。デザインスタジオ・お客様ポータルと同じ） */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2.5 }}>
+        {offeredVariants().map((d) => {
           const on = sel === d.id;
           return (
             <ButtonBase key={d.id} onClick={() => setSel(d.id)} aria-pressed={on} sx={{ display: 'block', textAlign: 'left', borderRadius: 4, border: `2px solid ${on ? c.primary : c.border}`, bgcolor: '#fff', overflow: 'hidden', boxShadow: on ? tokens.shadow.lg : tokens.shadow.sm, transform: on ? 'translateY(-4px)' : 'none', transition: `all .24s ${tokens.motion.easeCss}` }}>
@@ -269,7 +270,7 @@ function ImproveSlide() {
   const latest = workOf(state, CLIENT_PROJECT_ID).diagnoses[0];
   const cycles = ['リニューアル', '4か月後', '8か月後', '12か月後'];
   return (
-    <SlideFrame eyebrow="⑥ 改善" title="4か月ごとに、AIが自動で改善提案" lead="8カテゴリー60問でサイトを診断し、改善レポートを自動でお届け。実数値を含む詳しい分析もご相談いただけます。">
+    <SlideFrame eyebrow="⑧ 改善" title="4か月ごとに、AIが自動で改善提案" lead="8カテゴリー60問でサイトを診断し、改善レポートを自動でお届け。実数値を含む詳しい分析もご相談いただけます。">
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '280px 1fr' }, gap: 3, alignItems: 'center' }}>
         <Stack alignItems="center" spacing={1.5} sx={{ p: 3, borderRadius: 4, bgcolor: '#fff', border: `1px solid ${c.border}` }}>
           <ProgressRing value={latest?.score ?? 0} size={160} stroke={12} color={c.accent} label="AI診断スコア">

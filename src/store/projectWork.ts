@@ -1,8 +1,11 @@
-import type { AnswerValue, DemoState, ProjectContent, ProjectWork, QualityCheck, RequirementSession, Stage } from '@/types';
+import type { AnswerValue, ApprovalLog, DemoState, DevState, ProjectContent, ProjectWork, QualityCheck, RequirementSession, Stage } from '@/types';
 import { emptySitemap, sitemapFor } from '@/data/sitemap';
 import { QUALITY_ITEMS } from '@/data/quality';
+import { DEV_USER_ID, seedDevFor } from '@/data/dev';
+import { memberById } from '@/data/members';
+import { seedSchedule } from '@/data/schedule';
+import { seedDevProjects } from '@/data/users';
 import { daysAgo, hoursAgo } from '@/services/time';
-import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { emptyContent, emptySignage, seedContentFor } from '@/data/projectContent';
 import { clientActorName, seedProjects } from '@/data/projects';
 
@@ -245,45 +248,112 @@ function qualityChecks(partial: boolean, clientBy: string): Record<string, Quali
   return checks;
 }
 
-const ORDER: Stage[] = ['hearing', 'requirements', 'build', 'quality', 'operation', 'improvement'];
+/**
+ * 段階ごとの「済んでいること」（2026-11-17 会議で段階を足したので、添字ではなく段階の名前で決める）。
+ * shift は初期データの日付をずらす日数の目安（後の段階ほど前の工程が最近になる。0.39 までの値のまま）
+ */
+const SEED: Record<Stage, { analyzed: boolean; reqApproved: boolean; sitemapApproved: boolean; built: boolean; qualityDone: boolean; shift: number }> = {
+  hearing: { analyzed: false, reqApproved: false, sitemapApproved: false, built: false, qualityDone: false, shift: 0 },
+  requirements: { analyzed: true, reqApproved: false, sitemapApproved: false, built: false, qualityDone: false, shift: 1 },
+  schedule: { analyzed: true, reqApproved: true, sitemapApproved: false, built: false, qualityDone: false, shift: 2 },
+  build: { analyzed: true, reqApproved: true, sitemapApproved: true, built: false, qualityDone: false, shift: 2 },
+  quality: { analyzed: true, reqApproved: true, sitemapApproved: true, built: true, qualityDone: false, shift: 3 },
+  release: { analyzed: true, reqApproved: true, sitemapApproved: true, built: true, qualityDone: true, shift: 3 },
+  operation: { analyzed: true, reqApproved: true, sitemapApproved: true, built: true, qualityDone: true, shift: 4 },
+  improvement: { analyzed: true, reqApproved: true, sitemapApproved: true, built: true, qualityDone: true, shift: 5 },
+};
+
+/** 初期データの日程・構築を記録した人（その案件の初期の開発担当の 1 人目。いなければ開発者画面の既定の人） */
+export const seedDevOwner = (projectId: string) =>
+  memberById(Object.entries(seedDevProjects()).find(([, ids]) => ids.includes(projectId))?.[0] ?? DEV_USER_ID).name;
 
 /**
  * 案件の段階に合う制作データ。段階より前の工程は入力・承認済みにする。
  * - requirements: ヒアリング済み・AI 分析済み（要件定義書の承認待ち。サイトマップはまだ無い）
- * - build: 要件定義書を承認済み・サイトマップを作成して承認済み、デザイン要件定義を入力済み（デザイン案の採用待ち）
+ * - schedule: 要件定義書を承認済み・サイトマップ案あり（日程の入力待ち。2026-11-17 会議）
+ * - build: 日程を入力済み・サイトマップを承認済み、デザイン要件定義を入力済み（デザイン案の採用待ち）
  * - quality: デザイン採用・全ページ構築まで済み、品質チェックが途中
- * - operation / improvement: 品質チェックまで完了
+ * - release / operation / improvement: 品質チェックまで完了（お客様の完了＝納品検収済み）
+ * お客様の承認待ちの節目は、アフロが承認を依頼済みにする（2026-11-17 会議。依頼が無いとお客様の画面では「準備中」）。
  * 公開後のデータ（ページ・診断・サイネージ）は段階ではなく案件の id で決める（data/projectContent.ts。0.30.0）
  */
 export function seedWorkFor(projectId: string, stage: Stage): FullWork {
+  // 開発データ（構築タスク・デプロイ）はここでは作らない。担当（state.devProjects）に合わせて、読み込み時（DemoStore.withProjectDev）か devOf で作る
   const work: FullWork = { ...blankWork(projectId), ...seedContentFor(projectId) };
   const answers = HEARING[projectId];
-  const at = ORDER.indexOf(stage);
-  if (!answers || at < 1) return work;
+  const f = SEED[stage];
+  if (!answers || !f.analyzed) return work;
+  const at = f.shift;
   const heardAt = daysAgo(90 - at * 10);
+  const analyzedAt = f.reqApproved ? daysAgo(80 - at * 10) : hoursAgo(3);
   work.requirements = {
     ...work.requirements,
     answers,
     competitors: Array.isArray(answers['q-competitor']) ? answers['q-competitor'] : [],
     answerMeta: answerMetaOf(answers, heardAt),
-    status: at >= 2 ? 'approved' : 'analyzed',
-    analyzedAt: at >= 2 ? daysAgo(80 - at * 10) : hoursAgo(3),
-    ...(at >= 2 ? { approvedAt: daysAgo(75 - at * 10) } : {}),
+    status: f.reqApproved ? 'approved' : 'analyzed',
+    analyzedAt,
+    ...(f.reqApproved ? { approvedAt: daysAgo(75 - at * 10) } : {}),
   };
-  if (at >= 2) {
-    work.sitemap = { ...sitemapFor(projectId), approvedAt: at >= 3 ? daysAgo(70 - at * 10) : daysAgo(1.5) };
+  // 要件定義書はアフロが分析の後に承認を依頼した（2026-11-17 会議）
+  const requests: NonNullable<FullWork['approvalRequests']> = { requirements: analyzedAt };
+  // サイトマップは要件定義書の承認のときに作る（0.29.4）
+  if (f.reqApproved) work.sitemap = sitemapFor(projectId);
+  if (f.sitemapApproved) {
+    // 日程は要件定義書の承認の後に開発担当者が入れる（2026-11-17 会議。入れるまで制作へ進めない）
+    work.schedule = seedSchedule(work, seedProjects().find((p) => p.id === projectId)?.launchDate, seedDevOwner(projectId));
+    work.sitemap = { ...work.sitemap, approvedAt: f.built ? daysAgo(70 - at * 10) : daysAgo(1.5) };
+    requests.sitemap = f.built ? daysAgo(71 - at * 10) : daysAgo(2);
     const design = DESIGN[projectId] ?? {};
-    work.design = { selected: null, answers: design, answerMeta: answerMetaOf(design, daysAgo(at >= 3 ? 65 - at * 10 : 1)) };
+    work.design = { selected: null, answers: design, answerMeta: answerMetaOf(design, daysAgo(f.built ? 65 - at * 10 : 1)) };
+    // 制作の段階の案件はデザイン案の採用待ち（依頼済み）
+    requests.design = f.built ? daysAgo(63 - at * 10) : hoursAgo(20);
   }
-  if (at >= 3) {
+  if (f.built) {
     const built = daysAgo(60 - at * 10);
     work.design = { ...work.design, selected: 'premium', approvedAt: daysAgo(62 - at * 10), buildStartedAt: built, buildCompletedAt: built };
     const client = seedProjects().find((p) => p.id === projectId)?.clientName;
-    work.qualityChecks = qualityChecks(at === 3, client ? clientActorName(client) : 'お客様 担当者');
-    // 公開済み（運用・改善）の案件は、お客様が品質チェックを完了済み（0.39.7）
-    if (at > 3) work.design = { ...work.design, qualityApprovedAt: lastClientCheck(work.qualityChecks) };
+    work.qualityChecks = qualityChecks(!f.qualityDone, client ? clientActorName(client) : 'お客様 担当者');
+    requests.quality = daysAgo(59 - at * 10);
+    // 品質管理を終えた（リリース・運用・改善）案件は、お客様が品質チェックを完了済み（0.39.7）
+    if (f.qualityDone) work.design = { ...work.design, qualityApprovedAt: lastClientCheck(work.qualityChecks) };
   }
+  work.approvalRequests = requests;
   return work;
+}
+
+/** 承認の記録の文言（ApprovalLog.action・target。reducer の approval() と同じ文言） */
+export const LOG_ACTIONS = {
+  requirements: { action: '要件定義書を承認', target: '要件定義' },
+  sitemap: { action: 'サイトマップを承認', target: '制作 / サイトマップ' },
+  design: { action: 'トップデザインを承認', target: '制作 / デザイン' },
+  build: { action: '全ページの構築を完了', target: '制作 / 全ページ構築' },
+  quality: { action: '品質チェックを完了', target: '品質チェック（全項目）' },
+} as const;
+
+/**
+ * 制作データの済んだ節目から、承認の記録（承認履歴）を作る（2026-11-17 会議「初期データ・以前の保存データで承認履歴が空」）。
+ * has が true の節目（記録が既にある）は除く。id は案件と節目で決まる（同じものを 2 回足さない）
+ */
+export function approvalLogsFromWork(
+  projectId: string, work: Pick<ProjectWork, 'requirements' | 'sitemap' | 'design'>, clientActor: string,
+  has: (action: string) => boolean = () => false,
+): ApprovalLog[] {
+  const d = work.design;
+  const rows: { key: keyof typeof LOG_ACTIONS; at?: string; side: 'afro' | 'client'; actor: string }[] = [
+    { key: 'requirements', at: work.requirements.approvedAt, side: 'client', actor: clientActor },
+    { key: 'sitemap', at: work.sitemap.approvedAt, side: 'client', actor: clientActor },
+    { key: 'design', at: d.approvedAt, side: 'client', actor: clientActor },
+    { key: 'build', at: d.buildCompletedAt, side: 'afro', actor: seedDevOwner(projectId) },
+    { key: 'quality', at: d.qualityApprovedAt, side: 'client', actor: clientActor },
+  ];
+  return rows
+    .filter((r): r is typeof r & { at: string } => !!r.at && !has(LOG_ACTIONS[r.key].action))
+    .map((r) => ({
+      id: `log-seed-${projectId}-${r.key}`, at: r.at, actor: r.actor, side: r.side, projectId,
+      action: LOG_ACTIONS[r.key].action,
+      target: r.key === 'design' && d.selected ? `${LOG_ACTIONS.design.target}（${d.selected}）` : LOG_ACTIONS[r.key].target,
+    }));
 }
 
 /* ---------- 選んでいる案件の入れ替え ---------- */
@@ -296,10 +366,19 @@ const currentWork = (state: DemoState): FullWork => ({
   ...(state.pageHistory ? { pageHistory: state.pageHistory } : {}),
   ...(state.assets ? { assets: state.assets } : {}),
   ...(state.forms ? { forms: state.forms } : {}),
+  ...(state.dev ? { dev: state.dev } : {}),
+  ...(state.schedule ? { schedule: state.schedule } : {}),
+  ...(state.approvalRequests ? { approvalRequests: state.approvalRequests } : {}),
 });
 
-/** 無い案件もある案件ごとのデータ（自動送信 0.34.0・履歴 0.35.0・素材 0.36.0・フォーム 0.37.0）。前の案件の分が残らないよう必ず置き換える */
-const optionalWork = (work: ProjectWork) => ({ reportSend: work.reportSend, pageHistory: work.pageHistory, assets: work.assets, forms: work.forms });
+/**
+ * 無い案件もある案件ごとのデータ（自動送信 0.34.0・履歴 0.35.0・素材 0.36.0・フォーム 0.37.0・開発データ・日程・承認の依頼 2026-11-17）。
+ * 前の案件の分が残らないよう必ず置き換える
+ */
+const optionalWork = (work: ProjectWork) => ({
+  reportSend: work.reportSend, pageHistory: work.pageHistory, assets: work.assets, forms: work.forms, dev: work.dev,
+  schedule: work.schedule, approvalRequests: work.approvalRequests,
+});
 
 /** 保存した制作データに公開後のデータが無ければ（0.29 までの保存データ）、その案件の初期データで補う。そろっていれば同じものを返す */
 export function withContent(projectId: string, work: ProjectWork): FullWork {
@@ -326,10 +405,20 @@ export function workView(state: DemoState, projectId: string): DemoState {
 }
 
 /**
- * 開発者画面の開発データ（構築タスク・デプロイ）は MINAMO COFFEE の分だけなので、デプロイの関門・次の作業は
- * 選んでいる案件ではなく MINAMO COFFEE のトップデザイン承認で判定する（0.29.0）
+ * 案件の開発データ（構築タスク・デプロイ。2026-11-17 から案件ごと。以前は MINAMO COFFEE の分だけ）。
+ * 保存に無い案件（作ったばかりの案件など）は、その案件の段階に合う初期データ
  */
-export const demoDesignApprovedAt = (state: DemoState): string | undefined => workOf(state, CLIENT_PROJECT_ID).design.approvedAt;
+export function devOf(state: DemoState, projectId: string): DevState {
+  const dev = workOf(state, projectId).dev;
+  if (dev) return dev;
+  const p = state.projects.find((x) => x.id === projectId);
+  return seedDevFor(projectId, p?.stage ?? 'hearing', devTeamOf(state, projectId));
+}
+
+/** 案件の開発担当（保存データの担当。無ければ初期の担当）。開発データの初期値のタスクの割り振りに使う */
+export function devTeamOf(state: Pick<DemoState, 'devProjects'>, projectId: string): string[] {
+  return Object.entries(state.devProjects ?? seedDevProjects()).filter(([, ids]) => ids.includes(projectId)).map(([id]) => id);
+}
 
 /** 選んでいる案件を切り替える。いまの案件の制作データ・公開後のデータを projectWork へしまい、次の案件の分を出す */
 export function switchWork(state: DemoState, projectId: string): DemoState {

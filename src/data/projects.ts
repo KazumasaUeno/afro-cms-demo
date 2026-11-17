@@ -1,13 +1,16 @@
 import type { Activity, Project, Stage } from '@/types';
 import { daysAgo, daysFromNow, hoursAgo } from '@/services/time';
 
+// 8 段階（2026-11-17 会議。スケジュール・リリースを足し、品質管理を「品質管理・納品検収」にした。運用・改善は分けたまま）
 export const STAGES: { id: Stage; no: number; label: string; en: string; description: string }[] = [
   { id: 'hearing', no: 1, label: 'ヒアリング', en: 'Listen', description: '現状・目的・競合をお客様から聞き取り、回答をそろえる' },
   { id: 'requirements', no: 2, label: '要件定義', en: 'Discover', description: 'ヒアリングの回答を AI が分析し、要件定義書をつくってお客様の承認を得る' },
-  { id: 'build', no: 3, label: '制作', en: 'Build', description: 'サイトマップ・デザイン案・全ページ構築を承認しながら進める' },
-  { id: 'quality', no: 4, label: '品質管理', en: 'Assure', description: '12項目110問をアフロと顧客の双方で確認する' },
-  { id: 'operation', no: 5, label: '運用', en: 'Operate', description: 'ページ更新・お知らせ・公開ワークフローを回す' },
-  { id: 'improvement', no: 6, label: '改善', en: 'Improve', description: '4か月ごとにAIがサイトを診断し、改善を提案する' },
+  { id: 'schedule', no: 3, label: 'スケジュール', en: 'Plan', description: '要件定義のあと開発担当者が制作〜公開の日程を入れる。入れるまで制作へ進めない' },
+  { id: 'build', no: 4, label: '制作', en: 'Build', description: 'サイトマップ・デザイン案・全ページ構築を承認しながら進める' },
+  { id: 'quality', no: 5, label: '品質管理・納品検収', en: 'Assure', description: '12項目110問をアフロと顧客の双方で確認し、お客様の完了（納品検収）を受ける' },
+  { id: 'release', no: 6, label: 'リリース（公開）', en: 'Release', description: '納品検収の後、開発担当者がサイトを公開する' },
+  { id: 'operation', no: 7, label: '運用', en: 'Operate', description: 'ページ更新・お知らせ・公開ワークフローを回す' },
+  { id: 'improvement', no: 8, label: '改善', en: 'Improve', description: '4か月ごとにAIがサイトを診断し、改善を提案する' },
 ];
 
 export const stageIndex = (s: Stage) => STAGES.findIndex((x) => x.id === s);
@@ -89,7 +92,7 @@ export const seedProjects = (): Project[] => [
 export const seedActivities = (): Activity[] => [
   { id: 'a1', at: hoursAgo(1.5), actor: '上野 航', text: 'MINAMO COFFEE の案件を登録しました（ヒアリングはこれから）', kind: 'edit', projectId: 'p1' },
   { id: 'a2', at: hoursAgo(3), actor: 'AI', text: 'HOJO Construction の要件定義書（改善提案）を作成しました', kind: 'ai', projectId: 'p2' },
-  { id: 'a3', at: hoursAgo(5), actor: 'AI', text: 'Hidamari Dental のデザイン案を3パターン生成しました', kind: 'ai', projectId: 'p3' },
+  { id: 'a3', at: hoursAgo(5), actor: 'AI', text: 'Hidamari Dental のデザイン案を2パターン生成しました', kind: 'ai', projectId: 'p3' },
   { id: 'a4', at: hoursAgo(8), actor: 'Lumière Atelier 担当者', text: '品質チェック「デザイン・ブランド」を承認', kind: 'approve', projectId: 'p4' },
   { id: 'a5', at: daysAgo(1), actor: '藤井 慎', text: 'A区分 24項目を一括チェック', kind: 'check', projectId: 'p4' },
   { id: 'a6', at: daysAgo(2), actor: '森 あかり', text: '「新製品のお知らせ」を予約公開に設定', kind: 'publish', projectId: 'p5' },

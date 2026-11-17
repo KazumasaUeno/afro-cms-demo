@@ -11,6 +11,7 @@ import { AiBadge, StatusPill } from '@/components/ui';
 import { SEO_DESC_MAX, SEO_TITLE_MAX, STATUS_META } from './cmsUtils';
 import { htmlToText } from './sanitize';
 import { ImagePickerDialog } from './ImagePickerDialog';
+import { NewsCategoryField } from './NewsCategoryField';
 
 function Section({ title, icon, children, action }: { title: string; icon: ReactNode; children: ReactNode; action?: ReactNode }) {
   return (
@@ -167,6 +168,8 @@ export function Inspector({ draft, onChange, slugError }: Props) {
 
       <Section title="ページ設定" icon={<ImageIcon size={16} />}>
         <Stack spacing={2}>
+          {/* お知らせのカテゴリー（2026-11-17 会議） */}
+          {draft.type === 'news' && <NewsCategoryField size="small" value={draft.newsCategory} pages={state.pages} onChange={(v) => onChange({ newsCategory: v })} />}
           <TextField
             label="URL（スラッグ）"
             size="small"
@@ -219,6 +222,7 @@ export function Inspector({ draft, onChange, slugError }: Props) {
         open={cover}
         title="カバー画像を選ぶ"
         selected={draft.coverImage}
+        pageType={draft.type}
         onClose={() => setCover(false)}
         onPick={(img) => {
           onChange({ coverImage: img.src });

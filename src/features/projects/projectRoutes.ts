@@ -1,6 +1,6 @@
 import { useLocation } from 'react-router-dom';
 import type { DemoState, Project, Stage } from '@/types';
-import { areaOf, CLIENT_PROJECT_ID } from '@/components/layout/nav';
+import { areaOf } from '@/components/layout/nav';
 import { designReady } from '@/features/design/designReq';
 import { workView } from '@/store/projectWork';
 import type { ApprovalKey } from '@/features/portal/portalSteps';
@@ -67,10 +67,14 @@ function devRoutes(h: HearingRoutes): ProjectRoutes {
     stageLinks: {
       hearing: [{ label: 'ヒアリングを入力', to: h.answers }],
       requirements: [{ label: 'AI要件定義を開く', to: h.doc }],
+      // 日程の入力（2026-11-17 会議。開発担当者が入れる）
+      schedule: [{ label: 'スケジュールを入力', to: '/dev/schedule' }],
       build: [{ label: 'サイトマップ', to: sitemap }, { label: 'デザイン要件定義', to: designRequirements }, { label: 'デザインスタジオ', to: design }],
       quality: [{ label: '品質チェック', to: quality }],
+      release: [{ label: '品質チェック・公開', to: quality }],
       operation: [{ label: 'ページ・お知らせを編集', to: cms }, { label: '素材ドライブ', to: '/dev/assets' }, { label: 'フォーム', to: '/dev/forms' }],
-      improvement: [{ label: 'インサイト・改善提案', to: insights }, { label: '素材ドライブ', to: '/dev/assets' }, { label: 'フォーム', to: '/dev/forms' }],
+      // 素材ドライブ・フォームは運用の段階にだけ置く（改善の段階でも運用の段階のボタンから開ける。2026-11-17 ユーザー指示「被っている」）
+      improvement: [{ label: 'インサイト・改善提案', to: insights }],
     },
     requirements: h.doc,
     sitemap,
@@ -102,7 +106,7 @@ export function useProjectRoutes(): ProjectRoutes {
  * ヒアリングの段階 → ヒアリング（/dev/hearing）、要件定義の段階 → 要件定義書（/dev/requirements。0.28.0）。
  * 構築・品質の段階は、その案件の制作データで行き先を分ける（0.30.1。以前は一律に構築タスクだったため、構築タスクを持たない案件では行き止まりだった）:
  * サイトマップ未承認 → /dev/sitemap、デザイン要件定義が未完 → /dev/design/requirements、デザイン未採用 → /dev/design、
- * 全ページ未構築 → MINAMO COFFEE は構築タスク（/dev/tasks。構築タスクはこの案件の分だけ）・ほかはデザインスタジオ（/dev/design）、
+ * 全ページ未構築 → 構築タスク（/dev/tasks。2026-11-17 から全案件に構築タスクがある。以前は MINAMO COFFEE 以外はデザインスタジオ）、
  * 品質チェック → /dev/quality（双方確認が済んでいれば「サイトを公開する」）。
  * ダッシュボードのカードとプロジェクト詳細の「次に必要な作業」で使う
  */
@@ -114,12 +118,15 @@ export function devNextWork(p: Project, state: DemoState): { next: string; to: s
   // 分析前はヒアリングの入力、分析後（承認待ち）は要件定義書（0.28.0）
   if (view.requirements.status === 'draft') return { next: nextBestAction(view).cta, to: '/dev/hearing' };
   if (view.requirements.status === 'analyzed') return { next: nextBestAction(view).cta, to: '/dev/requirements' };
+  // 日程を入れるまで制作へ進めない（2026-11-17 会議）
+  if (!view.schedule && !view.sitemap.approvedAt) return { next: 'スケジュールを入力する', to: '/dev/schedule' };
   // 承認・採用はお客様の作業なので、待っている間もその画面を開く（開発者は内容を確認できる）
   if (!view.sitemap.approvedAt) return { next: 'お客様のサイトマップ承認を待つ', to: '/dev/sitemap' };
   if (!view.design.approvedAt && !designReady(view)) return { next: 'デザイン要件定義を入力する', to: '/dev/design/requirements' };
   if (!view.design.approvedAt) return { next: 'お客様のデザイン案の採用を待つ', to: '/dev/design' };
   if (!view.design.buildCompletedAt) {
-    return p.id === CLIENT_PROJECT_ID ? { next: '構築タスクを進める', to: '/dev/tasks' } : { next: '全ページを構築する', to: '/dev/design' };
+    return { next: '構築タスクを進める', to: '/dev/tasks' };
   }
-  return { next: qualityCompletion(view.qualityChecks).percent === 100 ? 'サイトを公開する' : '品質チェックを進める', to: '/dev/quality' };
+  // 公開できるのはお客様の品質チェックの完了（納品検収）の後（2026-11-17 会議。リリースの段階）
+  return { next: view.design.qualityApprovedAt ? 'サイトを公開する' : qualityCompletion(view.qualityChecks).percent === 100 ? 'お客様の納品検収を待つ' : '品質チェックを進める', to: '/dev/quality' };
 }

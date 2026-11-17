@@ -6,13 +6,14 @@ import { tokens } from '@/theme/tokens';
 import { AREAS, areaOf, isActive, visibleItems, type AreaDef, type NavItem } from './nav';
 import { Logo, LogoMark } from './Logo';
 import { navIndicatorSx, navToneSx, toneIndicator } from './navIndicator';
+import { badgeLabel, NavCountBadge, useNavBadge } from './navBadge';
 import { MemberAvatar } from '@/components/ui';
 import { memberById } from '@/data/members';
 import { useDevProjects, useDevUser } from '@/features/dev/useDevUser';
 import { useDemo, currentProject } from '@/store/DemoStore';
 
 /** ドロワー（lg 未満）の行。M3 Navigation drawer item: 高さ 56・角丸 Full。選択中の印は中心から広がる */
-function NavRow({ item, color, onNavigate }: { item: NavItem; color: string; onNavigate?: () => void }) {
+function NavRow({ item, color, onNavigate, count = 0 }: { item: NavItem; color: string; onNavigate?: () => void; count?: number }) {
   const { pathname } = useLocation();
   const active = isActive(item, pathname);
   const Icon = item.icon;
@@ -23,6 +24,7 @@ function NavRow({ item, color, onNavigate }: { item: NavItem; color: string; onN
       to={item.to}
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
+      aria-label={count > 0 ? `${item.label}${badgeLabel(count)}` : undefined}
       sx={{
         width: '100%', justifyContent: 'flex-start', gap: 1.5, px: 2, height: 56, borderRadius: `${tokens.radius.full}px`,
         color: active ? tokens.color.onSecondaryContainer : tokens.color.onSurfaceVariant, fontWeight: active ? 700 : 500, fontSize: 14,
@@ -34,18 +36,20 @@ function NavRow({ item, color, onNavigate }: { item: NavItem; color: string; onN
       <Box component="span" className="nav-ind" aria-hidden />
       <Icon size={20} strokeWidth={active ? 2.2 : 1.9} color={item.tone ? 'currentColor' : active ? color : 'currentColor'} />
       <span>{item.label}</span>
+      <NavCountBadge count={count} inline />
     </ButtonBase>
   );
 }
 
 /** PC のナビゲーションレールの項目（M3 Expressive: 56×32 の印＋12px のラベル） */
-function RailItem({ to, label, icon: Icon, active, color, hint, tone }: { to: string; label: string; icon: LucideIcon; active: boolean; color?: string; hint: string; tone?: NavItem['tone'] }) {
+function RailItem({ to, label, icon: Icon, active, color, hint, tone, count = 0 }: { to: string; label: string; icon: LucideIcon; active: boolean; color?: string; hint: string; tone?: NavItem['tone']; count?: number }) {
   return (
     <Tooltip title={hint} placement="right" enterDelay={600}>
       <ButtonBase
         component={Link}
         to={to}
         aria-current={active ? 'page' : undefined}
+        aria-label={count > 0 ? `${label}${badgeLabel(count)}` : undefined}
         sx={{
           width: '100%', flexDirection: 'column', gap: 0.5, py: 0.5, minHeight: 56, borderRadius: `${tokens.radius.md}px`,
           color: active ? tokens.color.onSurface : tokens.color.onSurfaceVariant,
@@ -59,8 +63,9 @@ function RailItem({ to, label, icon: Icon, active, color, hint, tone }: { to: st
           ...(tone && navToneSx(tone)),
         }}
       >
-        <Box component="span" className="nav-ind" sx={{ width: 56, height: 32, display: 'grid', placeItems: 'center', flexShrink: 0, color: active ? tokens.color.onSecondaryContainer : 'inherit' }}>
+        <Box component="span" className="nav-ind" sx={{ position: 'relative', width: 56, height: 32, display: 'grid', placeItems: 'center', flexShrink: 0, color: active ? tokens.color.onSecondaryContainer : 'inherit' }}>
           <Icon size={22} strokeWidth={active ? 2.2 : 1.8} color={!tone && active && color ? color : 'currentColor'} />
+          <NavCountBadge count={count} />
         </Box>
         <Box component="span" sx={{ maxWidth: '100%', overflowWrap: 'anywhere' }}>{label}</Box>
       </ButtonBase>
@@ -157,6 +162,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { pathname } = useLocation();
   const area = AREAS[areaOf(pathname)];
   const { state } = useDemo();
+  const badge = useNavBadge();
   return (
     <Stack sx={{ height: '100%', p: 2, gap: 2, overflowY: 'auto' }}>
       <Stack spacing={1.5} sx={{ px: 1, py: 0.5 }}>
@@ -166,7 +172,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       <Box component="nav" aria-label={`${area.label}のメニュー`}>
         <Stack spacing={0.5}>
-          {visibleItems(area.items, state).map((item) => <NavRow key={item.to} item={item} color={area.color} onNavigate={onNavigate} />)}
+          {visibleItems(area.items, state).map((item) => <NavRow key={item.to} item={item} color={area.color} onNavigate={onNavigate} count={badge(item)} />)}
         </Stack>
       </Box>
 
@@ -222,6 +228,7 @@ export function Sidebar() {
   const { pathname } = useLocation();
   const area = AREAS[areaOf(pathname)];
   const { state } = useDemo();
+  const badge = useNavBadge();
   return (
     <Box
       component="aside"
@@ -246,7 +253,7 @@ export function Sidebar() {
       <Box component="nav" aria-label={`${area.label}のメニュー`} sx={{ width: '100%' }}>
         <Stack spacing={1.5}>
           {visibleItems(area.items, state).map((item) => (
-            <RailItem key={item.to} to={item.to} label={item.label} icon={item.icon} hint={item.hint} active={isActive(item, pathname)} color={area.color} tone={item.tone} />
+            <RailItem key={item.to} to={item.to} label={item.label} icon={item.icon} hint={item.hint} active={isActive(item, pathname)} color={area.color} tone={item.tone} count={badge(item)} />
           ))}
         </Stack>
       </Box>

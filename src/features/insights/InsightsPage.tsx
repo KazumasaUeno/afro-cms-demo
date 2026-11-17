@@ -123,7 +123,7 @@ export default function InsightsPage() {
       {/* 見本の数値が無い案件（新しく作った案件など）も、改善の段階の前と同じ案内にする（0.30.0） */}
       {project.stage !== 'improvement' || !metrics ? (
         <Box>
-          <PageHeader eyebrow="⑥ 改善" icon={<BarChart3 size={15} />} title="インサイト" description="アクセスと問い合わせの推移を見ながら、4か月ごとのAI診断で次の改善を決めます。" />
+          <PageHeader eyebrow="⑧ 改善" icon={<BarChart3 size={15} />} title="インサイト" description="アクセスと問い合わせの推移を見ながら、4か月ごとのAI診断で次の改善を決めます。" />
           <NotYetPanel
             icon={<BarChart3 size={26} />}
             title={`${project.siteName} のインサイトはまだありません`}
@@ -183,7 +183,7 @@ function InsightsBody({ metrics, followUpButton }: { metrics: ProjectMetrics; fo
         プロジェクト詳細
       </Button>
       <PageHeader
-        eyebrow="⑥ 改善"
+        eyebrow="⑧ 改善"
         icon={<BarChart3 size={15} />}
         title="インサイト"
         description="アクセスと問い合わせの推移を見ながら、4か月ごとのAI診断で次の改善を決めます。"

@@ -1,12 +1,13 @@
 import { Box, ButtonBase, InputAdornment, MenuItem, Stack, TextField, Typography } from '@mui/material';
-import { Check, Globe } from 'lucide-react';
+import { Check, Globe, Mail, MapPin, Phone } from 'lucide-react';
 import { useId, useRef, type ComponentType, type KeyboardEvent, type MutableRefObject, type ReactNode } from 'react';
 import { MEMBERS } from '@/data/members';
+import type { DevPerson } from '@/data/people';
 import { MAX_URL } from '@/features/requirements/validation';
 import { MemberAvatar } from '@/components/ui';
 import { tokens } from '@/theme/tokens';
 import { TOUCH } from '@/theme/media';
-import { ACCENT_PRESETS, DEFAULT_NEXT_ACTION, INDUSTRY_SUGGESTIONS, PROJECT_LIMITS, todayYmd, type ProjectDraft, type ProjectField } from './projectForm';
+import { ACCENT_PRESETS, CLIENT_INFO_LIMITS, INDUSTRY_SUGGESTIONS, PROJECT_LIMITS, type ProjectDraft, type ProjectField } from './projectForm';
 
 export type ProjectFieldRefs = MutableRefObject<Partial<Record<ProjectField, HTMLElement | null>>>;
 
@@ -22,14 +23,17 @@ interface Props {
   Group: ProjectFieldGroup;
   /** ブランド色の候補（編集: 候補に無いいまの色を足す） */
   accents?: { value: string; name: string }[];
-  /** 公開予定日の下限（編集: いまの日付が過去ならその日） */
-  minLaunchDate?: string;
-  /** 次の作業の欄（編集では出さない。段階と同じくデータから導く） */
-  withNextAction?: boolean;
+  /**
+   * 担当開発者の候補（作成のときだけ渡す。2026-11-17 会議。以後の変更はユーザー管理の「担当を変更」）。
+   * 公開予定日・次に必要な作業の欄は 2026-11-17 会議で外した（公開予定日は日程＝スケジュール、次の作業は段階から導く）
+   */
+  devOptions?: DevPerson[];
+  /** お客様の連絡先でメールを必須にする（作成: お客様ポータルのログインに使う） */
+  emailRequired?: boolean;
 }
 
-/** 新しいプロジェクトと、プロジェクトの編集で共通の入力欄（入力チェックは validateProject） */
-export function ProjectFields({ draft, set, show, refs, Group, accents = ACCENT_PRESETS, minLaunchDate = todayYmd(), withNextAction = true }: Props) {
+/** 新しいプロジェクトと、プロジェクトの編集で共通の入力欄（入力チェックは validateProject と validateClientInfo） */
+export function ProjectFields({ draft, set, show, refs, Group, accents = ACCENT_PRESETS, devOptions, emailRequired = false }: Props) {
   const accentRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const accentLabelId = useId();
   const accentIndex = Math.max(0, accents.findIndex((a) => a.value === draft.accent));
@@ -43,6 +47,7 @@ export function ProjectFields({ draft, set, show, refs, Group, accents = ACCENT_
   };
 
   const counter = (k: 'clientName' | 'siteName' | 'industry' | 'nextAction') => `${draft[k].trim().length} / ${PROJECT_LIMITS[k]}文字`;
+  const clientCounter = (k: 'clientAddress' | 'clientContactName') => `${(draft[k] ?? '').trim().length} / ${CLIENT_INFO_LIMITS[k]}文字`;
 
   return (
     <>
@@ -101,7 +106,43 @@ export function ProjectFields({ draft, set, show, refs, Group, accents = ACCENT_
         </Box>
       </Group>
 
-      <Group title="担当・予定" index={1}>
+      {/* お客様の連絡先（2026-11-17 会議。管理者が入れる。お客様は入力しない） */}
+      <Group title="お客様の連絡先" sub="管理者が入力します。メールアドレスはお客様ポータルのログインに使います" index={1}>
+        <TextField
+          fullWidth label="ご担当者名" value={draft.clientContactName ?? ''} placeholder="例：水野 花子"
+          onChange={(e) => set({ clientContactName: e.target.value })}
+          error={!!show('clientContactName')} helperText={show('clientContactName') ?? clientCounter('clientContactName')}
+          inputRef={(el: HTMLElement | null) => { refs.current.clientContactName = el; }}
+          inputProps={{ maxLength: CLIENT_INFO_LIMITS.clientContactName + 10, autoComplete: 'off' }}
+        />
+        <TextField
+          fullWidth required={emailRequired} label="メールアドレス" type="email" value={draft.clientEmail ?? ''} placeholder="name@example.jp"
+          onChange={(e) => set({ clientEmail: e.target.value })}
+          error={!!show('clientEmail')}
+          helperText={show('clientEmail') ?? (emailRequired ? 'このアドレスでお客様ポータルのログインを作ります' : 'ログインのアドレスはユーザー管理で変えます')}
+          inputRef={(el: HTMLElement | null) => { refs.current.clientEmail = el; }}
+          inputProps={{ maxLength: CLIENT_INFO_LIMITS.clientEmail + 10, inputMode: 'email', autoComplete: 'off', spellCheck: false, autoCapitalize: 'none' }}
+          InputProps={{ startAdornment: <InputAdornment position="start"><Mail size={18} color={tokens.color.muted} /></InputAdornment> }}
+        />
+        <TextField
+          fullWidth label="電話番号" type="tel" value={draft.clientPhone ?? ''} placeholder="例：03-1234-5678"
+          onChange={(e) => set({ clientPhone: e.target.value })}
+          error={!!show('clientPhone')} helperText={show('clientPhone') ?? '任意'}
+          inputRef={(el: HTMLElement | null) => { refs.current.clientPhone = el; }}
+          inputProps={{ maxLength: CLIENT_INFO_LIMITS.clientPhone + 5, inputMode: 'tel', autoComplete: 'off' }}
+          InputProps={{ startAdornment: <InputAdornment position="start"><Phone size={18} color={tokens.color.muted} /></InputAdornment> }}
+        />
+        <TextField
+          fullWidth label="住所" value={draft.clientAddress ?? ''} placeholder="例：東京都渋谷区神宮前1-2-3"
+          onChange={(e) => set({ clientAddress: e.target.value })}
+          error={!!show('clientAddress')} helperText={show('clientAddress') ?? `任意（${clientCounter('clientAddress')}）`}
+          inputRef={(el: HTMLElement | null) => { refs.current.clientAddress = el; }}
+          inputProps={{ maxLength: CLIENT_INFO_LIMITS.clientAddress + 10, autoComplete: 'off' }}
+          InputProps={{ startAdornment: <InputAdornment position="start"><MapPin size={18} color={tokens.color.muted} /></InputAdornment> }}
+        />
+      </Group>
+
+      <Group title="担当" index={2}>
         <TextField
           select fullWidth required label="担当ディレクター" value={draft.ownerId}
           onChange={(e) => set({ ownerId: e.target.value })}
@@ -130,26 +171,41 @@ export function ProjectFields({ draft, set, show, refs, Group, accents = ACCENT_
             </MenuItem>
           ))}
         </TextField>
-        <TextField
-          fullWidth label="公開予定日" type="date" value={draft.launchDate}
-          onChange={(e) => set({ launchDate: e.target.value })}
-          error={!!show('launchDate')} helperText={show('launchDate') ?? '未定なら空のまま'}
-          inputRef={(el: HTMLElement | null) => { refs.current.launchDate = el; }}
-          inputProps={{ min: minLaunchDate }}
-          InputLabelProps={{ shrink: true }}
-        />
-        {withNextAction && (
+        {/* 担当開発者（2026-11-17 会議。ユーザー管理の担当プロジェクト＝devProjects に入る。作成のときだけ） */}
+        {devOptions && (
           <TextField
-            fullWidth label="次に必要な作業" value={draft.nextAction} placeholder={DEFAULT_NEXT_ACTION}
-            onChange={(e) => set({ nextAction: e.target.value })}
-            error={!!show('nextAction')} helperText={show('nextAction') ?? `空なら「${DEFAULT_NEXT_ACTION}」（${counter('nextAction')}）`}
-            inputRef={(el: HTMLElement | null) => { refs.current.nextAction = el; }}
-            inputProps={{ maxLength: PROJECT_LIMITS.nextAction + 10, autoComplete: 'off' }}
-          />
+            select fullWidth label="担当開発者" value={draft.devId ?? ''}
+            onChange={(e) => set({ devId: e.target.value })}
+            error={!!show('devId')} helperText={show('devId') ?? '開発者画面でこのプロジェクトを開ける人。あとからユーザー管理で変えられます'}
+            inputRef={(el: HTMLElement | null) => { refs.current.devId = el; }}
+            SelectProps={{
+              displayEmpty: true,
+              renderValue: (id) => {
+                const m = devOptions.find((x) => x.id === id);
+                return m ? (
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>{m.name}</Typography>
+                    <Typography variant="caption" noWrap>{m.role}</Typography>
+                  </Stack>
+                ) : <Typography variant="body2" color="text.secondary">あとで決める</Typography>;
+              },
+            }}
+            InputLabelProps={{ shrink: true }}
+          >
+            <MenuItem value="" sx={{ minHeight: 44 }}>あとで決める</MenuItem>
+            {devOptions.map((m) => (
+              <MenuItem key={m.id} value={m.id} sx={{ minHeight: 44 }}>
+                <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0 }}>
+                  <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>{m.name}</Typography>
+                  <Typography variant="caption" noWrap>{m.role}{m.partnerCompany ? `・${m.partnerCompany}` : ''}</Typography>
+                </Stack>
+              </MenuItem>
+            ))}
+          </TextField>
         )}
       </Group>
 
-      <Group title="見た目" sub="カードと詳細画面で使うブランド色" index={2}>
+      <Group title="見た目" sub="カードと詳細画面で使うブランド色" index={3}>
         <Box>
           <Typography id={accentLabelId} variant="subtitle2" sx={{ mb: 1 }}>ブランド色</Typography>
           <Stack direction="row" role="radiogroup" aria-labelledby={accentLabelId} sx={{ flexWrap: 'wrap', gap: 1 }}>

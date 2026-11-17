@@ -1,5 +1,5 @@
 import { Box, ButtonBase, Stack, Typography } from '@mui/material';
-import { CheckCircle2, Circle, FileSearch, LayoutTemplate, Network } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Circle, FileSearch, LayoutTemplate, Network } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useDemo } from '@/store/DemoStore';
 import { tokens } from '@/theme/tokens';
@@ -7,7 +7,7 @@ import { useProjectRoutes } from '@/features/projects/projectRoutes';
 import { useHearingRoutes } from '@/features/requirements/hearingRoutes';
 
 /**
- * 「要件定義 → サイトマップ → デザイン」の制作フロー。
+ * 「要件定義 → スケジュール → サイトマップ → デザイン」の制作フロー（スケジュールは 2026-11-17 会議で追加）。
  * AI Studio の各画面（要件・サイトマップ・デザイン）の上部に置き、どこまで承認済みかを示す。
  * 行き先はいまのエリアの中（管理者画面 /ai-studio・/site・/ai-studio/design、開発者画面 /dev/hearing・/dev/sitemap・/dev/design。0.26.0）
  */
@@ -20,6 +20,8 @@ export function BuildFlowNav() {
   if (pathname === hearing.input || pathname === hearing.answers) return null;
   const steps = [
     { to: routes.requirements, label: 'AI要件定義', short: '要件', icon: FileSearch, done: state.requirements.status === 'approved' },
+    // 開発者画面は入力（/dev/schedule）、管理者画面は見るだけ（/schedule）
+    { to: routes.sitemap.startsWith('/dev') ? '/dev/schedule' : '/schedule', label: 'スケジュール', short: '日程', icon: CalendarDays, done: !!state.schedule },
     { to: routes.sitemap, label: 'サイトマップ', short: 'サイトマップ', icon: Network, done: !!state.sitemap.approvedAt },
     { to: routes.design, label: 'デザイン・構築', short: 'デザイン', icon: LayoutTemplate, done: !!state.design.approvedAt },
   ];

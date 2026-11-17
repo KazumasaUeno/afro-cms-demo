@@ -26,7 +26,7 @@ import { useProjectRoutes } from '@/features/projects/projectRoutes';
 type Mode = 'dev' | 'portal' | 'admin';
 
 const HEADER: Record<Mode, { eyebrow: string; description: string }> = {
-  dev: { eyebrow: '⑤ 運用', description: 'サイトのフォーム（お問い合わせなど）の項目と通知先を管理します。受信した問い合わせへの対応はお客様がポータルで行います。' },
+  dev: { eyebrow: '⑦ 運用', description: 'サイトのフォーム（お問い合わせなど）の項目と通知先を管理します。受信した問い合わせへの対応はお客様がポータルで行います。' },
   portal: { eyebrow: 'お客様ポータル', description: 'サイトのフォームから届いた問い合わせを確認し、対応状況を記録します。CSV で保存できます（受信の見本は架空のデータです）。' },
   admin: { eyebrow: 'プロジェクト', description: 'フォームと受信件数の一覧です（管理者画面は見るだけ）。' },
 };

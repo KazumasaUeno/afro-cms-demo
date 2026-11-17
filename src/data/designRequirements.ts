@@ -2,7 +2,7 @@ import type { RequirementQuestion } from '@/types';
 
 /**
  * デザイン要件定義の質問（0.28.0。2026-11-12 ユーザー決定）。
- * 出典: お客様の草案資料「8. デザイン・ブランド」の 6 問。サイトマップの承認の後、デザイン案（3 案）を作る前に、デザインの段階で聞く。
+ * 出典: お客様の草案資料「8. デザイン・ブランド」の 6 問。サイトマップの承認の後、デザイン案（2 案）を作る前に、デザインの段階で聞く。
  * 最初の 3 問（q-design-dislike・q-image・q-brand）は 0.27 までヒアリング（rc8）にあった質問で、id はそのまま（保存データは DemoStore の読み込みで移す）。
  * 型と入力欄はヒアリングと同じ（RequirementQuestion・AnswerInput・validateAnswer）。categoryId は 1 画面のため固定。
  * demo だけ（live の Rules・ヒアリングの質問には含めない）

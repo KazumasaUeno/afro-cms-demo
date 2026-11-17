@@ -16,6 +16,7 @@ import { pendingConfirmations } from './assignment';
 import { downloadRequirementsDoc } from './requirementsDoc';
 import { useHearingRoutes } from './hearingRoutes';
 import { useLiveRoleOptional } from '@/live/session';
+import { useDemoOptional } from '@/store/DemoStore';
 
 const PRIORITY: Record<ProposalPoint['priority'], { label: string; tone: PillTone; color: string }> = {
   high: { label: '優先度 高', tone: 'danger', color: tokens.color.danger },
@@ -32,6 +33,9 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
   const { requirements, approvals, projects } = useRepositories();
   const { data: req } = useCurrentRequirements();
   const { data: projectList } = projects.useList();
+  // 要件定義書のスケジュールの節（2026-11-17 会議）。日程は demo の制作データだけにある（live は「承認後に入力します」と書く）
+  const demo = useDemoOptional();
+  const schedule = DATA_MODE === 'live' ? undefined : demo?.state.schedule;
   const navigate = useNavigate();
   // 開発者画面（/dev/hearing）では要件定義書を見るだけ。やり直し・サイトマップへ進むは管理者画面だけに出す（0.25.0）。承認はお客様ポータルだけ（管理者・開発者には承認待ちの表示。2026-11-12）
   const { dev } = useHearingRoutes();
@@ -168,7 +172,7 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
               {/* 差し戻す（回答を残して入力へ戻す）は demo・live 共通。demo は承認待ちの間だけ（0.29.3） */}
               {canReset && (live || req.status === 'analyzed') && <Button variant="text" startIcon={<RotateCcw size={16} />} onClick={() => setConfirmReset('sendBack')}>差し戻す</Button>}
               {canReset && !live && <Button variant="text" onClick={() => setConfirmReset('reset')}>回答をやり直す</Button>}
-              <Button variant="outlined" startIcon={<Download size={16} />} onClick={() => { downloadRequirementsDoc({ requirements: req, projects: projectList }); toast('要件定義書をダウンロードしました'); }}>要件定義書をダウンロード</Button>
+              <Button variant="outlined" startIcon={<Download size={16} />} onClick={() => { downloadRequirementsDoc({ requirements: req, projects: projectList, schedule }); toast('要件定義書をダウンロードしました'); }}>要件定義書をダウンロード</Button>
               {approved ? (
                 <Box
                   role="status"

@@ -5,6 +5,7 @@ import { memberById } from '@/data/members';
 import { formatDate } from '@/services/time';
 import { approvalSteps } from '../portalSteps';
 import { hasUndelivered } from '@/data/signage';
+import { releaseDateOf } from '@/data/schedule';
 import { isSiteLive } from '@/data/projectContent';
 
 /** ページ・公開承認・サイネージ・レポートはサイトの公開後（運用の段階）から使える（0.30.0。2026-11-13 ユーザー指示） */
@@ -135,10 +136,11 @@ export const TOPICS: Topic[] = [
   {
     id: 'launch', label: '公開はいつ？', keywords: ['公開', 'いつ', '予定', '納期', 'リリース'],
     answer: (state) => {
-      const p = currentProject(state);
-      if (!p.launchDate) return { text: '公開日はまだ調整中です。決まり次第ホームに表示します。' };
-      const days = Math.max(0, Math.ceil((new Date(p.launchDate).getTime() - Date.now()) / 86400000));
-      return { text: `公開予定は ${formatDate(p.launchDate)}、あと ${days} 日です。承認が遅れると公開日も後ろにずれることがあるので、お願いしたいことは早めに進めていただけると助かります。` };
+      // スケジュールの公開予定日があればそれを使う（2026-11-17 会議）
+      const launch = releaseDateOf(state, currentProject(state));
+      if (!launch) return { text: '公開日はまだ調整中です。決まり次第ホームに表示します。' };
+      const days = Math.max(0, Math.ceil((new Date(launch).getTime() - Date.now()) / 86400000));
+      return { text: `公開予定は ${formatDate(launch)}、あと ${days} 日です。承認が遅れると公開日も後ろにずれることがあるので、お願いしたいことは早めに進めていただけると助かります。` };
     },
   },
   {

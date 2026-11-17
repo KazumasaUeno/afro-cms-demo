@@ -5,7 +5,7 @@ import { useDemoOptional } from '@/store/DemoStore';
 import { workOf } from '@/store/projectWork';
 
 /**
- * デザイン案（3 案）に流し込む、案件ごとの中身（0.29.5。2026-11-12 ユーザー決定「デザイン案は案件ごと」）。
+ * デザイン案（新しく出すのは 2 案。2026-11-17 会議。C は選択済みのデータのために残す）に流し込む、案件ごとの中身（0.29.5。2026-11-12 ユーザー決定「デザイン案は案件ごと」）。
  * 案（minimal / creative / premium）はレイアウトと書体だけを持ち、文言・ナビ・CTA・色はここから取る。
  * 出所: 案件（サイト名・URL・ブランド色・業種）、ヒアリング（q-strength・q-target・q-cv・q-content）、
  * デザイン要件定義（q-image・q-brand）、改善後のサイトマップ（ナビ・各案の 2〜3 画面目）。

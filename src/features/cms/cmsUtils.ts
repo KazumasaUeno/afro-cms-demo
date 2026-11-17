@@ -120,7 +120,9 @@ export function diffBlocks(before: string | undefined, after: string | undefined
 export function samePage(a: CmsPage, b: CmsPage): boolean {
   return (
     a.title === b.title && a.slug === b.slug && a.content === b.content && a.seoTitle === b.seoTitle &&
-    a.seoDescription === b.seoDescription && (a.coverImage ?? '') === (b.coverImage ?? '') && (a.parentPath ?? '') === (b.parentPath ?? '')
+    a.seoDescription === b.seoDescription && (a.coverImage ?? '') === (b.coverImage ?? '') && (a.parentPath ?? '') === (b.parentPath ?? '') &&
+    // お知らせのカテゴリー（2026-11-17 会議）を変えたら未保存の変更にする
+    (a.newsCategory ?? '') === (b.newsCategory ?? '')
   );
 }
 

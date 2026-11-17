@@ -1,5 +1,5 @@
 import { Box, Button, ButtonBase, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography } from '@mui/material';
-import { ArrowLeft, ArrowRight, BadgeCheck, Check, CheckCircle2, ClipboardCheck, Download, ExternalLink, Eye, FileText, Lock, Network, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BadgeCheck, Check, CheckCircle2, ClipboardCheck, Download, ExternalLink, Eye, FileText, Lock, Maximize2, Network, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link as RouterLink, useHref, useLocation, useNavigate } from 'react-router-dom';
 import { PageHeader, Reveal, StatusPill, Surface } from '@/components/ui';
@@ -8,19 +8,20 @@ import { useCurrentRequirements, useRepositories } from '@/repositories';
 import { useWrite } from '@/hooks/useWrite';
 import { useToast } from '@/hooks/useToast';
 import { formatDateTime } from '@/services/time';
-import { DESIGN_VARIANTS } from '@/data/designs';
+import { offeredVariants } from '@/data/designs';
 import { tokens } from '@/theme/tokens';
 import type { DesignId } from '@/types';
 import { AREAS } from '@/components/layout/nav';
 import { DeviceFrame } from '@/features/design/DeviceFrame';
 import { personalize, useDesignContext } from '@/features/design/designContext';
-import { ScreenToggle } from '@/features/design/DesignStudioPage';
+import { PageTabs, screenLabelOf } from '@/features/design/DesignStudioPage';
 import { buildProposal } from '@/features/requirements/buildProposal';
 import { approvalSteps, type ApprovalKey, type ApprovalStep } from './portalSteps';
 import { sitemapCreated } from '@/data/sitemap';
 import { pendingConfirmations } from '@/features/requirements/assignment';
 import { buildRequirementsDocHtml, downloadRequirementsDoc } from '@/features/requirements/requirementsDoc';
 import { SitemapViewer } from '@/features/sitemap/SitemapViewer';
+import { SitemapDevCommentView } from '@/features/sitemap/DevComment';
 import { useProjectRoutes } from '@/features/projects/projectRoutes';
 
 const AREA = AREAS.portal;
@@ -43,6 +44,10 @@ function StepCard({ step, children, action, keepWhenLocked = false }: { step: Ap
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="h4" component="h2">{step.title}</Typography>
             <Typography variant="caption" sx={{ display: 'block' }}>{locked ? step.lockedReason : step.ask}</Typography>
+            {/* アフロが承認を依頼した日時（2026-11-17 会議） */}
+            {!locked && !approved && step.requestedAt && (
+              <Typography variant="caption" sx={{ display: 'block', color: tokens.color.muted }}>{formatDateTime(step.requestedAt)} に承認のお願いが届きました</Typography>
+            )}
           </Box>
         </Stack>
         {approved ? (
@@ -111,6 +116,9 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
   // 説明用の表示でのデザインの仮の選択（保存しない）
   const [previewDesign, setPreviewDesign] = useState<DesignId | null>(null);
   const selectedDesign = preview ? (previewDesign ?? state.design.selected) : state.design.selected;
+  // 出す案は A・B の 2 つ（2026-11-17 会議）。保存済みの選択（C = premium を含む）は消さずに出す
+  const portalVariants = offeredVariants(state.design.selected).map((v) => personalize(v, designCtx));
+  const fullscreenVariant = portalVariants.find((v) => v.id === selectedDesign) ?? portalVariants[0];
   const [confirm, setConfirm] = useState<Exclude<ApprovalKey, 'quality'> | null>(null);
   // 閉じるアニメーションの間も文言を残す（null にすると一瞬空になる）
   const lastConfirm = useRef<Exclude<ApprovalKey, 'quality'>>('requirements');
@@ -177,7 +185,8 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
       <Stack spacing={{ xs: 2, md: 2.5 }}>
         {/* 1. 要件定義書 */}
         <Reveal>
-          <StepCard step={byKey.requirements} action={approveBtn('requirements', pending.length > 0)} keepWhenLocked>
+          {/* 準備中の中身はヒアリング前（デモの進め方の案内）だけ出す。AI 分析の後でもアフロが依頼するまでは出さない（2026-11-17 会議） */}
+          <StepCard step={byKey.requirements} action={approveBtn('requirements', pending.length > 0)} keepWhenLocked={req.status === 'draft'}>
             {byKey.requirements.status === 'waiting' && pending.length > 0 && (
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }} role="status" sx={{ mb: 2, px: 1.5, py: 1, borderRadius: 2, bgcolor: tokens.color.warningSoft }}>
                 <Typography variant="caption" sx={{ flex: 1, color: tokens.color.warningInk, fontWeight: 650 }}>
@@ -265,6 +274,8 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
                     ))}
                   </Stack>
                 )}
+                {/* 開発担当者からのコメント（読むだけ。2026-11-17 会議。AI の改善理由の後に、開発者の意図を出す） */}
+                {state.sitemap.devComment?.text && <Box sx={{ mt: 2 }}><SitemapDevCommentView comment={state.sitemap.devComment} /></Box>}
               </>
             )}
           </StepCard>
@@ -273,26 +284,28 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
         {/* 3. トップデザイン */}
         <Reveal delay={0.08}>
           <StepCard step={byKey.design} action={approveBtn('design', !selectedDesign)}>
+            {/* 1. 先にページを選ぶ（2026-11-17 会議: 左上から見るので最初に置く）→ 2. そのページで案を比べる */}
             {designCtx.pages.length > 0 && (
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'flex-start', sm: 'center' }} sx={{ mb: 1.5 }}>
-                <ScreenToggle ctx={designCtx} value={screen} onChange={setScreen} />
-                <Typography variant="caption">トップと主要ページの {designCtx.pages.length + 1} 画面を切り替えて確認できます。</Typography>
-              </Stack>
+              <Box sx={{ mb: 2 }}>
+                <PageTabs ctx={designCtx} value={screen} onChange={setScreen} heading="1. ページを選ぶ" />
+              </Box>
             )}
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0,1fr))' }, gap: 1.5 }} role="radiogroup" aria-label="採用するデザイン">
-              {DESIGN_VARIANTS.map((v0) => {
-                const v = personalize(v0, designCtx);
+            <Typography variant="overline" component="p" sx={{ color: AREA.color, mb: 1 }}>
+              {designCtx.pages.length > 0 ? '2. ' : ''}「{screenLabelOf(designCtx, screen)}」のデザイン案を比べて選ぶ
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: `repeat(${portalVariants.length}, minmax(0,1fr))` }, gap: 1.5 }} role="radiogroup" aria-label="採用するデザイン">
+              {portalVariants.map((v) => {
                 const selected = selectedDesign === v.id;
                 const locked = !!state.design.approvedAt;
                 return (
-                  <Box key={v.id} sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                   <ButtonBase
+                    key={v.id}
                     role="radio"
                     aria-checked={selected}
                     disabled={locked && !selected}
                     onClick={() => { if (locked) return; if (preview) setPreviewDesign(v.id as DesignId); else dispatch({ type: 'selectDesign', id: v.id as DesignId }); }}
                     sx={{
-                      display: 'block', textAlign: 'left', p: 1, borderRadius: 3,
+                      display: 'block', textAlign: 'left', p: 1, borderRadius: 3, minWidth: 0,
                       border: `2px solid ${selected ? AREA.color : tokens.color.border}`,
                       '&.Mui-disabled': { opacity: 0.5 },
                     }}
@@ -309,22 +322,26 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
                     <Typography variant="body2" sx={{ fontWeight: 650 }}>{v.name}</Typography>
                     <Typography variant="caption">{v.tagline}</Typography>
                   </ButtonBase>
-                  <Button
-                    component="a"
-                    href={previewHref(v.id)}
-                    target="_blank"
-                    rel="noopener"
-                    size="small"
-                    endIcon={<ExternalLink size={14} />}
-                    aria-label={`${v.name}を新しいタブで全画面表示`}
-                    sx={{ alignSelf: 'flex-start', mt: 0.5 }}
-                  >
-                    新しいタブで全画面表示
-                  </Button>
-                  </Box>
                 );
               })}
             </Box>
+            {/* 全画面表示はカードの中に隠さず、1 つのボタンにする。何が開くか（案・ページ）をボタンに書く（2026-11-17 会議）。
+                案を選ぶ前は Design A を開く（開いた先で案・ページ・端末を切り替えられる） */}
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'stretch', sm: 'center' }} sx={{ mt: 2 }}>
+              <Button
+                component="a"
+                href={previewHref(fullscreenVariant.id)}
+                target="_blank"
+                rel="noopener"
+                variant="outlined"
+                startIcon={<Maximize2 size={16} />}
+                endIcon={<ExternalLink size={14} />}
+                sx={{ justifyContent: 'flex-start', textAlign: 'left' }}
+              >
+                {fullscreenVariant.label}「{fullscreenVariant.name}」の{screenLabelOf(designCtx, screen)}を新しいタブで全画面表示
+              </Button>
+              <Typography variant="caption">{selectedDesign ? '選んだ案・ページを開きます。' : '案を選ぶと、その案を開きます。'}開いた先でも案・ページ・端末を切り替えられます。</Typography>
+            </Stack>
             {!selectedDesign && <Typography variant="caption" sx={{ display: 'block', mt: 1.5 }}>案を 1 つ選ぶと承認できます。</Typography>}
           </StepCard>
         </Reveal>

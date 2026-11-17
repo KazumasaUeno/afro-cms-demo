@@ -4,6 +4,8 @@ import type { Project } from '@/types';
 import { STAGES } from '@/data/projects';
 import { StageTrack, StatusPill, Surface } from '@/components/ui';
 import { formatDate } from '@/services/time';
+import { useDemo } from '@/store/DemoStore';
+import { releaseDateOf } from '@/data/schedule';
 import { tokens } from '@/theme/tokens';
 import { FollowUpBadge } from '@/features/projects/FollowUpBadge';
 import { stageLabel } from '@/features/projects/projectHelpers';
@@ -13,6 +15,9 @@ import { stageLabel } from '@/features/projects/projectHelpers';
  * カード全体を押すと、その案件のプロジェクト詳細（開発者画面の中の /dev/projects/:id。0.26.0）を開く。見た目は管理者ホームの「進行中のプロジェクト」に合わせる
  */
 export function DevProjectCard({ p, next, onOpen }: { p: Project; next: string; onOpen: () => void }) {
+  // スケジュールの公開予定日があればそれを使う（2026-11-17 会議）
+  const { state } = useDemo();
+  const launchDate = releaseDateOf(state, p);
   const stage = STAGES.find((s) => s.id === p.stage);
   return (
     <Surface
@@ -58,7 +63,7 @@ export function DevProjectCard({ p, next, onOpen }: { p: Project; next: string; 
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 'auto', pt: 2, flexWrap: 'wrap', rowGap: 0.75 }}>
         <Stack direction="row" spacing={0.5} alignItems="center" sx={{ color: tokens.color.muted, flex: 1, minWidth: 0 }}>
           <CalendarDays size={14} style={{ flexShrink: 0 }} aria-hidden />
-          <Typography variant="caption" noWrap>公開予定 {p.launchDate ? formatDate(p.launchDate) : '未定'}</Typography>
+          <Typography variant="caption" noWrap>公開予定 {launchDate ? formatDate(launchDate) : '未定'}</Typography>
         </Stack>
         <Stack direction="row" spacing={0.5} alignItems="center" sx={{ color: tokens.color.primary, flexShrink: 0 }} aria-hidden>
           <Typography variant="body2" sx={{ fontWeight: 650, color: 'inherit' }}>詳細を開く</Typography>

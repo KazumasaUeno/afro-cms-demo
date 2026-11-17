@@ -1,7 +1,7 @@
 import { Box, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { DESIGN_VARIANTS } from '@/data/designs';
+import { DESIGN_VARIANTS, offeredVariants } from '@/data/designs';
 import { tokens } from '@/theme/tokens';
 import type { DesignId } from '@/types';
 import { DeviceFrame } from './DeviceFrame';
@@ -26,6 +26,8 @@ export default function DesignPreviewPage() {
   const screen = Math.min(Math.max(0, Number(params.get('screen')) || 0), ctx.pages.length);
   const device: Device = DEVICES.find((d) => d === params.get('device')) ?? 'pc';
   const variant = personalize(DESIGN_VARIANTS.find((v) => v.id === design)!, ctx);
+  // 最初に開いた案（C = premium の選択済み案件から開いた場合も、切り替えた後に選択肢から消さない）
+  const [openedWith] = useState<DesignId>(design);
 
   // 窓の高さに合わせて見本の高さを決める（上の操作バー・ブラウザ風の枠・余白を除く）
   const [winH, setWinH] = useState(() => window.innerHeight);
@@ -56,7 +58,8 @@ export default function DesignPreviewPage() {
       >
         <Typography variant="body2" sx={{ fontWeight: 650, mr: 1 }} noWrap>{ctx.siteName} のデザイン案</Typography>
         <ToggleButtonGroup exclusive size="small" value={design} onChange={(_, v) => v && set('design', v)} aria-label="表示するデザイン案">
-          {DESIGN_VARIANTS.map((v0) => {
+          {/* 切り替えの選択肢は A・B（2026-11-17 会議）。URL で C（premium。選択済みの案件）を開いたときは C も出す */}
+          {offeredVariants(openedWith === 'premium' ? openedWith : design).map((v0) => {
             const v = personalize(v0, ctx);
             return <ToggleButton key={v.id} value={v.id}>{v.label}・{v.name}</ToggleButton>;
           })}

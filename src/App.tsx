@@ -15,6 +15,8 @@ const HearingAnswersPage = lazy(() => import('@/features/requirements/HearingAns
 const RequirementsDocPage = lazy(() => import('@/features/requirements/RequirementsDocPage'));
 const DesignStudioPage = lazy(() => import('@/features/design/DesignStudioPage'));
 const DesignRequirementsPage = lazy(() => import('@/features/design/DesignRequirementsPage'));
+// 制作〜公開のスケジュール（2026-11-17 会議）
+const SchedulePage = lazy(() => import('@/features/schedule/SchedulePage'));
 const SitemapPage = lazy(() => import('@/features/sitemap/SitemapPage'));
 const QualityPage = lazy(() => import('@/features/quality/QualityPage'));
 const CmsEditorPage = lazy(() => import('@/features/cms/CmsEditorPage'));
@@ -69,6 +71,8 @@ const router = createBrowserRouter([
       { path: 'ai-studio/design', element: <DesignStudioPage /> },
       // デザイン要件定義（0.28.0）。サイトマップの承認の後、デザイン案を作る前に聞く 6 問
       { path: 'ai-studio/design/requirements', element: <DesignRequirementsPage /> },
+      // スケジュール（2026-11-17 会議）。管理者画面は見るだけ、入力は開発者画面の /dev/schedule
+      { path: 'schedule', element: <SchedulePage /> },
       { path: 'site', element: <SitemapPage /> },
       { path: 'quality', element: <QualityPage /> },
       // 管理者画面（アフロ社内）は従来どおりルート直下。お客様ポータルは /portal、開発者画面は /dev 配下
@@ -79,6 +83,8 @@ const router = createBrowserRouter([
       { path: 'dev/projects', element: <ProjectsPage /> },
       { path: 'dev/projects/:projectId', element: <ProjectDetailPage /> },
       // 構築の段階のサイトマップ・デザイン（0.26.0）。管理者画面の /site・/ai-studio/design と同じ画面（担当案件だけ。DevProjectGate）
+      // 要件定義の後のスケジュールの入力（2026-11-17 会議。担当案件だけ。DevProjectGate）
+      { path: 'dev/schedule', element: <SchedulePage /> },
       { path: 'dev/sitemap', element: <SitemapPage /> },
       { path: 'dev/design', element: <DesignStudioPage /> },
       { path: 'dev/design/requirements', element: <DesignRequirementsPage /> },
@@ -110,13 +116,15 @@ const router = createBrowserRouter([
       { path: 'portal/signage', element: <PortalSignagePage /> },
       // 問い合わせの確認・対応状況（0.37.0）。フォームの定義は見るだけ
       { path: 'portal/forms', element: <FormsPage /> },
-      // 担当者への相談（0.38.0）。管理者画面の /chat・開発者画面の /dev/chat と同じ会話
+      // 担当者への相談（0.38.0）。開発者画面の /dev/chat と同じ会話（管理者画面の /chat は 2026-11-17 に外した）
       { path: 'portal/chat', element: <ChatPage /> },
+      // 素材ドライブ（2026-11-17 会議）。お客様は見るのと画像のアップロードだけ（AssetDrivePage の client）
+      { path: 'portal/assets', element: <AssetDrivePage /> },
       { path: 'insights', element: <InsightsPage /> },
       { path: 'assets', element: <AssetDrivePage /> },
       { path: 'forms', element: <FormsPage /> },
-      // 相談チャット（0.38.0）・お客様の確認・承認画面を説明用に見るだけで開く（0.38.0。承認は記録しない）
-      { path: 'chat', element: <ChatPage /> },
+      // 管理者画面の相談チャットは外した（2026-11-17 ユーザー指示）。古い URL はホームへ。お客様の確認・承認画面は説明用に見るだけで開く（0.38.0。承認は記録しない）
+      { path: 'chat', element: <Navigate to="/" replace /> },
       { path: 'client-view/approvals', element: <PortalApprovalsPage preview /> },
       { path: 'users', element: <UsersPage /> },
       { path: 'settings', element: <SettingsPage /> },

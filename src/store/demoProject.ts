@@ -1,4 +1,4 @@
-import type { DemoState, Project, Stage } from '@/types';
+import type { ApprovalKey, DemoState, Project, Stage } from '@/types';
 import { QUALITY_ITEMS } from '@/data/quality';
 import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
 import { approvalSteps } from '@/features/portal/portalSteps';
@@ -20,15 +20,21 @@ export function derivedDemoProject(state: DemoState): Pick<Project, 'stage' | 'p
     const answered = REQUIREMENT_QUESTIONS.filter((q) => isAnswered(req.answers[q.id])).length;
     return { ...base, stage: 'hearing', progress: 2 + Math.round((10 * answered) / REQUIREMENT_QUESTIONS.length), nextAction: 'ヒアリングを入力する' };
   }
-  if (req.status === 'analyzed') return { ...base, stage: 'requirements', progress: 18, nextAction: 'お客様の要件定義書の承認を待つ' };
-  if (!state.sitemap.approvedAt) return { ...base, stage: 'build', progress: 25, nextAction: 'お客様のサイトマップ承認を待つ' };
+  // 承認を依頼する前は「承認を依頼する」、依頼の後は「お客様の承認を待つ」（2026-11-17 会議）
+  const asked = (key: ApprovalKey, waiting: string, ask: string) => (state.approvalRequests?.[key] ? waiting : ask);
+  if (req.status === 'analyzed') return { ...base, stage: 'requirements', progress: 18, nextAction: asked('requirements', 'お客様の要件定義書の承認を待つ', '要件定義書の承認を依頼する') };
+  // 日程を入れるまで制作へ進めない（2026-11-17 会議）。ただし後の工程が済んでいれば（サイトマップの承認など。日程の機能より前の保存データ）制作以降として扱う
+  if (!state.schedule && !state.sitemap.approvedAt) return { ...base, stage: 'schedule', progress: 21, nextAction: 'スケジュールを入力する' };
+  if (!state.sitemap.approvedAt) return { ...base, stage: 'build', progress: 25, nextAction: asked('sitemap', 'お客様のサイトマップ承認を待つ', 'サイトマップの承認を依頼する') };
   if (!state.design.approvedAt && !designReady(state)) return { ...base, stage: 'build', progress: 38, nextAction: 'デザイン要件定義を入力する' };
-  if (!state.design.approvedAt) return { ...base, stage: 'build', progress: 38, nextAction: 'お客様のデザイン案の採用を待つ' };
+  if (!state.design.approvedAt) return { ...base, stage: 'build', progress: 38, nextAction: asked('design', 'お客様のデザイン案の採用を待つ', 'デザイン案の承認を依頼する') };
   if (!state.design.buildCompletedAt) return { ...base, stage: 'build', progress: 52, nextAction: '全ページを構築する' };
+  // お客様が品質チェックを完了（納品検収）したらリリースの段階（2026-11-17 会議）。開発者画面の品質チェックから公開して運用へ進める（0.30.1）
+  if (state.design.qualityApprovedAt) return { ...base, stage: 'release', progress: 95, nextAction: 'サイトを公開する' };
   const both = QUALITY_ITEMS.filter((i) => state.qualityChecks[i.id]?.afroAt && state.qualityChecks[i.id]?.clientAt).length;
   const stage: Stage = 'quality';
-  // すべて双方確認済みなら次は公開（開発者画面の品質チェックから運用へ進める。0.30.1）
-  const nextAction = both === QUALITY_ITEMS.length ? 'サイトを公開する' : '品質チェック（110問）を進める';
+  const nextAction = !state.approvalRequests?.quality ? '品質チェックを依頼する'
+    : both === QUALITY_ITEMS.length ? 'お客様の品質チェックの完了（納品検収）を待つ' : '品質チェック（110問）を進める';
   return { ...base, stage, progress: 64 + Math.round((30 * both) / QUALITY_ITEMS.length), nextAction };
 }
 

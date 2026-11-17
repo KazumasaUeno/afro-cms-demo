@@ -1,9 +1,10 @@
 /**
  * CMS 本文（HTML）の許可リスト型サニタイザ。
  * プレビュー・比較で dangerouslySetInnerHTML に渡す前に必ず通す。
- * 許可: p,h2,h3,ul,ol,li,strong,em,blockquote,br,img[src=data:image/ | https:],a[href=http(s)]
+ * 許可: p,h2,h3,ul,ol,li,strong,em,blockquote,br,img[src=data:image/ | https: | 同梱の見本写真 demo-images/],a[href=http(s)]
  * それ以外の要素は中身（テキスト）だけ残して外し、属性はすべて捨てる。
  */
+import { isDemoImageSrc } from '@/data/demoImages';
 
 const ALLOWED = new Set(['P', 'H2', 'H3', 'UL', 'OL', 'LI', 'STRONG', 'EM', 'BLOCKQUOTE', 'BR', 'IMG', 'A']);
 /** 中身ごと捨てる要素 */
@@ -11,7 +12,8 @@ const DROP = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'TEMPLATE'
 /** 見た目の都合で同等の許可タグへ寄せる */
 const ALIAS: Record<string, string> = { B: 'STRONG', I: 'EM', H1: 'H2', H4: 'H3', H5: 'H3', H6: 'H3' };
 
-const safeImgSrc = (v: string) => /^data:image\/(png|jpe?g|gif|webp|svg\+xml);/i.test(v) || /^https:\/\//i.test(v);
+// 同梱の見本写真（素材ドライブ。2026-11-17）は、同じサイトの決まった場所のファイルだけ通す
+const safeImgSrc = (v: string) => /^data:image\/(png|jpe?g|gif|webp|svg\+xml);/i.test(v) || /^https:\/\//i.test(v) || isDemoImageSrc(v);
 const safeHref = (v: string) => /^https?:\/\//i.test(v);
 
 function cleanNode(node: Node, doc: Document): Node[] {

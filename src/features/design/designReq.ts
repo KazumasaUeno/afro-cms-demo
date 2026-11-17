@@ -11,7 +11,7 @@ export function designBlockers(answers: Record<string, AnswerValue> | undefined)
 }
 
 /**
- * デザイン案（3 案）を出せるか（demo のシミュレーション）。必須（A）の質問がそろったら出す。
+ * デザイン案（2 案）を出せるか（demo のシミュレーション）。必須（A）の質問がそろったら出す。
  * 採用・承認済みの保存データ（0.27 まで。デザイン要件定義が無かった）は、回答が無くてもそのまま出す
  */
 export function designReady(state: Pick<DemoState, 'design'>): boolean {

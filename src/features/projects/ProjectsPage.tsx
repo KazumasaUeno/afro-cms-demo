@@ -64,8 +64,8 @@ export default function ProjectsPage() {
       <PageHeader
         title="プロジェクト"
         description={routes.dev
-          ? 'あなたが担当しているプロジェクトです。ヒアリングから改善まで6つの段階で進み具合を確認できます。カードを開くと各段階の作業に進めます。'
-          : '顧客ごとのWebサイト制作を、ヒアリングから改善まで6つの段階で管理します。カードを開くと各段階の作業に進めます。'}
+          ? 'あなたが担当しているプロジェクトです。ヒアリングから改善まで8つの段階で進み具合を確認できます。カードを開くと各段階の作業に進めます。'
+          : '顧客ごとのWebサイト制作を、ヒアリングから改善まで8つの段階で管理します。カードを開くと各段階の作業に進めます。'}
         actions={routes.dev ? undefined : <Button variant="contained" startIcon={<Plus size={16} />} component={RouterLink} to="/projects/new">新しいプロジェクト</Button>}
       />
 

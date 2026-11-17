@@ -54,7 +54,8 @@ export function clientStatus(state: DemoState, project: Project): ClientStatus {
   const approvals = approvalSteps(w).map((s): ClientApprovalRow => {
     return {
       key: s.key, title: s.title, status: s.status, approvedAt: s.approvedAt, progress: s.progress,
-      requestedAt: s.status === 'waiting' ? requested[s.key] : undefined,
+      // アフロが承認を依頼した日時（2026-11-17 会議）。依頼の記録の無い古いデータは前の節目が終わった日
+      requestedAt: s.status === 'waiting' ? s.requestedAt ?? requested[s.key] : undefined,
     };
   });
   const waiting = approvals.filter((a) => a.status === 'waiting');

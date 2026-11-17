@@ -27,18 +27,21 @@ import { hasLiveVersion, pageDeleteBlock, samePage, STATUS_META, toLocalInput, T
 /** 上部バーの下に追従する列の最大高さ（上下の余白 16px ずつ） */
 const STICKY_MAX_HEIGHT = `calc(100dvh - ${tokens.layout.topbar + 32}px)`;
 
-function PageList({ pages, selectedId, onSelect, onNew }: { pages: CmsPage[]; selectedId?: string; onSelect: (id: string) => void; onNew: (t: PageType) => void }) {
-  const [tab, setTab] = useState<PageType>('page');
+/**
+ * 一覧のタブ（ページ / お知らせ）は呼び出し側が持つ（2026-11-17 会議: ホームの「お知らせを書く」から来たときや、お知らせを作ったときに
+ * 一覧がページのタブのままで、作ったお知らせが見えなかった）。件数は「お知らせ 5 件」と単位まで出す
+ */
+function PageList({ pages, tab, onTab, selectedId, onSelect, onNew }: { pages: CmsPage[]; tab: PageType; onTab: (t: PageType) => void; selectedId?: string; onSelect: (id: string) => void; onNew: (t: PageType) => void }) {
   const [q, setQ] = useState('');
-  const list = pages.filter((p) => p.type === tab && (!q || p.title.includes(q) || p.slug.includes(q.toLowerCase())));
+  const list = pages.filter((p) => p.type === tab && (!q || p.title.includes(q) || p.slug.includes(q.toLowerCase()) || !!p.newsCategory?.includes(q)));
   return (
     <Stack spacing={1.5} sx={{ minWidth: 0 }}>
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="fullWidth" aria-label="種類">
-        <Tab value="page" label={`ページ ${pages.filter((p) => p.type === 'page').length}`} />
-        <Tab value="news" label={`お知らせ ${pages.filter((p) => p.type === 'news').length}`} />
+      <Tabs value={tab} onChange={(_, v: PageType) => onTab(v)} variant="fullWidth" aria-label="種類">
+        <Tab value="page" label={`ページ ${pages.filter((p) => p.type === 'page').length} 件`} />
+        <Tab value="news" label={`お知らせ ${pages.filter((p) => p.type === 'news').length} 件`} />
       </Tabs>
       <TextField
-        size="small" placeholder="タイトル・URLで検索" value={q} onChange={(e) => setQ(e.target.value)} inputProps={{ 'aria-label': 'ページを検索' }}
+        size="small" placeholder={tab === 'news' ? 'タイトル・URL・カテゴリーで検索' : 'タイトル・URLで検索'} value={q} onChange={(e) => setQ(e.target.value)} inputProps={{ 'aria-label': 'ページを検索' }}
         InputProps={{ startAdornment: <InputAdornment position="start"><Search size={15} /></InputAdornment> }}
       />
       <Stack spacing={0.75} component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
@@ -58,9 +61,11 @@ function PageList({ pages, selectedId, onSelect, onNew }: { pages: CmsPage[]; se
               >
                 <Typography variant="body2" sx={{ fontWeight: 650, color: tokens.color.ink }} noWrap>{p.title}</Typography>
                 <Typography sx={{ fontFamily: tokens.font.mono, fontSize: 12, color: tokens.color.muted }} noWrap>{p.slug}</Typography>
-                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 1 }}>
+                <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mt: 1, minWidth: 0 }}>
                   <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
-                  <Typography variant="caption">{relativeTime(p.updatedAt)}</Typography>
+                  {/* お知らせのカテゴリー（2026-11-17 会議） */}
+                  {p.type === 'news' && p.newsCategory && <StatusPill tone="neutral" dot={false}>{p.newsCategory}</StatusPill>}
+                  <Typography variant="caption" sx={{ ml: 'auto !important', flexShrink: 0 }}>{relativeTime(p.updatedAt)}</Typography>
                 </Stack>
               </ButtonBase>
             </li>
@@ -145,7 +150,7 @@ export default function CmsEditorPage() {
     return (
       <>
         <Button component={RouterLink} to={back.to} size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>{back.label}</Button>
-        <PageHeader eyebrow={dev ? '⑤ 運用' : 'お客様ポータル'} icon={<LayoutTemplate size={15} />} title="ページ・お知らせ" description="ページとお知らせを編集し、承認を経て公開します。" />
+        <PageHeader eyebrow={dev ? '⑦ 運用' : 'お客様ポータル'} icon={<LayoutTemplate size={15} />} title="ページ・お知らせ" description="ページとお知らせを編集し、承認を経て公開します。" />
         <SiteNotLive icon={<LayoutTemplate size={26} />} feature="ページ編集" />
       </>
     );
@@ -178,6 +183,13 @@ function CmsEditor() {
     const q = params.get('new');
     return q === 'page' || q === 'news' ? q : null;
   });
+  // 作成ダイアログの種類（閉じる動きの間も見出しが「ページを作成」に変わらないよう、最後に開いた種類を残す）
+  const [dialogType, setDialogType] = useState<PageType>(newType ?? 'page');
+  useEffect(() => {
+    if (newType) setDialogType(newType);
+  }, [newType]);
+  // 一覧のタブ（2026-11-17 会議）。?new=news で来たらお知らせ、?page=<id> で来たらそのページの種類から始める
+  const [listTab, setListTab] = useState<PageType>(() => newType ?? stored?.type ?? 'page');
 
   // URL のパラメータは開いた時点で使い終わるので消す（再読み込みで同じダイアログが開き直さないように）
   useEffect(() => {
@@ -275,7 +287,7 @@ function CmsEditor() {
       </DialogActions>
     </Dialog>
     <PageHeader
-      eyebrow={dev ? '⑤ 運用' : 'お客様ポータル'}
+      eyebrow={dev ? '⑦ 運用' : 'お客様ポータル'}
       icon={<LayoutTemplate size={15} />}
       title="ページ・お知らせ"
       description={dev
@@ -287,7 +299,7 @@ function CmsEditor() {
   const newPageDialog = (
     <NewPageDialog
       open={!!newType}
-      initialType={newType ?? 'page'}
+      initialType={dialogType}
       pages={pages}
       parentOptions={parentOptions}
       onClose={() => setNewType(null)}
@@ -295,6 +307,7 @@ function CmsEditor() {
         dispatch({ type: 'savePage', page, ...actor });
         setNewType(null);
         setSelectedId(page.id);
+        setListTab(page.type);
         setDraft(page);
         setMobileView('editor');
         toast(`「${page.title}」を作成しました`);
@@ -308,7 +321,7 @@ function CmsEditor() {
       <>
         {header}
         <Box sx={{ maxWidth: 360 }}>
-          <PageList pages={pages} onSelect={requestOpen} onNew={(t) => setNewType(t)} />
+          <PageList pages={pages} tab={listTab} onTab={setListTab} onSelect={requestOpen} onNew={(t) => setNewType(t)} />
         </Box>
         {newPageDialog}
       </>
@@ -324,7 +337,7 @@ function CmsEditor() {
         {showList && (
           // 追従する一覧・設定は画面より高くなると下端に届かないので、画面の高さで区切って中をスクロールさせる
           <Box sx={{ position: { sm: 'sticky' }, top: { sm: tokens.layout.topbar + 16 }, maxHeight: { sm: STICKY_MAX_HEIGHT }, overflowY: { sm: 'auto' }, p: { sm: 0.5 }, m: { sm: -0.5 } }}>
-            <PageList pages={pages} selectedId={isMobile ? undefined : draft.id} onSelect={requestOpen} onNew={(t) => setNewType(t)} />
+            <PageList pages={pages} tab={listTab} onTab={setListTab} selectedId={isMobile ? undefined : draft.id} onSelect={requestOpen} onNew={(t) => setNewType(t)} />
           </Box>
         )}
 
@@ -383,7 +396,7 @@ function CmsEditor() {
               inputProps={{ 'aria-label': 'タイトル' }}
               InputProps={{ disableUnderline: true, sx: { fontSize: { xs: 24, md: 30 }, fontWeight: 720, letterSpacing: '-0.02em' } }}
             />
-            <RichEditor key={`${draft.id}-${editorRev}`} content={draft.content} onChange={(html) => patch({ content: html })} />
+            <RichEditor key={`${draft.id}-${editorRev}`} content={draft.content} onChange={(html) => patch({ content: html })} pageType={draft.type} />
 
             {!isDesktop && (
               <Box>

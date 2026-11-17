@@ -1,16 +1,14 @@
 import {
-  Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, InputAdornment, Stack, TextField,
+  Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, InputAdornment, MenuItem, Stack, TextField,
   ToggleButton, ToggleButtonGroup, Typography,
 } from '@mui/material';
-import { ArrowLeft, FileText, FolderOpen, LayoutGrid, List, Pencil, Search, Trash2, Upload } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, FileText, FolderOpen, FolderPlus, LayoutGrid, List, Pencil, Search, Trash2, Upload } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import type { Asset } from '@/types';
 import { PageHeader, StatusPill, Surface } from '@/components/ui';
 import { areaOf } from '@/components/layout/nav';
 import { currentProject, useDemo } from '@/store/DemoStore';
-import { isSiteLive } from '@/data/projectContent';
-import { SiteNotLive } from '@/features/projects/SiteNotLive';
 import { useDevUser } from '@/features/dev/useDevUser';
 import { useToast } from '@/hooks/useToast';
 import { useFullScreenDialog } from '@/hooks/useMediaQueries';
@@ -18,10 +16,10 @@ import { formatDateTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
 import { STATUS_META } from '@/features/cms/cmsUtils';
 import {
-  ASSET_ACCEPT, ASSET_LIMITS, assetDeleteBlock, assetsOf, assetSrc, assetTypeLabel, assetUsage, checkUpload, formatBytes, overStorageBudget,
-  uploadCount, validateAssetName,
+  ASSET_ACCEPT, ASSET_LIMITS, assetDeleteBlock, assetsOf, assetSrc, assetTypeLabel, assetUsage, formatBytes, IMAGE_MIMES, uploadCount, validateAssetName,
 } from '@/data/assets';
-import { makeThumbnail } from './thumbnail';
+import { assetFolderList, folderDeleteBlock, validateNewFolder } from '@/data/assetFolders';
+import { useAssetUpload } from './useAssetUpload';
 import { useProjectRoutes } from '@/features/projects/projectRoutes';
 
 const ALL = '__all__';
@@ -39,86 +37,74 @@ function BackButton() {
 
 /**
  * 素材ドライブ（0.36.0。案件ごと）。開発者画面（/dev/assets）はアップロード・名前とフォルダの変更・削除、管理者画面（/assets）は見るだけ。
- * お客様ポータルには画面を出さず、ページ編集の画像選択で使う（2026-11-13 lead 決定: 運用の作業は開発者）
+ * お客様ポータル（/portal/assets。2026-11-17 会議でメニューに追加）は見るのとアップロードだけ（制作中から使える）
+ * （写真・PDF・原稿など。名前・カテゴリーの変更・削除は開発者）
  */
 export default function AssetDrivePage() {
   const { state } = useDemo();
   const project = currentProject(state);
-  const dev = areaOf(useLocation().pathname) === 'dev';
-  if (!isSiteLive(project.stage)) {
-    return (
-      <>
-        <BackButton />
-        <PageHeader eyebrow={dev ? '⑤ 運用' : 'プロジェクト'} icon={<FolderOpen size={15} />} title="素材ドライブ" description="ページ・お知らせで使う画像と資料を管理します。" />
-        <SiteNotLive icon={<FolderOpen size={26} />} feature="素材ドライブ" />
-      </>
-    );
-  }
-  return <AssetDrive key={project.id} dev={dev} />;
+  const area = areaOf(useLocation().pathname);
+  const dev = area === 'dev';
+  const client = area === 'portal';
+  // 公開前（制作中）から使える（2026-11-17 会議: お客様から提供される写真・チラシ・原稿を制作中にドライブへ入れてもらう）。
+  // 以前は運用・改善の段階だけだった（0.36.0）
+  return <AssetDrive key={project.id} dev={dev} client={client} />;
 }
 
-function AssetDrive({ dev }: { dev: boolean }) {
+/** client: お客様ポータル（2026-11-17 会議）。一覧を見るのと、アップロードだけ（選んでいるカテゴリーへ入れる） */
+
+function AssetDrive({ dev, client = false }: { dev: boolean; client?: boolean }) {
   const { state, dispatch } = useDemo();
   const me = useDevUser();
   const toast = useToast();
-  const items = assetsOf(state).items;
+  const drive = assetsOf(state);
+  const items = drive.items;
   const [query, setQuery] = useState('');
   const [folder, setFolder] = useState(ALL);
   const [view, setView] = useState<'grid' | 'list'>('grid');
-  const [busy, setBusy] = useState(false);
   const [edit, setEdit] = useState<Asset | null>(null);
   const [del, setDel] = useState<Asset | null>(null);
+  // カテゴリーの作成・削除（2026-11-17 会議: お客様の素材をまとめて入れるので、空のカテゴリーを先に作って分けたい）
+  const [newFolder, setNewFolder] = useState(false);
+  const [delFolder, setDelFolder] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  // 縮小の途中で案件を切り替えると、この画面は作り直される（key=案件）。古い画面からは保存しない（0.39.1。2026-11-16）
-  const alive = useRef(true);
-  useEffect(() => {
-    alive.current = true;
-    return () => { alive.current = false; };
-  }, []);
+  // 検査・縮小・保存はページ編集の画像選択と同じ（useAssetUpload。2026-11-17 会議で切り出し）
+  // お客様は by: 'client' で写真も資料も（2026-11-17 会議）
+  const { upload, busy } = useAssetUpload(client ? { by: 'client' } : { devBy: me.id }, {});
 
-  const folders = useMemo(() => Array.from(new Set(items.map((a) => a.folder))).sort((a, b) => a.localeCompare(b, 'ja')), [items]);
+  // 作ったカテゴリー（空のものも）と素材のカテゴリー。「カテゴリーなし」は素材があるときだけ出す
+  const folders = useMemo(() => assetFolderList(drive), [drive]);
+  const chips = useMemo(() => [ALL, ...folders, ...(items.some((a) => !a.folder) ? [''] : [])], [folders, items]);
   const q = query.trim().toLowerCase();
   const shown = items.filter((a) => (folder === ALL || a.folder === folder) && (!q || a.name.toLowerCase().includes(q)));
   const used = uploadCount(items);
-
-  const upload = async (file: File) => {
-    const check = checkUpload(file, items);
-    if ('error' in check) return toast(check.error, 'error');
-    const name = file.name.replace(/\.[^.]+$/, '').slice(0, ASSET_LIMITS.name) || '無題';
-    const into = folder === ALL || folder === '見本' ? '' : folder;
-    // 保存先の案件は縮小を始める前に決める（縮小の途中で案件を切り替えても、別の案件へ保存しない。0.39.1。2026-11-16）
-    const projectId = state.requirements.projectId;
-    let src: string | undefined;
-    if (check.kind === 'image') {
-      setBusy(true);
-      src = (await makeThumbnail(file)) ?? undefined;
-      setBusy(false);
-      if (!alive.current) return toast('縮小の途中で画面を離れた（または案件が切り替わった）ため、アップロードを取り消しました。もう一度アップロードしてください', 'error');
-      if (!src) return toast('この画像は読み込めませんでした（壊れているか、対応していない形式です）', 'error');
-    }
-    // 保存データの上限（localStorage）を超えるなら保存しない。黙って保存に失敗しないよう、ここで理由を出す
-    if (overStorageBudget(state, (src?.length ?? 0) + 300)) {
-      return toast('保存できる容量の上限に達しました。使っていない素材を削除してからアップロードしてください', 'error');
-    }
-    dispatch({ type: 'addAsset', asset: { name, kind: check.kind, folder: into, mime: file.type, size: file.size, ...(src ? { src } : {}) }, projectId, devBy: me.id });
-    toast(check.kind === 'image' ? `「${name}」をアップロードしました（縮小して保存）` : `「${name}」を登録しました（デモのため中身は保存しません）`);
-  };
+  const into = folder === ALL || folder === '見本' ? '' : folder;
 
   return (
     <>
-      <BackButton />
+      {!client && <BackButton />}
       <PageHeader
-        eyebrow={dev ? '⑤ 運用' : 'プロジェクト'}
+        eyebrow={dev ? '素材' : client ? currentProject(state).siteName : 'プロジェクト'}
         icon={<FolderOpen size={15} />}
         title="素材ドライブ"
         description={dev
           ? 'ページ・お知らせで使う画像と資料を管理します。画像はブラウザの中で縮小して保存します（元の画像は保存しません）。お客様はページ編集の画像選択から使えます。'
-          : 'ページ・お知らせで使う画像と資料の一覧です（管理者画面は見るだけ。追加・削除は開発者画面で行います）。'}
-        actions={dev ? (
+          : client
+            ? 'サイトで使う写真・資料のお渡し場所です。写真・チラシの PDF・原稿などをアップロードすると、担当者が制作やページ・お知らせで使います（写真はブラウザの中で縮小して保存します）。名前の変更・削除は担当者にご相談ください。'
+            : 'ページ・お知らせで使う画像と資料の一覧です（管理者画面は見るだけ。追加・削除は開発者画面で行います）。'}
+        actions={client ? (
           <>
-            <input ref={fileRef} type="file" accept={ASSET_ACCEPT} hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void upload(f); }} />
+            <input ref={fileRef} type="file" accept={IMAGE_MIMES.join(',')} hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void upload(f, into); }} />
             <Button variant="contained" startIcon={busy ? <CircularProgress size={15} color="inherit" /> : <Upload size={16} />} disabled={busy} onClick={() => fileRef.current?.click()}>
-              アップロード
+              {into ? `「${into}」にアップロード` : 'アップロード'}
+            </Button>
+          </>
+        ) : dev ? (
+          <>
+            <input ref={fileRef} type="file" accept={ASSET_ACCEPT} hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void upload(f, into); }} />
+            <Button variant="outlined" startIcon={<FolderPlus size={16} />} onClick={() => setNewFolder(true)}>カテゴリーを追加</Button>
+            <Button variant="contained" startIcon={busy ? <CircularProgress size={15} color="inherit" /> : <Upload size={16} />} disabled={busy} onClick={() => fileRef.current?.click()}>
+              {into ? `「${into}」にアップロード` : 'アップロード'}
             </Button>
           </>
         ) : undefined}
@@ -130,23 +116,34 @@ function AssetDrive({ dev }: { dev: boolean }) {
             size="small" placeholder="名前で検索" value={query} onChange={(e) => setQuery(e.target.value)} inputProps={{ 'aria-label': '素材を名前で検索' }}
             InputProps={{ startAdornment: <InputAdornment position="start"><Search size={16} /></InputAdornment> }} sx={{ flex: { md: '0 0 260px' } }}
           />
-          <Stack direction="row" spacing={1} sx={{ flex: 1, minWidth: 0, flexWrap: 'wrap', rowGap: 1 }} role="group" aria-label="フォルダ">
-            {[ALL, ...folders].map((f) => (
-              <Chip key={f} label={f === ALL ? 'すべて' : f || 'フォルダなし'} onClick={() => setFolder(f)} color={folder === f ? 'primary' : 'default'} variant={folder === f ? 'filled' : 'outlined'} aria-pressed={folder === f} />
-            ))}
+          <Stack direction="row" spacing={1} sx={{ flex: 1, minWidth: 0, flexWrap: 'wrap', rowGap: 1 }} role="group" aria-label="カテゴリー">
+            {chips.map((f) => {
+              const n = f === ALL ? items.length : items.filter((a) => a.folder === f).length;
+              return (
+                <Chip key={f || '__none__'} label={`${f === ALL ? 'すべて' : f || 'カテゴリーなし'} ${n}`} onClick={() => setFolder(f)} color={folder === f ? 'primary' : 'default'} variant={folder === f ? 'filled' : 'outlined'} aria-pressed={folder === f} />
+              );
+            })}
           </Stack>
           <ToggleButtonGroup exclusive size="small" value={view} onChange={(_, v: 'grid' | 'list' | null) => v && setView(v)} aria-label="表示方法">
             <ToggleButton value="grid" aria-label="グリッド表示"><LayoutGrid size={16} /></ToggleButton>
             <ToggleButton value="list" aria-label="一覧表示"><List size={16} /></ToggleButton>
           </ToggleButtonGroup>
         </Stack>
-        <Typography variant="caption" component="p" sx={{ mb: 1.5 }}>
-          {shown.length} 件を表示（全 {items.length} 件・アップロード {used} / {ASSET_LIMITS.uploads} 件）
-        </Typography>
+        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5, minHeight: 32 }}>
+          <Typography variant="caption" component="p" sx={{ flex: 1, minWidth: 0 }}>
+            {shown.length} 件を表示（全 {items.length} 件・アップロード {used} / {ASSET_LIMITS.uploads} 件）
+          </Typography>
+          {/* 選んでいる空のカテゴリーだけ消せる（素材の入っているカテゴリーは先に素材を移す。2026-11-17 会議） */}
+          {dev && folder !== ALL && folder !== '' && !folderDeleteBlock(folder, drive) && (
+            <Button size="small" color="error" startIcon={<Trash2 size={14} />} onClick={() => setDelFolder(true)}>カテゴリー「{folder}」を削除</Button>
+          )}
+        </Stack>
 
         {shown.length === 0 ? (
           <Box sx={{ py: 5, textAlign: 'center' }}>
-            <Typography variant="body2" color="text.secondary">{items.length === 0 ? '素材がありません。' : '条件に合う素材がありません。'}</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {items.length === 0 ? '素材がありません。' : !q && folder !== ALL ? `このカテゴリーにはまだ素材がありません。${dev ? '「アップロード」で追加するか、ほかの素材の編集（鉛筆）からこのカテゴリーへ移せます。' : ''}` : '条件に合う素材がありません。'}
+            </Typography>
           </Box>
         ) : view === 'grid' ? (
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0,1fr))', sm: 'repeat(3, minmax(0,1fr))', lg: 'repeat(4, minmax(0,1fr))' }, gap: 1.5 }}>
@@ -159,7 +156,7 @@ function AssetDrive({ dev }: { dev: boolean }) {
                 <Thumb a={a} size={48} />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{a.name}</Typography>
-                  <Typography variant="caption" noWrap component="p">{assetTypeLabel(a)}・{formatBytes(a.size)}・{a.folder || 'フォルダなし'}・{formatDateTime(a.createdAt)}・{a.createdBy}</Typography>
+                  <Typography variant="caption" noWrap component="p">{assetTypeLabel(a)}・{formatBytes(a.size)}・{a.folder || 'カテゴリーなし'}・{formatDateTime(a.createdAt)}・{a.createdBy}</Typography>
                 </Box>
                 <UseCount n={assetUsage(a, state.pages).length} />
                 {dev && <RowActions a={a} onEdit={() => setEdit(a)} onDelete={() => setDel(a)} />}
@@ -170,6 +167,23 @@ function AssetDrive({ dev }: { dev: boolean }) {
       </Surface>
 
       {dev && edit && <EditDialog a={edit} folders={folders} onClose={() => setEdit(null)} onSave={(name, f) => { dispatch({ type: 'renameAsset', id: edit.id, name, folder: f, devBy: me.id }); setEdit(null); toast('素材を更新しました'); }} />}
+      {dev && newFolder && (
+        <NewFolderDialog
+          validate={(name) => validateNewFolder(name, drive)}
+          onClose={() => setNewFolder(false)}
+          onCreate={(name) => { dispatch({ type: 'addAssetFolder', name, devBy: me.id }); setNewFolder(false); setFolder(name); toast(`カテゴリー「${name}」を作りました`); }}
+        />
+      )}
+      {dev && delFolder && (
+        <Dialog open onClose={() => setDelFolder(false)} maxWidth="xs" fullWidth aria-labelledby="asset-folder-del-title">
+          <DialogTitle id="asset-folder-del-title">カテゴリー「{folder}」を削除しますか？</DialogTitle>
+          <DialogContent><Typography variant="body2" color="text.secondary">素材の入っていないカテゴリーです。削除しても素材は消えません。</Typography></DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
+            <Button onClick={() => setDelFolder(false)}>キャンセル</Button>
+            <Button variant="contained" color="error" onClick={() => { dispatch({ type: 'deleteAssetFolder', name: folder, devBy: me.id }); toast(`カテゴリー「${folder}」を削除しました`, 'info'); setDelFolder(false); setFolder(ALL); }}>削除する</Button>
+          </DialogActions>
+        </Dialog>
+      )}
       {dev && del && <DeleteDialog a={del} onClose={() => setDel(null)} onDelete={() => { dispatch({ type: 'deleteAsset', id: del.id, devBy: me.id }); toast(`「${del.name}」を削除しました`, 'info'); setDel(null); }} />}
     </>
   );
@@ -190,7 +204,7 @@ const UseCount = ({ n }: { n: number }) => (n > 0 ? <StatusPill tone="info" dot=
 function RowActions({ a, onEdit, onDelete }: { a: Asset; onEdit: () => void; onDelete: () => void }) {
   return (
     <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
-      <IconButton onClick={onEdit} aria-label={`「${a.name}」の名前・フォルダを変更`}><Pencil size={16} /></IconButton>
+      <IconButton onClick={onEdit} aria-label={`「${a.name}」の名前・カテゴリーを変更`}><Pencil size={16} /></IconButton>
       <IconButton onClick={onDelete} aria-label={`「${a.name}」を削除`} sx={{ '&:hover': { color: tokens.color.danger } }}><Trash2 size={16} /></IconButton>
     </Stack>
   );
@@ -217,22 +231,54 @@ function EditDialog({ a, folders, onClose, onSave }: { a: Asset; folders: string
   const [name, setName] = useState(a.name);
   const [folder, setFolder] = useState(a.folder);
   const err = validateAssetName(name, folder);
+  // カテゴリーは作ってあるものから選ぶ（2026-11-17 会議。以前は自由入力で、打ち間違いで別のフォルダができた。新しいカテゴリーは「カテゴリーを追加」で作る）
+  const options = folders.includes(a.folder) || !a.folder ? folders : [...folders, a.folder];
   return (
     <Dialog open onClose={onClose} maxWidth="xs" fullWidth fullScreen={fullScreen} aria-labelledby="asset-edit-title">
-      <DialogTitle id="asset-edit-title">名前・フォルダの変更</DialogTitle>
+      <DialogTitle id="asset-edit-title">名前・カテゴリーの変更</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           <TextField label="名前" value={name} onChange={(e) => setName(e.target.value)} required error={!!err && !!validateAssetName(name, '')} helperText={`${name.length} / ${ASSET_LIMITS.name}`} />
-          <TextField
-            label="フォルダ（空欄 = フォルダなし）" value={folder} onChange={(e) => setFolder(e.target.value)} error={folder.length > ASSET_LIMITS.folder}
-            helperText={folders.filter(Boolean).length ? `既存: ${folders.filter(Boolean).join('・')}` : `${ASSET_LIMITS.folder}文字以内`}
-          />
+          <TextField select label="カテゴリー（移動先）" value={folder} onChange={(e) => setFolder(e.target.value)} helperText="新しいカテゴリーは「カテゴリーを追加」で作れます">
+            <MenuItem value="">カテゴリーなし</MenuItem>
+            {options.map((f) => <MenuItem key={f} value={f}>{f}</MenuItem>)}
+          </TextField>
           {err && <Typography variant="caption" color="error" role="alert">{err}</Typography>}
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
         <Button onClick={onClose}>キャンセル</Button>
         <Button variant="contained" disabled={!!err} onClick={() => onSave(name, folder)}>保存</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+/** 空のカテゴリーを作る（2026-11-17 会議） */
+function NewFolderDialog({ validate, onClose, onCreate }: { validate: (name: string) => string | null; onClose: () => void; onCreate: (name: string) => void }) {
+  const fullScreen = useFullScreenDialog();
+  const [name, setName] = useState('');
+  const [touched, setTouched] = useState(false);
+  const err = validate(name);
+  const submit = () => {
+    setTouched(true);
+    if (!err) onCreate(name.trim());
+  };
+  return (
+    <Dialog open onClose={onClose} maxWidth="xs" fullWidth fullScreen={fullScreen} aria-labelledby="asset-folder-new-title">
+      <DialogTitle id="asset-folder-new-title">カテゴリーを追加</DialogTitle>
+      <DialogContent>
+        <Box component="form" id="asset-folder-new-form" noValidate onSubmit={(e) => { e.preventDefault(); submit(); }} sx={{ pt: 1 }}>
+          <TextField
+            label="カテゴリー名" autoFocus fullWidth required value={name} onChange={(e) => { setName(e.target.value); setTouched(true); }}
+            placeholder="例：チラシ・原稿・2026年冬キャンペーン"
+            error={touched && !!err} helperText={(touched && err) || `${name.length} / ${ASSET_LIMITS.folder}`}
+          />
+        </Box>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
+        <Button onClick={onClose}>キャンセル</Button>
+        <Button variant="contained" type="submit" form="asset-folder-new-form">追加する</Button>
       </DialogActions>
     </Dialog>
   );

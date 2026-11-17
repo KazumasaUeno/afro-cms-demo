@@ -12,6 +12,7 @@ import { AREAS } from '@/components/layout/nav';
 import { approvalSteps } from './portalSteps';
 import { clientTodos } from './assistant/answers';
 import type { PageStatus } from '@/types';
+import { releaseDateOf } from '@/data/schedule';
 import type { PillTone } from '@/components/ui';
 
 const AREA = AREAS.portal;
@@ -36,7 +37,9 @@ export default function PortalHomePage() {
   // 数え方の正は clientTodos（AI アシスタントのボタンの件数と揃える）
   const todoCount = clientTodos(state).length;
   const stage = STAGES[stageIndex(project.stage)];
-  const daysLeft = project.launchDate ? Math.max(0, Math.ceil((new Date(project.launchDate).getTime() - Date.now()) / 86400000)) : null;
+  // スケジュールの公開予定日があればそれを使う（2026-11-17 会議）
+  const launchDate = releaseDateOf(state, project);
+  const daysLeft = launchDate ? Math.max(0, Math.ceil((new Date(launchDate).getTime() - Date.now()) / 86400000)) : null;
   const pageCounts = SITE_STATUSES.map((x) => ({ ...x, count: state.pages.filter((p) => p.status === x.id).length }));
   const activities = state.activities.filter((a) => !a.projectId || a.projectId === project.id).slice(0, 6);
 
@@ -69,7 +72,7 @@ export default function PortalHomePage() {
                 <Stack direction="row" spacing={3} sx={{ mt: 2.5, flexWrap: 'wrap', rowGap: 1 }}>
                   <Stack direction="row" spacing={0.75} alignItems="center">
                     <CalendarDays size={16} color={tokens.color.muted} />
-                    <Typography variant="body2">公開予定 <b>{project.launchDate ? formatDate(project.launchDate) : '調整中'}</b></Typography>
+                    <Typography variant="body2">公開予定 <b>{launchDate ? formatDate(launchDate) : '調整中'}</b></Typography>
                   </Stack>
                   {daysLeft !== null && (
                     <Stack direction="row" spacing={0.75} alignItems="center">
@@ -143,7 +146,8 @@ export default function PortalHomePage() {
           <Stack spacing={{ xs: 2.5, md: 3 }}>
             {/* サイトの更新（ページ・お知らせ） */}
             {live && <Surface>
-              <SectionTitle title="サイトの更新" sub={<Typography variant="caption">ページ・お知らせ {state.pages.length} 件</Typography>} />
+              {/* ページとお知らせの件数を分けて出す（2026-11-17 会議） */}
+              <SectionTitle title="サイトの更新" sub={<Typography variant="caption">ページ {state.pages.filter((x) => x.type !== 'news').length} 件・お知らせ {state.pages.filter((x) => x.type === 'news').length} 件</Typography>} />
               <Box component="dl" sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 1, m: 0 }}>
                 {pageCounts.map((c) => (
                   <Box key={c.id} sx={{ p: 1.25, borderRadius: `${tokens.radius.md}px`, bgcolor: tokens.color.surfaceMuted, minWidth: 0 }}>

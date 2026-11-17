@@ -5,6 +5,7 @@ import Image from '@tiptap/extension-image';
 import { Placeholder } from '@tiptap/extension-placeholder';
 import { Bold, Heading2, Heading3, ImagePlus, Italic, List, ListOrdered, Quote, Redo2, Undo2, type LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import type { PageType } from '@/types';
 import { tokens } from '@/theme/tokens';
 import { ImagePickerDialog } from './ImagePickerDialog';
 import { sanitizeHtml } from './sanitize';
@@ -13,6 +14,8 @@ interface Props {
   content: string;
   onChange: (html: string) => void;
   placeholder?: string;
+  /** 画像のアップロード先のカテゴリーの既定に使う（2026-11-17 会議。ImagePickerDialog） */
+  pageType?: PageType;
 }
 
 function ToolButton({ icon: Icon, label, active, disabled, onClick, shortcut }: { icon: LucideIcon; label: string; active?: boolean; disabled?: boolean; onClick: () => void; shortcut?: string }) {
@@ -84,7 +87,7 @@ function Toolbar({ editor, onImage }: { editor: Editor; onImage: () => void }) {
 }
 
 /** Tiptap による本文編集。ページ切替時は key を変えて作り直す前提 */
-export function RichEditor({ content, onChange, placeholder = '本文を入力…  「/」ではなく上のツールバーから見出しや画像を追加できます' }: Props) {
+export function RichEditor({ content, onChange, placeholder = '本文を入力…  「/」ではなく上のツールバーから見出しや画像を追加できます', pageType }: Props) {
   const [picker, setPicker] = useState(false);
   // onUpdate は初回の関数を掴むため、最新の onChange は ref 経由で呼ぶ
   const changeRef = useRef(onChange);
@@ -134,6 +137,7 @@ export function RichEditor({ content, onChange, placeholder = '本文を入力�
       </Box>
       <ImagePickerDialog
         open={picker}
+        pageType={pageType}
         onClose={() => setPicker(false)}
         onPick={(img) => {
           editor.chain().focus().setImage({ src: img.src, alt: img.label }).run();

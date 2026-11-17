@@ -4,7 +4,7 @@ import {
   useEdgesState, useNodesState, useReactFlow, type Connection, type Edge, type EdgeChange, type NodeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { ArrowLeft, ArrowRight, BadgeCheck, Lightbulb, Lock, Maximize2, Network, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BadgeCheck, CalendarDays, Lightbulb, Lock, Maximize2, Network, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { BuildFlowNav } from '@/components/layout/BuildFlowNav';
@@ -21,6 +21,8 @@ import { AddPageDialog, type NewPageInput } from './AddPageDialog';
 import { sitemapMetrics, validateLabel } from './metrics';
 import { useProjectRoutes } from '@/features/projects/projectRoutes';
 import { sitemapCreated } from '@/data/sitemap';
+import { RequestApprovalButton } from '@/features/portal/RequestApprovalButton';
+import { SitemapDevCommentPanel } from './DevComment';
 
 const toStoreNodes = (ns: PageFlowNode[]): SitemapNode[] =>
   ns.map((n) => ({ id: n.id, position: { x: Math.round(n.position.x), y: Math.round(n.position.y) }, data: n.data }));
@@ -231,6 +233,8 @@ function Editor({ variant, onVariant }: { variant: SitemapVariant; onVariant: (v
               ))}
             </Stack>
           </Surface>
+          {/* AI の改善理由の下に、開発担当者の意図（2026-11-17 会議。改善後の図だけ。書けるのは開発者画面だけ） */}
+          {variant === 'after' && <SitemapDevCommentPanel />}
         </Stack>
       </Box>
 
@@ -286,7 +290,7 @@ export default function SitemapPage() {
       </Box>
       <BuildFlowNav />
       <PageHeader
-        eyebrow="③ 制作"
+        eyebrow="④ 制作"
         icon={<Network size={14} />}
         title="サイトの構造を、見ながら組み替える"
         description={!created
@@ -303,16 +307,31 @@ export default function SitemapPage() {
               <Button variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate(routes.design)}>デザインへ進む</Button>
             </>
           ) : (
-            // 承認はお客様ポータルだけ（管理者・開発者は承認しない。2026-11-12 ユーザー判断）
+            // 承認はお客様ポータルだけ（管理者・開発者は承認しない。2026-11-12 ユーザー判断）。
+            // アフロが承認を依頼してからお客様の承認待ちになる。依頼はスケジュールを入れてから（2026-11-17 会議）
             <Stack alignItems={{ xs: 'stretch', sm: 'flex-end' }} spacing={0.5}>
-              <Box role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, minHeight: 40, borderRadius: 3, bgcolor: tokens.color.warningSoft, color: tokens.color.warningInk, fontWeight: 650, fontSize: 14 , py: 0.75, whiteSpace: { sm: 'nowrap' } }}>
-                お客様の承認待ち（お客様ポータルで承認します）
-              </Box>
+              {state.approvalRequests?.sitemap ? (
+                <Box role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, minHeight: 40, borderRadius: 3, bgcolor: tokens.color.warningSoft, color: tokens.color.warningInk, fontWeight: 650, fontSize: 14 , py: 0.75, whiteSpace: { sm: 'nowrap' } }}>
+                  お客様の承認待ち（{formatDateTime(state.approvalRequests.sitemap)} に依頼）
+                </Box>
+              ) : (
+                <RequestApprovalButton approvalKey="sitemap" blockedReason={state.schedule ? undefined : 'スケジュールを入れると依頼できます'} />
+              )}
               {!reqApproved && <Typography variant="caption">要件定義書の承認の後に、お客様が承認できます</Typography>}
             </Stack>
           )
         }
       />
+      {/* スケジュールを入れるまで制作へ進めない（2026-11-17 会議。サイトマップの承認の依頼・承認も止める） */}
+      {reqApproved && !approvedAt && !state.schedule && (
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }} role="note" sx={{ mb: 2, px: 2, py: 1.5, borderRadius: 3, bgcolor: tokens.color.warningSoft, color: tokens.color.warningInk }}>
+          <CalendarDays size={18} style={{ flexShrink: 0 }} aria-hidden />
+          <Typography variant="body2" sx={{ flex: 1, color: 'inherit', fontWeight: 600 }}>
+            制作〜公開のスケジュールがまだ入っていません。スケジュールを入れると、サイトマップの承認をお客様へ依頼できます。
+          </Typography>
+          <Button variant="outlined" size="small" onClick={() => navigate(routes.stageLinks.schedule[0]?.to ?? '/schedule')}>スケジュールを入力</Button>
+        </Stack>
+      )}
       <Reveal>
         {created ? (
           <ReactFlowProvider key={variant}>

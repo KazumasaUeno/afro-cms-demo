@@ -1,8 +1,8 @@
 import { Box, Button, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Stack, Switch, Typography } from '@mui/material';
 import { ArrowLeft, BadgeCheck, CheckCircle2, ChevronDown, ListChecks, Lock } from 'lucide-react';
 import { useState } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
-import { PageHeader, ProgressRing, Surface } from '@/components/ui';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { NotYetPanel, PageHeader, ProgressRing, Surface } from '@/components/ui';
 import { useDemo } from '@/store/DemoStore';
 import { useToast } from '@/hooks/useToast';
 import { QUALITY_CATEGORIES, QUALITY_ITEMS } from '@/data/quality';
@@ -10,6 +10,7 @@ import { tokens } from '@/theme/tokens';
 import { formatDateTime } from '@/services/time';
 import { AREAS } from '@/components/layout/nav';
 import { CheckToggle } from '@/features/quality/CheckToggle';
+import { approvalSteps } from './portalSteps';
 
 const AREA = AREAS.portal;
 
@@ -39,6 +40,29 @@ export default function PortalQualityPage() {
     setConfirm(false);
     toast('品質チェックを完了しました', 'success');
   };
+  const navigate = useNavigate();
+  // まだ依頼されていない（確認・承認の「品質チェック」が locked）ときは、URL を直接開いてもチェックを出さず理由を出す（2026-11-17 会議）
+  const step = approvalSteps(state).find((x) => x.key === 'quality');
+  const back = (
+    <Button component={RouterLink} to="/portal/approvals" size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>
+      確認・承認
+    </Button>
+  );
+  if (!approved && step?.status === 'locked') {
+    return (
+      <>
+        {back}
+        <PageHeader eyebrow="お客様ポータル" icon={<ListChecks size={15} />} title="品質確認" description="公開前に、お客様の目で確認していただきたい項目です。" />
+        <NotYetPanel
+          icon={<Lock size={26} />}
+          title="品質確認はまだ始まっていません"
+          description={step.lockedReason ?? '準備ができると、確認のお願いが届きます。'}
+          actionLabel="確認・承認へ"
+          onAction={() => navigate('/portal/approvals')}
+        />
+      </>
+    );
+  }
 
   return (
     <>

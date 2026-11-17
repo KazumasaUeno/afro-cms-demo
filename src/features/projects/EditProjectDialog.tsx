@@ -5,7 +5,7 @@ import { useFullScreenDialog } from '@/hooks/useMediaQueries';
 import { TOUCH } from '@/theme/media';
 import { ProjectFields } from './ProjectFields';
 import {
-  ACCENT_PRESETS, applyProjectPatch, isoToYmd, PROJECT_FIELD_ORDER, projectPatchFromDraft, projectToDraft, todayYmd, validateProject,
+  ACCENT_PRESETS, applyProjectPatch, PROJECT_FIELD_ORDER, projectPatchFromDraft, projectToDraft, validateClientInfo, validateProject,
   type ProjectDraft, type ProjectField,
 } from './projectForm';
 
@@ -51,20 +51,18 @@ export function EditProjectDialog({ project, projects, onClose, onSave, saving }
   }
 
   const self = base ? projects.find((p) => p.id === base.id) ?? base : null;
-  const errors = useMemo(() => (draft && self ? validateProject(draft, projects, self) : {}), [draft, projects, self]);
+  // お客様の連絡先（2026-11-17 会議）: いまメールが入っている案件は消せない（ログインのアドレス）。初期データの案件は空でよい
+  const errors = useMemo(() => (draft && self ? { ...validateProject(draft, projects, self), ...validateClientInfo(draft, !!self.client?.email) } : {}), [draft, projects, self]);
   if (!draft || !self) return <Dialog open={false} />;
 
   const set = (patch: Partial<ProjectDraft>) => setDraft((d) => (d ? { ...d, ...patch } : d));
   const show = (k: ProjectField) => (submitted ? errors[k] : undefined);
   // 候補に無いいまの色（初期データ）も選べるように残す
   const accents = ACCENT_PRESETS.some((a) => a.value === self.accent) ? ACCENT_PRESETS : [...ACCENT_PRESETS, { value: self.accent, name: 'いまの色' }];
-  const today = todayYmd();
-  const current = self.launchDate ? isoToYmd(self.launchDate) : '';
-  const minLaunchDate = current && current < today ? current : today;
 
   const submit = () => {
     setSubmitted(true);
-    const fresh = validateProject(draft, projects, self);
+    const fresh = { ...validateProject(draft, projects, self), ...validateClientInfo(draft, !!self.client?.email) };
     const first = PROJECT_FIELD_ORDER.find((k) => fresh[k]);
     if (first) {
       refs.current[first]?.focus();
@@ -85,11 +83,11 @@ export function EditProjectDialog({ project, projects, onClose, onSave, saving }
         <Box component="form" id="edit-project-form" noValidate onSubmit={(e) => { e.preventDefault(); submit(); }}>
           <Stack spacing={3}>
             <Typography variant="body2" color="text.secondary">
-              段階・進捗・次に必要な作業は、制作の進み具合から決まるため、ここでは変更できません。
+              段階・進捗・次に必要な作業は、制作の進み具合から決まるため、ここでは変更できません。公開予定日はスケジュールで決めます。
             </Typography>
             <ProjectFields
               draft={draft} set={set} show={show} refs={refs} Group={Group}
-              accents={accents} minLaunchDate={minLaunchDate} withNextAction={false}
+              accents={accents}
             />
           </Stack>
         </Box>

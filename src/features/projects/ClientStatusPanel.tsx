@@ -71,10 +71,11 @@ export function ClientStatusPanel({ project }: { project: Project }) {
       <Typography variant="caption" sx={{ display: 'block', mb: 2 }}>
         {project.clientName}・最後の操作 {s.lastClientAt ? relativeTime(s.lastClientAt) : 'まだありません'}
       </Typography>
-      {/* お客様への画面説明（承認は記録しない）と相談チャット（0.38.0。2026-11-16 ユーザー指示）。demo だけ（live の router に無い） */}
+      {/* お客様への画面説明（承認は記録しない）と相談チャット（0.38.0。2026-11-16 ユーザー指示）。demo だけ（live の router に無い）。
+          相談チャットは開発者画面だけ（管理者画面は 2026-11-17 ユーザー指示で外した） */}
       {DATA_MODE === 'demo' && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 2 }}>
         <Button size="small" variant="outlined" startIcon={<Eye size={15} />} onClick={() => go(routes.clientApprovals)}>お客様の確認・承認画面を見る</Button>
-        <Button size="small" variant="outlined" startIcon={<MessageSquare size={15} />} onClick={() => go(routes.chat)}>相談チャット</Button>
+        {routes.dev && <Button size="small" variant="outlined" startIcon={<MessageSquare size={15} />} onClick={() => go(routes.chat)}>相談チャット</Button>}
       </Stack>}
 
       {/* いまお願いしていること */}

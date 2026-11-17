@@ -1,15 +1,18 @@
 import { Box, Button, LinearProgress, Stack, Typography } from '@mui/material';
-import { ArrowRight, ArrowUpRight, FolderKanban } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, CalendarCheck, FolderKanban, MessageCircle } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useRepositories } from '@/repositories';
 import { useDemo, currentProject } from '@/store/DemoStore';
-import { isSiteLive, metricsOf } from '@/data/projectContent';
+import { isSiteLive } from '@/data/projectContent';
 import { workOf } from '@/store/projectWork';
 import { AiBadge, AiMark, CountUp, MemberAvatar, Reveal, SectionTitle, StageTrack, Surface } from '@/components/ui';
 import { formatDate, nowIso, relativeTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
 import { nextBestAction, stageLabel } from '@/features/projects/projectHelpers';
+import { unansweredOf } from '@/features/chat/unanswered';
+import { todayYmd, ymdToIso } from '@/features/projects/projectForm';
+import type { Project } from '@/types';
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -33,10 +36,58 @@ function KpiItem({ label, value, suffix, foot }: { label: string; value: number 
   );
 }
 
+/** KPI の下の短い一覧（相談の未対応・今月の納品予定。2026-11-17 会議）。行を押すとプロジェクト詳細を開く */
+function ShortList({ title, icon, empty, rows, onOpen }: {
+  title: string; icon: ReactNode; empty: string;
+  rows: { p: Project; sub: string }[];
+  onOpen: (p: Project) => void;
+}) {
+  return (
+    <Surface padding={{ xs: 2, md: 2.5 }} sx={{ minWidth: 0 }}>
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.25 }}>
+        {icon}
+        <Typography variant="h5" component="h2">{title}</Typography>
+        <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums' }}>{rows.length}件</Typography>
+      </Stack>
+      {rows.length === 0 ? (
+        <Typography variant="body2" color="text.secondary">{empty}</Typography>
+      ) : (
+        <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
+          {rows.map(({ p, sub }) => (
+            <Box component="li" key={p.id} sx={{ '& + &': { borderTop: `1px solid ${tokens.color.border}` } }}>
+              <Box
+                component="button"
+                type="button"
+                onClick={() => onOpen(p)}
+                aria-label={`${p.siteName} の詳細を開く`}
+                sx={{
+                  all: 'unset', boxSizing: 'border-box', width: '100%', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 1.25,
+                  minHeight: 44, py: 1, px: 0.5, borderRadius: '8px',
+                  '&:hover': { bgcolor: tokens.color.primarySoft },
+                  '&:focus-visible': { outline: `2px solid ${tokens.color.primary}`, outlineOffset: 2 },
+                }}
+              >
+                <Box aria-hidden sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: p.accent, flexShrink: 0 }} />
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>{p.siteName}</Typography>
+                  <Typography variant="caption" noWrap sx={{ display: 'block' }}>{sub}</Typography>
+                </Box>
+                <ArrowRight size={15} color={tokens.color.muted} style={{ flexShrink: 0 }} aria-hidden />
+              </Box>
+            </Box>
+          ))}
+        </Box>
+      )}
+    </Surface>
+  );
+}
+
 /** ホームダッシュボード */
 export default function HomePage() {
   const { state } = useDemo();
-  const { projects } = useRepositories();
+  const { projects, accounts } = useRepositories();
+  const { data: devAll } = accounts.useDevProjects();
+  const { data: people } = accounts.useDevPeople();
   const navigate = useNavigate();
   const project = currentProject(state);
 
@@ -46,11 +97,22 @@ export default function HomePage() {
   const scheduled = state.projects.filter((p) => isSiteLive(p.stage))
     .flatMap((p) => workOf(state, p.id).pages.filter((x) => x.status === 'scheduled'))
     .sort((a, b) => (a.scheduledAt ?? '').localeCompare(b.scheduledAt ?? ''));
-  // 問い合わせの数値は選んでいる案件の分（公開前・見本の無い案件は出さない）
-  const monthly = isSiteLive(project.stage) ? metricsOf(project.id)?.monthly ?? [] : [];
-  const last = monthly[monthly.length - 1];
-  const prev = monthly[monthly.length - 2];
-  const inquiryDelta = last && prev ? Math.round(((last.inquiries - prev.inquiries) / prev.inquiries) * 100) : null;
+  // 「今月の問い合わせ」は外した（2026-11-17 会議）。代わりに、PMO として見たい「相談の未対応」と「今月の納品予定」を出す
+  // 開発担当の名前（プロジェクト詳細と同じ: ユーザー管理の担当。無効にした人は除く）
+  const devNamesOf = (projectId: string) => people.filter((m) => !m.disabled && devAll[m.id]?.includes(projectId)).map((m) => m.name);
+  // 相談の未対応: 会話の最後がお客様の案件（全案件。どの開発者のところで止まっているかを見る）
+  const unanswered = state.projects.filter((p) => unansweredOf(state, p.id))
+    .map((p) => {
+      const devs = devNamesOf(p.id);
+      return { p, sub: `開発担当: ${devs.length ? devs.join('・') : '未割り当て'}` };
+    });
+  // 今月の納品予定: 日程（schedule）の納品予定日が今月の案件。日程の無い案件は数えない。近い順
+  const month = todayYmd().slice(0, 7);
+  const deliveries = state.projects
+    .map((p) => ({ p, date: workOf(state, p.id).schedule?.deliveryDate }))
+    .filter((x): x is { p: Project; date: string } => !!x.date && x.date.slice(0, 7) === month)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map(({ p, date }) => ({ p, day: formatDate(ymdToIso(date) ?? undefined), sub: `納品予定日 ${formatDate(ymdToIso(date) ?? undefined)}` }));
   const action = nextBestAction(state);
 
   const open = (projectId: string, to: string) => {
@@ -109,7 +171,7 @@ export default function HomePage() {
           <Box
             component="dl"
             sx={{
-              m: 0, display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0,1fr))', md: 'repeat(4, minmax(0,1fr))' },
+              m: 0, display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0,1fr))', md: 'repeat(5, minmax(0,1fr))' },
               '& > div': { px: { xs: 2, md: 2.5 }, py: { xs: 1.5, md: 2 }, minWidth: 0 },
               '& > div + div': { borderLeft: { md: `1px solid ${tokens.color.border}` } },
               '& > div:nth-of-type(even)': { borderLeft: { xs: `1px solid ${tokens.color.border}` } },
@@ -119,14 +181,26 @@ export default function HomePage() {
             <KpiItem label="進行中プロジェクト" value={active.length} suffix="件" foot={`全 ${state.projects.length} 件中`} />
             <KpiItem label="承認待ち" value={pendingTotal} suffix="件" foot="顧客・社内の承認を含む" />
             <KpiItem label="公開予定ページ" value={scheduled.length} suffix="件" foot={scheduled[0] ? `次回 ${relativeTime(scheduled[0].scheduledAt)}` : '予約はありません'} />
-            <KpiItem
-              label="今月の問い合わせ" value={last ? last.inquiries : null} suffix="件"
-              foot={inquiryDelta !== null
-                ? <><Box component="span" sx={{ color: inquiryDelta >= 0 ? tokens.color.success : tokens.color.danger, fontWeight: 700 }}>{inquiryDelta >= 0 ? '+' : ''}{inquiryDelta}%</Box> {project.siteName}・前月比（デモデータ）</>
-                : `${project.siteName} は公開後に表示`}
-            />
+            <KpiItem label="相談の未対応" value={unanswered.length} suffix="件" foot={unanswered.length ? 'お客様の相談に未返信のプロジェクト' : '未対応の相談はありません'} />
+            <KpiItem label="今月の納品予定" value={deliveries.length} suffix="件" foot={deliveries[0] ? `次回 ${deliveries[0].day}` : '今月の納品はありません'} />
           </Box>
         </Surface>
+      </Reveal>
+
+      {/* 相談の未対応・今月の納品予定の内訳（2026-11-17 会議。管理者画面に相談の画面は無いので、プロジェクト詳細を開く） */}
+      <Reveal delay={0.09}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0,1fr)', md: 'repeat(2, minmax(0,1fr))' }, gap: { xs: 2, md: 3 }, mb: { xs: 2, md: 3 }, alignItems: 'start' }}>
+          <ShortList
+            title="相談の未対応" icon={<MessageCircle size={18} color={tokens.color.muted} aria-hidden />}
+            empty="お客様からの相談は、すべて返信済みです。" rows={unanswered}
+            onOpen={(p) => open(p.id, `/projects/${p.id}`)}
+          />
+          <ShortList
+            title="今月の納品予定" icon={<CalendarCheck size={18} color={tokens.color.muted} aria-hidden />}
+            empty="今月が納品予定日のプロジェクトはありません（スケジュールを入れた案件だけを数えます）。" rows={deliveries}
+            onOpen={(p) => open(p.id, `/projects/${p.id}`)}
+          />
+        </Box>
       </Reveal>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: { xs: 2, md: 3 }, alignItems: 'start' }}>

@@ -37,7 +37,8 @@ export function SitePreview({ page, compact }: { page: CmsPage; compact?: boolea
       {page.coverImage && <Box component="img" src={page.coverImage} alt="" sx={{ display: 'block', width: '100%', aspectRatio: '21/8', objectFit: 'cover' }} />}
       <Box sx={{ maxWidth: 720, mx: 'auto', px: { xs: 2.5, sm: 4 }, py: { xs: 4, sm: 6 } }}>
         <Typography sx={{ fontSize: 12, letterSpacing: '0.12em', color: project.accent, fontWeight: 700, mb: 1 }}>
-          {page.type === 'news' ? `NEWS ・ ${formatDate(page.publishedAt ?? page.scheduledAt ?? page.updatedAt)}` : page.slug}
+          {/* お知らせのカテゴリー（2026-11-17 会議）も出す */}
+          {page.type === 'news' ? `NEWS ・ ${page.newsCategory ? `${page.newsCategory} ・ ` : ''}${formatDate(page.publishedAt ?? page.scheduledAt ?? page.updatedAt)}` : page.slug}
         </Typography>
         <Typography component="h1" sx={{ fontSize: { xs: 26, sm: 34 }, fontWeight: 750, letterSpacing: '-0.02em', lineHeight: 1.3, mb: 3 }}>{page.title}</Typography>
         <Box sx={proseSx} dangerouslySetInnerHTML={{ __html: html }} />

@@ -1,6 +1,6 @@
 import type { Asset, AssetState, CmsPage, DemoState } from '@/types';
 import { hasLiveVersion } from '@/features/cms/cmsUtils';
-import { DEMO_IMAGES } from './cms';
+import { PROJECT_IMAGES, demoImageById, demoImageSrc } from './demoImages';
 
 /**
  * 素材ドライブ（0.36.0。案件ごと。2026-11-13 ユーザー指示）。
@@ -37,20 +37,41 @@ export const ASSET_ACCEPT = [...IMAGE_MIMES, ...Object.keys(DOC_TYPES), '.csv', 
 const PRESET_AT = '2026-11-01T00:00:00.000Z';
 const PRESET_PREFIX = 'asset-preset-';
 
-let presetCache: Asset[] | null = null;
-/** 見本の画像（どの案件にも最初から入っている。画像データは保存しない） */
-export const presetAssets = (): Asset[] =>
-  (presetCache ??= DEMO_IMAGES.map((i) => ({
-    id: `${PRESET_PREFIX}${i.id}`, name: i.label, kind: 'image' as const, folder: '見本', mime: 'image/svg+xml', size: i.src.length,
+const presetCache = new Map<string, Asset[]>();
+/**
+ * 見本の写真（案件ごとに最初から入っている。画像データは保存せず、同梱の写真を指す）。
+ * 2026-11-17 から案件の業種に合う写真（以前はどの案件にも MINAMO COFFEE の SVG 4 点）。見本の写真が無い案件（作ったばかりの案件）は空
+ */
+export const presetAssets = (projectId: string): Asset[] => {
+  const hit = presetCache.get(projectId);
+  if (hit) return hit;
+  const items = (PROJECT_IMAGES[projectId] ?? []).map((i) => ({
+    id: `${PRESET_PREFIX}${i.id}`, name: i.label, kind: 'image' as const, folder: i.folder, mime: 'image/jpeg', size: i.bytes,
     preset: i.id, createdAt: PRESET_AT, createdBy: 'アフロ',
-  })));
+  }));
+  presetCache.set(projectId, items);
+  return items;
+};
 
-/** 選んでいる案件の素材（無い案件は見本の画像 4 点。最初に変えたときに保存する） */
-export const assetsOf = (state: Pick<DemoState, 'assets'>): AssetState => state.assets ?? { items: presetAssets() };
+/** 選んでいる案件の素材（無ければその案件の見本の写真。最初に変えたときに保存する） */
+export const assetsOf = (state: Pick<DemoState, 'assets' | 'requirements'>): AssetState =>
+  state.assets ?? { items: presetAssets(state.requirements.projectId) };
 
-/** 表示する画像の src（見本は表示のときに作る。資料は無し） */
-export const assetSrc = (a: Pick<Asset, 'preset' | 'src'>): string | undefined =>
-  a.preset ? DEMO_IMAGES.find((i) => i.id === a.preset)?.src : a.src;
+/**
+ * 0.39 までの保存データの素材ドライブ（見本が SVG の珈琲 4 点）を、その案件の見本の写真に置き換える（2026-11-17。版は上げない）。
+ * アップロードした素材はそのまま残し、見本だけを入れ替える。古い見本が無ければ同じものを返す
+ */
+export function withProjectPresets(projectId: string, assets: AssetState | undefined): AssetState | undefined {
+  if (!assets || !assets.items.some((a) => a.preset && a.mime === 'image/svg+xml')) return assets;
+  return { ...assets, items: [...presetAssets(projectId), ...assets.items.filter((a) => !a.preset)] };
+}
+
+/** 表示する画像の src（見本は同梱の写真。資料は無し）。0.39 までの保存データの見本（beans など）も同じ id で引ける */
+export const assetSrc = (a: Pick<Asset, 'preset' | 'src'>): string | undefined => {
+  if (!a.preset) return a.src;
+  const img = demoImageById(a.preset);
+  return img ? demoImageSrc(img) : undefined;
+};
 
 export const uploadCount = (items: Asset[]): number => items.filter((a) => !a.preset).length;
 
@@ -106,7 +127,8 @@ export const overStorageBudget = (state: DemoState, extraChars: number): boolean
   JSON.stringify(state).length + extraChars > ASSET_LIMITS.stateChars;
 
 export const assetTypeLabel = (a: Pick<Asset, 'kind' | 'mime' | 'preset' | 'name'>): string =>
-  a.kind === 'image' ? (a.preset ? '見本の画像' : '画像') : DOC_TYPES[a.mime] ?? (a.name.split('.').pop()?.toUpperCase() || '資料');
+  // 見本の写真も「画像」と出す（実際の案件の素材に見えるように。2026-11-17 ユーザー指示「リアルっぽく」）
+  a.kind === 'image' ? '画像' : DOC_TYPES[a.mime] ?? (a.name.split('.').pop()?.toUpperCase() || '資料');
 
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;

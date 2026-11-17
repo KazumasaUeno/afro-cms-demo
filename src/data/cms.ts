@@ -1,21 +1,13 @@
 import type { CmsPage } from '@/types';
 import { daysAgo, daysFromNow, hoursAgo } from '@/services/time';
+import { PROJECT_IMAGES, demoImageSrc } from './demoImages';
 
-/** デモ用の画像（外部取得しないよう、生成した SVG を data URI で持つ） */
-export const DEMO_IMAGES: { id: string; label: string; src: string }[] = [
-  ['beans', '焙煎豆', '#7C4A1E', '#D6A86B'],
-  ['cafe', '店内', '#334155', '#CBD5E1'],
-  ['gift', 'ギフト', '#7F1D1D', '#E9C46A'],
-  ['latte', 'ラテ', '#92400E', '#FDE68A'],
-].map(([id, label, a, b]) => ({
-  id,
-  label,
-  src:
-    'data:image/svg+xml;utf8,' +
-    encodeURIComponent(
-      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="800" height="450" fill="url(#g)"/><circle cx="600" cy="150" r="120" fill="#fff" fill-opacity=".12"/><circle cx="220" cy="330" r="80" fill="#fff" fill-opacity=".1"/><text x="40" y="410" font-family="sans-serif" font-size="28" fill="#fff" fill-opacity=".85">${label} — demo image</text></svg>`,
-    ),
-}));
+/**
+ * MINAMO COFFEE の見本の写真（素材ドライブ・サイネージで使う）。
+ * 以前は生成した SVG（グラデーションに「demo image」の文字）だったが、写真に置き換えた（2026-11-17 ユーザー指示「リアルっぽく」）。
+ * 写真は public/demo-images/ に同梱（CC0・パブリックドメイン。出典は public/demo-images/CREDITS.md）。外部へは取りに行かない
+ */
+export const DEMO_IMAGES: { id: string; label: string; src: string }[] = PROJECT_IMAGES.p1.map((i) => ({ id: i.id, label: i.label, src: demoImageSrc(i) }));
 
 export const seedPages = (): CmsPage[] => [
   {

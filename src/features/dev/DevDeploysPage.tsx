@@ -3,11 +3,10 @@ import { ArrowDown, ArrowRight, CheckCircle2, ExternalLink, Lock, Rocket } from 
 import { Fragment, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader, Reveal, SectionTitle, StatusPill, Surface } from '@/components/ui';
-import { useDemo, devState } from '@/store/DemoStore';
-import { demoDesignApprovedAt } from '@/store/projectWork';
+import { currentProject, useDemo, devState } from '@/store/DemoStore';
 import { useToast } from '@/hooks/useToast';
 import { formatDateTime, relativeTime } from '@/services/time';
-import { DEV_ENVS, deployGate, latestDeploy, latestSuccess } from '@/data/dev';
+import { devEnvs, deployGate, latestDeploy, latestSuccess } from '@/data/dev';
 import { tokens } from '@/theme/tokens';
 import type { DeployEnv } from '@/types';
 import { ENV_TONE, envDef, envSync } from './devUi';
@@ -20,22 +19,24 @@ const PRIMARY_ORDER: DeployEnv[] = ['staging', 'production', 'development'];
 const actionLabel = (env: DeployEnv, version: string) =>
   env === 'development' ? `新しい版 v${version} を作る` : env === 'staging' ? `v${version} を検証へ反映` : `v${version} を本番へ公開`;
 
-const PROD_URL = DEV_ENVS.find((e) => e.id === 'production')?.url ?? '';
-
 export default function DevDeploysPage() {
   const { state, dispatch } = useDemo();
   // ログイン中のメンバー（「自分の担当」「あなた」の判定と、操作の記録に使う）
   const me = useDevUser();
   const toast = useToast();
   const navigate = useNavigate();
+  // 開発データ・環境の URL は選んでいる案件の分（2026-11-17 から全案件。以前は MINAMO COFFEE だけ）
   const dev = devState(state);
+  const envs = devEnvs(currentProject(state).siteUrl);
+  const prodUrl = envs.find((e) => e.id === 'production')?.url ?? '';
+  const designApprovedAt = state.design.approvedAt;
   const [confirm, setConfirm] = useState<string | null>(null);
 
-  const gates = Object.fromEntries(DEV_ENVS.map((e) => [e.id, deployGate(dev, e.id, demoDesignApprovedAt(state))])) as Record<DeployEnv, ReturnType<typeof deployGate>>;
+  const gates = Object.fromEntries(envs.map((e) => [e.id, deployGate(dev, e.id, designApprovedAt)])) as Record<DeployEnv, ReturnType<typeof deployGate>>;
   const primaryEnv = PRIMARY_ORDER.find((env) => gates[env].ok);
 
   const doDeploy = (env: DeployEnv) => {
-    const gate = deployGate(dev, env, demoDesignApprovedAt(state));
+    const gate = deployGate(dev, env, designApprovedAt);
     if (!gate.ok) return;
     dispatch({ type: 'deploy', env, by: me.id });
     toast(`${envDef(env).label}へ v${gate.version} をデプロイしました（シミュレーション）`);
@@ -54,7 +55,7 @@ export default function DevDeploysPage() {
         <Box>
           <SectionTitle title="パイプライン" sub={<StatusPill tone="neutral" dot={false}>シミュレーション</StatusPill>} />
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr)' }, gap: { xs: 1, md: 1.5 }, alignItems: 'stretch' }}>
-            {DEV_ENVS.map((e, i) => {
+            {envs.map((e, i) => {
               const last = latestDeploy(dev.deploys, e.id);
               const gate = gates[e.id];
               const sync = envSync(dev, e.id);
@@ -171,7 +172,7 @@ export default function DevDeploysPage() {
           <Typography variant="body2" color="text.secondary">
             v{confirm} を次の公開先に反映します。公開中のサイトが切り替わります（デモのためシミュレーションです）。
           </Typography>
-          <DevMono size="md" sx={{ display: 'block', mt: 1.5, wordBreak: 'break-all' }}>{PROD_URL.replace('https://', '')}</DevMono>
+          <DevMono size="md" sx={{ display: 'block', mt: 1.5, wordBreak: 'break-all' }}>{prodUrl.replace('https://', '')}</DevMono>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3, flexWrap: 'wrap', gap: 1 }}>
           <Button variant="outlined" onClick={() => setConfirm(null)}>キャンセル</Button>

@@ -1,56 +1,41 @@
 import { Box, Button, Stack, Typography } from '@mui/material';
 import { FolderLock } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useLocation } from 'react-router-dom';
 import type { Project } from '@/types';
 import { Surface } from '@/components/ui';
-import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { useRepositories } from '@/repositories';
 import { currentProject, useDemo } from '@/store/DemoStore';
 import { TOUCH } from '@/theme/media';
 import { tokens } from '@/theme/tokens';
 import { useDevProjects } from './useDevUser';
 
-/** 開発データ（MINAMO COFFEE の 1 案件分だけ）を出す画面: 構築タスク・環境・デプロイ（0.30.0） */
-const devDataOnly = (pathname: string) => /^\/dev\/(tasks|deploys)(\/|$)/.test(pathname);
-
 /**
  * 開発者画面: ログイン中のメンバーが、表示中のプロジェクトの担当かを確かめてから中身を出す。
- * 担当外・担当なし・（担当だが）デモにデータが無い案件は、理由と行き先だけを出す（転送はしない）。
- * 制作・運用のデータは案件ごと（0.29.0・0.30.0）なので、MINAMO COFFEE だけに限るのは開発データ（構築タスク・環境・デプロイ）の画面だけ
+ * 担当外・担当なしは、理由と行き先だけを出す（転送はしない）。
+ * 制作・運用のデータ（0.29.0・0.30.0）も開発データ（構築タスク・環境・デプロイ。2026-11-17）も案件ごとなので、担当ならどの案件でも中身を出す。
  * デモのため見た目の制御だけで、セキュリティ境界ではない。
  */
 export function DevProjectGate({ children, project: target, onOpen }: {
   children: ReactNode;
-  /**
-   * 確かめる案件。省略時は表示中の案件（作業画面）。プロジェクト詳細（/dev/projects/:id。0.26.0）は URL の案件を渡す。
-   * 渡したときは担当かどうかだけを見る（詳細はデモのデータが無い案件でも出せる）
-   */
+  /** 確かめる案件。省略時は表示中の案件（作業画面）。プロジェクト詳細（/dev/projects/:id。0.26.0）は URL の案件を渡す */
   project?: Project;
   /** 候補の案件を開く（省略時は表示中の案件を切り替える） */
   onOpen?: (id: string) => void;
 }) {
   const { state } = useDemo();
-  const { pathname } = useLocation();
   const { projects } = useRepositories();
   const project = target ?? currentProject(state);
   const mine = useDevProjects();
   const assigned = mine.some((p) => p.id === project.id);
-  if (assigned && (target || project.id === CLIENT_PROJECT_ID || !devDataOnly(pathname))) return <>{children}</>;
+  if (assigned) return <>{children}</>;
   const open = onOpen ?? ((id: string) => projects.select(id));
 
-  const title = !mine.length
-    ? '担当プロジェクトがありません'
-    : !assigned
-      ? 'このプロジェクトの担当ではありません'
-      : 'このプロジェクトの開発データはデモに含まれていません';
+  const title = !mine.length ? '担当プロジェクトがありません' : 'このプロジェクトの担当ではありません';
   const body = !mine.length
     ? '開発者画面は、担当のプロジェクトだけを開けます。管理者に担当の追加を依頼してください（管理者画面の「ユーザー管理」で設定します）。'
-    : !assigned
-      ? `${target ? '' : '表示中の'}プロジェクト「${project.siteName}」はあなたの担当ではありません。担当のプロジェクトを開くか、必要なら管理者に担当の追加を依頼してください。`
-      : 'デモの開発データは MINAMO COFFEE の 1 案件分だけです。ほかの担当プロジェクトでは中身を表示しません。';
-  // 開ける候補（表示中の案件以外）。デモのデータがある MINAMO COFFEE を先頭にする
-  const choices = mine.filter((p) => p.id !== project.id).sort((a, b) => Number(b.id === CLIENT_PROJECT_ID) - Number(a.id === CLIENT_PROJECT_ID));
+    : `${target ? '' : '表示中の'}プロジェクト「${project.siteName}」はあなたの担当ではありません。担当のプロジェクトを開くか、必要なら管理者に担当の追加を依頼してください。`;
+  // 開ける候補（表示中の案件以外）
+  const choices = mine.filter((p) => p.id !== project.id);
 
   return (
     <Surface sx={{ textAlign: 'center', py: { xs: 5, md: 7 }, px: { xs: 2.5, md: 4 }, maxWidth: 600, mx: 'auto' }}>

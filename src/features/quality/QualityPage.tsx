@@ -14,6 +14,7 @@ import { CountUp, PageHeader, ProgressRing, Reveal, SectionTitle, StatusPill, Su
 import { CategoryDetail, PriorityChip } from './CategoryDetail';
 import { computeStats, isComplete } from './qualityStats';
 import { useQualityDevBy } from './useQualityDevBy';
+import { RequestApprovalButton } from '@/features/portal/RequestApprovalButton';
 
 function MiniBar({ value, color, label }: { value: number; color: string; label: string }) {
   return (
@@ -94,11 +95,12 @@ export default function QualityPage() {
   const ownerStage = state.projects.find((p) => p.id === state.requirements.projectId)?.stage;
   // お客様が品質チェックの「完了」を押してから公開できる（0.39.7）
   const clientCompleted = !!state.design.qualityApprovedAt;
-  const canLaunch = openItems.length === 0 && clientCompleted && !!state.design.buildCompletedAt && ownerStage === 'quality' && state.requirements.projectId === state.currentProjectId;
+  const canLaunch = openItems.length === 0 && clientCompleted && !!state.design.buildCompletedAt && ownerStage === 'release' && state.requirements.projectId === state.currentProjectId;
   const launch = () => {
     dispatch({ type: 'launchSite', devBy });
     toast('サイトを公開しました。運用の段階へ進みます', 'success');
   };
+  // 公開できるのはリリースの段階（お客様の完了＝納品検収の後。2026-11-17 会議）
   const doneText = ownerStage === 'operation' || ownerStage === 'improvement'
     ? 'すべての項目が完了し、サイトを公開しました（運用の段階）。'
     : !clientCompleted ? 'すべての項目にチェックが付きました。お客様がポータルで品質チェックの「完了」を押すと、サイトを公開できます。'
@@ -117,7 +119,7 @@ export default function QualityPage() {
         プロジェクト詳細
       </Button>
       <PageHeader
-        eyebrow="④ 品質管理"
+        eyebrow="⑤ 品質管理・納品検収"
         icon={<ShieldCheck size={15} />}
         title="品質チェック"
         description={`12項目${TOTAL_QUALITY_QUESTIONS}問の品質基準のうち、アフロ側の確認を行います。顧客の承認はお客様がお客様ポータルで行います（デモでは代表${QUALITY_ITEMS.length}問を収録）。`}
@@ -126,6 +128,8 @@ export default function QualityPage() {
             {devBy && canLaunch && (
               <Button variant="contained" startIcon={<Rocket size={16} />} onClick={launch}>サイトを公開して運用へ進む</Button>
             )}
+            {/* 全ページの構築の後、お客様へ品質チェック（納品検収）を依頼する（2026-11-17 会議） */}
+            <RequestApprovalButton approvalKey="quality" />
             {!clientCompleted && <BulkMenu side="afro" />}
           </>
         }

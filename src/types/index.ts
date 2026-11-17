@@ -8,7 +8,31 @@ export type ISODate = string;
 
 /* ---------- 共通 ---------- */
 
-export type Stage = 'hearing' | 'requirements' | 'build' | 'quality' | 'operation' | 'improvement';
+/**
+ * 案件の段階（2026-11-17 会議で 8 段階に。要件定義の後に「スケジュール」、品質管理・納品検収の後に「リリース（公開）」を足した。
+ * 運用・改善は分けたまま＝会議で未決）
+ */
+export type Stage = 'hearing' | 'requirements' | 'schedule' | 'build' | 'quality' | 'release' | 'operation' | 'improvement';
+
+/** お客様が承認する 4 つの節目（features/portal/portalSteps.ts。承認の依頼の記録に使うので型をここに置く。2026-11-17） */
+export type ApprovalKey = 'requirements' | 'sitemap' | 'design' | 'quality';
+
+/**
+ * 制作〜公開の日程（2026-11-17 会議。要件定義書の承認の後に開発担当者が入れる。入れるまで制作へ進めない）。
+ * 日付は yyyy-mm-dd。buildDue <= deliveryDate <= releaseDate
+ */
+export interface ProjectSchedule {
+  /** 制作（全ページの構築）の完了予定（任意） */
+  buildDue?: ISODate;
+  /** 納品予定日（品質管理・納品検収の終了日） */
+  deliveryDate: ISODate;
+  /** 公開予定日 */
+  releaseDate: ISODate;
+  note?: string;
+  savedAt: ISODate;
+  /** 保存した人の名前 */
+  savedBy: string;
+}
 
 export interface Member {
   id: string;
@@ -46,6 +70,18 @@ export interface Project {
   parentProjectId?: string;
   /** 追加開発で採用した改善提案の見出し（作成時の写し。0.31.0） */
   adoptedProposals?: string[];
+  /** お客様の連絡先（2026-11-17 会議。管理者が案件の作成・編集で入れる。お客様は入力しない）。無い保存データは「未登録」 */
+  client?: ProjectClient;
+}
+
+/** お客様の連絡先（2026-11-17 会議）。空の項目は持たない */
+export interface ProjectClient {
+  address?: string;
+  phone?: string;
+  /** ご担当者名 */
+  contactName?: string;
+  /** お客様ポータルのログイン ID（作成時にこのアドレスでお客様アカウントを作る） */
+  email?: string;
 }
 
 /** 新しいプロジェクトの入力（画面・reducer・repository で使う。検査は features/projects/projectForm.ts） */
@@ -60,6 +96,16 @@ export interface ProjectDraft {
   launchDate: string;
   /** 空なら DEFAULT_NEXT_ACTION */
   nextAction: string;
+  /**
+   * お客様の連絡先（2026-11-17 会議。任意の項目にしたのは、ぷちリニューアル・live の作成画面が持たないため。
+   * 管理者画面の作成では clientEmail を必須にする＝validateClientInfo の requireEmail）
+   */
+  clientAddress?: string;
+  clientPhone?: string;
+  clientContactName?: string;
+  clientEmail?: string;
+  /** 担当開発者（Member.id / DevUser.id。作成のときだけ使う。空なら担当なし。以後の変更はユーザー管理） */
+  devId?: string;
 }
 
 /* ---------- 要件定義（12項目81問） ---------- */
@@ -169,6 +215,11 @@ export interface SitemapState {
   before: { nodes: SitemapNode[]; edges: SitemapEdge[] };
   after: { nodes: SitemapNode[]; edges: SitemapEdge[] };
   approvedAt?: ISODate;
+  /**
+   * 開発担当者からのコメント（2026-11-17 会議: AI の改善理由に加えて、開発者の意図をお客様へ伝える）。
+   * 書けるのは開発者画面だけ（setSitemapDevComment。devBy が無ければ何もしない）。お客様ポータルでは読むだけ。案件ごと（ProjectWork の sitemap と一緒に持ち運ぶ）
+   */
+  devComment?: { text: string; at: ISODate; by: string };
 }
 
 /* ---------- デザイン ---------- */
@@ -262,6 +313,11 @@ export interface CmsPage {
    */
   updatedBy?: string;
   parentPath?: string;
+  /**
+   * お知らせのカテゴリー（type が news のときだけ。2026-11-17 会議: お知らせを「お知らせ・キャンペーン・イベント」などで分けたい）。
+   * 無い古い記録は未分類。選択肢は既定のカテゴリーと、その案件のお知らせで使っているカテゴリー（features/cms/newsCategories.ts）
+   */
+  newsCategory?: string;
 }
 
 /* ---------- インサイト ---------- */
@@ -358,6 +414,11 @@ export interface Asset {
 
 export interface AssetState {
   items: Asset[];
+  /**
+   * 作ったカテゴリー（フォルダ）の一覧（2026-11-17 会議: お客様の素材をまとめて入れるので、空のカテゴリーを先に作って分けたい）。
+   * 素材が 0 件のカテゴリーも残すために持つ。無い保存データは素材の folder から求める（data/assetFolders.ts の assetFolderList。版は上げない）
+   */
+  folders?: string[];
 }
 
 /* ---------- フォーム管理（0.37.0） ---------- */
@@ -459,6 +520,8 @@ export interface Deploy {
 }
 
 export interface DevState {
+  /** 持ち主の案件（2026-11-17 から案件ごと）。無いのは 0.39 までの保存データで、中身は MINAMO COFFEE（p1）の分 */
+  projectId?: string;
   tasks: DevTask[];
   /** 新しい順 */
   deploys: Deploy[];
@@ -591,6 +654,12 @@ export interface ProjectWork extends Partial<ProjectContent> {
   assets?: AssetState;
   /** フォーム管理（0.37.0。無ければ公開中の案件は「お問い合わせ」の見本） */
   forms?: FormsState;
+  /** 開発者画面の開発データ（構築タスク・デプロイ。2026-11-17 から案件ごと。無ければその案件の段階に合う初期データ） */
+  dev?: DevState;
+  /** 制作〜公開の日程（2026-11-17 会議。無ければ未入力） */
+  schedule?: ProjectSchedule;
+  /** アフロがお客様へ承認を依頼した日時（節目ごと。2026-11-17 会議。依頼するまでお客様の画面では「準備中」） */
+  approvalRequests?: Partial<Record<ApprovalKey, ISODate>>;
   requirements: RequirementSession;
   sitemap: SitemapState;
   design: DesignState;
@@ -611,6 +680,9 @@ export interface DemoState {
    * （持ち主は requirements.projectId）。案件を切り替えるときに入れ替える（store/projectWork.ts）。無い保存データは初期データで補う（版は上げない）
    */
   projectWork?: Record<string, ProjectWork>;
+  /** 制作〜公開の日程と承認の依頼（選んでいる案件の分。ほかの案件の分は projectWork。2026-11-17 会議） */
+  schedule?: ProjectSchedule;
+  approvalRequests?: Partial<Record<ApprovalKey, ISODate>>;
   approvalLogs: ApprovalLog[];
   /** ページ・お知らせと AI 診断（選んでいる案件の分。持ち主は requirements.projectId。ほかの案件の分は projectWork。0.30.0） */
   pages: CmsPage[];
@@ -625,7 +697,10 @@ export interface DemoState {
   chats?: Record<string, ChatMessage[]>;
   activities: Activity[];
   settings: { reducedMotion: 'system' | 'on' | 'off'; companyName: string };
-  /** 開発者画面のデータ。0.5.0 で追加したため、それ以前の保存データには無い（devState() で補う） */
+  /**
+   * 開発者画面のデータ（選んでいる案件の分。ほかの案件の分は projectWork。2026-11-17 から案件ごと）。
+   * 0.5.0 で追加したため、それ以前の保存データには無い（devState() で補う）
+   */
   dev?: DevState;
   /**
    * デジタルサイネージ（選んでいる案件の分。0.30.0 から案件ごと）。0.11.0 で追加したため、それ以前の保存データには無い
@@ -640,6 +715,8 @@ export interface DemoState {
   devProjects?: Record<string, string[]>;
   /** 開発者の権限・担当の初期データの版（2 = 全員に権限と担当。0.39.6）。古い保存データに 1 回だけ新しい初期データを当てる印 */
   devSeed?: number;
+  /** 日程・承認の依頼・承認履歴を古い保存データへ補った印（0.41.0。2026-11-17 会議）。1 回だけ補う（毎回補うと日程の入力・承認の依頼を飛ばせてしまう） */
+  scheduleMigrated?: boolean;
   /** 管理者が登録した開発者。0.15.0 で追加（devUsersState() で補う） */
   devUsers?: DevUser[];
 }

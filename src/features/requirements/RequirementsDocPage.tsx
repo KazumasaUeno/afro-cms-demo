@@ -6,6 +6,7 @@ import { RouteLoader } from '@/components/layout/RouteLoader';
 import { useCurrentRequirements } from '@/repositories';
 import { tokens } from '@/theme/tokens';
 import { ProposalView } from './ProposalView';
+import { RequestApprovalButton } from '@/features/portal/RequestApprovalButton';
 import { useHearingRoutes } from './hearingRoutes';
 
 /**
@@ -62,6 +63,8 @@ export default function RequirementsDocPage() {
               {req.status !== 'approved' ? '回答を見直す' : 'ヒアリングの回答'}
             </Button>
             <AiBadge />
+            {/* 内容を確かめてからお客様へ承認を依頼する（2026-11-17 会議。依頼するまでお客様の画面では「準備中」） */}
+            <RequestApprovalButton approvalKey="requirements" />
           </Stack>
         }
       />
