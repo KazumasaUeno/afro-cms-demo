@@ -35,6 +35,7 @@ export const PREPARING = 'アフロが準備中です。準備ができると承
  */
 export function approvalSteps(state: DemoState): ApprovalStep[] {
   const req = state.requirements;
+  const appr = stageApprovals(state);
   const clientDone = QUALITY_ITEMS.filter((i) => !!state.qualityChecks[i.id]?.clientAt).length;
   const total = QUALITY_ITEMS.length;
   const requests = state.approvalRequests ?? {};
@@ -53,25 +54,55 @@ export function approvalSteps(state: DemoState): ApprovalStep[] {
       lockedReason: 'アフロがヒアリングの内容をもとに要件定義書を作成しています。できあがると、ここで内容の確認と承認をお願いします。',
     },
     {
-      key: 'sitemap', no: 2, title: 'サイトマップ', ask: 'リニューアル後のページ構成をご確認ください',
-      status: state.sitemap.approvedAt ? 'approved' : req.status === 'approved' ? 'waiting' : 'locked', approvedAt: state.sitemap.approvedAt,
-      lockedReason: '要件定義書の承認のあとに、アフロがサイトマップを作成します。',
+      key: 'schedule', no: 2, title: 'スケジュール', ask: '制作から公開までの日程（納品予定日・公開予定日）をご確認ください',
+      status: appr.schedule ? 'approved' : req.status === 'approved' && state.schedule ? 'waiting' : 'locked', approvedAt: appr.schedule,
+      lockedReason: '要件定義書の承認のあとに、アフロが制作から公開までの日程を作成します。',
     },
     {
-      key: 'design', no: 3, title: 'トップデザイン', ask: 'ページごとに 2 つの案を比べて、採用するデザインを選んでください',
+      key: 'sitemap', no: 3, title: 'サイトマップ', ask: 'リニューアル後のページ構成をご確認ください',
+      status: state.sitemap.approvedAt ? 'approved' : appr.schedule ? 'waiting' : 'locked', approvedAt: state.sitemap.approvedAt,
+      lockedReason: 'スケジュールの承認のあとに、アフロがサイトマップをご用意します。',
+    },
+    {
+      key: 'design', no: 4, title: 'トップデザイン', ask: 'ページごとに 2 つの案を比べて、採用するデザインを選んでください',
       status: state.design.approvedAt ? 'approved' : state.sitemap.approvedAt ? 'waiting' : 'locked', approvedAt: state.design.approvedAt,
       lockedReason: 'サイトマップの承認のあとに、アフロがデザイン案を作成します。',
     },
     {
-      key: 'quality', no: 4, title: '品質チェック', ask: '公開前の確認項目をチェックしてください',
+      key: 'build', no: 5, title: '制作の完了', ask: 'すべてのページができあがりました。仕上がりをご確認ください',
+      status: appr.build ? 'approved' : state.design.buildCompletedAt ? 'waiting' : 'locked', approvedAt: appr.build,
+      lockedReason: 'デザインの承認のあとに、アフロが全ページを制作します。',
+    },
+    {
+      key: 'quality', no: 6, title: '品質チェック', ask: '公開前の確認項目をチェックしてください',
       // 承認済みはお客様が「完了」を押したとき（0.39.7。全項目にチェックしただけでは承認にしない）
-      status: state.design.qualityApprovedAt ? 'approved' : state.design.buildCompletedAt ? 'waiting' : 'locked',
-      lockedReason: '全ページの構築が終わると、公開前の確認をお願いします。',
+      status: state.design.qualityApprovedAt ? 'approved' : appr.build ? 'waiting' : 'locked',
+      lockedReason: '制作の完了の承認のあとに、公開前の確認をお願いします。',
       approvedAt: state.design.qualityApprovedAt,
       progress: { done: clientDone, total },
     },
+    {
+      key: 'release', no: 7, title: '公開（リリース）', ask: '公開予定日にサイトを公開してよいかをご確認ください',
+      status: appr.release ? 'approved' : state.design.qualityApprovedAt ? 'waiting' : 'locked', approvedAt: appr.release,
+      lockedReason: '品質チェック（納品検収）の完了のあとに、公開の承認をお願いします。',
+    },
   ];
   return steps.map(gate);
+}
+
+/**
+ * 段階の最後の承認（2026-11-17 追加の schedule・build・release）の承認日時。
+ * それより前の保存データ・初期データは、後の節目が進んでいれば承認済みとして扱う（移行せずに導く）:
+ * スケジュール = サイトマップの承認があれば / 制作の完了 = 品質チェックを依頼済み・完了済みなら / 公開 = 運用・改善の段階なら
+ */
+export function stageApprovals(state: DemoState): { schedule?: ISODate; build?: ISODate; release?: ISODate } {
+  const d = state.design;
+  const stage = state.projects.find((p) => p.id === state.requirements.projectId)?.stage;
+  return {
+    schedule: state.schedule?.approvedAt ?? (state.schedule ? state.sitemap.approvedAt : undefined),
+    build: d.buildApprovedAt ?? (d.buildCompletedAt ? (d.qualityApprovedAt ?? state.approvalRequests?.quality) : undefined),
+    release: d.releaseApprovedAt ?? (d.qualityApprovedAt && (stage === 'operation' || stage === 'improvement') ? d.qualityApprovedAt : undefined),
+  };
 }
 
 /** 節目が「アフロの依頼を待っている」（前の節目が終わり、まだ依頼していない）か。承認を依頼するボタンを出す条件 */

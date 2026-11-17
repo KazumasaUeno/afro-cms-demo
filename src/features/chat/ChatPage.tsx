@@ -6,7 +6,7 @@ import type { Project } from '@/types';
 import { MemberAvatar, PageHeader, Surface } from '@/components/ui';
 import { areaOf } from '@/components/layout/nav';
 import { currentProject, useDemo } from '@/store/DemoStore';
-import { useDevProjects, useDevUser } from '@/features/dev/useDevUser';
+import { useDevProjects, useDevUser, useDirectorProjects } from '@/features/dev/useDevUser';
 import { useProjectRoutes } from '@/features/projects/projectRoutes';
 import { memberById } from '@/data/members';
 import { CHAT_LIMITS, chatOf, validateChat } from '@/data/chat';
@@ -22,36 +22,32 @@ type Mode = 'portal' | 'admin' | 'dev';
  * - お客様ポータル（/portal/chat）: お客様として送る。相手はその案件の担当者。自分の案件の会話 1 本だけ
  * - 開発者画面（/dev/chat）: 担当の案件の一覧（LINE のトーク一覧の形）→ 選んだ案件の会話。ログイン中の開発者の名前で返信する
  *   （2026-11-17 会議: 案件を 3 つ持つと、どこに相談が来たか分からないため。未対応＝最後がお客様のメッセージ。features/chat/unanswered）
- * - 管理者画面（/chat）は 2026-11-17 に外した（ホームへ転送）。mode 'admin' は従来の 1 本の表示のまま残す
+ *   2026-11-17 ユーザー指示「担当ディレクターがチャット対応できる、担当開発者は複数選択可」「回答はできないが、閲覧はできるように」:
+ *   返信できるのはその案件の担当ディレクター（Project.ownerId）だけ。開発担当だけの案件は会話を見られるが返信欄を出さない。
+ *   一覧は「開発担当の案件 ＋ 担当ディレクターの案件」。未対応の印と件数は担当ディレクターの案件だけ
+ * - 管理者画面（/chat）: 2026-11-17 午前に外したが、同日ユーザー指示「管理者は全てのチャット一覧が見れる」で戻した。
+ *   全案件の一覧（開発者画面と同じ形）→ 会話。見るだけ（返信欄は出さない。返信は担当ディレクターが開発者画面から）。未対応の印に担当ディレクターの名前を添える
  * デモのため、このブラウザの中だけに保存する（data/chat.ts）。表示の出し分けで、セキュリティ境界ではない
  */
 export default function ChatPage() {
   const area = areaOf(useLocation().pathname);
   const mode: Mode = area === 'portal' ? 'portal' : area === 'dev' ? 'dev' : 'admin';
-  if (mode === 'dev') return <DevChatInbox />;
+  if (mode !== 'portal') return <ChatInbox mode={mode} />;
   return <SingleChat mode={mode} />;
 }
 
-/** お客様ポータル（・旧管理者画面）: 表示中の案件の会話 1 本（0.38.0 からの表示） */
-function SingleChat({ mode }: { mode: Exclude<Mode, 'dev'> }) {
+/** お客様ポータル: 表示中の案件の会話 1 本（0.38.0 からの表示） */
+function SingleChat({ mode }: { mode: 'portal' }) {
   const { state } = useDemo();
   const project = currentProject(state);
-  const routes = useProjectRoutes();
   const owner = memberById(project.ownerId);
   return (
     <Box>
-      {mode !== 'portal' && (
-        <Button component={RouterLink} to={routes.detail(project.id)} size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>
-          プロジェクト詳細
-        </Button>
-      )}
       <PageHeader
-        eyebrow={mode === 'portal' ? 'お客様ポータル' : `プロジェクト・${project.siteName}`}
+        eyebrow="お客様ポータル"
         icon={<MessageSquare size={15} />}
-        title={mode === 'portal' ? '担当者に相談' : '相談チャット'}
-        description={mode === 'portal'
-          ? `制作についてのご質問・ご相談を、担当の${owner.name}にお送りいただけます。`
-          : `${project.clientName} からの相談に返信します。お客様ポータルの「担当者に相談」と同じ会話です。`}
+        title="担当者に相談"
+        description={`制作についてのご質問・ご相談を、担当ディレクターの${owner.name}にお送りいただけます。`}
       />
       <Surface sx={{ p: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', maxWidth: 820 }}>
         <ChatThread project={project} mode={mode} logHeight={{ xs: 'calc(100dvh - 500px)', md: 'calc(100dvh - 560px)' }} />
@@ -68,14 +64,20 @@ function summaryOf(state: Parameters<typeof chatOf>[0], p: Project) {
 }
 
 /**
- * 開発者画面の相談（2026-11-17 会議）。担当の案件の一覧 → 会話。
- * - md 以上: 左に一覧、右に選んだ案件の会話（未選択なら表示中の案件、担当外なら一覧の先頭）
+ * 開発者画面・管理者画面の相談（2026-11-17 会議）。案件の一覧 → 会話。
+ * - md 以上: 左に一覧、右に選んだ案件の会話（未選択なら表示中の案件、一覧に無ければ一覧の先頭）
  * - md 未満: 一覧 → 会話（戻るで一覧へ）
  * 選んだ案件は URL（?p=案件ID）に持つ。表示中の案件（currentProjectId）は切り替えない（ほかの画面の対象が勝手に変わらないように）
+ * 管理者画面（同日ユーザー指示「管理者は全てのチャット一覧が見れる」）は全案件・見るだけ。未対応の印に担当ディレクターの名前を添える
  */
-function DevChatInbox() {
+function ChatInbox({ mode }: { mode: 'dev' | 'admin' }) {
   const { state } = useDemo();
-  const mine = useDevProjects();
+  const admin = mode === 'admin';
+  const devMine = useDevProjects();
+  const directed = useDirectorProjects();
+  // 一覧に出す案件: 開発者画面は開発担当の案件 ＋ 担当ディレクターの案件（プロジェクト一覧の並び順。重複は 1 つ）。
+  // 担当ディレクターだけの案件は相談だけ開ける（ほかの開発者画面のページは DevProjectGate のまま。2026-11-17）。管理者画面は全案件
+  const mine = admin ? state.projects : state.projects.filter((p) => devMine.some((x) => x.id === p.id) || directed.some((x) => x.id === p.id));
   const theme = useTheme();
   const wide = useMediaQuery(theme.breakpoints.up('md'));
   const [params, setParams] = useSearchParams();
@@ -84,7 +86,8 @@ function DevChatInbox() {
   const rows = mine
     .map((p) => summaryOf(state, p))
     .sort((a, b) => (b.last?.at ?? '').localeCompare(a.last?.at ?? ''));
-  const count = unansweredCount(state, mine.map((p) => p.id));
+  // 未対応は返信する人＝担当ディレクターの案件だけ数える（管理者画面は全案件）
+  const count = unansweredCount(state, admin ? undefined : directed.map((p) => p.id));
 
   const requested = params.get('p');
   const picked = mine.find((p) => p.id === requested);
@@ -95,14 +98,24 @@ function DevChatInbox() {
   const back = () => setParams((prev) => { const n = new URLSearchParams(prev); n.delete('p'); return n; });
 
   const header = (
+    <>
+    {/* 管理者画面の相談はメニューに無い（ホームの「相談の未対応」から開く）ので、ホームへ戻る道を出す（2026-11-17 ユーザー指示「サイドに入らない」） */}
+    {admin && (
+      <Button component={RouterLink} to="/" size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 1.5, ml: -1, [TOUCH]: { minHeight: 44 } }}>
+        ホームへ戻る
+      </Button>
+    )}
     <PageHeader
-      eyebrow="開発者画面"
+      eyebrow={admin ? '管理者画面' : '開発者画面'}
       icon={<MessageSquare size={15} />}
       title="相談チャット"
-      description={count > 0
-        ? `担当のプロジェクトのお客様からの相談です。未対応が ${count} 件あります（最後のメッセージがお客様のもの）。`
-        : '担当のプロジェクトのお客様からの相談です。未対応はありません。'}
+      description={admin
+        ? `すべてのプロジェクトのお客様からの相談です（見るだけ。返信は各プロジェクトの担当ディレクターが開発者画面から行います）。${count > 0 ? `未対応が ${count} 件あります（最後のメッセージがお客様のもの）。` : '未対応はありません。'}`
+        : `担当のプロジェクトのお客様からの相談です。返信するのは各プロジェクトの担当ディレクターです（開発担当は閲覧のみ）。${count > 0
+          ? `あなたが担当ディレクターの相談に、未対応が ${count} 件あります（最後のメッセージがお客様のもの）。`
+          : '未対応はありません。'}`}
     />
+    </>
   );
 
   if (!mine.length) {
@@ -110,23 +123,27 @@ function DevChatInbox() {
       <Box>
         {header}
         <Surface sx={{ textAlign: 'center', py: 6 }}>
-          <Typography variant="body2" color="text.secondary">担当のプロジェクトがありません。</Typography>
+          <Typography variant="body2" color="text.secondary">{admin ? 'プロジェクトがありません。' : '担当のプロジェクトがありません。'}</Typography>
         </Surface>
       </Box>
     );
   }
 
   const list = (
-    <Box component="nav" aria-label="担当プロジェクトの相談" sx={{ height: '100%', overflowY: 'auto' }}>
+    <Box component="nav" aria-label={admin ? 'プロジェクトの相談' : '担当プロジェクトの相談'} sx={{ height: '100%', overflowY: 'auto' }}>
       <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
-        {rows.map(({ project: p, last, unanswered }) => {
+        {rows.map(({ project: p, last, unanswered: waiting }) => {
           const active = wide && selected?.id === p.id;
+          // 未対応の印は担当ディレクターの案件だけ。開発担当だけの案件は「閲覧のみ」。管理者画面は全案件の未対応を担当ディレクターの名前つきで出す
+          const readOnly = !admin && !directed.some((x) => x.id === p.id);
+          const unanswered = !readOnly && waiting;
+          const director = admin ? memberById(p.ownerId).name : undefined;
           return (
             <Box component="li" key={p.id} sx={{ borderBottom: `1px solid ${tokens.color.border}` }}>
               <ButtonBase
                 onClick={() => open(p.id)}
                 aria-current={active ? 'true' : undefined}
-                aria-label={`${p.clientName}（${p.siteName}）${unanswered ? '・未対応' : '・対応済み'}${last ? `・最後のメッセージ ${relativeTime(last.at)}` : ''}`}
+                aria-label={`${p.clientName}（${p.siteName}）${readOnly ? '・閲覧のみ' : unanswered ? `・未対応${director ? `・担当 ${director}` : ''}` : '・対応済み'}${last ? `・最後のメッセージ ${relativeTime(last.at)}` : ''}`}
                 sx={{
                   width: '100%', textAlign: 'left', display: 'flex', alignItems: 'flex-start', gap: 1.5, px: 2, py: 1.5, minHeight: 64,
                   bgcolor: active ? tokens.color.primarySoft : 'transparent',
@@ -146,7 +163,7 @@ function DevChatInbox() {
                     <Typography variant="body2" sx={{ flex: 1, minWidth: 0, color: unanswered ? tokens.color.onSurface : tokens.color.muted }} noWrap>
                       {last ? `${last.side === 'afro' ? `${last.author}: ` : ''}${last.text.replace(/\s+/g, ' ')}` : 'まだメッセージはありません'}
                     </Typography>
-                    <StatusBadge unanswered={unanswered} />
+                    <StatusBadge unanswered={unanswered} readOnly={readOnly} director={director} />
                   </Stack>
                 </Box>
               </ButtonBase>
@@ -165,7 +182,7 @@ function DevChatInbox() {
           相談の一覧{count > 0 ? `（未対応 ${count}）` : ''}
         </Button>
         <Surface sx={{ p: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <ChatThread key={selected.id} project={selected} mode="dev" logHeight={{ xs: 'calc(100dvh - 400px)' }} />
+          <ChatThread key={selected.id} project={selected} mode={mode} logHeight={{ xs: 'calc(100dvh - 400px)' }} />
         </Surface>
       </Box>
     );
@@ -178,7 +195,7 @@ function DevChatInbox() {
         <Surface sx={{ p: 0, overflow: 'hidden', display: 'grid', gridTemplateColumns: 'minmax(260px, 340px) 1fr', maxWidth: 1180 }}>
           <Box sx={{ borderRight: `1px solid ${tokens.color.border}`, minWidth: 0, height: 'calc(100dvh - 340px)', minHeight: 440 }}>{list}</Box>
           <Box sx={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-            <ChatThread key={selected.id} project={selected} mode="dev" logHeight={{ md: 'calc(100dvh - 340px - 170px)' }} />
+            <ChatThread key={selected.id} project={selected} mode={mode} logHeight={{ md: 'calc(100dvh - 340px - 170px)' }} />
           </Box>
         </Surface>
       ) : (
@@ -188,11 +205,15 @@ function DevChatInbox() {
   );
 }
 
-/** 未対応（赤）／対応済み（控えめ） */
-function StatusBadge({ unanswered }: { unanswered: boolean }) {
+/**
+ * 未対応（赤）／対応済み（控えめ）／閲覧のみ（担当ディレクターでない案件。2026-11-17）。
+ * director: 管理者画面で未対応に添える担当ディレクターの名前（「未対応・担当 佐倉 美緒」）
+ */
+function StatusBadge({ unanswered, readOnly = false, director }: { unanswered: boolean; readOnly?: boolean; director?: string }) {
+  if (readOnly) return <Typography component="span" variant="caption" sx={{ flexShrink: 0, color: tokens.color.muted }}>閲覧のみ</Typography>;
   return unanswered ? (
-    <Box component="span" sx={{ flexShrink: 0, px: 1, py: 0.25, borderRadius: 999, bgcolor: tokens.color.danger, color: tokens.color.onDanger, fontSize: 12, fontWeight: 700, lineHeight: 1.5 }}>
-      未対応
+    <Box component="span" sx={{ flexShrink: 0, px: 1, py: 0.25, borderRadius: 999, bgcolor: tokens.color.danger, color: tokens.color.onDanger, fontSize: 12, fontWeight: 700, lineHeight: 1.5, whiteSpace: 'nowrap' }}>
+      未対応{director ? `・担当 ${director}` : ''}
     </Box>
   ) : (
     <Typography component="span" variant="caption" sx={{ flexShrink: 0, color: tokens.color.muted }}>対応済み</Typography>
@@ -207,10 +228,16 @@ function ChatThread({ project, mode, logHeight }: { project: Project; mode: Mode
   const { state, dispatch } = useDemo();
   const routes = useProjectRoutes();
   const me = useDevUser();
+  const devMine = useDevProjects();
   const mySide = mode === 'portal' ? 'client' : 'afro';
   const owner = memberById(project.ownerId);
   const messages = chatOf(state, project.id);
-  const unanswered = mode === 'dev' && unansweredOf(state, project.id);
+  // 開発者画面で返信できるのは担当ディレクターだけ（2026-11-17 ユーザー指示「回答はできないが、閲覧はできるように」）
+  // 管理者画面は見るだけ（同日ユーザー指示「管理者は全てのチャット一覧が見れる」。返信は担当ディレクターが開発者画面から）
+  const readOnly = mode === 'admin' || (mode === 'dev' && project.ownerId !== me.id);
+  const unanswered = (mode === 'admin' || (mode === 'dev' && !readOnly)) && unansweredOf(state, project.id);
+  // 詳細（開発者画面のプロジェクト詳細）は開発担当の案件だけ（担当ディレクターだけの案件は相談だけ開ける）
+  const canOpenDetail = mode !== 'dev' || devMine.some((p) => p.id === project.id);
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -248,15 +275,18 @@ function ChatThread({ project, mode, logHeight }: { project: Project; mode: Mode
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography variant="body2" component="h2" sx={{ fontWeight: 650 }} noWrap>{mode === 'portal' ? owner.name : project.clientName}</Typography>
           <Typography variant="caption" noWrap sx={{ display: 'block' }}>
-            {mode === 'portal' ? `アフロ株式会社・${owner.role}` : `${project.siteName}・担当 ${owner.name}`}
+            {mode === 'portal' ? 'アフロ株式会社・担当ディレクター（相談の窓口）' : `${project.siteName}・担当ディレクター ${owner.name}`}
           </Typography>
         </Box>
-        {mode === 'dev' && (
+        {mode !== 'portal' && (
           <>
-            <StatusBadge unanswered={unanswered} />
-            <Button component={RouterLink} to={routes.detail(project.id)} size="small" sx={{ flexShrink: 0, [TOUCH]: { minHeight: 44 } }}>
-              詳細
-            </Button>
+            {/* 管理者画面は「閲覧のみ」ではなく、未対応・対応済みを出す（全案件を見張るため） */}
+            <StatusBadge unanswered={unanswered} readOnly={mode === 'dev' && readOnly} />
+            {canOpenDetail && (
+              <Button component={RouterLink} to={routes.detail(project.id)} size="small" sx={{ flexShrink: 0, [TOUCH]: { minHeight: 44 } }}>
+                詳細
+              </Button>
+            )}
           </>
         )}
       </Stack>
@@ -267,7 +297,7 @@ function ChatThread({ project, mode, logHeight }: { project: Project; mode: Mode
         role="log"
         aria-live="polite"
         aria-label={`${project.clientName}との相談のメッセージ`}
-        sx={{ px: { xs: 1.5, sm: 2 }, py: 2, height: logHeight, minHeight: 240, overflowY: 'auto', bgcolor: tokens.color.bg, flex: mode === 'dev' ? 1 : undefined }}
+        sx={{ px: { xs: 1.5, sm: 2 }, py: 2, height: logHeight, minHeight: 240, overflowY: 'auto', bgcolor: tokens.color.bg, flex: mode !== 'portal' ? 1 : undefined }}
       >
         {messages.length === 0 ? (
           <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 6 }}>まだメッセージはありません。</Typography>
@@ -298,7 +328,16 @@ function ChatThread({ project, mode, logHeight }: { project: Project; mode: Mode
         )}
       </Box>
 
-      {/* 入力 */}
+      {/* 入力（担当ディレクターでない開発者は閲覧のみ。返信欄の代わりに対応する人を出す） */}
+      {readOnly ? (
+        <Box role="note" sx={{ px: { xs: 1.5, sm: 2 }, py: 2, borderTop: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surfaceMuted }}>
+          <Typography variant="body2" sx={{ color: tokens.color.muted }}>
+            {mode === 'admin'
+              ? `返信は担当ディレクター（${owner.name}）が開発者画面から行います（閲覧のみ）`
+              : `この案件の相談は担当ディレクター（${owner.name}）が対応します（閲覧のみ）`}
+          </Typography>
+        </Box>
+      ) : (
       <Box sx={{ px: { xs: 1.5, sm: 2 }, py: 1.5, borderTop: `1px solid ${tokens.color.border}` }}>
         <Stack direction="row" spacing={1} alignItems="flex-start">
           <TextField
@@ -324,6 +363,7 @@ function ChatThread({ project, mode, logHeight }: { project: Project; mode: Mode
         </Stack>
         <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>デモのため、メッセージはこのブラウザの中だけに保存されます（実際には送信されません）。</Typography>
       </Box>
+      )}
     </>
   );
 }

@@ -24,7 +24,7 @@ interface Props {
   /** ブランド色の候補（編集: 候補に無いいまの色を足す） */
   accents?: { value: string; name: string }[];
   /**
-   * 担当開発者の候補（作成のときだけ渡す。2026-11-17 会議。以後の変更はユーザー管理の「担当を変更」）。
+   * 担当開発者の候補（2026-11-17 会議。同日ユーザー指示で作成・編集の両方に渡す。ユーザー管理の「担当を変更」でも変えられる）。
    * 公開予定日・次に必要な作業の欄は 2026-11-17 会議で外した（公開予定日は日程＝スケジュール、次の作業は段階から導く）
    */
   devOptions?: DevPerson[];
@@ -146,7 +146,7 @@ export function ProjectFields({ draft, set, show, refs, Group, accents = ACCENT_
         <TextField
           select fullWidth required label="担当ディレクター" value={draft.ownerId}
           onChange={(e) => set({ ownerId: e.target.value })}
-          error={!!show('ownerId')} helperText={show('ownerId') ?? 'カードと詳細画面に表示します'}
+          error={!!show('ownerId')} helperText={show('ownerId') ?? 'お客様の相談の窓口（相談チャットに返信する人）。カードと詳細画面に表示します'}
           inputRef={(el: HTMLElement | null) => { refs.current.ownerId = el; }}
           SelectProps={{
             renderValue: (id) => {
@@ -171,36 +171,42 @@ export function ProjectFields({ draft, set, show, refs, Group, accents = ACCENT_
             </MenuItem>
           ))}
         </TextField>
-        {/* 担当開発者（2026-11-17 会議。ユーザー管理の担当プロジェクト＝devProjects に入る。作成のときだけ） */}
+        {/* 担当開発者（2026-11-17 会議。ユーザー管理の担当プロジェクト＝devProjects に入る）。
+            同日ユーザー指示「担当ディレクターがチャット対応できる、担当開発者は複数選択可」: 複数選べる・作成と編集の両方。担当ディレクターと同じ人も選べる */}
         {devOptions && (
           <TextField
-            select fullWidth label="担当開発者" value={draft.devId ?? ''}
-            onChange={(e) => set({ devId: e.target.value })}
-            error={!!show('devId')} helperText={show('devId') ?? '開発者画面でこのプロジェクトを開ける人。あとからユーザー管理で変えられます'}
-            inputRef={(el: HTMLElement | null) => { refs.current.devId = el; }}
+            select fullWidth label="担当開発者（複数選択可）" value={draft.devIds ?? []}
+            onChange={(e) => {
+              const v = e.target.value as unknown as string[] | string;
+              set({ devIds: typeof v === 'string' ? v.split(',').filter(Boolean) : v });
+            }}
+            error={!!show('devIds')}
+            helperText={show('devIds') ?? '開発者画面でこのプロジェクトを開いて作業する人。お客様の相談に返信するのは担当ディレクターです'}
+            inputRef={(el: HTMLElement | null) => { refs.current.devIds = el; }}
             SelectProps={{
+              multiple: true,
               displayEmpty: true,
-              renderValue: (id) => {
-                const m = devOptions.find((x) => x.id === id);
-                return m ? (
-                  <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
-                    <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>{m.name}</Typography>
-                    <Typography variant="caption" noWrap>{m.role}</Typography>
-                  </Stack>
-                ) : <Typography variant="body2" color="text.secondary">あとで決める</Typography>;
+              renderValue: (ids) => {
+                const names = devOptions.filter((x) => (ids as string[]).includes(x.id)).map((m) => m.name);
+                return names.length
+                  ? <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>{names.join('・')}</Typography>
+                  : <Typography variant="body2" color="text.secondary">あとで決める</Typography>;
               },
             }}
             InputLabelProps={{ shrink: true }}
           >
-            <MenuItem value="" sx={{ minHeight: 44 }}>あとで決める</MenuItem>
-            {devOptions.map((m) => (
-              <MenuItem key={m.id} value={m.id} sx={{ minHeight: 44 }}>
-                <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0 }}>
-                  <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>{m.name}</Typography>
-                  <Typography variant="caption" noWrap>{m.role}{m.partnerCompany ? `・${m.partnerCompany}` : ''}</Typography>
-                </Stack>
-              </MenuItem>
-            ))}
+            {devOptions.map((m) => {
+              const on = (draft.devIds ?? []).includes(m.id);
+              return (
+                <MenuItem key={m.id} value={m.id} sx={{ minHeight: 44 }}>
+                  <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0, flex: 1 }}>
+                    <Box sx={{ width: 20, display: 'grid', placeItems: 'center', flexShrink: 0 }} aria-hidden>{on && <Check size={16} color={tokens.color.primary} />}</Box>
+                    <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>{m.name}</Typography>
+                    <Typography variant="caption" noWrap>{m.role}{m.partnerCompany ? `・${m.partnerCompany}` : ''}{m.id === draft.ownerId ? '・担当ディレクター' : ''}</Typography>
+                  </Stack>
+                </MenuItem>
+              );
+            })}
           </TextField>
         )}
       </Group>

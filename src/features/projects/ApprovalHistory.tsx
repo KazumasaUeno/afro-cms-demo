@@ -1,6 +1,10 @@
 import { Box, Button, Stack, Typography } from '@mui/material';
 import { Download, History } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import type { ApprovalKey, ApprovalLog } from '@/types';
+import { useDemo } from '@/store/DemoStore';
+import { workView } from '@/store/projectWork';
+import { REQUEST_TITLE } from '@/store/reducer';
 import { StatusPill, Surface } from '@/components/ui';
 import { useRepositories } from '@/repositories';
 import { downloadText } from '@/services/download';
@@ -16,7 +20,17 @@ const SIDE = { client: { label: 'お客様', tone: 'success' }, afro: { label: '
 const SHOW = 8;
 
 export function ApprovalHistory({ projectId, siteName }: { projectId: string; siteName: string }) {
-  const { data: logs } = useRepositories().approvals.useHistory(projectId);
+  const { data: stored } = useRepositories().approvals.useHistory(projectId);
+  // 承認の依頼も履歴に出す（2026-11-17 ユーザー指示）。依頼の記録（approvalRequests）はあるのに履歴の行が無いもの
+  // （この機能より前の依頼・初期データ）は、依頼の日時から行を補う（操作した人は分からないので「アフロ」）
+  const { state } = useDemo();
+  const requests = workView(state, projectId).approvalRequests;
+  const logs = useMemo(() => {
+    const extra: ApprovalLog[] = Object.entries(requests ?? {})
+      .filter(([key, at]) => !!at && !stored.some((l) => l.action === `${REQUEST_TITLE[key as ApprovalKey]}の承認を依頼`))
+      .map(([key, at]) => ({ id: `req-${key}`, at: at as string, actor: 'アフロ', side: 'afro' as const, action: `${REQUEST_TITLE[key as ApprovalKey]}の承認を依頼`, target: 'お客様への承認依頼', projectId }));
+    return extra.length ? [...stored, ...extra].sort((a, b) => b.at.localeCompare(a.at)) : stored;
+  }, [stored, requests, projectId]);
   const [all, setAll] = useState(false);
   const shown = all ? logs : logs.slice(0, SHOW);
 
@@ -33,7 +47,7 @@ export function ApprovalHistory({ projectId, siteName }: { projectId: string; si
         {logs.length > 0 && <Button size="small" variant="outlined" startIcon={<Download size={15} />} onClick={download}>CSVで保存</Button>}
       </Stack>
       <Typography variant="caption" component="p" sx={{ mb: 1.5 }}>
-        誰が・いつ（日本時間）・何を承認したかを秒まで記録しています（{logs.length} 件）。後から内容を確認するときの証跡になります。
+        誰が・いつ（日本時間）・何を承認したか（承認の依頼も）を秒まで記録しています（{logs.length} 件）。後から内容を確認するときの証跡になります。
       </Typography>
       {logs.length === 0 ? (
         <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>まだ承認の記録はありません。</Typography>

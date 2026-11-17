@@ -38,6 +38,7 @@ const PortalApprovalsPage = lazy(() => import('@/features/portal/PortalApprovals
 const PortalQualityPage = lazy(() => import('@/features/portal/PortalQualityPage'));
 const PortalReportsPage = lazy(() => import('@/features/portal/PortalReportsPage'));
 const PortalSignagePage = lazy(() => import('@/features/portal/PortalSignagePage'));
+const PortalSchedulePage = lazy(() => import('@/features/portal/PortalSchedulePage'));
 const PresentPage = lazy(() => import('@/features/present/PresentPage'));
 const PetitPage = lazy(() => import('@/features/present/PetitPage'));
 const DesignPreviewPage = lazy(() => import('@/features/design/DesignPreviewPage'));
@@ -111,20 +112,22 @@ const router = createBrowserRouter([
       // お客様ポータルのヒアリングは 0.18.0 で廃止（アフロが入力する）。古いリンク・ブックマークは確認・承認へ
       { path: 'portal/requirements', element: <Navigate to="/portal/approvals" replace /> },
       { path: 'portal/approvals', element: <PortalApprovalsPage /> },
+      { path: 'portal/schedule', element: <PortalSchedulePage /> },
       { path: 'portal/quality', element: <PortalQualityPage /> },
       { path: 'portal/reports', element: <PortalReportsPage /> },
       { path: 'portal/signage', element: <PortalSignagePage /> },
       // 問い合わせの確認・対応状況（0.37.0）。フォームの定義は見るだけ
       { path: 'portal/forms', element: <FormsPage /> },
-      // 担当者への相談（0.38.0）。開発者画面の /dev/chat と同じ会話（管理者画面の /chat は 2026-11-17 に外した）
+      // 担当者への相談（0.38.0）。開発者画面の /dev/chat・管理者画面の /chat（見るだけ）と同じ会話
       { path: 'portal/chat', element: <ChatPage /> },
       // 素材ドライブ（2026-11-17 会議）。お客様は見るのと画像のアップロードだけ（AssetDrivePage の client）
       { path: 'portal/assets', element: <AssetDrivePage /> },
       { path: 'insights', element: <InsightsPage /> },
       { path: 'assets', element: <AssetDrivePage /> },
       { path: 'forms', element: <FormsPage /> },
-      // 管理者画面の相談チャットは外した（2026-11-17 ユーザー指示）。古い URL はホームへ。お客様の確認・承認画面は説明用に見るだけで開く（0.38.0。承認は記録しない）
-      { path: 'chat', element: <Navigate to="/" replace /> },
+      // 管理者画面の相談（2026-11-17 ユーザー指示「管理者は全てのチャット一覧が見れる」。同日午前の「要らない」を置き換え）: 全案件の会話を見るだけ。
+      // お客様の確認・承認画面は説明用に見るだけで開く（0.38.0。承認は記録しない）
+      { path: 'chat', element: <ChatPage /> },
       { path: 'client-view/approvals', element: <PortalApprovalsPage preview /> },
       { path: 'users', element: <UsersPage /> },
       { path: 'settings', element: <SettingsPage /> },

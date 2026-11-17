@@ -1,14 +1,17 @@
 import { tokens } from '@/theme/tokens';
 import type { DemoState } from '@/types';
 import {
-  Building2, ClipboardCheck, MessageSquare, Code2, FolderKanban, FolderOpen, House, LayoutDashboard, ListTodo, Monitor,
-  Rocket, ScrollText, Settings, Stamp, UserRound, UsersRound, type LucideIcon,
+  Building2, CalendarDays, ClipboardCheck, MessageSquare, Code2, FolderKanban, FolderOpen, House, LayoutDashboard, ListTodo, Monitor,
+  ScrollText, Settings, Stamp, UserRound, UsersRound, type LucideIcon,
 } from 'lucide-react';
 import { unansweredCount } from '@/features/chat/unanswered';
 
-/** バッジの数を数えるときに渡す、いまの人の範囲（開発者画面: ログイン中の開発者の担当案件） */
+/**
+ * バッジの数を数えるときに渡す、いまの人の範囲（開発者画面: ログイン中の人が担当ディレクターの案件。
+ * 2026-11-17 ユーザー指示「担当ディレクターがチャット対応できる」: 相談の未対応は返信する人＝担当ディレクターにだけ数える）
+ */
 export interface NavBadgeScope {
-  devProjectIds: string[];
+  directorProjectIds: string[];
 }
 
 export interface NavItem {
@@ -63,12 +66,14 @@ export interface AreaDef {
 }
 
 const ADMIN_ITEMS: NavItem[] = [
-  { to: '/', label: 'ホーム', icon: House, match: ['/'], exact: true, hint: '今日の状況' },
+  // 全案件の相談（/chat）はホームの「相談の未対応」から開くので、開いている間はホームを選択中にする（2026-11-17）
+  { to: '/', label: 'ホーム', icon: House, match: ['/', '/chat'], exact: true, hint: '今日の状況' },
   // AI Studio（要件・サイトマップ・デザイン）・品質チェック・インサイトはプロジェクトの中の画面なので、メニューには出さず
   // プロジェクト詳細の段階ごとのボタンから開く。開いている間は「プロジェクト」を選択中にする
   { to: '/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/projects', '/ai-studio', '/schedule', '/site', '/quality', '/insights', '/assets', '/forms', '/client-view'], hint: '制作案件の一覧' },
   { to: '/users', label: 'ユーザー管理', icon: UsersRound, match: ['/users'], hint: 'お客様の登録・開発者画面の権限' },
-  // 相談チャット（0.38.2）は 2026-11-17 ユーザー指示「管理者画面に相談は要らない」で外した（/chat はホームへ転送。開発者画面・お客様ポータルには残す）
+  // 相談チャット（0.38.2）は 2026-11-17 午前に「管理者画面に相談は要らない」でメニューから外した。同日ユーザー指示「管理者は全てのチャット一覧が見れる」
+  // 「相談の未対応の欄に一覧を表示を追加。サイドに入らない」で、全案件の相談（/chat。見るだけ）はホームの「相談の未対応」から開く（メニューには出さない。開いている間はホームを選択中にする）
 ];
 
 const PORTAL_ITEMS: NavItem[] = [
@@ -76,6 +81,8 @@ const PORTAL_ITEMS: NavItem[] = [
   // ヒアリング（/portal/requirements）は 0.18.0 で廃止（受託開発ではアフロが入力する）。URL は確認・承認へ転送する
   // 品質確認（/portal/quality）はメニューから外した（2026-11-16 ユーザー指示）。画面は残し、確認・承認の「品質チェック」から開く。開いている間は確認・承認を選択中にする
   { to: '/portal/approvals', label: '確認・承認', icon: ClipboardCheck, match: ['/portal/approvals', '/portal/quality'], hint: '要件・サイトマップ・デザイン' },
+  // スケジュール（2026-11-17 ユーザー指示「お客さんもスケジュールが見れるように」）。見るだけ
+  { to: '/portal/schedule', label: 'スケジュール', icon: CalendarDays, match: ['/portal/schedule'], hint: '制作〜公開の予定' },
   // 公開承認・レポート・サイネージはトップデザインの承認後に出す（requires。2026-11-16 ユーザー指示）
   // ページ・お知らせ（/portal/pages）はメニューから外した（2026-11-16 ユーザー指示）。画面は残し、ホームの「サイトの更新」から開く
   { to: '/portal/publish', label: '公開承認', icon: Stamp, match: ['/portal/publish'], hint: '更新の承認ワークフロー', requires: 'designApproved' },
@@ -100,13 +107,13 @@ const DEV_ITEMS: NavItem[] = [
   // ヒアリング（/dev/hearing・/dev/requirements）はメニューから外した（2026-11-12 ユーザー指示）。プロジェクト詳細・担当案件から開き、「プロジェクト」を選択中にする
   { to: '/dev/tasks', label: '構築タスク', icon: ListTodo, match: ['/dev/tasks'], hint: 'ページごとの実装状況' },
   // 自動チェック（/dev/checks）は 0.19.0 でメニューから外した（11/10 レビュー）。URL はダッシュボードへ転送する
-  // 下部タブは添字 [0,1,2,3]（ホーム・プロジェクト・構築タスク・環境・デプロイ）
-  { to: '/dev/deploys', label: '環境・デプロイ', icon: Rocket, match: ['/dev/deploys'], hint: '開発・検証・本番' },
+  // 環境・デプロイ（/dev/deploys）はメニューから外した（2026-11-17 ユーザー指示「リリース公開があるから、サイドの環境・デプロイがいらない」）。
+  // 画面（URL）はダッシュボードの「最近のデプロイ」から開けるので残す。下部タブは添字 [0,1,2,3]（ホーム・プロジェクト・構築タスク・相談）
   // デザイン（/dev/design）は 2026-11-17 会議でメニューから外した（デザインはプロジェクトの中で開く: プロジェクト詳細の段階ボタン・ダッシュボード）。
   // 画面（URL）は残す。下部タブは添字 [0..3] なので、外しても変わらない
   // 相談チャット（0.38.1。2026-11-16 ユーザー指示「開発者画面からも開く」）。下部タブの添字が変わらないよう末尾に足す。
   // 未対応（最後がお客様のメッセージ）の担当案件の数を赤いバッジで出す（2026-11-17 会議）
-  { to: '/dev/chat', label: '相談', icon: MessageSquare, match: ['/dev/chat'], hint: 'お客様からの相談に返信', badge: (state, scope) => unansweredCount(state, scope.devProjectIds) },
+  { to: '/dev/chat', label: '相談', icon: MessageSquare, match: ['/dev/chat'], hint: 'お客様からの相談に返信', badge: (state, scope) => unansweredCount(state, scope.directorProjectIds) },
 ];
 
 export const SETTINGS_ITEM: NavItem = { to: '/settings', label: '設定', icon: Settings, match: ['/settings'], hint: 'デモの設定' };
@@ -122,7 +129,7 @@ export const AREAS: Record<AreaId, AreaDef> = {
     id: 'portal', label: 'お客様ポータル', short: 'ポータル', audience: 'お客様',
     description: '進み具合の確認・承認・ページ更新・レポート・サイネージ', home: '/portal', icon: UserRound,
     color: tokens.color.success, soft: tokens.color.successSoft,
-    items: PORTAL_ITEMS, bottom: [PORTAL_ITEMS[0], PORTAL_ITEMS[1], PORTAL_ITEMS[3], PORTAL_ITEMS[5]],
+    items: PORTAL_ITEMS, bottom: [PORTAL_ITEMS[0], PORTAL_ITEMS[1], PORTAL_ITEMS[4], PORTAL_ITEMS[6]],
   },
   dev: {
     id: 'dev', label: '開発者画面', short: '開発者', audience: '制作エンジニア',

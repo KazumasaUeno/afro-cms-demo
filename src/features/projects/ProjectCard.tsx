@@ -9,12 +9,15 @@ import { relativeTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
 import { FollowUpBadge } from '@/features/projects/FollowUpBadge';
 import { stageLabel } from './projectHelpers';
+import { useProjectRoutes } from './projectRoutes';
 
 /**
  * プロジェクトのカード。onOpen があればクリックで開けるカード、無ければ見るだけ（新規作成画面のプレビュー）
  */
 export function ProjectCard({ p, onOpen }: { p: Project; onOpen?: () => void }) {
   const owner = memberById(p.ownerId);
+  // 「次に必要な作業」は開発者画面だけ（管理者画面は見るだけ。2026-11-17 ユーザー指示）
+  const { dev } = useProjectRoutes();
   const open = onOpen
     ? {
         interactive: true,
@@ -74,14 +77,17 @@ export function ProjectCard({ p, onOpen }: { p: Project; onOpen?: () => void }) 
           <StageTrack stage={p.stage} compact />
         </Box>
 
-        <Box sx={{ p: 1.25, borderRadius: 2.5, bgcolor: tokens.color.surfaceMuted, border: `1px solid ${tokens.color.border}` }}>
-          <Typography variant="overline" sx={{ display: 'block', lineHeight: 1.4 }}>次に必要な作業</Typography>
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>{p.nextAction}</Typography>
-        </Box>
+        {dev && (
+          <Box sx={{ p: 1.25, borderRadius: 2.5, bgcolor: tokens.color.surfaceMuted, border: `1px solid ${tokens.color.border}` }}>
+            <Typography variant="overline" sx={{ display: 'block', lineHeight: 1.4 }}>次に必要な作業</Typography>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>{p.nextAction}</Typography>
+          </Box>
+        )}
 
         <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 'auto' }}>
           <MemberAvatar id={p.ownerId} size={26} />
-          <Typography variant="caption" noWrap sx={{ flex: 1, minWidth: 0 }}>{owner.name}</Typography>
+          {/* 担当ディレクター（相談の窓口）。開発担当とは別（2026-11-17 ユーザー指示「担当ディレクターがチャット対応できる、担当開発者は複数選択可」） */}
+          <Typography variant="caption" noWrap sx={{ flex: 1, minWidth: 0 }}>ディレクター {owner.name}</Typography>
           <Stack direction="row" spacing={0.5} alignItems="center" sx={{ color: tokens.color.muted, flexShrink: 0 }}>
             <Clock size={13} />
             <Typography variant="caption">{relativeTime(p.updatedAt)}</Typography>

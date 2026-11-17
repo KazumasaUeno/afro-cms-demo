@@ -29,3 +29,18 @@ export function useDevProjects(): Project[] {
   const { state } = useDemo();
   return devProjectsOf(state, me.id);
 }
+
+/**
+ * メンバーが担当ディレクター（Project.ownerId）のプロジェクト（2026-11-17 ユーザー指示「担当ディレクターがチャット対応できる、担当開発者は複数選択可」）。
+ * 相談チャットの返信・未対応の数はこの案件だけ。開発担当（devProjects）でなくても、開発者画面の相談（/dev/chat）だけは開ける
+ */
+export function directorProjectsOf(state: DemoState, memberId: string): Project[] {
+  return state.projects.filter((p) => p.ownerId === memberId);
+}
+
+/** 開発者画面にログインしているメンバーが担当ディレクターのプロジェクト */
+export function useDirectorProjects(): Project[] {
+  const me = useDevUser();
+  const { state } = useDemo();
+  return directorProjectsOf(state, me.id);
+}

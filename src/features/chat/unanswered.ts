@@ -14,7 +14,9 @@ export function unansweredOf(state: Pick<DemoState, 'chats' | 'projects'>, proje
 
 /**
  * 未対応の案件の数（メッセージの数ではない）。
- * projectIds を渡すとその案件だけ（開発者画面は担当の案件 = useDevProjects() の id を渡す）。省略時は全案件
+ * projectIds を渡すとその案件だけ。省略時は全案件。
+ * 開発者画面は、ログイン中の人が担当ディレクターの案件（useDirectorProjects() の id）を渡す
+ * （2026-11-17 ユーザー指示「担当ディレクターがチャット対応できる」。開発担当だけの案件は閲覧のみなので数えない）
  */
 export function unansweredCount(state: Pick<DemoState, 'chats' | 'projects'>, projectIds?: string[]): number {
   const ids = projectIds ?? state.projects.map((p) => p.id);

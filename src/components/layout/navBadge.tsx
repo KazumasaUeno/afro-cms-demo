@@ -1,19 +1,20 @@
 import { Box } from '@mui/material';
 import { useMemo } from 'react';
 import { useDemo } from '@/store/DemoStore';
-import { useDevProjects } from '@/features/dev/useDevUser';
+import { useDirectorProjects } from '@/features/dev/useDevUser';
 import { tokens } from '@/theme/tokens';
 import type { NavItem } from './nav';
 
 /**
  * メニューの件数バッジ（2026-11-17 会議: 開発者が複数の案件を持つと、どこに相談が来たか分からないため）。
- * サイドバー（ドロワー・レール）と下部タブで同じ数を出す。範囲は開発者画面にログインしている人の担当案件
+ * サイドバー（ドロワー・レール）と下部タブで同じ数を出す。範囲は開発者画面にログインしている人が担当ディレクターの案件
+ * （2026-11-17 ユーザー指示「担当ディレクターがチャット対応できる」。開発担当だけの案件は見られるが返信しないので数えない）
  */
 export function useNavBadge(): (item: NavItem) => number {
   const { state } = useDemo();
-  const mine = useDevProjects();
-  const devProjectIds = useMemo(() => mine.map((p) => p.id), [mine]);
-  return (item) => (item.badge ? item.badge(state, { devProjectIds }) : 0);
+  const directed = useDirectorProjects();
+  const directorProjectIds = useMemo(() => directed.map((p) => p.id), [directed]);
+  return (item) => (item.badge ? item.badge(state, { directorProjectIds }) : 0);
 }
 
 /** 読み上げ用の補足（ラベルの後ろに付ける。見た目は数字だけ） */

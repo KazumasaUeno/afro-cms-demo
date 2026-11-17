@@ -7,7 +7,8 @@ import { currentProject, useDemo } from '@/store/DemoStore';
 import { useCurrentRequirements, useRepositories } from '@/repositories';
 import { useWrite } from '@/hooks/useWrite';
 import { useToast } from '@/hooks/useToast';
-import { formatDateTime } from '@/services/time';
+import { formatDate, formatDateTime } from '@/services/time';
+import { ymdToIso } from '@/features/projects/projectForm';
 import { offeredVariants } from '@/data/designs';
 import { tokens } from '@/theme/tokens';
 import type { DesignId } from '@/types';
@@ -78,6 +79,9 @@ const CONFIRM: Record<Exclude<ApprovalKey, 'quality'>, { title: string; body: st
   requirements: { title: '要件定義書を承認しますか？', body: '承認すると、この内容をもとにサイトマップとデザインの制作に進みます。承認した日時が記録されます。', done: '要件定義書を承認しました' },
   sitemap: { title: 'サイトマップを承認しますか？', body: '承認すると、このページ構成でデザインを進めます。承認した日時が記録されます。', done: 'サイトマップを承認しました' },
   design: { title: 'このデザインで承認しますか？', body: '承認すると、採用したデザインで全ページの制作に進みます。承認後は案を変更できません。', done: 'トップデザインを承認しました' },
+  schedule: { title: 'このスケジュールで承認しますか？', body: '承認すると、この日程でサイトマップ・デザインの制作に進みます。承認した日時が記録されます。', done: 'スケジュールを承認しました' },
+  build: { title: '制作の完了を承認しますか？', body: '承認すると、公開前の品質チェック（納品検収）に進みます。承認した日時が記録されます。', done: '制作の完了を承認しました' },
+  release: { title: 'サイトの公開を承認しますか？', body: '承認すると、アフロが公開予定日にサイトを公開します。承認した日時が記録されます。', done: 'サイトの公開を承認しました' },
 };
 
 /**
@@ -149,6 +153,9 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
     else {
       if (confirm === 'sitemap') dispatch({ type: 'approveSitemap', by: 'client' });
       if (confirm === 'design') dispatch({ type: 'approveDesign', by: 'client' });
+      if (confirm === 'schedule') dispatch({ type: 'approveSchedule', by: 'client' });
+      if (confirm === 'build') dispatch({ type: 'approveBuild', by: 'client' });
+      if (confirm === 'release') dispatch({ type: 'approveRelease', by: 'client' });
       toast(CONFIRM[confirm].done);
     }
     setConfirm(null);
@@ -234,7 +241,23 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
           </StepCard>
         </Reveal>
 
-        {/* 2. サイトマップ */}
+        {/* 2. スケジュール（2026-11-17 ユーザー指示「各段階で最後に承認」） */}
+        <Reveal delay={0.02}>
+          <StepCard step={byKey.schedule} action={approveBtn('schedule')}>
+            {state.schedule && (
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0,1fr)', sm: 'repeat(3, minmax(0,1fr))' }, gap: 1.25 }}>
+                {([['制作の完了予定', state.schedule.buildDue], ['納品予定日', state.schedule.deliveryDate], ['公開予定日', state.schedule.releaseDate]] as const).map(([label, ymd]) => (
+                  <Box key={label} sx={{ px: 1.75, py: 1.25, borderRadius: 2.5, bgcolor: tokens.color.surfaceMuted }}>
+                    <Typography variant="caption" component="p">{label}</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 700 }}>{ymd ? formatDate(ymdToIso(ymd) ?? undefined) : '—'}</Typography>
+                  </Box>
+                ))}
+              </Box>
+            )}
+          </StepCard>
+        </Reveal>
+
+        {/* 3. サイトマップ */}
         <Reveal delay={0.04}>
           <StepCard step={byKey.sitemap} action={approveBtn('sitemap', !sitemapCreated(state.sitemap))}>
             {/* サイトマップは要件定義書の承認のときに作る（0.29.4）。承認前はこの欄ごと隠れるが、念のため未作成でも空の一覧を出さない */}
@@ -281,7 +304,7 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
           </StepCard>
         </Reveal>
 
-        {/* 3. トップデザイン */}
+        {/* 4. トップデザイン */}
         <Reveal delay={0.08}>
           <StepCard step={byKey.design} action={approveBtn('design', !selectedDesign)}>
             {/* 1. 先にページを選ぶ（2026-11-17 会議: 左上から見るので最初に置く）→ 2. そのページで案を比べる */}
@@ -346,7 +369,16 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
           </StepCard>
         </Reveal>
 
-        {/* 4. 品質チェック */}
+        {/* 5. 制作の完了（2026-11-17） */}
+        <Reveal delay={0.11}>
+          <StepCard step={byKey.build} action={approveBtn('build')}>
+            <Typography variant="body2" color="text.secondary">
+              全ページの制作が{state.design.buildCompletedAt ? `${formatDate(state.design.buildCompletedAt)}に` : ''}完了しました。採用したデザインで仕上げたページをご確認ください。承認すると、公開前の品質チェック（納品検収）に進みます。
+            </Typography>
+          </StepCard>
+        </Reveal>
+
+        {/* 6. 品質チェック */}
         <Reveal delay={0.12}>
           <StepCard
             step={byKey.quality}
@@ -363,6 +395,15 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
                 </Box>
               </Box>
             )}
+          </StepCard>
+        </Reveal>
+
+        {/* 7. 公開（リリース。2026-11-17） */}
+        <Reveal delay={0.14}>
+          <StepCard step={byKey.release} action={approveBtn('release')}>
+            <Typography variant="body2" color="text.secondary">
+              公開予定日: {state.schedule ? formatDate(ymdToIso(state.schedule.releaseDate) ?? undefined) : '未定'}。承認すると、アフロがサイトを公開します。
+            </Typography>
           </StepCard>
         </Reveal>
       </Stack>

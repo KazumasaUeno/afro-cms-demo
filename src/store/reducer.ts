@@ -1,6 +1,6 @@
 import type {
   Activity, AnswerValue, ApprovalLog, ClientAccount, CmsPage, DevUser, DemoState, DeployEnv, DesignId, DevState, DevTaskStatus, DiagnosisReport,
-  AnswerSide, PageStatus, Project, QuestionPriority, RequirementMode, SignageState, SitemapEdge, SitemapNode, SitemapVariant, Slide,
+  AnswerSide, PageStatus, Project, QuestionPriority, RequirementMode, SignageState, SitemapEdge, SitemapNode, SitemapVariant, Slide, WbsItem,
 } from '@/types';
 import { QUALITY_CATEGORIES, QUALITY_ITEMS } from '@/data/quality';
 import { nowIso } from '@/services/time';
@@ -11,7 +11,7 @@ import { syncDemoProject } from './demoProject';
 import { DEV_ENVS, DEV_TASK_STATUSES, DEV_USER_ID, deployGate } from '@/data/dev';
 import { memberById } from '@/data/members';
 import { clientActorName } from '@/data/projects';
-import { devUsersState, personById } from '@/data/people';
+import { allDevPeople, devUsersState, personById } from '@/data/people';
 import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
 import { DESIGN_QUESTIONS } from '@/data/designRequirements';
 import { MODE_LABEL, pendingConfirmations, questionStatus } from '@/features/requirements/assignment';
@@ -21,7 +21,7 @@ import {
   DEV_AFFILIATION, normalizeEmail, seedClientAccounts, seedDevAccess, seedDevProjects, validateClientAccount, validateDevUser,
   type ClientAccountDraft, type DevUserDraft,
 } from '@/data/users';
-import { applyProjectPatch, DEFAULT_NEXT_ACTION, projectFromDraft, projectPatchFromDraft, validateClientInfo, validateProject, type ProjectDraft } from '@/features/projects/projectForm';
+import { applyProjectPatch, DEFAULT_NEXT_ACTION, projectFromDraft, projectPatchFromDraft, validateClientInfo, validateProject, withProjectDevs, type ProjectDraft } from '@/features/projects/projectForm';
 import { followUpName } from '@/features/projects/followUp';
 import { hasLiveVersion, pageDeleteBlock } from '@/features/cms/cmsUtils';
 import { REPORT_SEND_HISTORY_MAX, reportRecipients, reportSendOf } from '@/data/reportSend';
@@ -31,8 +31,8 @@ import { folderDeleteBlock, validateNewFolder, withFolderList } from '@/data/ass
 import { formsOf, validateForm, type FormDraft } from '@/data/forms';
 import { CHAT_LIMITS, chatOf, validateChat } from '@/data/chat';
 import type { ApprovalKey, Asset, PageVersionKind } from '@/types';
-import { validateSchedule, type ScheduleDraft } from '@/data/schedule';
-import { canRequestApproval } from '@/features/portal/portalSteps';
+import { validateSchedule, validateWbs, WBS_ITEMS, type ScheduleDraft } from '@/data/schedule';
+import { canRequestApproval, stageApprovals } from '@/features/portal/portalSteps';
 import { designReady } from '@/features/design/designReq';
 import { LOG_ACTIONS } from './projectWork';
 
@@ -67,6 +67,10 @@ export type Action =
   /** 開発担当者からのコメント（2026-11-17 会議）。開発者画面だけ（devBy が無ければ何もしない）。お客様の承認後は変えない。空文字で消す */
   | { type: 'setSitemapDevComment'; text: string; devBy?: string }
   | { type: 'approveSitemap'; by?: Side }
+  /** 段階の最後の承認（2026-11-17 ユーザー指示。スケジュール・制作の完了・公開） */
+  | { type: 'approveSchedule'; by?: Side }
+  | { type: 'approveBuild'; by?: Side }
+  | { type: 'approveRelease'; by?: Side }
   | { type: 'selectDesign'; id: DesignId }
   /** デザイン要件定義の回答（0.28.0）。デザインの採用・承認の後は変えない */
   | { type: 'setDesignAnswer'; questionId: string; value: AnswerValue }
@@ -79,6 +83,8 @@ export type Action =
    * 開発者画面だけ（devBy が無ければ何もしない）。制作の完了予定 <= 納品予定日 <= 公開予定日
    */
   | { type: 'saveSchedule'; schedule: ScheduleDraft; devBy?: string }
+  /** 制作〜公開の WBS を保存する（開発者画面だけ。2026-11-17） */
+  | { type: 'saveWbs'; wbs: WbsItem[]; devBy?: string }
   /** お客様へ承認を依頼する（2026-11-17 会議。依頼するまでお客様の画面では「準備中」）。前の節目が済み、まだ依頼していないときだけ */
   | { type: 'requestApproval'; key: ApprovalKey; devBy?: string }
   /** サイトの公開（0.30.1。開発者画面だけ）。リリースの段階（お客様が品質チェックを完了＝納品検収済み）の案件を運用の段階へ進める */
@@ -174,9 +180,12 @@ const actorOf = (state: DemoState, side: Side, projectId?: string) => (side === 
 /** 承認したときにアクティビティへ残す文（管理者画面の「お客様の対応状況」が承認した人を探すのにも使う） */
 export const APPROVE_TEXT = {
   requirements: '要件定義書を承認しました', sitemap: '改善後のサイトマップを承認しました', design: 'トップデザイン案を採用・承認しました', quality: '品質チェックを完了しました',
+  schedule: 'スケジュールを承認しました', build: '制作の完了を承認しました', release: 'サイトの公開を承認しました',
 } as const;
 /** 承認を依頼した節目の名前（アクティビティの文。2026-11-17） */
-const REQUEST_TITLE: Record<ApprovalKey, string> = { requirements: '要件定義書', sitemap: 'サイトマップ', design: 'トップデザイン', quality: '品質チェック（納品検収）' };
+export const REQUEST_TITLE: Record<ApprovalKey, string> = {
+  requirements: '要件定義書', schedule: 'スケジュール', sitemap: 'サイトマップ', design: 'トップデザイン', build: '制作の完了', quality: '品質チェック（納品検収）', release: 'サイトの公開',
+};
 /** 開発者画面の操作者の名前（ログイン中の人。登録した開発者も含む。省略時・見つからないときは DEV_USER_ID） */
 const devActor = (state: DemoState, by?: string) => (personById(state, by) ?? memberById(DEV_USER_ID)).name;
 /** 品質チェックの確認者。開発者画面のアフロ側の確認はログイン中の開発者、それ以外は actorOf（顧客側は開発者画面から操作しない） */
@@ -272,19 +281,20 @@ function baseReducer(state: DemoState, action: Action): DemoState {
         if (Object.keys(validateClientAccount(draft, accounts, projects)).length > 0) return state;
         account = { id: uid('ca'), company: draft.company.trim(), name: draft.name.trim(), email: normalizeEmail(draft.email), projectId: created.id, status: 'invited', createdAt: nowIso() };
       }
-      // 担当開発者（2026-11-17 会議）: ユーザー管理の担当プロジェクト（devProjects）に足す。無効の人・いない人は受け付けない
-      const devId = action.project.devId?.trim();
-      const dev = devId ? personById(state, devId) : undefined;
-      if (devId && (!dev || dev.disabled)) return state;
-      const devAll = devProjectsState(state);
+      // 担当開発者（2026-11-17 会議。同日ユーザー指示「担当開発者は複数選択可」）: ユーザー管理の担当プロジェクト（devProjects）に足す。
+      // 無効の人・いない人は受け付けない
+      const devIds = [...new Set((action.project.devIds ?? []).map((x) => x.trim()).filter(Boolean))];
+      const devs = devIds.map((id) => personById(state, id));
+      if (devs.some((d) => !d || d.disabled)) return state;
+      const devProjects = devIds.length ? withProjectDevs(devProjectsState(state), created.id, devIds, devIds, projects.map((p) => p.id)) : null;
       let s: DemoState = {
-        ...switchWork({ ...state, projects }, created.id), currentProjectId: created.id,
+        ...switchWork({ ...state, projects, ...(devProjects ? { devProjects } : {}) }, created.id), currentProjectId: created.id,
         ...(account ? { clientAccounts: [account, ...accounts] } : {}),
-        ...(dev ? { devProjects: { ...devAll, [dev.id]: [created.id, ...(devAll[dev.id] ?? [])] } } : {}),
+        ...(devProjects ? { devProjects } : {}),
       };
       s = log(s, `プロジェクト「${created.siteName}」（${created.clientName}）を作成しました`, 'edit', ACTOR.afro, created.id);
       if (account) s = log(s, `お客様「${account.company} ${account.name}」のお客様ポータルのログインを発行しました（デモ: 実際にはメールを送信しない）`, 'edit', ACTOR.afro, created.id);
-      if (dev) s = log(s, `${dev.name}を「${created.siteName}」の開発担当にしました`, 'edit', ACTOR.afro, created.id);
+      if (devs.length) s = log(s, `${devs.map((d) => d!.name).join('・')}を「${created.siteName}」の開発担当にしました`, 'edit', ACTOR.afro, created.id);
       return s;
     }
 
@@ -325,10 +335,24 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       const prev = state.projects.find((p) => p.id === action.id);
       if (!prev || Object.keys(validateProject(action.project, state.projects, prev)).length > 0) return state;
       const next = applyProjectPatch(prev, projectPatchFromDraft(action.project));
-      if (!next) return state;
-      const updated: Project = { ...next, updatedAt: nowIso() };
-      const s = { ...state, projects: state.projects.map((p) => (p.id === prev.id ? updated : p)) };
-      return log(s, `プロジェクト「${updated.siteName}」（${updated.clientName}）の情報を更新しました`, 'edit', ACTOR.afro, prev.id);
+      // 担当開発者（2026-11-17 ユーザー指示「担当開発者は複数選択可」）: devIds があれば devProjects をそろえる。
+      // 変えるのは有効な人だけ（無効にした人の担当はそのまま）。無効の人・いない人を選んだ編集は受け付けない
+      let devProjects: Record<string, string[]> | null = null;
+      let devNames: string[] = [];
+      if (action.project.devIds) {
+        const devIds = [...new Set(action.project.devIds)];
+        const devs = devIds.map((id) => personById(state, id));
+        if (devs.some((d) => !d || d.disabled)) return state;
+        const editable = allDevPeople(state).filter((m) => !m.disabled).map((m) => m.id);
+        devProjects = withProjectDevs(devProjectsState(state), prev.id, devIds, editable, state.projects.map((p) => p.id));
+        devNames = devs.map((d) => d!.name);
+      }
+      if (!next && !devProjects) return state;
+      const updated: Project = { ...(next ?? prev), updatedAt: nowIso() };
+      let s: DemoState = { ...state, projects: state.projects.map((p) => (p.id === prev.id ? updated : p)), ...(devProjects ? { devProjects } : {}) };
+      if (next) s = log(s, `プロジェクト「${updated.siteName}」（${updated.clientName}）の情報を更新しました`, 'edit', ACTOR.afro, prev.id);
+      if (devProjects) s = log(s, devNames.length ? `「${updated.siteName}」の開発担当を${devNames.join('・')}にしました` : `「${updated.siteName}」の開発担当をすべて外しました`, 'edit', ACTOR.afro, prev.id);
+      return s;
     }
 
     case 'setAnswer': {
@@ -417,9 +441,31 @@ function baseReducer(state: DemoState, action: Action): DemoState {
 
     case 'approveSitemap': {
       // ウォーターフォール: 要件定義書の承認の後だけ（画面でも止めている）。日程を入れるまでは承認できない（2026-11-17 会議）
-      if (state.requirements.status !== 'approved' || state.sitemap.approvedAt || !sitemapCreated(state.sitemap) || !state.schedule || !state.approvalRequests?.sitemap) return state;
+      // スケジュールの承認の後（2026-11-17。以前はスケジュールを入れた後）
+      if (state.requirements.status !== 'approved' || state.sitemap.approvedAt || !sitemapCreated(state.sitemap) || !stageApprovals(state).schedule || !state.approvalRequests?.sitemap) return state;
       const s = patchOwner({ ...state, sitemap: { ...state.sitemap, approvedAt: nowIso() } }, {});
       return log(approval(s, 'client', 'サイトマップを承認', '制作 / サイトマップ', actorOf(state, action.by ?? 'afro')), APPROVE_TEXT.sitemap, 'approve', actorOf(state, action.by ?? 'afro'), state.requirements.projectId);
+    }
+
+    case 'approveSchedule': {
+      if (state.requirements.status !== 'approved' || !state.schedule || stageApprovals(state).schedule || !state.approvalRequests?.schedule) return state;
+      const actor = actorOf(state, action.by ?? 'afro');
+      const s = patchOwner({ ...state, schedule: { ...state.schedule, approvedAt: nowIso() } }, {});
+      return log(approval(s, 'client', 'スケジュールを承認', 'スケジュール', actor), APPROVE_TEXT.schedule, 'approve', actor, state.requirements.projectId);
+    }
+
+    case 'approveBuild': {
+      if (!state.design.buildCompletedAt || stageApprovals(state).build || !state.approvalRequests?.build) return state;
+      const actor = actorOf(state, action.by ?? 'afro');
+      const s = patchOwner({ ...state, design: { ...state.design, buildApprovedAt: nowIso() } }, {});
+      return log(approval(s, 'client', '制作の完了を承認', '制作 / 全ページ', actor), APPROVE_TEXT.build, 'approve', actor, state.requirements.projectId);
+    }
+
+    case 'approveRelease': {
+      if (!state.design.qualityApprovedAt || stageApprovals(state).release || !state.approvalRequests?.release) return state;
+      const actor = actorOf(state, action.by ?? 'afro');
+      const s = patchOwner({ ...state, design: { ...state.design, releaseApprovedAt: nowIso() } }, {});
+      return log(approval(s, 'client', 'サイトの公開を承認', 'リリース（公開）', actor), APPROVE_TEXT.release, 'approve', actor, state.requirements.projectId);
     }
 
     case 'selectDesign':
@@ -461,10 +507,29 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       const schedule = {
         ...(d.buildDue.trim() ? { buildDue: d.buildDue.trim() } : {}),
         deliveryDate: d.deliveryDate.trim(), releaseDate: d.releaseDate.trim(), ...(note ? { note } : {}), savedAt: nowIso(), savedBy: actor,
+        // 予定日を変えても入れた WBS は残す（2026-11-17）
+        ...(state.schedule?.wbs ? { wbs: state.schedule.wbs } : {}),
       };
       const prev = state.schedule;
       if (prev && prev.buildDue === schedule.buildDue && prev.deliveryDate === schedule.deliveryDate && prev.releaseDate === schedule.releaseDate && prev.note === schedule.note) return state;
       return log(patchOwner({ ...state, schedule }, {}), `スケジュールを${prev ? '変更' : '入力'}しました（納品予定 ${schedule.deliveryDate}・公開予定 ${schedule.releaseDate}）`, 'edit', actor, state.requirements.projectId);
+    }
+
+    case 'saveWbs': {
+      // 制作〜公開の WBS（2026-11-17 ユーザー指示「作ってみて」）。開発者画面だけ・要件定義書の承認の後・日程を入れた後だけ。
+      // 6 つの作業を決まった順でそろえ、日付の形式と開始 ≦ 終了をここでも確かめる。WBS を変えても承認はやり直しにしない
+      if (!action.devBy || state.requirements.status !== 'approved' || !state.schedule) return state;
+      const byId = new Map(action.wbs.map((w) => [w.id, w]));
+      if (!WBS_ITEMS.every((i) => byId.has(i.id))) return state;
+      const wbs = WBS_ITEMS.map((i) => {
+        const w = byId.get(i.id)!;
+        const assignee = (w.assignee ?? '').trim();
+        return { id: i.id, start: w.start.trim(), end: w.end.trim(), ...(assignee ? { assignee } : {}) };
+      });
+      if (Object.keys(validateWbs(wbs)).length > 0) return state;
+      if (JSON.stringify(state.schedule.wbs ?? null) === JSON.stringify(wbs)) return state;
+      const actor = devActor(state, action.devBy);
+      return log(patchOwner({ ...state, schedule: { ...state.schedule, wbs } }, {}), `制作〜公開の WBS を${state.schedule.wbs ? '変更' : '入力'}しました`, 'edit', actor, state.requirements.projectId);
     }
 
     case 'requestApproval': {
@@ -473,7 +538,9 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       if (!action.devBy || !canRequestApproval(state, action.key) || (action.key === 'sitemap' && !state.schedule) || (action.key === 'design' && !designReady(state))) return state;
       const actor = devActor(state, action.devBy);
       const s = { ...state, approvalRequests: { ...(state.approvalRequests ?? {}), [action.key]: nowIso() } };
-      return log(s, `${REQUEST_TITLE[action.key]}の承認をお客様へ依頼しました`, 'edit', actor, state.requirements.projectId);
+      // 承認の履歴にも依頼を残す（2026-11-17 ユーザー指示「承認の履歴に承認を依頼した履歴も追加」）
+      const withLog = approval(s, 'afro', `${REQUEST_TITLE[action.key]}の承認を依頼`, 'お客様への承認依頼', actor);
+      return log(withLog, `${REQUEST_TITLE[action.key]}の承認をお客様へ依頼しました`, 'edit', actor, state.requirements.projectId);
     }
 
     case 'launchSite': {
@@ -486,6 +553,8 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       if (!QUALITY_ITEMS.every((i) => state.qualityChecks[i.id]?.afroAt && state.qualityChecks[i.id]?.clientAt)) return state;
       // お客様が品質チェックの「完了」を押してから公開する（0.39.7）
       if (!state.design.qualityApprovedAt) return state;
+      // お客様が公開を承認してから（2026-11-17 ユーザー指示「各段階で最後に承認」）
+      if (!stageApprovals(state).release) return state;
       const s = patchOwner(state, { stage: 'operation', progress: 88, nextAction: 'ページ・お知らせを更新する' });
       return log(s, 'サイトを公開しました（運用の段階へ）', 'publish', action.devBy ? devActor(state, action.devBy) : ACTOR.afro, id);
     }
@@ -701,11 +770,11 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       if (validateChat(action.text)) return state;
       // 画面の表示（currentProject）と同じ案件に保存する（currentProjectId が無効なときの補いも同じ）。
       // projectId があればその案件（2026-11-17 会議: 開発者画面の案件一覧から選んだ会話）。無い案件・担当外は保存しない（デモの見た目の制御）
-      if (action.projectId !== undefined) {
-        if (!state.projects.some((p) => p.id === action.projectId)) return state;
-        if (action.devBy && !(devProjectsState(state)[action.devBy] ?? []).includes(action.projectId)) return state;
-      }
+      if (action.projectId !== undefined && !state.projects.some((p) => p.id === action.projectId)) return state;
       const projectId = action.projectId ?? currentProject(state).id;
+      // 開発者画面から返信できるのは、その案件の担当ディレクター（ownerId）だけ。開発担当は閲覧のみ
+      // （2026-11-17 ユーザー指示「担当ディレクターがチャット対応できる」「回答はできないが、閲覧はできるように」）
+      if (action.devBy && state.projects.find((p) => p.id === projectId)?.ownerId !== action.devBy) return state;
       const side: 'client' | 'afro' = action.devBy ? 'afro' : action.by;
       const author = side === 'client' ? clientActorOf(state, projectId) : action.devBy ? devActor(state, action.devBy) : ACTOR.afro;
       const msg = { id: uid('chat'), at: nowIso(), side, author, text: action.text.trim() };

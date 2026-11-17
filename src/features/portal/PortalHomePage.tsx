@@ -73,6 +73,8 @@ export default function PortalHomePage() {
                   <Stack direction="row" spacing={0.75} alignItems="center">
                     <CalendarDays size={16} color={tokens.color.muted} />
                     <Typography variant="body2">公開予定 <b>{launchDate ? formatDate(launchDate) : '調整中'}</b></Typography>
+                    {/* スケジュール（2026-11-17 ユーザー指示「お客さんもスケジュールが見れるように」） */}
+                    <Button size="small" endIcon={<ArrowRight size={14} />} onClick={() => navigate('/portal/schedule')} sx={{ ml: 0.5, minHeight: 32 }}>スケジュール</Button>
                   </Stack>
                   {daysLeft !== null && (
                     <Stack direction="row" spacing={0.75} alignItems="center">
@@ -164,14 +166,14 @@ export default function PortalHomePage() {
               </Stack>
             </Surface>}
 
-            {/* 担当者 */}
+            {/* 担当ディレクター（相談の窓口。2026-11-17 ユーザー指示「担当ディレクターがチャット対応できる、担当開発者は複数選択可」） */}
             <Surface>
-              <SectionTitle title="担当" />
+              <SectionTitle title="担当ディレクター（相談の窓口）" />
               <Stack direction="row" spacing={1.5} alignItems="center">
                 <MemberAvatar id={owner.id} size={44} />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography variant="body1" sx={{ fontWeight: 650 }}>{owner.name}</Typography>
-                  <Typography variant="caption">アフロ株式会社・{owner.role}</Typography>
+                  <Typography variant="caption">アフロ株式会社・担当ディレクター</Typography>
                 </Box>
               </Stack>
               <Button fullWidth variant="outlined" startIcon={<MessageSquare size={16} />} sx={{ mt: 2 }} onClick={() => navigate('/portal/chat')}>

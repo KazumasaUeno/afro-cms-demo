@@ -1,7 +1,7 @@
 import type { ApprovalKey, DemoState, Project, Stage } from '@/types';
 import { QUALITY_ITEMS } from '@/data/quality';
 import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
-import { approvalSteps } from '@/features/portal/portalSteps';
+import { approvalSteps, stageApprovals } from '@/features/portal/portalSteps';
 import { isAnswered } from '@/features/requirements/validation';
 import { designReady } from '@/features/design/designReq';
 import { workView } from './projectWork';
@@ -25,12 +25,16 @@ export function derivedDemoProject(state: DemoState): Pick<Project, 'stage' | 'p
   if (req.status === 'analyzed') return { ...base, stage: 'requirements', progress: 18, nextAction: asked('requirements', 'お客様の要件定義書の承認を待つ', '要件定義書の承認を依頼する') };
   // 日程を入れるまで制作へ進めない（2026-11-17 会議）。ただし後の工程が済んでいれば（サイトマップの承認など。日程の機能より前の保存データ）制作以降として扱う
   if (!state.schedule && !state.sitemap.approvedAt) return { ...base, stage: 'schedule', progress: 21, nextAction: 'スケジュールを入力する' };
+  // 段階の最後のお客様の承認（2026-11-17 ユーザー指示「各段階で最後に承認。ヒアリングは要らない、リリースまで」）
+  const appr = stageApprovals(state);
+  if (!appr.schedule) return { ...base, stage: 'schedule', progress: 23, nextAction: asked('schedule', 'お客様のスケジュール承認を待つ', 'スケジュールの承認を依頼する') };
   if (!state.sitemap.approvedAt) return { ...base, stage: 'build', progress: 25, nextAction: asked('sitemap', 'お客様のサイトマップ承認を待つ', 'サイトマップの承認を依頼する') };
   if (!state.design.approvedAt && !designReady(state)) return { ...base, stage: 'build', progress: 38, nextAction: 'デザイン要件定義を入力する' };
   if (!state.design.approvedAt) return { ...base, stage: 'build', progress: 38, nextAction: asked('design', 'お客様のデザイン案の採用を待つ', 'デザイン案の承認を依頼する') };
   if (!state.design.buildCompletedAt) return { ...base, stage: 'build', progress: 52, nextAction: '全ページを構築する' };
+  if (!appr.build) return { ...base, stage: 'build', progress: 60, nextAction: asked('build', 'お客様の制作完了の承認を待つ', '制作の完了の承認を依頼する') };
   // お客様が品質チェックを完了（納品検収）したらリリースの段階（2026-11-17 会議）。開発者画面の品質チェックから公開して運用へ進める（0.30.1）
-  if (state.design.qualityApprovedAt) return { ...base, stage: 'release', progress: 95, nextAction: 'サイトを公開する' };
+  if (state.design.qualityApprovedAt) return { ...base, stage: 'release', progress: 95, nextAction: appr.release ? 'サイトを公開する' : asked('release', 'お客様の公開の承認を待つ', '公開の承認を依頼する') };
   const both = QUALITY_ITEMS.filter((i) => state.qualityChecks[i.id]?.afroAt && state.qualityChecks[i.id]?.clientAt).length;
   const stage: Stage = 'quality';
   const nextAction = !state.approvalRequests?.quality ? '品質チェックを依頼する'

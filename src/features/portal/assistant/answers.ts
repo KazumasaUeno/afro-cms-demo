@@ -151,7 +151,7 @@ export const TOPICS: Topic[] = [
     id: 'contact', label: '担当者と話したい', keywords: ['担当', '相談', '電話', '連絡', '人と'],
     answer: (state) => {
       const owner = memberById(currentProject(state).ownerId);
-      return { text: `担当は ${owner.name}（${owner.role}）です。「相談」の画面から担当者にメッセージを送れます（デモのため、このブラウザの中だけに保存されます）。`, action: { label: '相談を開く', to: '/portal/chat' } };
+      return { text: `担当ディレクター（相談の窓口）は ${owner.name}です。「相談」の画面から担当ディレクターにメッセージを送れます（デモのため、このブラウザの中だけに保存されます）。`, action: { label: '相談を開く', to: '/portal/chat' } };
     },
   },
 ];

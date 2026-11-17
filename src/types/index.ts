@@ -15,7 +15,11 @@ export type ISODate = string;
 export type Stage = 'hearing' | 'requirements' | 'schedule' | 'build' | 'quality' | 'release' | 'operation' | 'improvement';
 
 /** お客様が承認する 4 つの節目（features/portal/portalSteps.ts。承認の依頼の記録に使うので型をここに置く。2026-11-17） */
-export type ApprovalKey = 'requirements' | 'sitemap' | 'design' | 'quality';
+/**
+ * お客様の承認の節目。schedule・build・release は 2026-11-17 ユーザー指示「各段階で最後に承認（ヒアリングは要らない、リリースまで）」で追加。
+ * 段階の最後の承認: 要件定義=requirements / スケジュール=schedule / 制作=build（sitemap・design は制作の途中）/ 品質管理・納品検収=quality / リリース=release
+ */
+export type ApprovalKey = 'requirements' | 'schedule' | 'sitemap' | 'design' | 'build' | 'quality' | 'release';
 
 /**
  * 制作〜公開の日程（2026-11-17 会議。要件定義書の承認の後に開発担当者が入れる。入れるまで制作へ進めない）。
@@ -32,6 +36,26 @@ export interface ProjectSchedule {
   savedAt: ISODate;
   /** 保存した人の名前 */
   savedBy: string;
+  /** お客様がスケジュールを承認した日時（2026-11-17）。無くてもサイトマップの承認があれば承認済みとして扱う（それより前の保存データ） */
+  approvedAt?: ISODate;
+  /**
+   * 制作〜公開の WBS（作業ごとの開始・終了・担当。2026-11-17 ユーザー指示「作ってみて」）。
+   * 無ければ 3 つの予定日から導く（data/schedule.ts の wbsOf。移行はしない・版は上げない）
+   */
+  wbs?: WbsItem[];
+}
+
+/** WBS の作業（2026-11-17。順番は固定: サイトマップ → デザイン → 全ページの構築 → 制作の完了の承認 → 品質チェック・納品検収 → 公開） */
+export type WbsId = 'sitemap' | 'design' | 'build' | 'buildApproval' | 'quality' | 'release';
+
+export interface WbsItem {
+  id: WbsId;
+  /** yyyy-mm-dd */
+  start: string;
+  /** yyyy-mm-dd（start 以降） */
+  end: string;
+  /** 担当者の名前（任意） */
+  assignee?: string;
 }
 
 export interface Member {
@@ -104,8 +128,12 @@ export interface ProjectDraft {
   clientPhone?: string;
   clientContactName?: string;
   clientEmail?: string;
-  /** 担当開発者（Member.id / DevUser.id。作成のときだけ使う。空なら担当なし。以後の変更はユーザー管理） */
-  devId?: string;
+  /**
+   * 担当開発者（Member.id / DevUser.id。複数選べる。空なら担当なし。ユーザー管理の担当プロジェクト＝devProjects に入る）。
+   * 2026-11-17 ユーザー指示「担当ディレクターがチャット対応できる、担当開発者は複数選択可」: 作成と編集の両方で使う。
+   * undefined（ぷちリニューアル等の作成画面）は担当を変えない。担当ディレクター（ownerId）と同じ人を選んでもよい
+   */
+  devIds?: string[];
 }
 
 /* ---------- 要件定義（12項目81問） ---------- */
@@ -248,6 +276,10 @@ export interface DesignState {
   buildCompletedAt?: ISODate;
   /** お客様が品質チェックの「完了」を押した日時（0.39.7）。以後お客様側のチェックは変えられない。制作の進み具合と一緒に案件ごとに入れ替わるので design に置く */
   qualityApprovedAt?: ISODate;
+  /** お客様が制作（全ページの構築）の完了を承認した日時（2026-11-17）。無くても品質チェックを依頼済みなら承認済みとして扱う（それより前の保存データ） */
+  buildApprovedAt?: ISODate;
+  /** お客様が公開（リリース）を承認した日時（2026-11-17）。公開済み（運用・改善）の案件は無くても承認済みとして扱う */
+  releaseApprovedAt?: ISODate;
 }
 
 /* ---------- 品質管理（12項目110問） ---------- */

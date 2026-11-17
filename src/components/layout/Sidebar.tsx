@@ -96,7 +96,6 @@ function AdminFooter({ onNavigate, showPresent = true }: { onNavigate?: () => vo
           <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: project.accent, flexShrink: 0 }} />
           <Typography variant="h6" noWrap>{project.siteName}</Typography>
         </Stack>
-        <Typography variant="caption" noWrap sx={{ display: 'block' }}>{project.nextAction}</Typography>
       </Box>
 
       {showPresent && <Tooltip title="顧客に見せる全画面のプレゼン表示" placement="right">

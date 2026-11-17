@@ -38,8 +38,34 @@ export const ACCENT_PRESETS: { value: string; name: string }[] = [
 export const emptyProjectDraft = (ownerId: string = MEMBERS[0].id): ProjectDraft => ({
   clientName: '', siteName: '', siteUrl: '', industry: '', ownerId, accent: ACCENT_PRESETS[0].value, launchDate: '', nextAction: '',
   // お客様の連絡先・担当開発者（2026-11-17 会議。管理者画面の作成で入れる）
-  clientAddress: '', clientPhone: '', clientContactName: '', clientEmail: '', devId: '',
+  clientAddress: '', clientPhone: '', clientContactName: '', clientEmail: '', devIds: [],
 });
+
+/**
+ * 案件の担当開発者を devIds にそろえた devProjects（2026-11-17 ユーザー指示「担当開発者は複数選択可」。作成と編集で同じ形）。
+ * editable: 変えてよい人（無効にした人は含めない＝いまの担当のまま残す）。order: プロジェクト一覧の並び順（ユーザー管理の setDevProjects と同じ並びにする）。
+ * 何も変わらなければ null
+ */
+export function withProjectDevs(
+  all: Record<string, string[]>, projectId: string, devIds: string[], editable: string[], order: string[],
+): Record<string, string[]> | null {
+  let changed = false;
+  const next = { ...all };
+  for (const id of editable) {
+    const cur = all[id] ?? [];
+    const want = devIds.includes(id);
+    if (want === cur.includes(projectId)) continue;
+    changed = true;
+    const ids = want ? [...cur, projectId] : cur.filter((x) => x !== projectId);
+    next[id] = order.filter((x) => ids.includes(x));
+  }
+  return changed ? next : null;
+}
+
+/** 案件のいまの担当開発者（devProjects から。並びは people の順） */
+export function projectDevIds(all: Record<string, string[]>, projectId: string, people: { id: string }[]): string[] {
+  return people.filter((m) => all[m.id]?.includes(projectId)).map((m) => m.id);
+}
 
 /** 入力のお客様の連絡先（空の項目は持たない。メールは小文字にそろえる）。どれも空なら undefined */
 export function clientFromDraft(d: ProjectDraft): ProjectClient | undefined {
@@ -120,7 +146,7 @@ export function ymdToIso(ymd: string): string | null {
 export const PROJECT_FIELD_ORDER: ProjectField[] = [
   'clientName', 'siteName', 'siteUrl', 'industry',
   'clientContactName', 'clientEmail', 'clientPhone', 'clientAddress',
-  'ownerId', 'devId', 'launchDate', 'nextAction', 'accent',
+  'ownerId', 'devIds', 'launchDate', 'nextAction', 'accent',
 ];
 
 /**

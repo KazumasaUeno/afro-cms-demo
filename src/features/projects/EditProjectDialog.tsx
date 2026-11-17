@@ -1,6 +1,7 @@
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography, Box } from '@mui/material';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Project } from '@/types';
+import type { DevPerson } from '@/data/people';
 import { useFullScreenDialog } from '@/hooks/useMediaQueries';
 import { TOUCH } from '@/theme/media';
 import { ProjectFields } from './ProjectFields';
@@ -23,6 +24,9 @@ interface Props {
   /** 編集する案件（null で閉じる） */
   project: Project | null;
   projects: Project[];
+  /** 担当開発者の候補（有効な人）といまの担当（2026-11-17 ユーザー指示「担当開発者は複数選択可」。編集でも変えられるように） */
+  devOptions?: DevPerson[];
+  devIds?: string[];
   onClose: () => void;
   /** 変わった入力だけ渡す（何も変えていなければ呼ばずに閉じる） */
   onSave: (draft: ProjectDraft) => void;
@@ -33,7 +37,7 @@ interface Props {
  * プロジェクトの情報の編集（管理者画面・demo だけ。2026-11-12）。入力欄は新しいプロジェクトと同じ ProjectFields、
  * 入力チェックは reducer と同じ validateProject（URL の重複は自分を除く）。段階・進捗・次の作業・承認待ちの数は変えない
  */
-export function EditProjectDialog({ project, projects, onClose, onSave, saving }: Props) {
+export function EditProjectDialog({ project, projects, devOptions, devIds = [], onClose, onSave, saving }: Props) {
   const fullScreen = useFullScreenDialog();
   const [draft, setDraft] = useState<ProjectDraft | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -45,7 +49,7 @@ export function EditProjectDialog({ project, projects, onClose, onSave, saving }
     setSource(project);
     if (project && !source) {
       setBase(project);
-      setDraft(projectToDraft(project));
+      setDraft({ ...projectToDraft(project), ...(devOptions ? { devIds } : {}) });
       setSubmitted(false);
     }
   }
@@ -69,7 +73,9 @@ export function EditProjectDialog({ project, projects, onClose, onSave, saving }
       return;
     }
     if (saving) return;
-    if (!applyProjectPatch(self, projectPatchFromDraft(draft))) {
+    // 担当開発者だけを変えた編集も保存する（並びは問わない）
+    const sameDevs = !draft.devIds || (draft.devIds.length === devIds.length && draft.devIds.every((id) => devIds.includes(id)));
+    if (!applyProjectPatch(self, projectPatchFromDraft(draft)) && sameDevs) {
       onClose();
       return;
     }
@@ -87,7 +93,7 @@ export function EditProjectDialog({ project, projects, onClose, onSave, saving }
             </Typography>
             <ProjectFields
               draft={draft} set={set} show={show} refs={refs} Group={Group}
-              accents={accents}
+              accents={accents} devOptions={devOptions}
             />
           </Stack>
         </Box>

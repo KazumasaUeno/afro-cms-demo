@@ -15,6 +15,7 @@ import { CategoryDetail, PriorityChip } from './CategoryDetail';
 import { computeStats, isComplete } from './qualityStats';
 import { useQualityDevBy } from './useQualityDevBy';
 import { RequestApprovalButton } from '@/features/portal/RequestApprovalButton';
+import { stageApprovals } from '@/features/portal/portalSteps';
 
 function MiniBar({ value, color, label }: { value: number; color: string; label: string }) {
   return (
@@ -95,7 +96,9 @@ export default function QualityPage() {
   const ownerStage = state.projects.find((p) => p.id === state.requirements.projectId)?.stage;
   // お客様が品質チェックの「完了」を押してから公開できる（0.39.7）
   const clientCompleted = !!state.design.qualityApprovedAt;
-  const canLaunch = openItems.length === 0 && clientCompleted && !!state.design.buildCompletedAt && ownerStage === 'release' && state.requirements.projectId === state.currentProjectId;
+  // お客様が公開を承認してから公開する（2026-11-17 ユーザー指示「各段階で最後に承認」）
+  const releaseApproved = !!stageApprovals(state).release;
+  const canLaunch = openItems.length === 0 && clientCompleted && releaseApproved && !!state.design.buildCompletedAt && ownerStage === 'release' && state.requirements.projectId === state.currentProjectId;
   const launch = () => {
     dispatch({ type: 'launchSite', devBy });
     toast('サイトを公開しました。運用の段階へ進みます', 'success');
@@ -104,6 +107,7 @@ export default function QualityPage() {
   const doneText = ownerStage === 'operation' || ownerStage === 'improvement'
     ? 'すべての項目が完了し、サイトを公開しました（運用の段階）。'
     : !clientCompleted ? 'すべての項目にチェックが付きました。お客様がポータルで品質チェックの「完了」を押すと、サイトを公開できます。'
+    : !releaseApproved ? 'すべての項目が完了しました。お客様へ公開の承認を依頼し、承認されるとサイトを公開できます。'
     : devBy ? 'すべての項目が完了しました。サイトを公開すると運用の段階へ進みます。' : 'すべての項目が完了しました。開発者がサイトを公開すると運用の段階へ進みます。';
 
   const kpis = [
@@ -130,6 +134,8 @@ export default function QualityPage() {
             )}
             {/* 全ページの構築の後、お客様へ品質チェック（納品検収）を依頼する（2026-11-17 会議） */}
             <RequestApprovalButton approvalKey="quality" />
+            {/* 納品検収の後、お客様へ公開の承認を依頼する（2026-11-17） */}
+            {clientCompleted && <RequestApprovalButton approvalKey="release" />}
             {!clientCompleted && <BulkMenu side="afro" />}
           </>
         }

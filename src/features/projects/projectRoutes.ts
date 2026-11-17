@@ -3,7 +3,7 @@ import type { DemoState, Project, Stage } from '@/types';
 import { areaOf } from '@/components/layout/nav';
 import { designReady } from '@/features/design/designReq';
 import { workView } from '@/store/projectWork';
-import type { ApprovalKey } from '@/features/portal/portalSteps';
+import { stageApprovals, type ApprovalKey } from '@/features/portal/portalSteps';
 import { useHearingRoutes, type HearingRoutes } from '@/features/requirements/hearingRoutes';
 import { nextBestAction, qualityCompletion, STAGE_LINKS } from './projectHelpers';
 
@@ -49,7 +49,7 @@ const ADMIN: ProjectRoutes = {
   insights: '/insights',
   chat: '/chat',
   clientApprovals: '/client-view/approvals',
-  approval: { requirements: '/ai-studio/requirements', sitemap: '/site', design: '/ai-studio/design', quality: '/quality' },
+  approval: { requirements: '/ai-studio/requirements', schedule: '/schedule', sitemap: '/site', design: '/ai-studio/design', build: '/ai-studio/design', quality: '/quality', release: '/quality' },
 };
 
 function devRoutes(h: HearingRoutes): ProjectRoutes {
@@ -85,7 +85,7 @@ function devRoutes(h: HearingRoutes): ProjectRoutes {
     insights,
     chat: '/dev/chat',
     clientApprovals: '/dev/client-view/approvals',
-    approval: { requirements: h.doc, sitemap, design, quality },
+    approval: { requirements: h.doc, schedule: '/dev/schedule', sitemap, design, build: '/dev/tasks', quality, release: quality },
   };
 }
 
@@ -120,6 +120,10 @@ export function devNextWork(p: Project, state: DemoState): { next: string; to: s
   if (view.requirements.status === 'analyzed') return { next: nextBestAction(view).cta, to: '/dev/requirements' };
   // 日程を入れるまで制作へ進めない（2026-11-17 会議）
   if (!view.schedule && !view.sitemap.approvedAt) return { next: 'スケジュールを入力する', to: '/dev/schedule' };
+  // 段階の最後の承認（2026-11-17）: 依頼していなければ依頼、依頼済みならお客様を待つ
+  const ask = (key: ApprovalKey, label: string) => (view.approvalRequests?.[key] ? `お客様の${label}の承認を待つ` : `${label}の承認を依頼する`);
+  const appr = stageApprovals(view);
+  if (!appr.schedule) return { next: ask('schedule', 'スケジュール'), to: '/dev/schedule' };
   // 承認・採用はお客様の作業なので、待っている間もその画面を開く（開発者は内容を確認できる）
   if (!view.sitemap.approvedAt) return { next: 'お客様のサイトマップ承認を待つ', to: '/dev/sitemap' };
   if (!view.design.approvedAt && !designReady(view)) return { next: 'デザイン要件定義を入力する', to: '/dev/design/requirements' };
@@ -127,6 +131,8 @@ export function devNextWork(p: Project, state: DemoState): { next: string; to: s
   if (!view.design.buildCompletedAt) {
     return { next: '構築タスクを進める', to: '/dev/tasks' };
   }
+  if (!appr.build) return { next: ask('build', '制作の完了'), to: `/dev/projects/${p.id}` };
+  if (view.design.qualityApprovedAt && !appr.release) return { next: ask('release', '公開'), to: `/dev/projects/${p.id}` };
   // 公開できるのはお客様の品質チェックの完了（納品検収）の後（2026-11-17 会議。リリースの段階）
   return { next: view.design.qualityApprovedAt ? 'サイトを公開する' : qualityCompletion(view.qualityChecks).percent === 100 ? 'お客様の納品検収を待つ' : '品質チェックを進める', to: '/dev/quality' };
 }

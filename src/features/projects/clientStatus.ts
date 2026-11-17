@@ -47,7 +47,7 @@ export function clientStatus(state: DemoState, project: Project): ClientStatus {
   const req = w.requirements;
   // お願いした日 = 前の節目が終わった日（サイトマップは要件定義書の承認のときに AI が作る。0.29.4）
   const requested: Record<ApprovalKey, ISODate | undefined> = {
-    requirements: req.analyzedAt, sitemap: req.approvedAt, design: w.sitemap.approvedAt, quality: w.design.buildCompletedAt,
+    requirements: req.analyzedAt, schedule: w.schedule?.savedAt, sitemap: req.approvedAt, design: w.sitemap.approvedAt, build: w.design.buildCompletedAt, quality: w.design.buildCompletedAt, release: w.design.qualityApprovedAt,
   };
   // 古い記録（projectId なし）はデモのデータを持つ案件のもの
   const ofProject = (id: string | undefined) => (id ?? CLIENT_PROJECT_ID) === pid;
