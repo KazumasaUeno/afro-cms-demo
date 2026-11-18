@@ -27,6 +27,8 @@ export interface ProjectRoutes {
   /** 品質チェック・ページ編集（CMS）・改善（インサイト） */
   quality: string;
   cms: string;
+  /** お知らせ（2026-11-18。ページとは別の画面） */
+  news: string;
   insights: string;
   /** 相談チャット（0.38.0）と、お客様の確認・承認画面の説明用の表示（0.38.0） */
   chat: string;
@@ -46,10 +48,11 @@ const ADMIN: ProjectRoutes = {
   design: '/ai-studio/design',
   quality: '/quality',
   cms: '/portal/pages',
+  news: '/portal/news',
   insights: '/insights',
   chat: '/chat',
   clientApprovals: '/client-view/approvals',
-  approval: { requirements: '/ai-studio/requirements', schedule: '/schedule', sitemap: '/site', design: '/ai-studio/design', build: '/ai-studio/design', quality: '/quality', release: '/quality' },
+  approval: { requirements: '/ai-studio/requirements', schedule: '/schedule', sitemap: '/site', design: '/ai-studio/design', build: '/ai-studio/design', quality: '/quality', release: '/release' },
 };
 
 function devRoutes(h: HearingRoutes): ProjectRoutes {
@@ -58,6 +61,7 @@ function devRoutes(h: HearingRoutes): ProjectRoutes {
   const designRequirements = '/dev/design/requirements';
   const quality = '/dev/quality';
   const cms = '/dev/cms';
+  const news = '/dev/news';
   const insights = '/dev/insights';
   return {
     dev: true,
@@ -69,11 +73,13 @@ function devRoutes(h: HearingRoutes): ProjectRoutes {
       requirements: [{ label: 'AI要件定義を開く', to: h.doc }],
       // 日程の入力（2026-11-17 会議。開発担当者が入れる）
       schedule: [{ label: 'スケジュールを入力', to: '/dev/schedule' }],
-      build: [{ label: 'サイトマップ', to: sitemap }, { label: 'デザイン要件定義', to: designRequirements }, { label: 'デザインスタジオ', to: design }],
+      // 素材ドライブは制作の段階（2026-11-18 ユーザー指示「素材ドライブは制作に移動」）
+      build: [{ label: 'サイトマップ', to: sitemap }, { label: 'デザイン要件定義', to: designRequirements }, { label: 'デザインスタジオ', to: design }, { label: '素材ドライブ', to: '/dev/assets' }],
       quality: [{ label: '品質チェック', to: quality }],
-      release: [{ label: '品質チェック・公開', to: quality }],
-      operation: [{ label: 'ページ・お知らせを編集', to: cms }, { label: '素材ドライブ', to: '/dev/assets' }, { label: 'フォーム', to: '/dev/forms' }],
-      // 素材ドライブ・フォームは運用の段階にだけ置く（改善の段階でも運用の段階のボタンから開ける。2026-11-17 ユーザー指示「被っている」）
+      // リリースの段階はリリース画面（2026-11-18 ユーザー指示）
+      release: [{ label: 'リリース画面', to: '/dev/release' }],
+      // ページとお知らせは別の画面（2026-11-18 ユーザー指示）。フォームは外した（同日「フォームは不要」）
+      operation: [{ label: 'ページを編集', to: cms }, { label: 'お知らせを編集', to: news }],
       improvement: [{ label: 'インサイト・改善提案', to: insights }],
     },
     requirements: h.doc,
@@ -82,10 +88,11 @@ function devRoutes(h: HearingRoutes): ProjectRoutes {
     design,
     quality,
     cms,
+    news,
     insights,
     chat: '/dev/chat',
     clientApprovals: '/dev/client-view/approvals',
-    approval: { requirements: h.doc, schedule: '/dev/schedule', sitemap, design, build: '/dev/tasks', quality, release: quality },
+    approval: { requirements: h.doc, schedule: '/dev/schedule', sitemap, design, build: '/dev/tasks', quality, release: '/dev/release' },
   };
 }
 
@@ -132,7 +139,9 @@ export function devNextWork(p: Project, state: DemoState): { next: string; to: s
     return { next: '構築タスクを進める', to: '/dev/tasks' };
   }
   if (!appr.build) return { next: ask('build', '制作の完了'), to: `/dev/projects/${p.id}` };
-  if (view.design.qualityApprovedAt && !appr.release) return { next: ask('release', '公開'), to: `/dev/projects/${p.id}` };
+  if (view.design.qualityApprovedAt && !appr.release) return { next: ask('release', '公開'), to: '/dev/release' };
   // 公開できるのはお客様の品質チェックの完了（納品検収）の後（2026-11-17 会議。リリースの段階）
-  return { next: view.design.qualityApprovedAt ? 'サイトを公開する' : qualityCompletion(view.qualityChecks).percent === 100 ? 'お客様の納品検収を待つ' : '品質チェックを進める', to: '/dev/quality' };
+  return view.design.qualityApprovedAt
+    ? { next: 'サイトを公開する', to: '/dev/release' }
+    : { next: qualityCompletion(view.qualityChecks).percent === 100 ? 'お客様の納品検収を待つ' : '品質チェックを進める', to: '/dev/quality' };
 }

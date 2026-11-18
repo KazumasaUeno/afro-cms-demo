@@ -16,13 +16,15 @@ export const STAGE_LINKS: Record<Stage, { label: string; to: string }[]> = {
     // デザイン要件定義（0.28.0）: サイトマップの承認の後、デザイン案を作る前に聞く
     { label: 'デザイン要件定義', to: '/ai-studio/design/requirements' },
     { label: 'デザインスタジオ', to: '/ai-studio/design' },
+    // 素材ドライブは制作の段階へ移した（2026-11-18 ユーザー指示「素材ドライブは制作に移動」。お客様の写真・原稿は制作中に集める）。[0] は次の作業の行き先なので末尾
+    { label: '素材ドライブ', to: '/assets' },
   ],
   quality: [{ label: '品質チェック', to: '/quality' }],
   // 公開は開発者画面の品質チェックから行う（2026-11-17 会議でリリースの段階を足した）
-  release: [{ label: '品質チェック・公開', to: '/quality' }],
-  // 素材ドライブ・フォーム（0.36.0・0.37.0。管理者画面は見るだけ）。[0] は次の作業の行き先に使うので末尾に足す。
-  // 運用の段階にだけ置く（改善の段階でも、完了した運用の段階のボタンから開ける。2026-11-17 ユーザー指示「運用と改善で被っている」）
-  operation: [{ label: 'CMSで更新', to: '/portal/pages' }, { label: '素材ドライブ', to: '/assets' }, { label: 'フォーム', to: '/forms' }],
+  // リリースの段階はリリース画面（2026-11-18 ユーザー指示。以前は品質チェックの画面）
+  release: [{ label: 'リリース画面', to: '/release' }],
+  // ページとお知らせは別の画面（2026-11-18 ユーザー指示「ページとお知らせを別物に」）。フォームは外した（同日「フォームは不要」。画面のコードは残す）
+  operation: [{ label: 'ページを編集', to: '/portal/pages' }, { label: 'お知らせを編集', to: '/portal/news' }],
   improvement: [{ label: 'インサイト・改善提案', to: '/insights' }],
 };
 
@@ -96,7 +98,7 @@ export function nextBestAction(state: DemoState): { title: string; detail: strin
       title: review ? `お客様の公開承認を待っている更新が ${review} 件あります` : 'ページ・お知らせを更新しましょう',
       // 運用から改善へは最初の AIサイト診断で進む（0.30.1）。まだ診断が無ければその道筋も示す
       detail: `公開後の運用の段階です。お知らせの追加や予約公開で、サイトを新しく保ちます。${state.diagnoses.length === 0 ? '開発者が第1回 AIサイト診断を実行すると、改善の段階へ進みます。' : ''}`,
-      to: STAGE_LINKS.operation[0].to, cta: 'CMSで更新',
+      to: STAGE_LINKS.operation[0].to, cta: 'ページを編集',
     };
   }
   if (stage === 'quality' && !state.design.qualityApprovedAt) {

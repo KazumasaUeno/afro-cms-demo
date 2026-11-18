@@ -72,7 +72,10 @@ export function pageGuide(pathname: string, state: DemoState): AssistantReply {
       return { text: '公開前に、お客様の目で確認していただく項目です。実際のページを見ながらチェックしてください。カテゴリごとにまとめて確認することもできます。' };
     case '/portal/pages':
       if (!live(state)) return notYet(state, 'ページ編集');
-      return { text: 'ページやお知らせを書いて、公開や予約公開ができます。「承認依頼」にすると、社内の承認を経てから公開されます。' };
+      return { text: 'サイトのページを編集して、公開や予約公開ができます。「承認依頼」にすると、社内の承認を経てから公開されます。お知らせはホームの「お知らせを書く」から。' };
+    case '/portal/news':
+      if (!live(state)) return notYet(state, 'お知らせ');
+      return { text: 'お知らせを書いて、すぐ公開するか、日時を決めて予約公開できます。カテゴリーも選べます。' };
     case '/portal/publish': {
       if (!live(state)) return notYet(state, '公開承認');
       const review = state.pages.filter((p) => p.status === 'review').length;
@@ -101,8 +104,13 @@ interface Topic {
   label: string;
   /** 自由入力でこの話題とみなす語 */
   keywords: string[];
+  /** 候補ボタンに出さない（一旦止めている機能。自由入力には答える） */
+  hidden?: boolean;
   answer: (state: DemoState) => AssistantReply;
 }
+
+/** サイネージを一旦止めている（2026-11-18 ユーザー指示「サイネージも一旦非表示」）。戻すときは false にし、nav.ts のメニューも戻す */
+const SIGNAGE_PAUSED = true;
 
 export const TOPICS: Topic[] = [
   { id: 'next', label: 'いま何をすればいい？', keywords: ['何をすれば', 'やること', '次', 'お願い', 'todo', 'タスク'], answer: nextTodo },
@@ -117,8 +125,11 @@ export const TOPICS: Topic[] = [
   // 「サイネージを更新したい」が news の「更新」に当たらないよう、news より先に判定する（「お知らせを出したい」は下の news に当たる）
   {
     id: 'signage', label: 'サイネージを更新したい', // 「画面」は「承認の画面」などにも当たるので入れない
+    // サイネージは一旦非表示（2026-11-18 ユーザー指示）。候補に出さず、聞かれたら準備中と答える（下の元の答えは戻すときのために残す）
+    hidden: true,
     keywords: ['サイネージ', '店頭', 'モニター'],
     answer: (state) => {
+      if (SIGNAGE_PAUSED) return { text: 'サイネージ（店頭の画面）は現在準備中です。ご利用いただけるようになったらお知らせします。' };
       if (!live(state)) return notYet(state, 'サイネージ');
       const { displays, slides } = signageState(state);
       const changed = displays.filter((d) => hasUndelivered(d, slides)).length;
@@ -131,7 +142,7 @@ export const TOPICS: Topic[] = [
   // 「お知らせを公開したい」を公開日の質問と取り違えないよう、launch より先に判定する
   {
     id: 'news', label: 'お知らせを出したい', keywords: ['お知らせ', 'ニュース', '記事', '更新', 'ページ'],
-    answer: (state) => !live(state) ? notYet(state, 'お知らせの更新') : ({ text: 'ホームの「サイトの更新」の「お知らせを書く」から書けます。タイトルと本文を書いて、すぐ公開するか、日時を決めて予約公開できます。', action: { label: 'お知らせを書く', to: '/portal/pages?new=news' } }),
+    answer: (state) => !live(state) ? notYet(state, 'お知らせの更新') : ({ text: 'ホームの「サイトの更新」の「お知らせを書く」から書けます。タイトルと本文を書いて、すぐ公開するか、日時を決めて予約公開できます。', action: { label: 'お知らせを書く', to: '/portal/news?new=news' } }),
   },
   {
     id: 'launch', label: '公開はいつ？', keywords: ['公開', 'いつ', '予定', '納期', 'リリース'],

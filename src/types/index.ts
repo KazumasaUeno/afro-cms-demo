@@ -428,13 +428,19 @@ export interface PageVersion {
  * - preset: 見本の画像（data/cms の DEMO_IMAGES の id）。画像データは保存せず表示のときに作る
  * - アップロードした画像: ブラウザで縮小した JPEG（24KB 以下）を src に持つ。ページの本文はこれを埋め込む（履歴には asset:<id> で残す）
  * - 資料（PDF など）: 名前・種類・大きさだけ（デモのため中身は保存しない）
+ * - 動画（2026-11-18）: kind は 'doc'。名前・種類・大きさだけ（デモの保存領域が小さいため中身は保存しない）
  */
 export interface Asset {
   id: string;
   name: string;
   kind: 'image' | 'doc';
-  /** フォルダ名（空文字 = フォルダなし） */
+  /** フォルダ名（空文字 = フォルダなし）。2026-11-18 からは分け方の主はページ（page）。保存データの互換のため残す */
   folder: string;
+  /**
+   * どのページの素材か（サイトマップ（after）のページの path。2026-11-18 ユーザー指示「素材ドライブは、ページ別で画像、PDF、テキスト、動画で分ける」）。
+   * 無い（0.43 までの保存データ・未設定）は「ページ未設定」。画像・PDF・テキスト・動画の分類は mime から求める（data/assets.ts の assetType。保存しない）
+   */
+  page?: string;
   mime: string;
   /** 元のファイルの大きさ（バイト） */
   size: number;

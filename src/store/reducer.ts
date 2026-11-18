@@ -119,8 +119,9 @@ export type Action =
    * addAsset の projectId: 画面がアップロードを始めたときの案件（0.39.1。いまの案件と違えば受け付けない＝縮小の途中で切り替えた分を別の案件へ保存しない）
    */
   // by: 'client' = お客様ポータルの素材ドライブ・ページ編集の画像選択からのアップロード（2026-11-17 会議。写真も資料も。名前・カテゴリーの変更・削除は開発者画面だけのまま）
-  | { type: 'addAsset'; asset: Pick<Asset, 'name' | 'kind' | 'folder' | 'mime' | 'size' | 'src'>; projectId: string; devBy?: string; by?: Side }
-  | { type: 'renameAsset'; id: string; name: string; folder: string; devBy?: string }
+  | { type: 'addAsset'; asset: Pick<Asset, 'name' | 'kind' | 'folder' | 'mime' | 'size' | 'src' | 'page'>; projectId: string; devBy?: string; by?: Side }
+  /** page: 2026-11-18 からのページの付け替え（省略 = そのまま。空文字 = ページ未設定） */
+  | { type: 'renameAsset'; id: string; name: string; folder: string; page?: string; devBy?: string }
   | { type: 'deleteAsset'; id: string; devBy?: string }
   /** 素材ドライブのカテゴリー（フォルダ）の作成・削除（2026-11-17 会議。開発者画面だけ。素材の入っているカテゴリーは消さない） */
   | { type: 'addAssetFolder'; name: string; devBy?: string }
@@ -709,12 +710,16 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       const items = cur.items;
       const name = a.name.trim();
       const folder = a.folder.trim();
-      if (validateAssetName(name, folder) || uploadCount(items) >= ASSET_LIMITS.uploads) return state;
+      // どのページの素材か（2026-11-18 ユーザー指示「素材ドライブは、ページ別で画像、PDF、テキスト、動画で分ける」。空 = ページ未設定）
+      const page = a.page?.trim() ?? '';
+      if (validateAssetName(name, folder, page) || uploadCount(items) >= ASSET_LIMITS.uploads) return state;
       if (a.kind === 'image' ? !validThumb(a.src) : a.src !== undefined) return state;
       // 保存データが上限を超えるなら受け付けない（画面では先に確かめてエラーを出す）
       if (overStorageBudget(state, (a.src?.length ?? 0) + 300)) return state;
       const actor = action.devBy ? devActor(state, action.devBy) : clientActorOf(state);
-      const asset: Asset = { id: uid('asset'), name, kind: a.kind, folder, mime: a.mime, size: a.size, ...(a.src ? { src: a.src } : {}), createdAt: nowIso(), createdBy: actor };
+      const asset: Asset = {
+        id: uid('asset'), name, kind: a.kind, folder, ...(page ? { page } : {}), mime: a.mime, size: a.size, ...(a.src ? { src: a.src } : {}), createdAt: nowIso(), createdBy: actor,
+      };
       // カテゴリーの一覧（folders）も残す（2026-11-17 会議。以前は items だけで作り直していた）
       return log({ ...state, assets: withFolderList({ ...cur, items: [asset, ...items] }) }, `素材「${name}」をアップロードしました`, 'edit', actor, state.requirements.projectId);
     }
@@ -726,12 +731,24 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       const cur = items.find((x) => x.id === action.id);
       const name = action.name.trim();
       const folder = action.folder.trim();
-      if (!cur || validateAssetName(name, folder) || (cur.name === name && cur.folder === folder)) return state;
+      // ページの付け替え（2026-11-18）。省略はいまのまま
+      const page = action.page === undefined ? cur?.page ?? '' : action.page.trim();
+      if (!cur || validateAssetName(name, folder, page) || (cur.name === name && cur.folder === folder && (cur.page ?? '') === page)) return state;
       const actor = devActor(state, action.devBy);
       // 移す前のカテゴリーが 0 件になっても一覧に残す（withFolderList は移す前の素材の folder も数える。2026-11-17 会議）
       const kept = withFolderList(drive);
-      const s = { ...state, assets: withFolderList({ ...kept, items: items.map((x) => (x.id === cur.id ? { ...x, name, folder } : x)) }) };
-      return log(s, cur.name === name ? `素材「${cur.name}」をカテゴリー「${folder || 'なし'}」へ移しました` : `素材「${cur.name}」の名前を「${name}」に変更しました`, 'edit', actor, state.requirements.projectId);
+      // ページ未設定に戻すときは page を持たない（0.43 までの保存データと同じ形）
+      const next = (x: Asset): Asset => {
+        const out: Asset = { ...x, name, folder };
+        if (page) out.page = page;
+        else delete out.page;
+        return out;
+      };
+      const s = { ...state, assets: withFolderList({ ...kept, items: items.map((x) => (x.id === cur.id ? next(x) : x)) }) };
+      const text = cur.name !== name ? `素材「${cur.name}」の名前を「${name}」に変更しました`
+        : (cur.page ?? '') !== page ? `素材「${cur.name}」のページを「${page || '未設定'}」にしました`
+          : `素材「${cur.name}」をカテゴリー「${folder || 'なし'}」へ移しました`;
+      return log(s, text, 'edit', actor, state.requirements.projectId);
     }
 
     case 'deleteAsset': {

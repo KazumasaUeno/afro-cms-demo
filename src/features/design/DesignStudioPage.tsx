@@ -1,6 +1,6 @@
 import { Box, Button, ButtonBase, Dialog, IconButton, Stack, Tab, Tabs, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
 import { ArrowLeft, ArrowRight, BadgeCheck, Check, Columns3, Expand, LayoutTemplate, Monitor, Network, Palette, ShieldCheck, Smartphone, Square, Tablet, Wand2, X, PenLine, ListTodo } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type ComponentProps } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { BuildFlowNav } from '@/components/layout/BuildFlowNav';
 import { AiBadge, PageHeader, Reveal, StatusPill, Surface } from '@/components/ui';
@@ -19,19 +19,26 @@ import { useQualityDevBy } from '@/features/quality/useQualityDevBy';
 import { DESIGN_REQUIRED, designBlockers, designReady } from './designReq';
 import { personalize, useDesignContext, type DesignContext } from './designContext';
 
-const DEVICES: { id: Device; label: string; icon: typeof Monitor }[] = [
+/**
+ * タブレットは横向きに描く（2026-11-18 ユーザー指示「スマホとタブレットが一緒のアイコン」。lucide の Tablet と Smartphone は
+ * どちらも縦長の角丸で見分けにくい）。縦長のスマホと形で区別する
+ */
+const TabletLandscape = ((props: ComponentProps<typeof Tablet>) => <Tablet {...props} style={{ ...props.style, transform: 'rotate(90deg)' }} />) as typeof Monitor;
+
+export const DEVICES: { id: Device; label: string; icon: typeof Monitor }[] = [
   { id: 'pc', label: 'PC', icon: Monitor },
-  { id: 'tablet', label: 'タブレット', icon: Tablet },
+  { id: 'tablet', label: 'タブレット', icon: TabletLandscape },
   { id: 'phone', label: 'スマホ', icon: Smartphone },
 ];
 
 /** 表示する端末の切替（営業プレゼンのプチ要件定義でも使う。0.32.0） */
-export function DeviceToggle({ value, onChange }: { value: Device; onChange: (d: Device) => void }) {
+/** iconOnly: アイコンだけ（名前はツールチップと読み上げ。2026-11-18 全画面プレビューの右端用） */
+export function DeviceToggle({ value, onChange, iconOnly }: { value: Device; onChange: (d: Device) => void; iconOnly?: boolean }) {
   return (
     <ToggleButtonGroup exclusive size="small" value={value} onChange={(_, v) => v && onChange(v)} aria-label="表示する端末">
       {DEVICES.map(({ id, label, icon: Icon }) => (
-        <ToggleButton key={id} value={id} aria-label={label} sx={{ gap: 0.75 }}>
-          <Icon size={15} /><Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>{label}</Box>
+        <ToggleButton key={id} value={id} aria-label={label} title={iconOnly ? label : undefined} sx={{ gap: 0.75 }}>
+          <Icon size={15} />{!iconOnly && <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>{label}</Box>}
         </ToggleButton>
       ))}
     </ToggleButtonGroup>

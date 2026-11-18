@@ -2,6 +2,7 @@ import { Box, Button, ButtonBase, Stack, Typography } from '@mui/material';
 import { ArrowRight, BadgeCheck, CalendarDays, Clock3, House, Lock, Megaphone, MessageSquare, PenLine, Stamp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { MemberAvatar, PageHeader, ProgressRing, Reveal, SectionTitle, StageTrack, StatusPill, Surface } from '@/components/ui';
+import { SitePreviewButton } from '@/features/quality/SitePreviewButton';
 import { useDemo, currentProject } from '@/store/DemoStore';
 import { isSiteLive } from '@/data/projectContent';
 import { formatDate, formatDateTime, relativeTime } from '@/services/time';
@@ -50,6 +51,8 @@ export default function PortalHomePage() {
         icon={<House size={15} />}
         title={`${project.clientName} さま`}
         description="ホームページリニューアルの進み具合と、ご確認をお願いしたいことをまとめています。"
+        // 制作中のサイト（2026-11-18 ユーザー指示「お客さんも見れるように」）。デザインの採用後から出す
+        actions={<SitePreviewButton checkScreen="品質確認" hideUntilReady />}
       />
 
       <Stack spacing={{ xs: 2.5, md: 3 }}>
@@ -161,8 +164,9 @@ export default function PortalHomePage() {
                 ))}
               </Box>
               <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-                <Button fullWidth variant="contained" startIcon={<Megaphone size={16} />} onClick={() => navigate('/portal/pages?new=news')}>お知らせを書く</Button>
-                <Button fullWidth variant="outlined" startIcon={<PenLine size={16} />} onClick={() => navigate('/portal/pages')}>編集する</Button>
+                <Button fullWidth variant="contained" startIcon={<Megaphone size={16} />} onClick={() => navigate('/portal/news?new=news')}>お知らせを書く</Button>
+                {/* ページとお知らせは別の画面（2026-11-18） */}
+                <Button fullWidth variant="outlined" startIcon={<PenLine size={16} />} onClick={() => navigate('/portal/pages')}>ページを編集</Button>
               </Stack>
             </Surface>}
 

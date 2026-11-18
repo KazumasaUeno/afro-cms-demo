@@ -361,7 +361,10 @@ function routeLabel(pathname: string): string {
   if (pathname === '/dev/sitemap') return '開発者画面・サイトマップ';
   if (pathname === '/dev/design') return '開発者画面・AIデザインスタジオ';
   if (pathname === '/dev/quality') return '開発者画面・品質チェック';
-  if (pathname === '/dev/cms') return '開発者画面・ページ・お知らせ';
+  if (pathname === '/dev/release') return '開発者画面・リリース';
+  if (pathname === '/release') return 'リリース';
+  if (pathname === '/dev/cms') return '開発者画面・ページ';
+  if (pathname === '/dev/news') return '開発者画面・お知らせ';
   if (pathname === '/dev/insights') return '開発者画面・インサイト';
   if (pathname === '/dev/assets') return '開発者画面・素材ドライブ';
   if (pathname === '/dev/forms') return '開発者画面・フォーム';
@@ -370,7 +373,8 @@ function routeLabel(pathname: string): string {
   // メニューから外したお客様ポータルの画面（2026-11-16）。メニューの項目名を使えないので、ここで名前を付ける
   if (pathname === '/portal/forms') return 'お客様ポータル・フォーム';
   if (pathname === '/portal/quality') return 'お客様ポータル・品質確認';
-  if (pathname === '/portal/pages') return 'お客様ポータル・ページ・お知らせ';
+  if (pathname === '/portal/pages') return 'お客様ポータル・ページ';
+  if (pathname === '/portal/news') return 'お客様ポータル・お知らせ';
   if (pathname === '/chat') return '相談チャット';
   if (pathname === '/dev/chat') return '開発者画面・相談チャット';
   if (pathname === '/client-view/approvals' || pathname === '/dev/client-view/approvals') return 'お客様の確認・承認（説明用）';

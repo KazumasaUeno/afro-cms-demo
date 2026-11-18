@@ -113,6 +113,9 @@ export function Inspector({ draft, onChange, slugError }: Props) {
         </Stack>
       </Section>
 
+      {/* お知らせは検索から来てもらうものではないので SEO の欄を出さない（2026-11-18 ユーザー指示「お知らせは SEO の検索ではない」）。
+          保存済みの seoTitle・seoDescription は消さない（ページの公開時の head はページだけが使う） */}
+      {draft.type !== 'news' && (
       <Section title="SEO" icon={<Globe size={16} />} action={<AiBadge label="AI生成" />}>
         <Stack spacing={2}>
           <TextField
@@ -165,8 +168,9 @@ export function Inspector({ draft, onChange, slugError }: Props) {
           </Box>
         </Stack>
       </Section>
+      )}
 
-      <Section title="ページ設定" icon={<ImageIcon size={16} />}>
+      <Section title={draft.type === 'news' ? 'お知らせの設定' : 'ページ設定'} icon={<ImageIcon size={16} />}>
         <Stack spacing={2}>
           {/* お知らせのカテゴリー（2026-11-17 会議） */}
           {draft.type === 'news' && <NewsCategoryField size="small" value={draft.newsCategory} pages={state.pages} onChange={(v) => onChange({ newsCategory: v })} />}

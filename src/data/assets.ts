@@ -1,4 +1,4 @@
-import type { Asset, AssetState, CmsPage, DemoState } from '@/types';
+import type { Asset, AssetState, CmsPage, DemoState, SitemapNode } from '@/types';
 import { hasLiveVersion } from '@/features/cms/cmsUtils';
 import { PROJECT_IMAGES, demoImageById, demoImageSrc } from './demoImages';
 
@@ -14,12 +14,16 @@ export const ASSET_LIMITS = {
   /** 画像として受け付ける元のファイルの大きさ */
   imageBytes: 10 * 1024 * 1024,
   docBytes: 10 * 1024 * 1024,
+  /** 動画の元のファイルの大きさ（2026-11-18。中身は保存しないが、お客様から届く現実的な大きさに留める） */
+  videoBytes: 500 * 1024 * 1024,
   /** 縮小後の画像（data URL の文字数） */
   thumbChars: 24 * 1024,
   /** 縮小後の長辺（px） */
   thumbEdge: 480,
   name: 60,
   folder: 20,
+  /** ページ（サイトマップの path）の文字数（2026-11-18） */
+  page: 200,
   /** 保存データ全体（JSON の文字数）。これを超えるアップロードは受け付けない（localStorage はおよそ 5MB） */
   stateChars: 3_000_000,
 } as const;
@@ -30,9 +34,74 @@ export const DOC_TYPES: Record<string, string> = {
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel',
   'text/csv': 'CSV',
+  // 2026-11-18 ユーザー指示「素材ドライブは、ページ別で画像、PDF、テキスト、動画で分ける」: 原稿のテキストも受け付ける
+  'application/msword': 'Word',
+  'text/plain': 'テキスト',
+  'text/markdown': 'Markdown',
+  'application/rtf': 'RTF',
+  'text/rtf': 'RTF',
+  'application/vnd.oasis.opendocument.text': 'ODT',
 };
+/** 資料として受け付ける拡張子（ブラウザが種類（mime）を付けないファイルもあるため。.md・.docx は Windows で空になることがある） */
+const DOC_EXT = /\.(pdf|docx?|xlsx|csv|txt|md|rtf|odt)$/i;
+/** 動画（2026-11-18。中身は保存しない） */
+const VIDEO_EXT = /\.(mp4|mov|webm|m4v)$/i;
 /** ファイル選択の accept */
-export const ASSET_ACCEPT = [...IMAGE_MIMES, ...Object.keys(DOC_TYPES), '.csv', '.pdf', '.docx', '.xlsx'].join(',');
+export const ASSET_ACCEPT = [
+  ...IMAGE_MIMES, ...Object.keys(DOC_TYPES), '.csv', '.pdf', '.doc', '.docx', '.xlsx', '.txt', '.md', '.rtf', '.odt',
+  'video/*', '.mp4', '.mov', '.webm', '.m4v',
+].join(',');
+
+/** 拡張子から求めた種類（ブラウザが種類を付けなかったとき。分からなければ空文字） */
+export function guessMime(fileName: string): string {
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+  const map: Record<string, string> = {
+    pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', csv: 'text/csv', txt: 'text/plain', md: 'text/markdown',
+    rtf: 'application/rtf', odt: 'application/vnd.oasis.opendocument.text', mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm',
+  };
+  return fileName.includes('.') ? map[ext] ?? '' : '';
+}
+
+/**
+ * 素材の分類（2026-11-18 ユーザー指示「素材ドライブは、ページ別で画像、PDF、テキスト、動画で分ける」）。保存はせず mime（無ければ名前の拡張子）から求める。
+ * テキストは原稿・文書（Word・テキスト・Markdown・RTF・ODT のほか、0.43 までに入れた Excel・CSV もここへ入れる）
+ */
+export type AssetType = 'image' | 'pdf' | 'text' | 'video';
+export const ASSET_TYPES: { key: AssetType; label: string }[] = [
+  { key: 'image', label: '画像' }, { key: 'pdf', label: 'PDF' }, { key: 'text', label: 'テキスト' }, { key: 'video', label: '動画' },
+];
+export function assetType(a: Pick<Asset, 'kind' | 'mime' | 'name'>): AssetType {
+  const mime = (a.mime || guessMime(a.name)).toLowerCase();
+  if (a.kind === 'image' || mime.startsWith('image/')) return 'image';
+  if (mime === 'application/pdf') return 'pdf';
+  if (mime.startsWith('video/')) return 'video';
+  return 'text';
+}
+
+/** 素材を分けるページ（2026-11-18）。キーはサイトマップ（after）の path */
+export interface AssetPageOption { path: string; label: string; inSitemap: boolean }
+/**
+ * 素材ドライブのページの一覧。サイトマップ（after）の順（同じ path は 1 つ）。
+ * サイトマップから消えたページの素材も見失わないよう、素材にだけあるページを後ろに足す（名前は path のまま）
+ */
+export function assetPageOptions(nodes: SitemapNode[], items: Asset[]): AssetPageOption[] {
+  const seen = new Set<string>();
+  const out: AssetPageOption[] = [];
+  for (const n of nodes) {
+    const path = n.data.path;
+    if (!path || seen.has(path)) continue;
+    seen.add(path);
+    out.push({ path, label: n.data.label || path, inSitemap: true });
+  }
+  for (const a of items) {
+    if (a.page && !seen.has(a.page)) {
+      seen.add(a.page);
+      out.push({ path: a.page, label: a.page, inSitemap: false });
+    }
+  }
+  return out;
+}
 
 const PRESET_AT = '2026-11-01T00:00:00.000Z';
 const PRESET_PREFIX = 'asset-preset-';
@@ -97,24 +166,30 @@ export function assetDeleteBlock(a: Asset, pages: CmsPage[]): string | null {
 }
 
 /** アップロードするファイルの検査。画像か資料かを返す（受け付けないときは error） */
-export function checkUpload(file: { name: string; size: number; type: string }, items: Asset[]): { kind: Asset['kind'] } | { error: string } {
+export function checkUpload(file: { name: string; size: number; type: string }, items: Asset[]): { kind: Asset['kind']; video?: boolean } | { error: string } {
   if (uploadCount(items) >= ASSET_LIMITS.uploads) return { error: `アップロードできるのは ${ASSET_LIMITS.uploads} 件までです。使っていない素材を削除してください` };
   if ((IMAGE_MIMES as readonly string[]).includes(file.type)) {
     if (file.size > ASSET_LIMITS.imageBytes) return { error: '画像は 10MB 以下にしてください' };
     return { kind: 'image' };
   }
-  if (DOC_TYPES[file.type] || /\.(pdf|docx|xlsx|csv)$/i.test(file.name)) {
+  // 動画は kind 'doc'（名前・種類・大きさだけ。2026-11-18）
+  if (file.type.startsWith('video/') || VIDEO_EXT.test(file.name)) {
+    if (file.size > ASSET_LIMITS.videoBytes) return { error: '動画は 500MB 以下にしてください' };
+    return { kind: 'doc', video: true };
+  }
+  if (DOC_TYPES[file.type] || DOC_EXT.test(file.name)) {
     if (file.size > ASSET_LIMITS.docBytes) return { error: '資料は 10MB 以下にしてください' };
     return { kind: 'doc' };
   }
   if (file.type === 'image/svg+xml') return { error: 'SVG はアップロードできません（PNG・JPEG・WebP・GIF にしてください）' };
-  return { error: 'この種類のファイルはアップロードできません（画像: PNG・JPEG・WebP・GIF ／ 資料: PDF・Word・Excel・CSV）' };
+  return { error: 'この種類のファイルはアップロードできません（画像: PNG・JPEG・WebP・GIF ／ PDF ／ テキスト: Word・テキスト・Markdown・RTF・ODT・Excel・CSV ／ 動画: MP4・MOV・WebM）' };
 }
 
-export function validateAssetName(name: string, folder: string): string | null {
+export function validateAssetName(name: string, folder: string, page = ''): string | null {
   if (!name.trim()) return '名前を入力してください';
   if (name.length > ASSET_LIMITS.name) return `名前は${ASSET_LIMITS.name}文字以内にしてください`;
   if (folder.length > ASSET_LIMITS.folder) return `フォルダ名は${ASSET_LIMITS.folder}文字以内にしてください`;
+  if (page.length > ASSET_LIMITS.page) return 'ページの指定が長すぎます';
   return null;
 }
 
@@ -128,7 +203,7 @@ export const overStorageBudget = (state: DemoState, extraChars: number): boolean
 
 export const assetTypeLabel = (a: Pick<Asset, 'kind' | 'mime' | 'preset' | 'name'>): string =>
   // 見本の写真も「画像」と出す（実際の案件の素材に見えるように。2026-11-17 ユーザー指示「リアルっぽく」）
-  a.kind === 'image' ? '画像' : DOC_TYPES[a.mime] ?? (a.name.split('.').pop()?.toUpperCase() || '資料');
+  a.kind === 'image' ? '画像' : a.mime.startsWith('video/') ? '動画' : DOC_TYPES[a.mime] ?? (a.name.split('.').pop()?.toUpperCase() || '資料');
 
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;

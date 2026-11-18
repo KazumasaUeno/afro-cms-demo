@@ -2,6 +2,7 @@ import { Box, Button, ButtonBase, Stack, Typography } from '@mui/material';
 import { ArrowLeft, ArrowRight, BadgeCheck, CalendarDays, Check, CheckCircle2, Clock, Send, Code2, FolderSearch, Globe, Mail, MapPin, Pencil, Phone, User, UserRound } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
+import { SitePreviewButton } from '@/features/quality/SitePreviewButton';
 import type { Project, Stage } from '@/types';
 import { useDemo } from '@/store/DemoStore';
 import { workView } from '@/store/projectWork';
@@ -199,7 +200,8 @@ function Detail({ p }: { p: Project }) {
     ),
     operation: (
       <>
-        <Fact label="ページ数" value={`${state.pages.length}件`} />
+        {/* ページとお知らせは別物（2026-11-18 ユーザー指示）なので件数も分ける */}
+        <Fact label="ページ・お知らせ" value={`${state.pages.filter((p) => p.type !== 'news').length}件・${state.pages.filter((p) => p.type === 'news').length}件`} />
         <Fact label="公開中" value={`${published}件`} />
         <Fact label="予約公開" value={`${scheduled}件`} />
       </>
@@ -238,11 +240,15 @@ function Detail({ p }: { p: Project }) {
                   <Typography variant="overline">{p.clientName}・{p.industry}</Typography>
                   <Typography variant="h1" component="h1">{p.siteName}</Typography>
                 </Box>
-                {update && (
-                  <Button variant="outlined" size="small" startIcon={<Pencil size={15} />} onClick={() => setEditing(true)} sx={{ flexShrink: 0, minHeight: 36, [TOUCH]: { minHeight: 44 } }}>
-                    編集
-                  </Button>
-                )}
+                <Stack direction="row" spacing={1} sx={{ flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end', rowGap: 1 }}>
+                  {/* 制作中のサイト（2026-11-18 ユーザー指示「プロジェクトに入ったところで見えるように」）。デザイン採用前は押せない */}
+                  <SitePreviewButton projectId={p.id} size="small" />
+                  {update && (
+                    <Button variant="outlined" size="small" startIcon={<Pencil size={15} />} onClick={() => setEditing(true)} sx={{ flexShrink: 0, minHeight: 36, [TOUCH]: { minHeight: 44 } }}>
+                      編集
+                    </Button>
+                  )}
+                </Stack>
               </Stack>
               <Stack direction="row" sx={{ mt: 1.5, flexWrap: 'wrap', gap: { xs: 1, sm: 2.5 }, color: tokens.color.muted }}>
                 <Stack direction="row" spacing={0.75} alignItems="center"><Globe size={15} /><Typography variant="body2">{p.siteUrl.replace(/^https?:\/\//, '')}</Typography></Stack>
@@ -340,7 +346,8 @@ function Detail({ p }: { p: Project }) {
                     }}
                   >
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'flex-start' }} justifyContent="space-between">
-                      <Box sx={{ minWidth: 0 }}>
+                      {/* 見出しは最低 220px を保ち、ボタンが多い段階（制作は 4 つ。2026-11-18 素材ドライブを移した）はボタンの側を折り返す */}
+                      <Box sx={{ minWidth: 0, flex: { md: '1 0 220px' } }}>
                         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
                           <Typography variant="overline" sx={{ color: tokens.color.muted }}>段階 {sel.no} / {STAGES.length}</Typography>
                           <StatusPill tone={selDone ? 'success' : selActive ? 'primary' : 'neutral'}>{selDone ? '完了' : selActive ? '進行中' : 'これから'}</StatusPill>
@@ -351,7 +358,7 @@ function Detail({ p }: { p: Project }) {
                       {selFuture ? (
                         <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0 }}>前の段階が終わると始まります</Typography>
                       ) : routes.stageLinks[sel.id].length > 0 && (
-                        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1, flexShrink: 0 }}>
+                        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1, flexShrink: 1, minWidth: 0, justifyContent: { md: 'flex-end' } }}>
                           {routes.stageLinks[sel.id].map((l, k) => (
                             <Button key={l.to} variant={selActive && k === 0 ? 'contained' : 'outlined'} endIcon={<ArrowRight size={16} />} onClick={() => go(l.to)}>
                               {/* ヒアリングを終えた（AI 分析済み）案件は入力ではなく確認（2026-11-12 ユーザー指示） */}

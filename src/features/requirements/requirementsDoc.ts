@@ -21,7 +21,7 @@ const PRIORITY = { high: '優先度 高', medium: '優先度 中', low: '優先�
 export type RequirementsDocState = Pick<DemoState, 'requirements' | 'projects'> & { schedule?: ProjectSchedule };
 
 /** yyyy-mm-dd を「2026年11月17日」の形に（読めなければそのまま） */
-const ymdText = (ymd: string) => {
+export const ymdText = (ymd: string) => {
   const iso = ymdToIso(ymd);
   return iso ? new Date(iso).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' }) : ymd;
 };
@@ -44,7 +44,7 @@ ${s.note ? `<tr><th>備考</th><td>${esc(s.note).replace(/\n/g, '<br>')}</td></t
  * 4. 非機能要件（アフロ標準。2026-11-17 会議）。固定のたたき台で、案件ごとに見直す。
  * 数値は目標であって保証ではない（法的な保証・約束の表現は使わない。条件は契約・保守の取り決めで決める）
  */
-const NON_FUNCTIONAL: { title: string; rows: [string, string][] }[] = [
+export const NON_FUNCTIONAL: { title: string; rows: [string, string][] }[] = [
   { title: 'ホスティング', rows: [
     ['基盤', 'AWS（Amazon Web Services）上で運用します。リージョン・構成は案件ごとに決めます。'],
   ] },
@@ -66,9 +66,12 @@ const NON_FUNCTIONAL: { title: string; rows: [string, string][] }[] = [
   ] },
 ];
 
+/** 非機能要件の前置き（画面とダウンロードで同じ文） */
+export const NON_FUNCTIONAL_NOTE = 'アフロ標準のたたき台（案件ごとに見直し）。記載の数値は目標であり、保証するものではありません。具体的な条件は契約・保守の取り決めで定めます。';
+
 function nonFunctionalSection(): string {
   const groups = NON_FUNCTIONAL.map((g) => `<h3>${esc(g.title)}</h3><table>${g.rows.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('')}</table>`).join('');
-  return `<p class="note-plain">アフロ標準のたたき台（案件ごとに見直し）。記載の数値は目標であり、保証するものではありません。具体的な条件は契約・保守の取り決めで定めます。</p>${groups}`;
+  return `<p class="note-plain">${esc(NON_FUNCTIONAL_NOTE)}</p>${groups}`;
 }
 
 export function buildRequirementsDocHtml(state: RequirementsDocState): string {

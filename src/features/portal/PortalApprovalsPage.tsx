@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link as RouterLink, useHref, useLocation, useNavigate } from 'react-router-dom';
 import { PageHeader, Reveal, StatusPill, Surface } from '@/components/ui';
 import { currentProject, useDemo } from '@/store/DemoStore';
+import { isSiteLive } from '@/data/projectContent';
 import { useCurrentRequirements, useRepositories } from '@/repositories';
 import { useWrite } from '@/hooks/useWrite';
 import { useToast } from '@/hooks/useToast';
@@ -406,6 +407,29 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
             </Typography>
           </StepCard>
         </Reveal>
+
+        {/* 公開後のページ・お知らせの更新の承認（2026-11-18 ユーザー指示「お客様、公開承認は確認・承認の中」。メニューから外し、ここから開く）。サイトの公開後だけ出す */}
+        {!preview && isSiteLive(currentProject(state).stage) && (() => {
+          const waiting = state.pages.filter((x) => x.status === 'review').length;
+          return (
+            <Reveal delay={0.16}>
+              <Surface>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }}>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Typography variant="h3" component="h2">ページ・お知らせの公開承認</Typography>
+                      {waiting > 0 && <StatusPill tone="warning">承認待ち {waiting} 件</StatusPill>}
+                    </Stack>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                      {waiting > 0 ? 'アフロから公開の承認を依頼された更新があります。変更前と変更後を見比べて、承認するか差し戻してください。' : 'いま承認をお願いしている更新はありません。'}
+                    </Typography>
+                  </Box>
+                  <Button variant={waiting > 0 ? 'contained' : 'outlined'} endIcon={<ArrowRight size={16} />} onClick={() => navigate('/portal/publish')} sx={{ flexShrink: 0, alignSelf: { xs: 'stretch', sm: 'auto' } }}>公開承認を開く</Button>
+                </Stack>
+              </Surface>
+            </Reveal>
+          );
+        })()}
       </Stack>
 
       <ConfirmDialog

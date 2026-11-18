@@ -11,6 +11,7 @@ import { formatDateTime } from '@/services/time';
 import { AREAS } from '@/components/layout/nav';
 import { CheckToggle } from '@/features/quality/CheckToggle';
 import { approvalSteps } from './portalSteps';
+import { SitePreviewButton } from '@/features/quality/SitePreviewButton';
 
 const AREA = AREAS.portal;
 
@@ -75,6 +76,7 @@ export default function PortalQualityPage() {
         icon={<ListChecks size={15} />}
         title="品質確認"
         description="公開前に、お客様の目で確認していただきたい項目です。確認した項目にチェックを付けてください（チェックした日時が記録されます）。"
+        actions={<SitePreviewButton checkScreen="品質確認" />}
       />
 
       <Stack spacing={{ xs: 2, md: 2.5 }}>

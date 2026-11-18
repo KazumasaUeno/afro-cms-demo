@@ -1,7 +1,7 @@
 import { Box, Button, Menu, MenuItem, Stack, Typography, ListItemText } from '@mui/material';
 import { ArrowLeft, ArrowUpRight, CheckCheck, ShieldCheck, Building2, UserRound, History, Lock, Rocket } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import type { QualityCategory } from '@/types';
 import { QUALITY_CATEGORIES, QUALITY_ITEMS, TOTAL_QUALITY_QUESTIONS } from '@/data/quality';
 import { currentProject, useDemo } from '@/store/DemoStore';
@@ -14,8 +14,9 @@ import { CountUp, PageHeader, ProgressRing, Reveal, SectionTitle, StatusPill, Su
 import { CategoryDetail, PriorityChip } from './CategoryDetail';
 import { computeStats, isComplete } from './qualityStats';
 import { useQualityDevBy } from './useQualityDevBy';
+import { SitePreviewButton } from './SitePreviewButton';
 import { RequestApprovalButton } from '@/features/portal/RequestApprovalButton';
-import { stageApprovals } from '@/features/portal/portalSteps';
+import { releaseState } from '@/features/release/releaseState';
 
 function MiniBar({ value, color, label }: { value: number; color: string; label: string }) {
   return (
@@ -72,8 +73,7 @@ function BulkMenu({ side }: { side: 'afro' }) {
 }
 
 export default function QualityPage() {
-  const { state, dispatch } = useDemo();
-  const toast = useToast();
+  const { state } = useDemo();
   const devBy = useQualityDevBy();
   const routes = useProjectRoutes();
   // 管理者・開発者画面ではアフロ側の確認だけを行う。顧客側の承認はお客様ポータルだけ（開発者 0.27.0・管理者 2026-11-12）
@@ -92,23 +92,16 @@ export default function QualityPage() {
   const openItems = QUALITY_ITEMS.filter((i) => !isComplete(state.qualityChecks[i.id]));
   const openByCategory = perCategory.filter((c) => c.stats.open > 0).slice(0, 5);
 
-  // 公開（0.30.1。2026-11-13 ユーザー指示）: 双方確認が済んだら開発者画面から運用の段階へ進める。管理者画面は見るだけ（文言だけ出す）
-  const ownerStage = state.projects.find((p) => p.id === state.requirements.projectId)?.stage;
-  // お客様が品質チェックの「完了」を押してから公開できる（0.39.7）
-  const clientCompleted = !!state.design.qualityApprovedAt;
-  // お客様が公開を承認してから公開する（2026-11-17 ユーザー指示「各段階で最後に承認」）
-  const releaseApproved = !!stageApprovals(state).release;
-  const canLaunch = openItems.length === 0 && clientCompleted && releaseApproved && !!state.design.buildCompletedAt && ownerStage === 'release' && state.requirements.projectId === state.currentProjectId;
-  const launch = () => {
-    dispatch({ type: 'launchSite', devBy });
-    toast('サイトを公開しました。運用の段階へ進みます', 'success');
-  };
+  // 公開の条件と操作はリリース画面（2026-11-18 ユーザー指示）。判定は releaseState（リリース画面と共通）。ここでは案内の文言とリリース画面への入口だけ
+  const { ownerStage, clientCompleted, releaseApproved } = releaseState(state);
+  const navigate = useNavigate();
+  const releaseHref = routes.dev ? '/dev/release' : '/release';
   // 公開できるのはリリースの段階（お客様の完了＝納品検収の後。2026-11-17 会議）
   const doneText = ownerStage === 'operation' || ownerStage === 'improvement'
     ? 'すべての項目が完了し、サイトを公開しました（運用の段階）。'
     : !clientCompleted ? 'すべての項目にチェックが付きました。お客様がポータルで品質チェックの「完了」を押すと、サイトを公開できます。'
     : !releaseApproved ? 'すべての項目が完了しました。お客様へ公開の承認を依頼し、承認されるとサイトを公開できます。'
-    : devBy ? 'すべての項目が完了しました。サイトを公開すると運用の段階へ進みます。' : 'すべての項目が完了しました。開発者がサイトを公開すると運用の段階へ進みます。';
+    : devBy ? 'すべての項目が完了しました。リリース画面でサイトを公開すると運用の段階へ進みます。' : 'すべての項目が完了しました。開発者がリリース画面でサイトを公開すると運用の段階へ進みます。';
 
   const kpis = [
     { label: 'アフロ確認', value: overall.afroRate as number | null, n: overall.afro, color: tokens.color.primary, soft: tokens.color.primarySoft, icon: <Building2 size={16} /> },
@@ -129,13 +122,12 @@ export default function QualityPage() {
         description={`12項目${TOTAL_QUALITY_QUESTIONS}問の品質基準のうち、アフロ側の確認を行います。顧客の承認はお客様がお客様ポータルで行います（デモでは代表${QUALITY_ITEMS.length}問を収録）。`}
         actions={
           <>
-            {devBy && canLaunch && (
-              <Button variant="contained" startIcon={<Rocket size={16} />} onClick={launch}>サイトを公開して運用へ進む</Button>
-            )}
+            {/* 制作中のサイトを新しいタブで見る（2026-11-18） */}
+            <SitePreviewButton />
             {/* 全ページの構築の後、お客様へ品質チェック（納品検収）を依頼する（2026-11-17 会議） */}
             <RequestApprovalButton approvalKey="quality" />
-            {/* 納品検収の後、お客様へ公開の承認を依頼する（2026-11-17） */}
-            {clientCompleted && <RequestApprovalButton approvalKey="release" />}
+            {/* 納品検収の後の公開の承認の依頼・公開はリリース画面（2026-11-18 ユーザー指示「リリース（公開）はリリース画面を表示」） */}
+            {clientCompleted && <Button variant="contained" startIcon={<Rocket size={16} />} onClick={() => navigate(releaseHref)}>リリース画面へ</Button>}
             {!clientCompleted && <BulkMenu side="afro" />}
           </>
         }

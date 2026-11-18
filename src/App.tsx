@@ -42,6 +42,8 @@ const PortalSchedulePage = lazy(() => import('@/features/portal/PortalSchedulePa
 const PresentPage = lazy(() => import('@/features/present/PresentPage'));
 const PetitPage = lazy(() => import('@/features/present/PetitPage'));
 const DesignPreviewPage = lazy(() => import('@/features/design/DesignPreviewPage'));
+// リリース（公開）の画面（2026-11-18）
+const ReleasePage = lazy(() => import('@/features/release/ReleasePage'));
 
 /** 旧 CMS画面の URL（0.4.0）はポータルのページ編集へ。?page= / ?new= はそのまま引き継ぐ */
 function LegacyCmsRedirect() {
@@ -76,8 +78,11 @@ const router = createBrowserRouter([
       { path: 'schedule', element: <SchedulePage /> },
       { path: 'site', element: <SitemapPage /> },
       { path: 'quality', element: <QualityPage /> },
+      { path: 'release', element: <ReleasePage /> },
       // 管理者画面（アフロ社内）は従来どおりルート直下。お客様ポータルは /portal、開発者画面は /dev 配下
-      { path: 'portal/pages', element: <CmsEditorPage /> },
+      { path: 'portal/pages', element: <CmsEditorPage kind="page" /> },
+      // お知らせはページと別の画面（2026-11-18 ユーザー指示「ページとお知らせを別物に」）
+      { path: 'portal/news', element: <CmsEditorPage kind="news" /> },
       { path: 'portal/publish', element: <PublishApprovalsPage /> },
       { path: 'dev', element: <DevDashboardPage /> },
       // 開発者画面のプロジェクト（0.26.0）。管理者画面の /projects・/projects/:id と同じ画面（担当案件だけ。詳細は URL の案件が担当かを画面の中で確かめる）
@@ -92,7 +97,9 @@ const router = createBrowserRouter([
       // 品質管理・運用・改善の段階（0.27.0）。管理者画面の /quality・/insights、お客様ポータルの /portal/pages と同じ画面（担当案件だけ。DevProjectGate）。
       // お客様側の操作（顧客の品質承認・ページの公開）は開発者画面では出さない
       { path: 'dev/quality', element: <QualityPage /> },
-      { path: 'dev/cms', element: <CmsEditorPage /> },
+      { path: 'dev/release', element: <ReleasePage /> },
+      { path: 'dev/cms', element: <CmsEditorPage kind="page" /> },
+      { path: 'dev/news', element: <CmsEditorPage kind="news" /> },
       { path: 'dev/insights', element: <InsightsPage /> },
       // 運用の段階の素材ドライブ（0.36.0）・フォーム（0.37.0）。管理は開発者画面（担当案件だけ。DevProjectGate）。管理者画面の /assets・/forms は見るだけ
       { path: 'dev/assets', element: <AssetDrivePage /> },

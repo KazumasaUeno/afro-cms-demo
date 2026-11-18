@@ -1,8 +1,8 @@
 import { tokens } from '@/theme/tokens';
 import type { DemoState } from '@/types';
 import {
-  Building2, CalendarDays, ClipboardCheck, MessageSquare, Code2, FolderKanban, FolderOpen, House, LayoutDashboard, ListTodo, Monitor,
-  ScrollText, Settings, Stamp, UserRound, UsersRound, type LucideIcon,
+  Building2, CalendarDays, ClipboardCheck, MessageSquare, Code2, FolderKanban, FolderOpen, House, LayoutDashboard, ListTodo,
+  ScrollText, Settings, UserRound, UsersRound, type LucideIcon,
 } from 'lucide-react';
 import { unansweredCount } from '@/features/chat/unanswered';
 
@@ -70,7 +70,7 @@ const ADMIN_ITEMS: NavItem[] = [
   { to: '/', label: 'ホーム', icon: House, match: ['/', '/chat'], exact: true, hint: '今日の状況' },
   // AI Studio（要件・サイトマップ・デザイン）・品質チェック・インサイトはプロジェクトの中の画面なので、メニューには出さず
   // プロジェクト詳細の段階ごとのボタンから開く。開いている間は「プロジェクト」を選択中にする
-  { to: '/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/projects', '/ai-studio', '/schedule', '/site', '/quality', '/insights', '/assets', '/forms', '/client-view'], hint: '制作案件の一覧' },
+  { to: '/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/projects', '/ai-studio', '/schedule', '/site', '/quality', '/release', '/insights', '/assets', '/forms', '/client-view'], hint: '制作案件の一覧' },
   { to: '/users', label: 'ユーザー管理', icon: UsersRound, match: ['/users'], hint: 'お客様の登録・開発者画面の権限' },
   // 相談チャット（0.38.2）は 2026-11-17 午前に「管理者画面に相談は要らない」でメニューから外した。同日ユーザー指示「管理者は全てのチャット一覧が見れる」
   // 「相談の未対応の欄に一覧を表示を追加。サイドに入らない」で、全案件の相談（/chat。見るだけ）はホームの「相談の未対応」から開く（メニューには出さない。開いている間はホームを選択中にする）
@@ -80,15 +80,15 @@ const PORTAL_ITEMS: NavItem[] = [
   { to: '/portal', label: 'ホーム', icon: House, match: ['/portal'], exact: true, hint: '制作の進み具合' },
   // ヒアリング（/portal/requirements）は 0.18.0 で廃止（受託開発ではアフロが入力する）。URL は確認・承認へ転送する
   // 品質確認（/portal/quality）はメニューから外した（2026-11-16 ユーザー指示）。画面は残し、確認・承認の「品質チェック」から開く。開いている間は確認・承認を選択中にする
-  { to: '/portal/approvals', label: '確認・承認', icon: ClipboardCheck, match: ['/portal/approvals', '/portal/quality'], hint: '要件・サイトマップ・デザイン' },
+  { to: '/portal/approvals', label: '確認・承認', icon: ClipboardCheck, match: ['/portal/approvals', '/portal/quality', '/portal/publish'], hint: '要件・サイトマップ・デザイン' },
   // スケジュール（2026-11-17 ユーザー指示「お客さんもスケジュールが見れるように」）。見るだけ
   { to: '/portal/schedule', label: 'スケジュール', icon: CalendarDays, match: ['/portal/schedule'], hint: '制作〜公開の予定' },
   // 公開承認・レポート・サイネージはトップデザインの承認後に出す（requires。2026-11-16 ユーザー指示）
   // ページ・お知らせ（/portal/pages）はメニューから外した（2026-11-16 ユーザー指示）。画面は残し、ホームの「サイトの更新」から開く
-  { to: '/portal/publish', label: '公開承認', icon: Stamp, match: ['/portal/publish'], hint: '更新の承認ワークフロー', requires: 'designApproved' },
+  // 公開承認（/portal/publish）はメニューから外した（2026-11-18 ユーザー指示「お客様、公開承認は確認・承認の中」）。画面は残し、確認・承認から開く。開いている間は確認・承認を選択中にする
   { to: '/portal/reports', label: 'レポート', icon: ScrollText, match: ['/portal/reports'], hint: '改善診断', requires: 'designApproved' },
   // 下部タブは添字で選んでいるため（下の bottom）、新しい項目は末尾に足す
-  { to: '/portal/signage', label: 'サイネージ', icon: Monitor, match: ['/portal/signage'], hint: '店頭の画面', requires: 'designApproved' },
+  // サイネージ（/portal/signage）は一旦メニューから外した（2026-11-18 ユーザー指示「サイネージも一旦非表示」）。画面のコード・URL は残す。戻すときは answers.ts の SIGNAGE_PAUSED も
   // フォームの問い合わせ（0.37.0）はメニューから外した（2026-11-16 ユーザー指示）。画面（/portal/forms）は残す
   // 担当者への相談（0.38.0）。下部タブの添字が変わらないよう末尾に足す
   { to: '/portal/chat', label: '相談', icon: MessageSquare, match: ['/portal/chat'], hint: '担当者に相談' },
@@ -103,7 +103,7 @@ const DEV_ITEMS: NavItem[] = [
   //   メニューに項目が無いサイトマップ（/dev/sitemap）・品質（/dev/quality）・ページ編集（/dev/cms）・改善（/dev/insights。0.27.0）は、
   //   常に「プロジェクト」を選択中にする（下の match）
   // デザイン（/dev/design・/dev/design/requirements）も、メニューから外したので「プロジェクト」を選択中にする（2026-11-17 会議）
-  { to: '/dev/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/dev/projects', '/dev/hearing', '/dev/requirements', '/dev/schedule', '/dev/sitemap', '/dev/design', '/dev/quality', '/dev/cms', '/dev/insights', '/dev/assets', '/dev/forms', '/dev/client-view'], hint: '担当案件の8段階' },
+  { to: '/dev/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/dev/projects', '/dev/hearing', '/dev/requirements', '/dev/schedule', '/dev/sitemap', '/dev/design', '/dev/quality', '/dev/release', '/dev/cms', '/dev/news', '/dev/insights', '/dev/assets', '/dev/forms', '/dev/client-view'], hint: '担当案件の8段階' },
   // ヒアリング（/dev/hearing・/dev/requirements）はメニューから外した（2026-11-12 ユーザー指示）。プロジェクト詳細・担当案件から開き、「プロジェクト」を選択中にする
   { to: '/dev/tasks', label: '構築タスク', icon: ListTodo, match: ['/dev/tasks'], hint: 'ページごとの実装状況' },
   // 自動チェック（/dev/checks）は 0.19.0 でメニューから外した（11/10 レビュー）。URL はダッシュボードへ転送する
@@ -129,7 +129,7 @@ export const AREAS: Record<AreaId, AreaDef> = {
     id: 'portal', label: 'お客様ポータル', short: 'ポータル', audience: 'お客様',
     description: '進み具合の確認・承認・ページ更新・レポート・サイネージ', home: '/portal', icon: UserRound,
     color: tokens.color.success, soft: tokens.color.successSoft,
-    items: PORTAL_ITEMS, bottom: [PORTAL_ITEMS[0], PORTAL_ITEMS[1], PORTAL_ITEMS[4], PORTAL_ITEMS[6]],
+    items: PORTAL_ITEMS, bottom: (['/portal', '/portal/approvals', '/portal/reports', '/portal/chat'] as const).map((to) => PORTAL_ITEMS.find((i) => i.to === to)!),
   },
   dev: {
     id: 'dev', label: '開発者画面', short: '開発者', audience: '制作エンジニア',

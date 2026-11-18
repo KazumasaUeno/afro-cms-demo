@@ -30,13 +30,18 @@ interface Props {
   projectId?: string;
   /** 中身を直接渡す（ストアに無い見込み客のプチ要件定義。0.32.0）。省略時は projectId の案件 */
   ctx?: DesignContext;
+  /**
+   * ブラウザ風の上の帯（アドレスバー）を付けない（2026-11-18 ユーザー指示「制作中のサイトは全画面で」「アドレスバーもいらない」）。
+   * PC は角丸・影・枠線も付けず置き場所の幅いっぱいに描き、広い画面では等倍より大きくもする（最大 1.5 倍）
+   */
+  bare?: boolean;
 }
 
 /**
  * 実寸（1280/820/390px）でレンダリングし、置き場所の幅に合わせて縮小表示する。
  * プレビュー自体は device によってレイアウトを切り替える（実際の HTML/CSS）。
  */
-export function DeviceFrame({ design, device, thumbnail, viewportHeight, label, screen = 0, projectId, ctx: ctxProp }: Props) {
+export function DeviceFrame({ design, device, thumbnail, viewportHeight, label, screen = 0, projectId, ctx: ctxProp, bare }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [avail, setAvail] = useState(0);
   const reduced = useReducedMotion();
@@ -44,7 +49,8 @@ export function DeviceFrame({ design, device, thumbnail, viewportHeight, label, 
   const ctx = ctxProp ?? storeCtx;
   const page = screen > 0 ? ctx.pages[screen - 1] : undefined;
   const w = DEVICE_WIDTH[device];
-  const h = viewportHeight ?? DEVICE_HEIGHT[device];
+  // 枠なしは、拡大しても見える高さ（viewportHeight）が変わらないよう、描く高さを倍率で割る（下の useLayoutEffect の後で決める）
+  const baseH = viewportHeight ?? DEVICE_HEIGHT[device];
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -54,9 +60,12 @@ export function DeviceFrame({ design, device, thumbnail, viewportHeight, label, 
     return () => ro.disconnect();
   }, []);
 
-  const scale = avail ? Math.min(1, avail / w) : 0;
+  // PC は画面いっぱい（拡大も可）、タブレット・スマホは端末の幅のまま中央（アドレスバーだけ外す。2026-11-18「アドレスバーもいらない」）
+  const fill = !!bare && device === 'pc';
+  const scale = avail ? Math.min(fill ? 1.5 : 1, avail / w) : 0;
+  const h = fill && scale > 0 ? Math.round(baseH / scale) : baseH;
   const Preview = PREVIEWS[design];
-  const chrome = !thumbnail;
+  const chrome = !thumbnail && !bare;
   const barH = chrome ? 34 : 0;
 
   return (
@@ -66,8 +75,8 @@ export function DeviceFrame({ design, device, thumbnail, viewportHeight, label, 
       <Box
         sx={{
           width: w * scale, height: h * scale + barH, mx: 'auto', overflow: 'hidden', bgcolor: '#fff',
-          borderRadius: device === 'phone' && chrome ? '28px' : thumbnail ? '10px' : '14px',
-          border: `1px solid ${tokens.color.border}`, boxShadow: thumbnail ? 'none' : tokens.shadow.md,
+          borderRadius: fill ? 0 : device === 'phone' && (chrome || bare) ? '28px' : thumbnail ? '10px' : '14px',
+          border: fill ? 'none' : `1px solid ${tokens.color.border}`, boxShadow: thumbnail || fill ? 'none' : tokens.shadow.md,
           transition: reduced ? 'none' : `width .34s ${tokens.motion.easeCss}, height .34s ${tokens.motion.easeCss}`,
         }}
       >

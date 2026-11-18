@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useDemo } from '@/store/DemoStore';
 import { useToast } from '@/hooks/useToast';
-import { ASSET_LIMITS, assetsOf, checkUpload, overStorageBudget } from '@/data/assets';
+import { ASSET_LIMITS, assetsOf, checkUpload, guessMime, overStorageBudget } from '@/data/assets';
 import { makeThumbnail } from './thumbnail';
 
 /**
@@ -10,6 +10,8 @@ import { makeThumbnail } from './thumbnail';
  * - actor: 開発者画面は { devBy }、お客様ポータルは { by: 'client' }（reducer はお客様からは画像だけ受け付ける）
  * - imagesOnly: 画像以外を選んだらエラーにする（画像選択から使うとき）
  * 戻り値の upload は、保存した画像の src と名前を返す（資料・失敗のときは null）。画像選択はこれでそのまま選ぶ
+ * - page: どのページの素材か（2026-11-18 ユーザー指示「素材ドライブは、ページ別で画像、PDF、テキスト、動画で分ける」。省略・空 = ページ未設定）
+ * - 動画は名前・種類・大きさだけ登録する（デモの保存領域が小さいため中身は保存しない。2026-11-18）
  */
 export function useAssetUpload(actor: { devBy: string } | { by: 'client' }, opts: { imagesOnly?: boolean } = {}) {
   const { state, dispatch } = useDemo();
@@ -22,7 +24,7 @@ export function useAssetUpload(actor: { devBy: string } | { by: 'client' }, opts
     return () => { alive.current = false; };
   }, []);
 
-  const upload = async (file: File, folder: string): Promise<{ src: string; label: string } | null> => {
+  const upload = async (file: File, folder: string, page = ''): Promise<{ src: string; label: string } | null> => {
     const items = assetsOf(state).items;
     const check = checkUpload(file, items);
     if ('error' in check) { toast(check.error, 'error'); return null; }
@@ -43,8 +45,12 @@ export function useAssetUpload(actor: { devBy: string } | { by: 'client' }, opts
       toast('保存できる容量の上限に達しました。使っていない素材を削除してからアップロードしてください', 'error');
       return null;
     }
-    dispatch({ type: 'addAsset', asset: { name, kind: check.kind, folder: folder.trim(), mime: file.type, size: file.size, ...(src ? { src } : {}) }, projectId, ...actor });
-    toast(check.kind === 'image' ? `「${name}」をアップロードしました（縮小して保存${folder ? `・${folder}` : ''}）` : `「${name}」を登録しました（デモのため中身は保存しません）`);
+    // 種類が空のファイル（.md など）は拡張子から補う（PDF・テキスト・動画に分けるため。2026-11-18）
+    const mime = file.type || guessMime(file.name);
+    dispatch({ type: 'addAsset', asset: { name, kind: check.kind, folder: folder.trim(), ...(page.trim() ? { page: page.trim() } : {}), mime, size: file.size, ...(src ? { src } : {}) }, projectId, ...actor });
+    toast(check.kind === 'image'
+      ? `「${name}」をアップロードしました（縮小して保存${folder ? `・${folder}` : ''}）`
+      : check.video ? `「${name}」を登録しました（デモでは動画の中身は保存しません）` : `「${name}」を登録しました（デモのため中身は保存しません）`);
     return src ? { src, label: name } : null;
   };
 

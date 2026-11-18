@@ -166,7 +166,7 @@ export function PortalAssistant() {
 
               <Box sx={{ px: 1.5, pt: 1, pb: 1.5, borderTop: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surfaceMuted }}>
                 <Box sx={{ display: 'flex', gap: 0.75, overflowX: 'auto', pb: 1, mx: -0.5, px: 0.5 }} role="group" aria-label="よくある質問">
-                  {TOPICS.map((t) => (
+                  {TOPICS.filter((t) => !t.hidden).map((t) => (
                     <ButtonBase
                       key={t.id}
                       disabled={typing}
