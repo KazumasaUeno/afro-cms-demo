@@ -1,5 +1,5 @@
 import { Box, Button, ButtonBase, Dialog, IconButton, Stack, Tab, Tabs, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
-import { ArrowLeft, ArrowRight, BadgeCheck, Check, Columns3, Expand, LayoutTemplate, Monitor, Network, Palette, ShieldCheck, Smartphone, Square, Tablet, Wand2, X, PenLine, ListTodo } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BadgeCheck, Check, Expand, LayoutTemplate, Monitor, Network, Palette, ShieldCheck, Smartphone, Tablet, Wand2, X, PenLine, ListTodo } from 'lucide-react';
 import { useState, type ComponentProps } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { BuildFlowNav } from '@/components/layout/BuildFlowNav';
@@ -171,8 +171,6 @@ export default function DesignStudioPage() {
   const design = state.design;
   const [focus, setFocus] = useState<DesignId>(design.selected ?? 'creative');
   const [device, setDevice] = useState<Device>('pc');
-  // 既定は比較（2026-11-17 会議: ページを選んでから、そのページの案を並べて比べる）
-  const [mode, setMode] = useState<'single' | 'compare'>('compare');
   const [expanded, setExpanded] = useState(false);
   const [building, setBuilding] = useState(false);
   const [screenNo, setScreen] = useState(0);
@@ -218,10 +216,6 @@ export default function DesignStudioPage() {
             <AiBadge />
             {/* デザイン案ができたらお客様へ採用・承認を依頼する（2026-11-17 会議。依頼するまでお客様の画面では「準備中」） */}
             <RequestApprovalButton approvalKey="design" blockedReason={reqOk ? undefined : 'デザイン要件定義の必須（A）の質問に答えると依頼できます'} />
-            <ToggleButtonGroup exclusive size="small" value={mode} onChange={(_, v) => v && setMode(v)} aria-label="表示モード">
-              <ToggleButton value="single" sx={{ gap: 0.75 }}><Square size={14} />単体</ToggleButton>
-              <ToggleButton value="compare" sx={{ gap: 0.75 }}><Columns3 size={14} />比較</ToggleButton>
-            </ToggleButtonGroup>
           </>
         )}
       />
@@ -277,18 +271,12 @@ export default function DesignStudioPage() {
         ))}
       </Box>
 
-      {/* プレビュー */}
+      {/* プレビュー: 上のカードで選んだ案を大きく見る。3 案を並べる比較は上のカードと同じなので外した（2026-11-19 ユーザー指示） */}
       <Surface padding={{ xs: 1.5, md: 2.5 }} sx={{ mb: 3, bgcolor: tokens.color.surfaceMuted }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }} sx={{ mb: 2 }}>
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            {mode === 'single' ? (
-              <>
-                <Typography variant="h4" component="h2">{current.label}：{current.name}</Typography>
-                <Typography variant="body2" color="text.secondary">{current.description}</Typography>
-              </>
-            ) : (
-              <Typography variant="h4" component="h2">{screenLabelOf(ctx, screen)}を {variants.length} 案で比較</Typography>
-            )}
+            <Typography variant="h4" component="h2">{current.label}：{current.name}（{screenLabelOf(ctx, screen)}）</Typography>
+            <Typography variant="body2" color="text.secondary">{current.description}</Typography>
             {/* 案に使った案件の情報（ブランド色・イメージ） */}
             <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
               {ctx.siteName}
@@ -299,33 +287,13 @@ export default function DesignStudioPage() {
           <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
             {/* ページの選択は上のタブ（2026-11-17 会議）。ここは端末だけ */}
             <DeviceToggle value={device} onChange={setDevice} />
-            {mode === 'single' && (
-              <Tooltip title="大きくプレビュー">
-                <IconButton aria-label="大きくプレビュー" onClick={() => setExpanded(true)}><Expand size={18} /></IconButton>
-              </Tooltip>
-            )}
+            <Tooltip title="大きくプレビュー">
+              <IconButton aria-label="大きくプレビュー" onClick={() => setExpanded(true)}><Expand size={18} /></IconButton>
+            </Tooltip>
           </Stack>
         </Stack>
 
-        {mode === 'single' ? (
-          <DeviceFrame design={current.id} device={device} screen={screen} viewportHeight={device === 'pc' ? 720 : undefined} label={`${current.name}のプレビュー`} />
-        ) : (
-          <Box sx={{ display: { xs: 'flex', md: 'grid' }, gridTemplateColumns: `repeat(${variants.length}, minmax(0, 1fr))`, gap: 2, overflowX: { xs: 'auto', md: 'visible' }, scrollSnapType: 'x mandatory' }}>
-            {variants.map((v) => (
-              <Box key={v.id} sx={{ flex: { xs: '0 0 86%', sm: '0 0 60%' }, scrollSnapAlign: 'center', minWidth: 0 }}>
-                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                  <Typography variant="h6">{v.label} · {v.name}</Typography>
-                  {/* 採用後は「採用した案」を基準に表示する（見ている案と取り違えない） */}
-                  <Button size="small" variant={(locked ? design.selected : focus) === v.id ? 'contained' : 'outlined'} disabled={locked && design.selected !== v.id} onClick={() => choose(v.id)}>
-                    {/* 選んでも保存しない（見るだけ。選ぶのはお客様）ので「表示」と書く */}
-                    {locked ? (design.selected === v.id ? '採用済み' : '不採用') : focus === v.id ? '表示中' : 'この案を表示'}
-                  </Button>
-                </Stack>
-                <DeviceFrame design={v.id} device={device} screen={screen} viewportHeight={device === 'pc' ? 900 : undefined} label={`${v.name}のプレビュー`} />
-              </Box>
-            ))}
-          </Box>
-        )}
+        <DeviceFrame design={current.id} device={device} screen={screen} viewportHeight={device === 'pc' ? 720 : undefined} label={`${current.name}のプレビュー`} />
       </Surface>
 
       {/* 採用・構築 */}
