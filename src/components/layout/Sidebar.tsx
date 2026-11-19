@@ -85,36 +85,25 @@ function AreaBadge({ area }: { area: AreaDef }) {
   );
 }
 
-function AdminFooter({ onNavigate, showPresent = true }: { onNavigate?: () => void; showPresent?: boolean }) {
-  const { state } = useDemo();
-  const project = currentProject(state);
+/** 管理者画面のメニューの下はプレゼンと設定だけ（2026-11-19 ユーザー指示。作業中のプロジェクトは上のバーの案件切り替えに出ている） */
+function AdminFooter({ onNavigate }: { onNavigate?: () => void }) {
   return (
-    <>
-      <Box sx={{ p: 1.5, borderRadius: 3, border: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface }}>
-        <Typography variant="overline" sx={{ display: 'block', lineHeight: 1.4 }}>作業中のプロジェクト</Typography>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.75 }}>
-          <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: project.accent, flexShrink: 0 }} />
-          <Typography variant="h6" noWrap>{project.siteName}</Typography>
-        </Stack>
-      </Box>
-
-      {showPresent && <Tooltip title="顧客に見せる全画面のプレゼン表示" placement="right">
-        <ButtonBase
-          component={NavLink}
-          to="/present"
-          onClick={onNavigate}
-          sx={{
-            justifyContent: 'flex-start', gap: 1.5, px: 2, height: 56, borderRadius: '16px', color: tokens.color.onPrimaryContainer, fontWeight: 500, fontSize: 14,
-            bgcolor: tokens.color.primaryContainer, boxShadow: tokens.shadow.sm, // M3 Extended FAB（tonal）。押すと角が締まる
-            transition: `box-shadow .2s, border-radius .35s ${tokens.motion.easeSpringCss}`,
-            '&:hover': { boxShadow: tokens.shadow.md }, '&:active': { borderRadius: '12px' },
-          }}
-        >
-          <Presentation size={18} />
-          営業プレゼンモード
-        </ButtonBase>
-      </Tooltip>}
-    </>
+    <Tooltip title="顧客に見せる全画面のプレゼン表示" placement="right">
+      <ButtonBase
+        component={NavLink}
+        to="/present"
+        onClick={onNavigate}
+        sx={{
+          justifyContent: 'flex-start', gap: 1.5, px: 2, height: 56, borderRadius: '16px', color: tokens.color.onPrimaryContainer, fontWeight: 500, fontSize: 14,
+          bgcolor: tokens.color.primaryContainer, boxShadow: tokens.shadow.sm, // M3 Extended FAB（tonal）。押すと角が締まる
+          transition: `box-shadow .2s, border-radius .35s ${tokens.motion.easeSpringCss}`,
+          '&:hover': { boxShadow: tokens.shadow.md }, '&:active': { borderRadius: '12px' },
+        }}
+      >
+        <Presentation size={18} />
+        営業プレゼンモード
+      </ButtonBase>
+    </Tooltip>
   );
 }
 
@@ -163,7 +152,8 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { state } = useDemo();
   const badge = useNavBadge();
   return (
-    <Stack sx={{ height: '100%', p: 2, gap: 2, overflowY: 'auto' }}>
+    // 画面が低いときは子を縮めずに中でスクロールさせる（flex の既定の縮みで下のボタンが潰れていた）
+    <Stack sx={{ height: '100%', p: 2, gap: 2, overflowY: 'auto', '& > *': { flexShrink: 0 } }}>
       <Stack spacing={1.5} sx={{ px: 1, py: 0.5 }}>
         <Logo />
         <AreaBadge area={area} />
@@ -216,7 +206,7 @@ function AccountButton({ area }: { area: AreaDef }) {
         slotProps={{ paper: { role: 'dialog', 'aria-label': 'ログイン中の情報', sx: { ml: 1.5, width: 300, p: 2, bgcolor: tokens.color.surfaceContainer, display: 'flex', flexDirection: 'column', gap: 1.5 } } }}
       >
         <AreaBadge area={area} />
-        {area.id === 'admin' ? <AdminFooter showPresent={false} /> : <AreaFooter area={area} />}
+        <AreaFooter area={area} />
       </Popover>
     </>
   );
@@ -263,7 +253,7 @@ export function Sidebar() {
       {area.settings && (
         <RailItem to={area.settings.to} label={area.settings.label} icon={area.settings.icon} hint={area.settings.hint} active={isActive(area.settings, pathname)} color={area.color} />
       )}
-      <AccountButton area={area} />
+      {area.id !== 'admin' && <AccountButton area={area} />}
     </Box>
   );
 }
