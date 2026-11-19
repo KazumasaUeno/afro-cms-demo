@@ -364,7 +364,7 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
               >
                 {fullscreenVariant.label}「{fullscreenVariant.name}」の{screenLabelOf(designCtx, screen)}を新しいタブで全画面表示
               </Button>
-              <Typography variant="caption">{selectedDesign ? '選んだ案・ページを開きます。' : '案を選ぶと、その案を開きます。'}開いた先でも案・ページ・端末を切り替えられます。</Typography>
+              <Typography variant="caption">{selectedDesign ? '選んだ案・ページを開きます。' : '案を選ぶと、その案を開きます。'}開いた先ではページ・端末を切り替えられます。</Typography>
             </Stack>
             {!selectedDesign && <Typography variant="caption" sx={{ display: 'block', mt: 1.5 }}>案を 1 つ選ぶと承認できます。</Typography>}
           </StepCard>

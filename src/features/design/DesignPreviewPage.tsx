@@ -1,7 +1,7 @@
-import { Box, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { Box, Stack, Typography } from '@mui/material';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { DESIGN_VARIANTS, offeredVariants } from '@/data/designs';
+import { DESIGN_VARIANTS } from '@/data/designs';
 import { tokens } from '@/theme/tokens';
 import type { DesignId } from '@/types';
 import { DeviceFrame } from './DeviceFrame';
@@ -70,14 +70,8 @@ export default function DesignPreviewPage() {
         useFlexGap
         sx={{ minHeight: BAR_H, px: 2, py: 1, flexWrap: 'wrap', bgcolor: tokens.color.surface, borderBottom: `1px solid ${tokens.color.border}`, position: 'sticky', top: 0, zIndex: 1 }}
       >
-        <Typography variant="body2" sx={{ fontWeight: 650, mr: 1 }} noWrap>{ctx.siteName} の{site ? '制作中のサイト' : 'デザイン案'}</Typography>
-        {!site && <ToggleButtonGroup exclusive size="small" value={design} onChange={(_, v) => v && set('design', v)} aria-label="表示するデザイン案">
-          {/* 切り替えの選択肢は A・B・C（2026-11-19 ユーザー指示） */}
-          {offeredVariants(design).map((v0) => {
-            const v = personalize(v0, ctx);
-            return <ToggleButton key={v.id} value={v.id}>{v.label}・{v.name}</ToggleButton>;
-          })}
-        </ToggleButtonGroup>}
+        {/* 他の案へ切り替えるボタンは出さない。開いた案だけを見る（2026-11-19 ユーザー指示「全画面表示、他のデザインに切り替えるボタンをなくす」）。案を変えるのは元の画面で */}
+        <Typography variant="body2" sx={{ fontWeight: 650, mr: 1 }} noWrap>{ctx.siteName} の{site ? '制作中のサイト' : `デザイン案（${variant.label}・${variant.name}）`}</Typography>
         {ctx.pages.length > 0 && <ScreenToggle ctx={ctx} value={screen} onChange={(n) => set('screen', String(n))} />}
         <Typography variant="caption" sx={{ ml: 'auto' }}>{site ? `公開前の制作中のサイトです（デモの見本）。チェックは${checkScreen}の画面で行ってください。` : '見本の表示だけです。承認は元の画面で行ってください。'}</Typography>
       </Stack>
