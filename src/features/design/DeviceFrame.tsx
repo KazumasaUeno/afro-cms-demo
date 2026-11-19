@@ -31,7 +31,7 @@ interface Props {
   /** 中身を直接渡す（ストアに無い見込み客のプチ要件定義。0.32.0）。省略時は projectId の案件 */
   ctx?: DesignContext;
   /**
-   * ブラウザ風の上の帯（アドレスバー）を付けない（2026-11-18 ユーザー指示「制作中のサイトは全画面で」「アドレスバーもいらない」）。
+   * 枠なしで描く（2026-11-18 ユーザー指示「制作中のサイトは全画面で」）。
    * PC は角丸・影・枠線も付けず置き場所の幅いっぱいに描き、広い画面では等倍より大きくもする（最大 1.5 倍）
    */
   bare?: boolean;
@@ -65,8 +65,7 @@ export function DeviceFrame({ design, device, thumbnail, viewportHeight, label, 
   const scale = avail ? Math.min(fill ? 1.5 : 1, avail / w) : 0;
   const h = fill && scale > 0 ? Math.round(baseH / scale) : baseH;
   const Preview = PREVIEWS[design];
-  const chrome = !thumbnail && !bare;
-  const barH = chrome ? 34 : 0;
+  // ブラウザ風の上の帯（アドレスバー）はどの表示でも付けない（2026-11-19 ユーザー指示「上のアドレスバーは要らない」。11-18 は制作中のサイトだけ外していた）
 
   return (
     // 顧客サイトの見本なので、アプリの配色（ダーク）に関わらずライトで描く
@@ -74,20 +73,12 @@ export function DeviceFrame({ design, device, thumbnail, viewportHeight, label, 
     <Box ref={ref} data-theme="light" sx={{ width: '100%' }}>
       <Box
         sx={{
-          width: w * scale, height: h * scale + barH, mx: 'auto', overflow: 'hidden', bgcolor: '#fff',
-          borderRadius: fill ? 0 : device === 'phone' && (chrome || bare) ? '28px' : thumbnail ? '10px' : '14px',
+          width: w * scale, height: h * scale, mx: 'auto', overflow: 'hidden', bgcolor: '#fff',
+          borderRadius: fill ? 0 : device === 'phone' && !thumbnail ? '28px' : thumbnail ? '10px' : '14px',
           border: fill ? 'none' : `1px solid ${tokens.color.border}`, boxShadow: thumbnail || fill ? 'none' : tokens.shadow.md,
           transition: reduced ? 'none' : `width .34s ${tokens.motion.easeCss}, height .34s ${tokens.motion.easeCss}`,
         }}
       >
-        {chrome && (
-          <Box sx={{ height: barH, display: 'flex', alignItems: 'center', gap: 0.75, px: 1.5, bgcolor: tokens.color.bgSubtle, borderBottom: `1px solid ${tokens.color.border}` }}>
-            {['#F87171', '#FBBF24', '#34D399'].map((c) => <Box key={c} sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: c, opacity: 0.8 }} />)}
-            <Box sx={{ flex: 1, mx: 1, height: 20, borderRadius: '6px', bgcolor: '#fff', fontSize: 12, color: tokens.color.muted, display: 'flex', alignItems: 'center', px: 1, overflow: 'hidden', whiteSpace: 'nowrap' }}>
-              {ctx.domain}{page?.path ?? ''}
-            </Box>
-          </Box>
-        )}
         {scale > 0 && (
           <Box
             key={page?.key ?? 'top'}
