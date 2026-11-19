@@ -2,14 +2,13 @@ import type { DemoState, ProjectSchedule } from '@/types';
 import { REQUIREMENT_CATEGORIES, REQUIREMENT_QUESTIONS } from '@/data/requirements';
 import { formatDateTime } from '@/services/time';
 import { ymdToIso } from '@/features/projects/projectForm';
-import { downloadText } from '@/services/download';
 import { buildProposal } from './buildProposal';
 import { DATA_MODE } from '@/repositories/mode';
 import { answerText, isAnswered } from './validation';
 
 /**
  * 要件定義書（印刷できる HTML）。改善提案（buildProposal）とヒアリングの全回答を 1 枚にまとめる。
- * 画面と同じく回答から毎回作る（別に保存しない）。ブラウザで開いて印刷すると PDF にもできる。
+ * 画面と同じく回答から毎回作る（別に保存しない）。保存は印刷画面から PDF にする（printRequirementsDoc）。
  */
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -90,7 +89,9 @@ export function buildRequirementsDocHtml(state: RequirementsDocState): string {
     return `<h3>${c.no}. ${esc(c.title)}</h3><table>${rows}</table>`;
   }).join('');
   const points = proposal.points.map((p) => `<li><b>[${PRIORITY[p.priority] ?? ""}] ${esc(p.area)}: ${esc(p.title)}</b><br>${esc(p.detail)}<br><span class="muted">${esc(p.impact)}</span></li>`).join('');
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>要件定義書 ${esc(project?.siteName ?? proposal.hostname)}</title>
+  // タイトルは PDF に保存するときの既定のファイル名になる（printRequirementsDoc）
+  const today = new Date().toLocaleDateString('sv-SE'); // yyyy-mm-dd（端末の日付）
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>要件定義書_${esc(project?.siteName ?? proposal.hostname)}_${today}</title>
 <style>
 body{font-family:"Noto Sans JP",sans-serif;max-width:820px;margin:32px auto;padding:0 16px;color:#0f172a;line-height:1.7;font-size:14px}
 h1{font-size:24px;margin:0 0 4px}h2{font-size:18px;margin:28px 0 8px;padding-bottom:4px;border-bottom:2px solid #0f172a}h3{font-size:15px;margin:18px 0 6px}
@@ -120,7 +121,27 @@ ${nonFunctionalSection()}
 </body></html>`;
 }
 
-export function downloadRequirementsDoc(state: RequirementsDocState): void {
-  const host = (state.requirements.proposal ?? buildProposal(state.requirements.answers, state.requirements.competitors)).hostname.replace(/[^a-zA-Z0-9.-]/g, '_');
-  downloadText(`requirements-${host}-${new Date().toISOString().slice(0, 10)}.html`, buildRequirementsDocHtml(state), 'text/html;charset=utf-8');
+/**
+ * 要件定義書を PDF で保存する（2026-11-19 ユーザー指示「ダウンロードは html ではないものに」。以前は .html を保存していた）。
+ * 見えない iframe に要件定義書を入れて印刷画面を開き、「PDF に保存」で保存してもらう（部品を増やさない。見た目は印刷用の CSS のまま）。
+ * 印刷画面の既定のファイル名は <title>（要件定義書_サイト名_日付）になる。
+ */
+export function printRequirementsDoc(state: RequirementsDocState): void {
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.tabIndex = -1;
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+  let removed = false;
+  const remove = () => { if (!removed) { removed = true; iframe.remove(); } };
+  iframe.onload = () => {
+    const win = iframe.contentWindow;
+    if (!win) { remove(); return; }
+    // 印刷画面を閉じたら片付ける（afterprint が来ないブラウザ向けに 1 分で消す）
+    win.addEventListener('afterprint', () => window.setTimeout(remove, 0));
+    window.setTimeout(remove, 60_000);
+    win.focus();
+    win.print();
+  };
+  iframe.srcdoc = buildRequirementsDocHtml(state);
+  document.body.appendChild(iframe);
 }
