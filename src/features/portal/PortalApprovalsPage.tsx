@@ -94,7 +94,7 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
   const { state, dispatch } = useDemo();
   // デザイン案は案件ごと（ポータルは MINAMO COFFEE。0.29.5）
   const designCtx = useDesignContext();
-  // 見本で表示する画面（0 = トップ、1・2 = 主要ページ。デザイン作成画面と同じ 3 画面。0.39.3）
+  // 見本で表示する画面（0 = トップ、1 = 主要ページ。デザイン作成画面と同じ 2 画面。2026-11-19）
   const [screenNo, setScreen] = useState(0);
   const screen = Math.min(screenNo, designCtx.pages.length);
   // サイトマップの図（閲覧だけ）を開いているか（0.39.5）
@@ -121,7 +121,7 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
   // 説明用の表示でのデザインの仮の選択（保存しない）
   const [previewDesign, setPreviewDesign] = useState<DesignId | null>(null);
   const selectedDesign = preview ? (previewDesign ?? state.design.selected) : state.design.selected;
-  // 出す案は A・B の 2 つ（2026-11-17 会議）。保存済みの選択（C = premium を含む）は消さずに出す
+  // 出す案は A・B・C の 3 つ（2026-11-19 ユーザー指示）
   const portalVariants = offeredVariants(state.design.selected).map((v) => personalize(v, designCtx));
   const fullscreenVariant = portalVariants.find((v) => v.id === selectedDesign) ?? portalVariants[0];
   const [confirm, setConfirm] = useState<Exclude<ApprovalKey, 'quality'> | null>(null);

@@ -64,7 +64,7 @@ export function approvalSteps(state: DemoState): ApprovalStep[] {
       lockedReason: 'スケジュールの承認のあとに、アフロがサイトマップをご用意します。',
     },
     {
-      key: 'design', no: 4, title: 'トップデザイン', ask: 'ページごとに 2 つの案を比べて、採用するデザインを選んでください',
+      key: 'design', no: 4, title: 'トップデザイン', ask: 'ページごとに 3 つの案を比べて、採用するデザインを選んでください',
       status: state.design.approvedAt ? 'approved' : state.sitemap.approvedAt ? 'waiting' : 'locked', approvedAt: state.design.approvedAt,
       lockedReason: 'サイトマップの承認のあとに、アフロがデザイン案を作成します。',
     },

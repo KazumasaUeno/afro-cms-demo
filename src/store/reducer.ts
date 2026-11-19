@@ -8,7 +8,7 @@ import { sitemapCreated, sitemapFor } from '@/data/sitemap';
 import { createSeedState } from './seed';
 import { blankRequirements, blankWork, devOf, switchWork, workOf } from './projectWork';
 import { syncDemoProject } from './demoProject';
-import { DEV_ENVS, DEV_TASK_STATUSES, DEV_USER_ID, deployGate } from '@/data/dev';
+import { DEV_ENVS, DEV_TASK_STATUSES, DEV_TASK_TITLE_MAX, DEV_USER_ID, deployGate } from '@/data/dev';
 import { memberById } from '@/data/members';
 import { clientActorName } from '@/data/projects';
 import { allDevPeople, devUsersState, personById } from '@/data/people';
@@ -145,6 +145,8 @@ export type Action =
   /** 開発者画面（操作者は制作エンジニア） */
   // by: 操作したメンバーの id（ログイン中の人。省略時は DEV_USER_ID）
   | { type: 'setDevTaskStatus'; id: string; status: DevTaskStatus; by?: string }
+  /** 構築タスクを手で追加する（2026-11-19 ユーザー指示「タスクの新規作成がない」）。状態は未着手から */
+  | { type: 'addDevTask'; title: string; page: string; assigneeIds: string[]; by?: string }
   | { type: 'runAutoChecks'; by?: string }
   | { type: 'deploy'; env: DeployEnv; by?: string }
   /** デジタルサイネージ（お客様ポータル。操作者はお客様） */
@@ -853,6 +855,17 @@ function baseReducer(state: DemoState, action: Action): DemoState {
       const tasks = dev.tasks.map((t) => (t.id === task.id ? { ...t, status: action.status, updatedAt: nowIso() } : t));
       const label = DEV_TASK_STATUSES.find((x) => x.id === action.status)?.label ?? action.status;
       return log({ ...state, dev: { ...dev, tasks } }, `構築タスク「${task.title}」を${label}にしました`, 'edit', devActor(state, action.by));
+    }
+
+    case 'addDevTask': {
+      const title = action.title.trim();
+      const page = action.page.trim();
+      const assigneeIds = [...new Set(action.assigneeIds)];
+      if (!title || title.length > DEV_TASK_TITLE_MAX || !page || !assigneeIds.length) return state;
+      const dev = devState(state);
+      // assigneeId（主担当）は以前のデータ・画面との互換のため先頭の人を入れておく
+      const task = { id: uid('dt'), page, title, assigneeId: assigneeIds[0], assigneeIds, status: 'todo' as const, updatedAt: nowIso() };
+      return log({ ...state, dev: { ...dev, tasks: [...dev.tasks, task] } }, `構築タスク「${title}」を追加しました`, 'edit', devActor(state, action.by));
     }
 
     case 'runAutoChecks': {

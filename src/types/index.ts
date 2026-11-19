@@ -538,7 +538,10 @@ export interface DevTask {
   /** 対象ページ名（BUILD_PAGES のいずれか） */
   page: string;
   title: string;
+  /** 主担当（assigneeIds の先頭と同じ。assigneeIds が無い以前のデータはこれだけ） */
   assigneeId: string;
+  /** 担当全員（2026-11-19 ユーザー指示「担当は複数選択可」）。読むときは taskAssignees() を使う */
+  assigneeIds?: string[];
   status: DevTaskStatus;
   updatedAt: ISODate;
 }

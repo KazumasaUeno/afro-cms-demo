@@ -72,14 +72,14 @@ export function nextBestAction(state: DemoState): { title: string; detail: strin
   if (!state.design.approvedAt && !designReady(state)) {
     return {
       title: 'デザイン要件定義を入力しましょう',
-      detail: '必須（A）の質問に答えると、2つのデザイン案を作れます。',
+      detail: '必須（A）の質問に答えると、3つのデザイン案を作れます。',
       to: '/ai-studio/design/requirements', cta: 'デザイン要件定義を入力する',
     };
   }
   if (!state.design.approvedAt) {
     return {
-      title: 'デザイン案2パターンが揃いました。お客様の採用を待っています',
-      detail: '要件定義から生成したミニマル・クリエイティブの2案。お客様がお客様ポータルで採用すると、全ページ構築へ進めます。',
+      title: 'デザイン案3パターンが揃いました。お客様の採用を待っています',
+      detail: '要件定義から生成したミニマル・クリエイティブ・プレミアムの3案。お客様がお客様ポータルで採用すると、全ページ構築へ進めます。',
       to: '/ai-studio/design', cta: 'デザイン案を比較する',
     };
   }

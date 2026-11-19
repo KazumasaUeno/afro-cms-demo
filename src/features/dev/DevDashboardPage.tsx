@@ -10,7 +10,7 @@ import { DEV_TASK_STATUSES } from '@/data/dev';
 import { devNextWork } from '@/features/projects/projectRoutes';
 import { tokens } from '@/theme/tokens';
 import type { DevTaskStatus, Project } from '@/types';
-import { ENV_TONE, TASK_TONE, envDef, nextDevAction, taskLabel } from './devUi';
+import { ENV_TONE, TASK_TONE, envDef, isTaskAssignee, nextDevAction, taskLabel } from './devUi';
 import { DevMono } from './DevMono';
 import { DevProjectCard } from './DevProjectCard';
 import { useDevProjects, useDevUser } from './useDevUser';
@@ -93,7 +93,7 @@ export default function DevDashboardPage() {
 function BuildStatus({ project, meId, openWork }: { project: Project; meId: string; openWork: (to: string) => void }) {
   const { state } = useDemo();
   const dev = devOf(state, project.id);
-  const mineAll = dev.tasks.filter((t) => t.assigneeId === meId && t.status !== 'done');
+  const mineAll = dev.tasks.filter((t) => isTaskAssignee(t, meId) && t.status !== 'done');
   const mine = [...mineAll].sort((a, b) => MINE_ORDER[a.status] - MINE_ORDER[b.status]).slice(0, 3);
   const next = nextDevAction(dev, !!workView(state, project.id).design.approvedAt, meId);
 

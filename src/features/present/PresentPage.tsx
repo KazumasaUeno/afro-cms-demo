@@ -186,9 +186,9 @@ function DesignSlide() {
   const [sel, setSel] = useState<DesignId>('creative');
   const ctx = useDesignContext();
   return (
-    <SlideFrame eyebrow="④ 制作" title="要件から、2つのデザイン案を生成" lead="色違いではなく、レイアウト・書体・構成まで異なる2案。ページごとに顧客と並べて比べ、その場で採用できます。（クリックで選択）">
-      {/* 案は A・B の 2 つ（2026-11-17 会議: 3 画面 × 3 案は多すぎる。デザインスタジオ・お客様ポータルと同じ） */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2.5 }}>
+    <SlideFrame eyebrow="④ 制作" title="要件から、3つのデザイン案を生成" lead="色違いではなく、レイアウト・書体・構成まで異なる3案。ページごとに顧客と並べて比べ、その場で採用できます。（クリックで選択）">
+      {/* 案は A・B・C の 3 つ（2026-11-19 ユーザー指示。デザインスタジオ・お客様ポータルと同じ） */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2.5 }}>
         {offeredVariants().map((d) => {
           const on = sel === d.id;
           return (

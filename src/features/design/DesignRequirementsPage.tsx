@@ -16,7 +16,7 @@ import { DESIGN_REQUIRED, designAnsweredCount, designBlockers } from './designRe
 
 /**
  * デザイン要件定義（管理者画面 /ai-studio/design/requirements・開発者画面 /dev/design/requirements。0.28.0。2026-11-12 ユーザー決定）。
- * サイトマップの承認の後、デザイン案（2 案。2026-11-17 会議で 3 → 2）を作る前に、デザイン・ブランドの 6 問を聞く。必須（A）の質問がそろうとデザインスタジオで 2 案を出す。
+ * サイトマップの承認の後、デザイン案（3 案 × 2 画面。2026-11-19 ユーザー指示）を作る前に、デザイン・ブランドの 6 問を聞く。必須（A）の質問がそろうとデザインスタジオで 3 案を出す。
  * 入力欄・保存の表示はヒアリングと同じ部品（AnswerInput・SaveAnswersButton）。入力は自動で保存される（store が localStorage へ書く）。
  * デザインの採用・承認の後は閲覧だけ（reducer も受け付けない）。demo だけ（live の router には無い）
  */
@@ -48,7 +48,7 @@ export default function DesignRequirementsPage() {
         title="デザイン要件定義"
         description={
           editable
-            ? 'デザインの好み・ブランドを伺って入力します。必須（A）の質問がそろうと、デザインスタジオで2つのデザイン案を作れます。'
+            ? 'デザインの好み・ブランドを伺って入力します。必須（A）の質問がそろうと、デザインスタジオで3つのデザイン案を作れます。'
             : 'デザイン案を採用済みのため、閲覧だけできます。'
         }
       />

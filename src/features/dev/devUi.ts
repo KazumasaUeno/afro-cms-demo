@@ -1,4 +1,4 @@
-import type { DeployEnv, DevState, DevTaskStatus } from '@/types';
+import type { DeployEnv, DevState, DevTask, DevTaskStatus } from '@/types';
 import type { PillTone } from '@/components/ui';
 import { DEV_ENVS, DEV_TASK_STATUSES, DEV_USER_ID, latestDeploy, latestSuccess } from '@/data/dev';
 
@@ -6,6 +6,10 @@ import { DEV_ENVS, DEV_TASK_STATUSES, DEV_USER_ID, latestDeploy, latestSuccess }
 export const TASK_TONE: Record<DevTaskStatus, PillTone> = { todo: 'neutral', doing: 'info', review: 'warning', done: 'success' };
 
 export const taskLabel = (s: DevTaskStatus) => DEV_TASK_STATUSES.find((x) => x.id === s)?.label ?? s;
+
+/** タスクの担当全員（複数担当は 2026-11-19 から。以前のデータは assigneeId の 1 人） */
+export const taskAssignees = (t: DevTask): string[] => (t.assigneeIds?.length ? t.assigneeIds : [t.assigneeId]);
+export const isTaskAssignee = (t: DevTask, userId: string) => taskAssignees(t).includes(userId);
 
 export const envDef = (env: DeployEnv) => DEV_ENVS.find((e) => e.id === env) ?? DEV_ENVS[0];
 
@@ -50,7 +54,7 @@ export function nextDevAction(dev: DevState, designApproved: boolean, userId: st
       ? { title: `v${stgOk.version} を本番環境へ公開できます`, cta: '本番へ公開する', to: '/dev/deploys' }
       : { title: `v${stgOk.version} はお客様のデザイン承認待ちです（承認後に本番へ公開できます）`, cta: '環境・デプロイを見る', to: '/dev/deploys' };
   }
-  const review = dev.tasks.filter((t) => t.assigneeId === userId && t.status === 'review').length;
+  const review = dev.tasks.filter((t) => isTaskAssignee(t, userId) && t.status === 'review').length;
   if (review > 0) return { title: `レビュー待ちが ${review} 件あります`, cta: 'タスクを見る', to: '/dev/tasks' };
   return { title: '今すぐ対応が必要なものはありません' };
 }

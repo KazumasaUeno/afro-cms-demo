@@ -1,16 +1,17 @@
 import { Box, Button, FormControlLabel, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Stack, Switch, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
-import { ArrowRight, Check, ListTodo, MoreHorizontal } from 'lucide-react';
+import { ArrowRight, Check, ListTodo, MoreHorizontal, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { MemberAvatar, PageHeader, StatusPill, Surface } from '@/components/ui';
-import { useDemo, devState } from '@/store/DemoStore';
+import { useDemo, devState, devProjectsState } from '@/store/DemoStore';
 import { useToast } from '@/hooks/useToast';
 import { relativeTime } from '@/services/time';
 import { memberById } from '@/data/members';
 import { DEV_TASK_STATUSES } from '@/data/dev';
 import { tokens } from '@/theme/tokens';
 import type { DevTask, DevTaskStatus } from '@/types';
-import { NEXT_STATUS, TASK_TONE, taskLabel } from './devUi';
+import { NEXT_STATUS, TASK_TONE, isTaskAssignee, taskAssignees, taskLabel } from './devUi';
 import { useDevUser } from './useDevUser';
+import { NewDevTaskDialog, WHOLE_SITE } from './NewDevTaskDialog';
 
 /** 390px の状態タブで 4 等分に収まらない名前だけ短くする（aria-label は正式名） */
 const SHORT_LABEL: Partial<Record<DevTaskStatus, string>> = { review: 'レビュー' };
@@ -23,7 +24,14 @@ export default function DevTasksPage() {
   const [mineOnly, setMineOnly] = useState(false);
   const [tab, setTab] = useState<DevTaskStatus>('doing');
   const [menu, setMenu] = useState<{ el: HTMLElement; task: DevTask } | null>(null);
-  const tasks = devState(state).tasks.filter((t) => !mineOnly || t.assigneeId === me.id);
+  const [adding, setAdding] = useState(false);
+  const dev = devState(state);
+  const tasks = dev.tasks.filter((t) => !mineOnly || isTaskAssignee(t, me.id));
+  // 追加の候補: 対象ページはその案件のタスクのページ、担当はログイン中の人＋その案件の開発担当＋いまの担当
+  // 「サイト全体」はダイアログが先頭に固定で出すので、候補からは外す（重複させない）
+  const taskPages = [...new Set(dev.tasks.map((t) => t.page))].filter((p) => p !== WHOLE_SITE);
+  const projectDevs = Object.entries(devProjectsState(state)).filter(([, ids]) => ids.includes(state.requirements.projectId)).map(([id]) => id);
+  const assignable = [...new Set([me.id, ...projectDevs, ...dev.tasks.flatMap(taskAssignees)])];
 
   const change = (id: string, title: string, status: DevTaskStatus) => {
     dispatch({ type: 'setDevTaskStatus', id, status, by: me.id });
@@ -38,11 +46,14 @@ export default function DevTasksPage() {
         title="構築タスク"
         description="採用デザインをもとに、ページごとに実装します。状態を変えると管理者画面のアクティビティにも記録されます。"
         actions={
-          <FormControlLabel
-            control={<Switch checked={mineOnly} onChange={(e) => setMineOnly(e.target.checked)} />}
-            label="自分の担当のみ"
-            sx={{ mr: 0, minHeight: 44 }}
-          />
+          <Stack direction="row" spacing={1.5} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
+            <FormControlLabel
+              control={<Switch checked={mineOnly} onChange={(e) => setMineOnly(e.target.checked)} />}
+              label="自分の担当のみ"
+              sx={{ mr: 0, minHeight: 44 }}
+            />
+            <Button variant="contained" startIcon={<Plus size={16} />} onClick={() => setAdding(true)} sx={{ minHeight: 44 }}>タスクを追加</Button>
+          </Stack>
         }
       />
 
@@ -84,7 +95,8 @@ export default function DevTasksPage() {
               ) : (
                 <Stack spacing={1}>
                   {items.map((t) => {
-                    const m = memberById(t.assigneeId);
+                    // 担当が複数のときはアバターを重ねて並べ、名前は「・」でつなぐ（2026-11-19）
+                    const people = taskAssignees(t).map(memberById);
                     const next = NEXT_STATUS[t.status];
                     const workLabel = t.title.startsWith(t.page) ? t.title.slice(t.page.length).replace(/^ページの/, '') : t.title;
                     return (
@@ -92,9 +104,11 @@ export default function DevTasksPage() {
                         <Typography variant="body2" component="h3" sx={{ fontWeight: 650 }}>{t.page}</Typography>
                         <Typography variant="caption" sx={{ display: 'block' }}>{workLabel}</Typography>
                         <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 1, minWidth: 0 }}>
-                          <MemberAvatar id={m.id} size={20} />
-                          <Typography variant="caption" noWrap sx={{ minWidth: 0 }}>{m.name}</Typography>
-                          {m.id === me.id && <StatusPill tone="primary" dot={false}>あなた</StatusPill>}
+                          <Box sx={{ display: 'flex', flexShrink: 0, '& > * + *': { ml: '-6px' } }}>
+                            {people.map((p) => <MemberAvatar key={p.id} id={p.id} size={20} />)}
+                          </Box>
+                          <Typography variant="caption" noWrap sx={{ minWidth: 0 }} title={people.map((p) => p.name).join('・')}>{people.map((p) => p.name).join('・')}</Typography>
+                          {people.some((p) => p.id === me.id) && <StatusPill tone="primary" dot={false}>あなた</StatusPill>}
                           <Typography variant="caption" noWrap sx={{ flexShrink: 0 }}>{relativeTime(t.updatedAt)}</Typography>
                         </Stack>
                         <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1.5 }}>
@@ -145,6 +159,19 @@ export default function DevTasksPage() {
           );
         })}
       </Menu>
+
+      <NewDevTaskDialog
+        open={adding}
+        pages={taskPages}
+        assigneeIds={assignable}
+        onClose={() => setAdding(false)}
+        onCreate={(t) => {
+          dispatch({ type: 'addDevTask', ...t, by: me.id });
+          setAdding(false);
+          setTab('todo');
+          toast(`「${t.title}」を追加しました`);
+        }}
+      />
     </>
   );
 }

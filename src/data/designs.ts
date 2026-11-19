@@ -25,11 +25,11 @@ export const DESIGN_VARIANTS: DesignVariant[] = [
 ];
 
 /**
- * 新しく選んでもらう案は Design A・B の 2 つ（2026-11-17 会議: 3 画面 × 3 案 = 9 パターンは多すぎる）。
- * Design C（premium）は新しくは出さないが、選択済み・保存済みのデータ（seed の一部の案件など）を壊さないよう、
- * keep に渡した案は含めて表示する。プレビューの部品（previews/*）は DESIGN_VARIANTS の並び順を参照するので、配列自体は 3 つのまま
+ * 選んでもらう案は Design A・B・C の 3 つ。画面はトップ＋主要ページ 1 つの 2 画面（2026-11-19 ユーザー指示「ページが２つで、案は３つ」。
+ * 11-17 会議の 3 画面 × 2 案から、画面を減らして案を増やした。パターン数は 6 のまま）。
+ * keep は、出す案を絞ったときに選択済みの案を消さないための引数（いまは全案を出すので効かない）
  */
-export const OFFERED_DESIGN_IDS: readonly DesignId[] = ['minimal', 'creative'];
+export const OFFERED_DESIGN_IDS: readonly DesignId[] = ['minimal', 'creative', 'premium'];
 
 export function offeredVariants(keep?: DesignId | null): DesignVariant[] {
   return DESIGN_VARIANTS.filter((v) => OFFERED_DESIGN_IDS.includes(v.id) || v.id === keep);

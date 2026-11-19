@@ -8,6 +8,9 @@ import { daysAgo, hoursAgo } from '@/services/time';
 /** 開発者画面の既定のログインユーザー（ログインしたメールがメンバーに当たらないときに使う。正は features/dev/useDevUser） */
 export const DEV_USER_ID = 'm3';
 
+/** 構築タスク名の上限（追加ダイアログと reducer の両方で使う） */
+export const DEV_TASK_TITLE_MAX = 60;
+
 export const DEV_TASK_STATUSES: { id: DevTaskStatus; label: string }[] = [
   { id: 'todo', label: '未着手' },
   { id: 'doing', label: '作業中' },

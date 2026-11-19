@@ -5,16 +5,16 @@ import { useDemoOptional } from '@/store/DemoStore';
 import { workOf } from '@/store/projectWork';
 
 /**
- * デザイン案（新しく出すのは 2 案。2026-11-17 会議。C は選択済みのデータのために残す）に流し込む、案件ごとの中身（0.29.5。2026-11-12 ユーザー決定「デザイン案は案件ごと」）。
+ * デザイン案（3 案 × 2 画面。2026-11-19 ユーザー指示）に流し込む、案件ごとの中身（0.29.5。2026-11-12 ユーザー決定「デザイン案は案件ごと」）。
  * 案（minimal / creative / premium）はレイアウトと書体だけを持ち、文言・ナビ・CTA・色はここから取る。
  * 出所: 案件（サイト名・URL・ブランド色・業種）、ヒアリング（q-strength・q-target・q-cv・q-content）、
- * デザイン要件定義（q-image・q-brand）、改善後のサイトマップ（ナビ・各案の 2〜3 画面目）。
+ * デザイン要件定義（q-image・q-brand）、改善後のサイトマップ（ナビ・各案の 2 画面目）。
  * MINAMO COFFEE（p1）はヒアリング前でも見本が崩れないよう、従来の見本の文言を持つ（P1_PRESET）
  */
 
 export interface DesignBlock { title: string; text: string }
 
-/** トップ以外にプレビューする画面（改善後サイトマップの第1階層から最大 2 つ） */
+/** トップ以外にプレビューする画面（改善後サイトマップの第1階層から 1 つ。2026-11-19） */
 export interface DesignPage { key: string; label: string; path: string; lead: string; blocks: DesignBlock[]; cta: boolean }
 
 /** 案ごとに差し替える見出し（p1 だけ。ほかの案件は 3 案で共通の見出しを使う） */
@@ -128,7 +128,8 @@ function choosePages(sm: SitemapState, ctaLabel: string, strength: string): Desi
   const top = firstLevel(sm);
   const content = top.filter((x) => x.data.kind === 'new' || x.data.kind === 'section');
   const cta = top.find((x) => x.data.kind === 'cta');
-  const picked = [content[0], cta ?? content[1]].filter((x): x is SitemapNode => !!x);
+  // トップ＋この 1 ページの 2 画面（2026-11-19 ユーザー指示「ページが２つ」）。主要な中身のページを優先し、無ければ申込み・問い合わせのページ
+  const picked = [content[0] ?? cta].filter((x): x is SitemapNode => !!x);
   return picked.map((node) => designPageOf(sm, node, ctaLabel, strength));
 }
 

@@ -45,7 +45,7 @@ export function DeviceToggle({ value, onChange, iconOnly }: { value: Device; onC
   );
 }
 
-/** 表示する画面（トップ＋改善後サイトマップの主要ページ最大 2 つ。0.29.5。お客様ポータルの承認でも使う。0.39.3） */
+/** 表示する画面（トップ＋改善後サイトマップの主要ページ 1 つ。2026-11-19。お客様ポータルの承認でも使う。0.39.3） */
 export function ScreenToggle({ ctx, value, onChange }: { ctx: DesignContext; value: number; onChange: (n: number) => void }) {
   const screens = ['トップ', ...ctx.pages.map((p) => p.label)];
   return (
@@ -179,7 +179,7 @@ export default function DesignStudioPage() {
   const locked = !!design.approvedAt;
   // 案は案件ごと（ヒアリング・要件定義書・サイトマップ・デザイン要件定義から。0.29.5）
   const ctx = useDesignContext();
-  // 新しく出す案は A・B の 2 つ（2026-11-17 会議）。選択済みの C（premium）は消さずに出す
+  // 出す案は A・B・C の 3 つ（2026-11-19 ユーザー指示）
   const variants = offeredVariants(design.selected).map((v) => personalize(v, ctx));
   const screen = Math.min(screenNo, ctx.pages.length);
   const current = variants.find((v) => v.id === focus) ?? variants[0];
@@ -210,8 +210,8 @@ export default function DesignStudioPage() {
       <PageHeader
         eyebrow="④ 制作"
         icon={<Wand2 size={14} />}
-        title="ページごとに、2つのデザイン案を比べる"
-        description="ヒアリング・要件定義書・サイトマップ・デザイン要件定義をもとに、AI が 2 つのデザイン案（各最大 3 画面）を作ります。先にページを選び、そのページで案を並べて比べます"
+        title="ページごとに、3つのデザイン案を比べる"
+        description="ヒアリング・要件定義書・サイトマップ・デザイン要件定義をもとに、AI が 3 つのデザイン案（各 2 画面: トップと主要ページ）を作ります。先にページを選び、そのページで案を並べて比べます"
         actions={!ready ? <AiBadge /> : (
           <>
             <Button variant="outlined" size="small" startIcon={<Palette size={15} />} onClick={() => navigate(designReqRoute)}>デザイン要件定義</Button>
@@ -250,7 +250,7 @@ export default function DesignStudioPage() {
               <Palette size={36} color={tokens.color.faint} aria-hidden />
               <Typography variant="h3" component="h2">先にデザイン要件定義を入力してください</Typography>
               <Typography variant="body2" color="text.secondary">
-                必須（A）の {DESIGN_REQUIRED.length} 問に答えると、2つのデザイン案を作れます（あと {missing} 問）。
+                必須（A）の {DESIGN_REQUIRED.length} 問に答えると、3つのデザイン案を作れます（あと {missing} 問）。
               </Typography>
               <Box sx={{ pt: 1 }}>
                 <Button variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate(designReqRoute)}>デザイン要件定義へ</Button>
@@ -383,7 +383,7 @@ export default function DesignStudioPage() {
               <Typography variant="h4" component="h2" sx={{ fontSize: { xs: 16, md: undefined } }}>デザイン案の採用</Typography>
               <Typography variant="body2" color="text.secondary">
                 {state.sitemap.approvedAt
-                  ? 'お客様がお客様ポータルで 2 案から選んで承認します。承認されると、このデザインで全ページを構築できます。'
+                  ? 'お客様がお客様ポータルで 3 案から選んで承認します。承認されると、このデザインで全ページを構築できます。'
                   : 'サイトマップの承認の後に、お客様がお客様ポータルで選びます（ここでは案の比較だけできます）。'}
               </Typography>
             </Box>

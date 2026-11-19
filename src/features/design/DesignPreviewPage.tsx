@@ -27,8 +27,6 @@ export default function DesignPreviewPage() {
   const screen = Math.min(Math.max(0, Number(params.get('screen')) || 0), ctx.pages.length);
   const device: Device = DEVICES.find((d) => d === params.get('device')) ?? 'pc';
   const variant = personalize(DESIGN_VARIANTS.find((v) => v.id === design)!, ctx);
-  // 最初に開いた案（C = premium の選択済み案件から開いた場合も、切り替えた後に選択肢から消さない）
-  const [openedWith] = useState<DesignId>(design);
   const site = params.get('mode') === 'site';
   // チェックする画面の名前（管理者・開発者は「品質チェック」、お客様は「品質確認」）。表示に使うだけなので許す値に絞る
   const checkScreen = params.get('check') === '品質確認' ? '品質確認' : '品質チェック';
@@ -62,8 +60,8 @@ export default function DesignPreviewPage() {
       >
         <Typography variant="body2" sx={{ fontWeight: 650, mr: 1 }} noWrap>{ctx.siteName} の{site ? '制作中のサイト' : 'デザイン案'}</Typography>
         {!site && <ToggleButtonGroup exclusive size="small" value={design} onChange={(_, v) => v && set('design', v)} aria-label="表示するデザイン案">
-          {/* 切り替えの選択肢は A・B（2026-11-17 会議）。URL で C（premium。選択済みの案件）を開いたときは C も出す */}
-          {offeredVariants(openedWith === 'premium' ? openedWith : design).map((v0) => {
+          {/* 切り替えの選択肢は A・B・C（2026-11-19 ユーザー指示） */}
+          {offeredVariants(design).map((v0) => {
             const v = personalize(v0, ctx);
             return <ToggleButton key={v.id} value={v.id}>{v.label}・{v.name}</ToggleButton>;
           })}
