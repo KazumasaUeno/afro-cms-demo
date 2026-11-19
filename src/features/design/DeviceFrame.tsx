@@ -76,7 +76,8 @@ export function DeviceFrame({ design, device, thumbnail, viewportHeight, label, 
           width: w * scale, height: h * scale, mx: 'auto', overflow: 'hidden', bgcolor: '#fff',
           borderRadius: fill ? 0 : device === 'phone' && !thumbnail ? '28px' : thumbnail ? '10px' : '14px',
           border: fill ? 'none' : `1px solid ${tokens.color.border}`, boxShadow: thumbnail || fill ? 'none' : tokens.shadow.md,
-          transition: reduced ? 'none' : `width .34s ${tokens.motion.easeCss}, height .34s ${tokens.motion.easeCss}`,
+          // 最初の採寸の前（幅 0）から広がる動きと、画面いっぱい（fill）の表示の伸び縮みは見せない（2026-11-19「最大画面を開いたら変な動き」）
+          transition: reduced || fill || !avail ? 'none' : `width .34s ${tokens.motion.easeCss}, height .34s ${tokens.motion.easeCss}`,
         }}
       >
         {scale > 0 && (

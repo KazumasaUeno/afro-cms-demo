@@ -1,5 +1,5 @@
 import { Box, ButtonBase, Stack, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { DESIGN_VARIANTS, offeredVariants } from '@/data/designs';
 import { tokens } from '@/theme/tokens';
@@ -38,6 +38,17 @@ export default function DesignPreviewPage() {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+  // 上の操作バーの実際の高さ（折り返し・枠線で BAR_H より高くなる。決め打ちだとページが数 px はみ出し、
+  // ページと見本の両方にスクロールバーが出る。2026-11-19「右側にあるバーが２つある」）
+  const barRef = useRef<HTMLDivElement>(null);
+  const [barH, setBarH] = useState(BAR_H);
+  useLayoutEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setBarH(Math.ceil(el.getBoundingClientRect().height)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     document.title = site ? `制作中のサイト — ${ctx.siteName}` : `${variant.name}（${variant.label}）のプレビュー — ${ctx.siteName}`;
@@ -52,6 +63,7 @@ export default function DesignPreviewPage() {
   return (
     <Box sx={{ minHeight: '100dvh', bgcolor: tokens.color.bgSubtle }}>
       <Stack
+        ref={barRef}
         direction="row"
         alignItems="center"
         spacing={1.5}
@@ -79,7 +91,7 @@ export default function DesignPreviewPage() {
           device={device}
           screen={screen}
           projectId={projectId}
-          viewportHeight={device === 'pc' ? Math.max(400, winH - BAR_H) : Math.max(400, winH - BAR_H - 40)}
+          viewportHeight={device === 'pc' ? Math.max(400, winH - barH) : Math.max(400, winH - barH - 48)}
           label={`${variant.name}のプレビュー`}
         />
       </Box>

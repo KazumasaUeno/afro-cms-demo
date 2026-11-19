@@ -371,9 +371,10 @@ export default function DesignStudioPage() {
           <IconButton aria-label="閉じる" onClick={() => setExpanded(false)}><X size={20} /></IconButton>
         </Stack>
         {/* PC は枠なしで画面いっぱい（2026-11-19 ユーザー指示「全画面表示した時は PC 画面いっぱいに」） */}
-        <Box sx={{ p: device === 'pc' ? 0 : { xs: 1.5, md: 3 }, overflow: 'auto', flex: 1 }}>
+        {/* 見本の中だけをスクロールさせ、高さは窓に収める（タブレット・スマホも）。（外側にスクロールバーが出ると幅が変わり、縮尺が揺れる） */}
+        <Box sx={{ p: device === 'pc' ? 0 : { xs: 1.5, md: 3 }, overflow: { xs: 'auto', md: 'hidden' }, flex: 1, minHeight: 0 }}>
           <Box sx={{ display: { md: 'none' }, m: device === 'pc' ? 1.5 : 0, mb: 1.5 }}><ScreenToggle ctx={ctx} value={screen} onChange={setScreen} /></Box>
-          <DeviceFrame bare design={current.id} device={device} screen={screen} viewportHeight={device === 'pc' ? Math.max(400, window.innerHeight - 66) : undefined} label={`${current.name}の拡大プレビュー`} />
+          <DeviceFrame bare design={current.id} device={device} screen={screen} viewportHeight={Math.max(400, window.innerHeight - 70 - (device === 'pc' ? 0 : 50))} label={`${current.name}の拡大プレビュー`} />
         </Box>
       </Dialog>
     </Box>
