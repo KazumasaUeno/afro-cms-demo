@@ -7,5 +7,5 @@ export const PRODUCTION_PROJECT_IDS = Object.freeze(['afro-cms-4a6ff']);
 // エミュレータ専用の ID（`demo-` で始まる ID は実在のリソースに接続しない）
 export const EMULATOR_PROJECT_ID = 'demo-afro-cms';
 
-// デプロイしてよい対象（Functions・Storage などは使わない）
-export const DEPLOY_TARGETS = Object.freeze(['hosting', 'firestore:rules', 'firestore:indexes']);
+// デプロイしてよい対象（Storage などは使わない）。functions は招待のアカウント作成だけ（functions/。0.46.0）
+export const DEPLOY_TARGETS = Object.freeze(['hosting', 'firestore:rules', 'firestore:indexes', 'functions']);

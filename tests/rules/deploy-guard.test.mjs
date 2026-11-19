@@ -23,8 +23,14 @@ test('許可リストに無い ID・demo- の ID は拒否', () => {
 test('--only が無い・対象外を含むなら拒否', () => {
   const list = ['afro-cms-prod'];
   assert.throws(() => checkDeploy({ project: 'afro-cms-prod', only: null }, list), /--only/);
-  assert.throws(() => checkDeploy({ project: 'afro-cms-prod', only: 'hosting,functions' }, list), /対象外/);
+  assert.throws(() => checkDeploy({ project: 'afro-cms-prod', only: 'hosting,storage' }, list), /対象外/);
+  assert.throws(() => checkDeploy({ project: 'afro-cms-prod', only: 'functions:other' }, list), /対象外/);
   assert.throws(() => checkDeploy({ project: 'afro-cms-prod', only: 'firestore' }, list), /対象外/);
+});
+test('functions は許可リストの ID でだけ通す（0.46.0。招待のアカウント作成）', () => {
+  assert.deepEqual(checkDeploy({ project: 'afro-cms-prod', only: 'functions' }, ['afro-cms-prod']), { project: 'afro-cms-prod', targets: ['functions'] });
+  assert.throws(() => checkDeploy({ project: 'castfile-prod', only: 'functions' }, ['afro-cms-prod']), /許可リスト/);
+  assert.throws(() => checkDeploy({ project: 'demo-afro-cms', only: 'functions' }, ['demo-afro-cms']), /エミュレータ専用/);
 });
 test('許可リストと完全一致し、対象が許可内なら通す', () => {
   const r = checkDeploy({ project: 'afro-cms-prod', only: 'hosting,firestore:rules,firestore:indexes' }, ['afro-cms-prod']);

@@ -16,3 +16,6 @@ dist-emulator
 
 # TypeScript のビルド情報（生成物）
 *.tsbuildinfo
+
+# Cloud Functions のビルド出力（npm --prefix functions run build）
+functions/lib

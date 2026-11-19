@@ -50,11 +50,12 @@
    └─ データモード = live   → repository 層（firebase 実装）
           ├─ Firebase Auth（メール＋パスワード、メール確認必須）
           └─ Cloud Firestore（Security Rules が唯一の権限境界）
-[Firebase Console]  初代管理者の招待作成・Auth ユーザーの削除（運用手順。Cloud Functions なし）
-[ローカル / CI]     Firestore・Auth エミュレータ（project = demo-afro-cms 固定）で Rules テスト
+[Cloud Functions]   provisionInvitee（asia-northeast1。招待した人の Auth アカウントを Admin SDK で作るだけ。0.46.0。Blaze が必要）
+[Firebase Console]  初代管理者の招待作成・Auth ユーザーの削除（運用手順）
+[ローカル / CI]     Firestore・Auth（・Functions）エミュレータ（project = demo-afro-cms 固定）で Rules テスト・callable のテスト
 ```
 
-- サーバー側コードは**無い**（Cloud Functions は Blaze プランが必要。[FACT] Firebase の料金ページ。§21）。したがって**権限・整合性・証跡はすべて Security Rules で守る**
+- サーバー側コードは**招待のアカウント作成（`functions/` の `provisionInvitee`）だけ**（0.46.0。2026-11-19 ユーザー決定。Cloud Functions は Blaze プランが必要 [FACT] Firebase の料金ページ。§21）。それ以外の**権限・整合性・証跡はすべて Security Rules で守る**（Functions はデータを書かない。Auth のアカウントを作るだけ）
 - 結果として: カスタムクレームは使えない（付与に Admin SDK が要る）→ **役割は Firestore の `accounts/{uid}` を正**にし、Rules で `get()` して判定する
 
 ---
@@ -99,16 +100,16 @@
 
 - パスワード再設定・メール確認メールの Spark 上限は **[UNKNOWN]**（上記 limits ページで確認する。§23）
 - 送信元は既定で `noreply@<project>.firebaseapp.com`。迷惑メール扱いの可能性 [INFERENCE]。独自ドメイン化は後回し
-- Auth の新規登録自体は誰でもできてしまう（Spark・Functions なしでは止められない [INFERENCE]。招待のアカウント作成もクライアントの SDK で行うので「作成（登録）を許可」は ON のまま）。**登録しただけでは何も読めない**（招待を受け取った `accounts` 文書が無ければ Rules がすべて拒否）ことで守る。アプリの画面からの登録は 0.45.0 で無くした
+- 0.46.0 から招待のアカウントは Cloud Functions（Admin SDK）で作るので、Console の「作成（登録）を許可」を **OFF** にできる（functions をデプロイした後。手順は `docs/TODO.md`）。OFF にするとクライアントからの登録は `auth/admin-restricted-operation` で拒否され、Admin SDK・Console からの作成だけが残る（[FACT] [Identity Platform: Manage users](https://docs.cloud.google.com/identity-platform/docs/concepts-manage-users)「end-user の作成・削除を止める」。2026-11-19 確認。Admin SDK が影響を受けないことは明記なし＝本番で確かめる）。OFF にするまでは誰でも登録でき、**登録しただけでは何も読めない**（招待を受け取った `accounts` 文書が無ければ Rules がすべて拒否）ことで守る。アプリの画面からの登録は 0.45.0 で無くした
 
-### 2.4 招待と有効化（Functions なしで成り立たせる「招待の受け取り」方式）
+### 2.4 招待と有効化（「招待の受け取り」方式）
 
-0.45.0（2026-11-19 ユーザー決定。security M1 の対策）で「招待の後に本人が同じメールで登録」から「招待のときにアカウントを作り、パスワード設定のメールを送る」に変えた。実装は `src/live/invite.ts`。
+0.45.0（2026-11-19 ユーザー決定。security M1 の対策）で「招待の後に本人が同じメールで登録」から「招待のときにアカウントを作り、パスワード設定のメールを送る」に変えた。0.46.0（同日ユーザー決定。security re-audit MEDIUM の対策）でアカウントの作成を管理者のブラウザ（2 つ目の Firebase アプリ）から Cloud Functions の callable `provisionInvitee`（`functions/src/index.ts`）へ移し、「作成（登録）を許可」を OFF にできるようにした。クライアントは `src/live/invite.ts`。
 
 ```
 1. admin が invites/{email小文字} を作る（role・name・company・projectId）           … status: invited
-   続けて admin のブラウザが 2 つ目の Firebase アプリ（保存はメモリだけ）で Auth のアカウントを作る
-   （パスワードは乱数。誰にも見せず保存しない）→ その 2 つ目をログアウトして破棄 → パスワード再設定のメール（＝招待メール。
+   続けて admin のブラウザが callable provisionInvitee（asia-northeast1）を呼び、サーバーが Admin SDK で Auth のアカウントを作る
+   （パスワードは乱数。誰にも見せず保存しない。emailVerified = false）→ ブラウザがパスワード再設定のメール（＝招待メール。
    リンクの後はアプリの /login）を送る。invites が作れなければ（招待済み等）アカウントもメールも作らない
 2. 本人がメールのリンクで自分のパスワードを決める（再設定の完了でメールも確認済みになる。§2.4 の注）
 3. 本人がログイン → アプリが invites/{自分のメール} を読む（Rules: token.email 一致 かつ email_verified）
@@ -123,10 +124,18 @@
 - 招待の取り消し: admin が `invites.status = revoked`（未使用の招待だけ）。Auth のアカウントは残る（ログインしても「招待が見つからない」。削除は Console）
 - **同じメールのアカウントが既にある**とき（招待より前に誰かが登録した・送り直し）は、作らずにパスワード設定のメールだけ送り、管理者に「既にあった」と伝える。受信箱の持ち主が設定すると前のパスワードは使えなくなり、uid はそのまま本人のものになる。先に登録した人は、メールが未確認のままなら招待を読めず受け取れない（Rules の email_verified）。**ただし**先に登録した人が確認メールのリンクを本人に押させていた場合や、本番がパスワード再設定で前のログインを無効にしない場合は、パスワード設定の前に受け取れてしまう（security re-audit 2026-11-19 MEDIUM）。そのため初めての招待で「既にあった」ときは待たずに Console でそのアカウントを削除し、「招待メールを送り直す」で作り直す（画面の案内も同じ）
 - 管理者の一覧の招待中の行に「招待メールを送り直す」（アカウントが無ければ作る。メールの送信に失敗したときのやり直しにも使う）
+- **provisionInvitee の契約**（0.46.0）: 入力 `{ email }`／出力 `'created' | 'existing'`。
+  - 呼べるのは Rules の `isAdmin()` と同じ条件の人だけ（`email_verified`・`accounts/{uid}` が `status: active`・`accounts.email == token.email`・`role: admin`）。それ以外は `permission-denied`、未ログインは `unauthenticated`
+  - メールは前後の空白を除いて小文字にし、254 文字以内・`[^@s]+@[^@s]+[.][^@s]+`（Rules の `validInvite` と同じ）。違えば `invalid-argument`
+  - `invites/{小文字のメール}` が `status: invited` で無ければ `failed-precondition`（アカウントを作らない。取り消し・受け取り済みも同じ）
+  - 同じメールのアカウントが既にあれば**何も変えずに** `'existing'`（ログに warn。画面は「招待より前からあった」の警告）
+  - App Check の強制（`ENFORCE_APP_CHECK`）は **false**（App Check が未設定のため）。App Check を入れたら true にしてデプロイし直す（`docs/TODO.md`）
+  - 費用の上限として `maxInstances: 2`・メモリ 256MiB・タイムアウト 30 秒。ログは `event: invite.provision` と `status`・呼んだ管理者の uid（メールは出さない）
+  - テスト: `npm run test:functions`（エミュレータ。demo-afro-cms 固定。`tests/functions/provision.test.mjs`）
 - 注（2026-11-19 確認）: [FACT] Auth エミュレータ（firebase-tools 15.x）は再設定の完了で `emailVerified = true` にする（`operations.js` の resetPassword・invite-e2e の実行で確認）。本番は [INFERENCE]（公式に明記なし）。本番で確認済みにならなくても、ログイン後に確認メールの画面が出て、確認後に受け取れる（流れは止まらない）。
   [FACT] 公式（Manage User Sessions）: 「パスワードの再設定は既存のトークンを失効させる」。エミュレータは失効させない（再設定前の未確認のログインが、更新後に確認済みのトークンを得る）ので、この点は本番相当のプロジェクトで確かめる（TODO）
 
-### 2.5 初代管理者の作り方（Bootstrap。Functions・Admin SDK を使わない）
+### 2.5 初代管理者の作り方（Bootstrap。Console で作る。招待の Functions は管理者しか呼べないため）
 
 1. Firebase Console → Firestore → `invites` に文書 ID = 管理者のメール（小文字）で `{role:'admin', name, status:'invited', createdAt, createdBy:'console'}` を手で作る（**Console からの書き込みは Rules を通らない** [FACT] Firebase の仕様）
 2. Firebase Console → Authentication →「ユーザーを追加」で同じメール（**小文字**）と、使い捨ての長いパスワードで Auth のアカウントを作る（0.45.0 からアプリに登録の画面は無い）
@@ -580,6 +589,7 @@ service cloud.firestore {
 
 - 1 日: Read 約 300 × 20 ＋ Listener の更新 ≒ **6,000〜10,000（枠の 12〜20%）**、Write **数百（枠の数 %）**、保存 1 案件 約 0.5MB（回答 ＋ 承認ごとの写し）× 100 案件 ≒ 50MB
 - **金額: 0 円**（Spark。請求アカウントを付けない限り課金されない）
+- **0.46.0 から Blaze（従量課金）が前提**（招待の Cloud Functions のため）。見込みは**ほぼ 0 円 / 月**（Confidence: MEDIUM。未計測）: 招待は月に数十回 × 1 回 30 秒以内・256MiB ＝ Functions の無料枠（呼び出し 200 万回 / 月・40 万 GB 秒・20 万 CPU 秒・送信 5GB）の 0.1% 未満。デプロイ時の Cloud Build（1 日 120 分まで無料）・Artifact Registry（500MB まで無料。古いイメージは cleanup policy で 1 日後に削除）も枠内の見込み。Firestore・Auth の無料枠は Spark と同じ（Auth は月 5 万 MAU まで無料）。出典: [Firebase の料金](https://firebase.google.com/pricing)（2026-11-19 確認）。**予算アラート（例: 1,000 円）を必ず設定**する（`docs/TODO.md`）。Blaze では枠を超えると止まらずに課金される（Spark の「止まる」とは逆）
 - 一番の危険は**キー入力ごとの保存**（Write 枠を食う）と、公開 URL に対する**嫌がらせの大量リクエストで枠を使い切られること**。前者はまとめ書きで、後者は App Check（reCAPTCHA。`firebase` SDK に含まれ追加依存なし）を**第 2 段階で入れる**提案 **[NC-7]**
 - 営業デモはデモモード（Firebase に接続しない）なので枠を使わない
 
@@ -689,6 +699,7 @@ src/repositories/
 - テストランナーは追加しない: Node 22 組み込みの `node --test`（`@firebase/rules-unit-testing` はランナー非依存）
 - **Java 21 以上**（firebase-tools 15 のエミュレータの要件）。`npm run test:rules` は `scripts/test-rules.mjs` 経由で、`JAVA_HOME` があればその `bin` を**子プロセスの PATH の先頭にだけ**足す（ユーザーの PATH・システム設定は変えない）。このPC（Windows）は PATH の java が 17、`JAVA_HOME` が 21.0.12 [FACT] 2026-11-10 実行ログ
 - `npm run test:rules` = 上記 `emulators:exec`。CI（GitHub Actions）にも同じものを Build の前に置く（エミュレータは CI 上でも `demo-` プロジェクトで動く）
+- `npm run test:functions` = `functions/` をビルドして `emulators:exec --only firestore,auth,functions`（0.46.0）。Functions エミュレータはこのPCの gcloud の ADC を検出して警告を出すが、関数は Auth・Firestore のエミュレータが無ければ起動しない（`functions/src/index.ts` 先頭）。関数の読み込み待ちは 60 秒（`FUNCTIONS_DISCOVERY_TIMEOUT`。既定 10 秒では遅い PC で失敗した）。`npm run deploy:firebase -- --only functions` は送る前にこのテストを通す
 
 ### 16.3 観点（qa-engineer が実行。件数は実装時に確定）
 
@@ -784,6 +795,7 @@ src/repositories/
 | 保持期限の自動削除・定期バックアップが必要 | Scheduler・managed export / PITR |
 | 1 日の Read が枠の 50% を超える日が続く | 従量課金（予算アラートを先に設定） |
 | 役割の判定で Rules の `get` が上限に近づく | カスタムクレーム（Admin SDK を Functions で） |
+| 招待前の登録の余地を無くす（security re-audit 2026-11-19 MEDIUM） | **0.46.0 で移行**: 招待のアカウント作成を Cloud Functions へ（§2.4）。Blaze への切り替えはユーザーが行う |
 
 ---
 

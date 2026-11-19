@@ -13,6 +13,8 @@
     "preview:emulator": "vite preview --mode emulator",
     "typecheck": "tsc -p tsconfig.json",
     "test:rules": "node scripts/test-rules.mjs",
+    "test:functions": "node scripts/test-functions.mjs",
+    "build:functions": "npm --prefix functions run build",
     "rules:gen": "node --experimental-strip-types --no-warnings scripts/gen-rules-questions.mjs",
     "rules:check": "node --experimental-strip-types --no-warnings scripts/gen-rules-questions.mjs --check",
     "deploy:firebase": "node scripts/deploy-firebase.mjs",

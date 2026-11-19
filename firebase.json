@@ -3,6 +3,14 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "runtime": "nodejs22",
+      "ignore": ["node_modules", ".git", "*.log", "src", "tsconfig.json"]
+    }
+  ],
   "hosting": {
     "public": "dist-live",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
@@ -23,6 +31,7 @@
     "singleProjectMode": true,
     "firestore": { "host": "127.0.0.1", "port": 8080 },
     "auth": { "host": "127.0.0.1", "port": 9099 },
+    "functions": { "host": "127.0.0.1", "port": 5001 },
     "ui": { "enabled": false }
   }
 }

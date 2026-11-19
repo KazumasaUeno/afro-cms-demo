@@ -16,11 +16,24 @@
   - [ ] `scripts/firebase-projects.mjs` の `PRODUCTION_PROJECT_IDS` に本番 ID を入れる（`TBD` のままでは全デプロイ拒否。変更は lead-architect 確認）
 - [ ] **招待メール（パスワード設定）の Console 設定**（security M1 は 0.45.0 で対策。2026-11-19 ユーザー決定「招待時にアカウントを作り、パスワード設定のメールを送る」。作業はユーザー）
   - [ ] Auth → テンプレート →「パスワードの再設定」の文面を招待の文面にする（このメールは招待と「パスワードを忘れた方」の両方で届く）。例: 件名「アフロCMS へのご招待／パスワードの設定」、本文「アフロCMS をご利用いただくためのパスワードを、下のリンクから設定してください。設定後はログイン画面からメールアドレスとパスワードでログインできます。お心当たりがない場合は、このメールを破棄してください」
-  - [ ] Auth →「ユーザー アクション」の **作成（登録）を許可は ON のまま**（招待のアカウント作成はクライアントの SDK で行うため。OFF にすると招待が auth/admin-restricted-operation で失敗する [INFERENCE]。OFF にするなら Cloud Functions／Admin SDK での作成に変える＝構成の変更）
-  - [ ] 本番相当のプロジェクトで 1 回だけ通しを確かめる: 招待 → メールのリンクでパスワード設定 → ログインで「有効」になる（設定の完了でメールが確認済みになるのはエミュレータで確認済み。本番は未確認。ならなければ確認メールの画面が出て、確認後に使える）／招待より前に登録されたメールを招待し、設定後に前のパスワードとそれまでのログインが使えないこと（公式は「再設定でトークンを失効」。エミュレータは失効しない）
-  - 残るリスク: 登録の API は開いたまま（誰でも未確認のアカウントは作れる。何も読めない）。招待より前に登録されたアカウントは、受信箱の持ち主がパスワードを設定した時点でその人のものになる（uid は同じ）。その前に登録した人がアカウントを消すと設定のリンクが無効になる（管理者が「招待メールを送り直す」で作り直せる）
-  - **運用（security re-audit 2026-11-19 MEDIUM）**: 初めての招待で「アカウントは招待より前からありました」と出たら、待たずに Console（Authentication）でそのアカウントを削除し「招待メールを送り直す」。同じメールの人がアカウント一覧に出ていたら無効にする（先に登録した人が確認メールのリンクを本人に押させていると、パスワード設定の前に招待を受け取れるため）
-  - [ ] **お客様を招待する前のゲート**: 本番で「再設定で前のログインが失効する」ことと「先に登録＋確認リンク済み」の場合を確かめる。登録の API を閉じる（Cloud Functions／Admin SDK での作成・blocking function）か、App Check で抑える
+  - [ ] 本番相当のプロジェクトで 1 回だけ通しを確かめる: 招待 → メールのリンクでパスワード設定 → ログインで「有効」になる（設定の完了でメールが確認済みになるのはエミュレータで確認済み。本番は未確認。ならなければ確認メールの画面が出て、確認後に使える）
+- [ ] **招待のアカウント作成を Cloud Functions へ移す（0.46.0。security re-audit 2026-11-19 MEDIUM の対策。2026-11-19 ユーザー決定）**。コードは済み（`functions/`・`src/live/invite.ts`。エミュレータのテスト 8 件成功）。以下は**この順番で**（作業はユーザー。課金の変更・デプロイはユーザーの判断で行う）
+  1. [ ] Firebase Console → 左下「Spark」→ **Blaze にアップグレード**（請求先アカウントを付ける）
+  2. [ ] Google Cloud Console → お支払い → **予算とアラート** → 予算を作る（対象: afro-cms-4a6ff、金額 **1,000 円**、通知 50%・90%・100%）。予算は上限ではなく通知だけ（超えても止まらない）
+  3. [ ] **functions を先にデプロイ**: `npm --prefix functions ci` → `npm run deploy:firebase -- --project afro-cms-4a6ff --only functions`（送る前に test:functions が走る）。**hosting より先**に出す（0.46.0 の画面は Functions を呼ぶので、先に hosting を出すと招待が「メールを送れませんでした」になる）
+     - 初回は「Functions successfully deployed but could not set up cleanup policy」で終了コード 1 になる見込み（firebase-tools 15.35 の --non-interactive の動き。デプロイ自体は済んでいる）。そのときは `npx firebase functions:artifacts:setpolicy --project afro-cms-4a6ff --location asia-northeast1 --days 1` で古いイメージを 1 日で消す設定を入れる（入れないと保存料が少しずつ増える）
+     - Console → Functions に `provisionInvitee`（asia-northeast1）が出ていることを確かめる
+  4. [ ] hosting をデプロイ（`npm run build:live` → `npm run deploy:firebase -- --project afro-cms-4a6ff --only hosting`）
+  5. [ ] **通しを確かめる**（作成（登録）を許可がまだ ON のうちに）: 管理者で新しいメールを招待 →「招待し、パスワード設定のメールを送りました」→ メールのリンクでパスワード設定 → ログインで「有効」。Console → Functions → ログに `invite.provision`・`status: created` が出る
+  6. [ ] Firebase Console → Authentication → 設定 →「ユーザー アクション」→ **「作成（登録）を許可」を OFF** → 保存
+  7. [ ] **OFF にした後に**もう一度通しを確かめる（別の新しいメールで招待 → パスワード設定 → ログイン）。招待が失敗したら 6 を ON に戻して連絡する（Admin SDK が OFF の影響を受けないことは公式に明記が無い [INFERENCE]）
+  - 確認済み（エミュレータ・2026-11-19）: 管理者だけが作れる（未ログイン・開発者・お客様・メール未確認・無効化・メール不一致の管理者は拒否）／招待中の文書が無ければ作らない（取り消し済みも）／既にあるアカウントは変えずに existing／メールの形・長さの検査
+  - 未確認（本番）: 上の 5・7。Auth の「作成（登録）を許可」OFF で Admin SDK の作成が通ること
+  - App Check: 関数側は `ENFORCE_APP_CHECK = false`（`functions/src/index.ts`）。App Check を有効にしたら（下の「App Check を有効にして enforce」）true にして functions をデプロイし直す
+  - 費用の見込み: ほぼ 0 円 / 月（招待は月に数十回。Functions の無料枠は呼び出し 200 万回 / 月・40 万 GB 秒・20 万 CPU 秒。出典 https://firebase.google.com/pricing 2026-11-19 確認。設計書 §12.2）
+  - 残るリスク: 登録を OFF にするまでは、誰でも未確認のアカウントを作れる（何も読めない）。OFF にする前に登録されたアカウントは残る（Console の Authentication で、招待していないメールのアカウントが無いか一度見る）
+  - **運用（security re-audit 2026-11-19 MEDIUM。登録を OFF にするまで）**: 初めての招待で「アカウントは招待より前からありました」と出たら、待たずに Console（Authentication）でそのアカウントを削除し「招待メールを送り直す」。同じメールの人がアカウント一覧に出ていたら無効にする（先に登録した人が確認メールのリンクを本人に押させていると、パスワード設定の前に招待を受け取れるため）
+  - [ ] **お客様を招待する前のゲート**: 上の 6・7（作成（登録）を許可 OFF と通し）を終える。加えて本番で「再設定で前のログインが失効する」ことを確かめる（公式は「再設定でトークンを失効」。エミュレータは失効しない）
 - [ ] **0.28.0 で Rules から外した質問 ID**（`q-design-dislike`・`q-image`・`q-brand`）: これらの回答を持つ `requirements/current` があると、その文書の回答の更新が Rules で拒否されうる（`validAnswers` の `hasOnly`）。本番に live のデータを入れる前なら影響なし。入った後なら、移行（キーの削除）か Rules の経過措置を決める
 - [ ] **npm audit の @grpc/grpc-js（high 4 件）を firebase の更新時に確かめ直す**（security L2。サーバー側の依存でバンドルには入らない＝受け入れ中）
 - [ ] **ユーザーはアプリの招待からだけ作る**（security L3）: Console で大文字を含むメールのユーザーを作ると招待（小文字の ID）を受け取れない。運用手順に書く（例外は最初の管理者。設計書 §2.5 の手順で小文字のメールで作る）
@@ -33,4 +46,4 @@
 - 書き込み待ちのタイマーは LiveDataProvider のアンマウント（ログアウト）で片付けていない。ログアウト直前の入力は permission-denied で失われうる（re-review 2026-11-12 Minor。0.28.1 より前から）
 - オフラインでログインすると読み込み中のまま止まり、案内が出ない（`src/live/auth.tsx` の fromCache 待ち。live は接続が前提）
 - 自動テストが無い: `scripts/deploy-firebase.mjs` の `checkHostingBuild`・`parseTestCounts`（127.0.0.1 の検査は assets/*.js だけ）／「別の画面で予約した書き込みも saveNow が待つ」（エミュレータで手動確認のみ）
-- Auth の「ユーザー アクション」: 作成（登録）を許可 ON は招待のアカウント作成（管理者のブラウザから SDK で作る。0.45.0）に必要なので維持。**削除を許可 ON**（本人が SDK から Auth アカウントを消せる。`accounts`・承認の記録は残る）は、削除依頼の手順（設計書 §17.2）と合わせて OFF にするかを決める
+- Auth の「ユーザー アクション」: 作成（登録）を許可は 0.46.0 の functions をデプロイして通しを確かめた後に OFF にする（上の「招待のアカウント作成を Cloud Functions へ移す」）。**削除を許可 ON**（本人が SDK から Auth アカウントを消せる。`accounts`・承認の記録は残る）は、削除依頼の手順（設計書 §17.2）と合わせて OFF にするかを決める

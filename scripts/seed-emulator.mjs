@@ -50,7 +50,7 @@ async function setPasswords(password) {
   console.log(`パスワード設定: ${n} 件`);
 }
 
-/** アプリの招待（src/live/invite.ts）と同じ: 誰にも知らせないパスワードで作り、パスワード設定のメールを出す */
+/** Console の「ユーザーを追加」相当（最初の管理者は招待の Functions を呼べないため。§2.5）: 誰にも知らせないパスワードで作り、パスワード設定のメールを出す */
 async function createAuthUser(email) {
   const key = 'demo-api-key';
   const pw = `Aa1!${crypto.randomUUID()}`;
