@@ -367,9 +367,10 @@ export default function DesignStudioPage() {
         <Stack direction="row" alignItems="center" spacing={1.5} sx={{ px: { xs: 2, md: 3 }, py: 1.5, bgcolor: tokens.color.surface, borderBottom: `1px solid ${tokens.color.border}` }}>
           <Typography variant="h5" sx={{ flex: 1, minWidth: 0, lineHeight: 1.3 }}>{current.label}<Box component="br" sx={{ display: { sm: 'none' } }} /><Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>：</Box>{current.name}</Typography>
           <Box sx={{ display: { xs: 'none', md: 'block' } }}><ScreenToggle ctx={ctx} value={screen} onChange={setScreen} /></Box>
-          <DeviceToggle value={device} onChange={setDevice} />
           <IconButton aria-label="閉じる" onClick={() => setExpanded(false)}><X size={20} /></IconButton>
         </Stack>
+        {/* 端末の切り替えは帯の下の右端に縦に浮かせる（全画面プレビューと同じ。2026-11-19 ユーザー指示） */}
+        <FloatingDeviceSwitch value={device} onChange={setDevice} top={80} />
         {/* PC は枠なしで画面いっぱい（2026-11-19 ユーザー指示「全画面表示した時は PC 画面いっぱいに」） */}
         {/* 見本の中だけをスクロールさせ、高さは窓に収める（タブレット・スマホも）。（外側にスクロールバーが出ると幅が変わり、縮尺が揺れる） */}
         <Box sx={{ p: device === 'pc' ? 0 : { xs: 1.5, md: 3 }, overflow: { xs: 'auto', md: 'hidden' }, flex: 1, minHeight: 0 }}>
@@ -377,6 +378,43 @@ export default function DesignStudioPage() {
           <DeviceFrame bare design={current.id} device={device} screen={screen} viewportHeight={Math.max(400, window.innerHeight - 70 - (device === 'pc' ? 0 : 50))} label={`${current.name}の拡大プレビュー`} />
         </Box>
       </Dialog>
+    </Box>
+  );
+}
+
+/**
+ * 端末の切り替え（帯の下の右端に浮かせる。2026-11-18 ユーザー指示「帯の下に浮かせる」「アイコンのボタンデザインを変えて」）。
+ * サイトの上に重なるので、濃い半透明の縦長のカプセル（同日「縦にして」）にアイコンだけ。選んでいる端末だけ白く抜く。名前はツールチップと読み上げで出す
+ * 全画面プレビューとデザインスタジオの「大きくプレビュー」で共通（2026-11-19 ユーザー指示「帯の下に縦表示」）。top は帯の下端＋余白
+ */
+export function FloatingDeviceSwitch({ value, onChange, top }: { value: Device; onChange: (d: Device) => void; top: number }) {
+  return (
+    <Box
+      role="radiogroup" aria-label="表示する端末"
+      sx={{
+        position: 'fixed', top, right: 16, zIndex: 2, display: 'flex', flexDirection: 'column', gap: 0.5, p: 0.5,
+        borderRadius: '999px', bgcolor: 'rgba(17, 17, 24, 0.72)', backdropFilter: 'blur(8px)', boxShadow: tokens.shadow.md,
+      }}
+    >
+      {DEVICES.map(({ id, label, icon: Icon }) => {
+        const on = id === value;
+        return (
+          <Tooltip key={id} title={label} placement="left">
+            <ButtonBase
+              role="radio" aria-checked={on} aria-label={label} onClick={() => onChange(id)}
+              sx={{
+                width: 40, height: 40, borderRadius: '50%',
+                color: on ? 'rgba(17, 17, 24, 0.92)' : 'rgba(255, 255, 255, 0.82)', bgcolor: on ? '#fff' : 'transparent',
+                transition: 'background-color .2s, color .2s',
+                '&:hover': { bgcolor: on ? '#fff' : 'rgba(255, 255, 255, 0.14)' },
+                '&.Mui-focusVisible': { outline: '2px solid #fff', outlineOffset: 2 },
+              }}
+            >
+              <Icon size={18} aria-hidden />
+            </ButtonBase>
+          </Tooltip>
+        );
+      })}
     </Box>
   );
 }
