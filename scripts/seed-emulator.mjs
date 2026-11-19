@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// npm run seed:emulator — 起動中のエミュレータ（npm run emulators）に、最初の管理者の招待を入れる。
-// 本番では Console で手で作る文書（BACKEND_FIREBASE §2.5）と同じ形。エミュレータ専用（demo- 以外・127.0.0.1 以外なら throw）。
+// npm run seed:emulator — 起動中のエミュレータ（npm run emulators）に、最初の管理者の招待と Auth のアカウントを入れ、
+// パスワード設定のメールを出す。本番で Console から手で作るもの（BACKEND_FIREBASE §2.5）と同じ形。エミュレータ専用（demo- 以外・127.0.0.1 以外なら throw）。
 // firebase-admin・gcloud・ADC は使わない（エミュレータの REST に `Authorization: Bearer owner` で書く＝Rules を通らない Console 相当）。
 //   node scripts/seed-emulator.mjs [admin のメール] [名前]
 //   node scripts/seed-emulator.mjs --verify   … エミュレータが出したメール確認リンクをすべて開く（確認メールの代わり）
+//   node scripts/seed-emulator.mjs --set-password <8文字以上>   … 出ているパスワード設定（再設定）のリンクをすべてこのパスワードで完了する（招待メールの代わり）
 import { EMULATOR_PROJECT_ID } from './firebase-projects.mjs';
 
 const PROJECT = EMULATOR_PROJECT_ID;
@@ -32,6 +33,37 @@ async function verifyAll() {
   console.log(`メール確認: ${pending.length} 件`);
 }
 
+async function setPasswords(password) {
+  if (!password || password.length < 8) throw new Error('パスワードは 8 文字以上');
+  const { oobCodes = [] } = await call(`${AUTH}/emulator/v1/projects/${PROJECT}/oobCodes`);
+  const pending = oobCodes.filter((c) => c.requestType === 'PASSWORD_RESET');
+  let n = 0;
+  for (const c of pending) {
+    const link = new URL(c.oobLink);
+    if (link.hostname !== '127.0.0.1') throw new Error(`エミュレータ以外のリンク: ${link.origin}`);
+    link.searchParams.set('newPassword', password);
+    // 使用済みのリンクは 400（同じメールに複数あれば最新だけ通る）
+    const res = await fetch(link, { redirect: 'manual' });
+    if (res.status < 400) n++;
+    console.log(`password ${c.email}: ${res.status}`);
+  }
+  console.log(`パスワード設定: ${n} 件`);
+}
+
+/** アプリの招待（src/live/invite.ts）と同じ: 誰にも知らせないパスワードで作り、パスワード設定のメールを出す */
+async function createAuthUser(email) {
+  const key = 'demo-api-key';
+  const pw = `Aa1!${crypto.randomUUID()}`;
+  const res = await fetch(`${AUTH}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=${key}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: pw, returnSecureToken: false }),
+  });
+  const body = await res.json();
+  if (!res.ok && body?.error?.message !== 'EMAIL_EXISTS') throw new Error(`signUp → ${res.status} ${JSON.stringify(body)}`);
+  await call(`${AUTH}/identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${key}`, {
+    method: 'POST', body: JSON.stringify({ requestType: 'PASSWORD_RESET', email }),
+  });
+}
+
 async function seedAdmin(email, name) {
   const id = email.trim().toLowerCase();
   const doc = `${FIRESTORE}/v1/projects/${PROJECT}/databases/(default)/documents/invites?documentId=${encodeURIComponent(id)}`;
@@ -48,12 +80,15 @@ async function seedAdmin(email, name) {
       },
     }),
   });
-  console.log(`invites/${id}（admin・${name}）を作りました。アプリの /login で「招待されたメールで登録」してください`);
+  await createAuthUser(id);
+  console.log(`invites/${id}（admin・${name}）と Auth のアカウントを作り、パスワード設定のメールを出しました。` +
+    '`node scripts/seed-emulator.mjs --set-password <パスワード>` で設定してから、アプリの /login でログインしてください');
 }
 
 const args = process.argv.slice(2);
 try {
   if (args[0] === '--verify') await verifyAll();
+  else if (args[0] === '--set-password') await setPasswords(args[1]);
   else await seedAdmin(args[0] ?? 'admin@example.com', args[1] ?? '管理者 太郎');
 } catch (e) {
   console.error(`seed:emulator を中止しました: ${e.message}（npm run emulators を起動しているか確認）`);

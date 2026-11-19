@@ -1,4 +1,4 @@
-import { Alert, Box, Button, Stack, Tab, Tabs, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Stack, TextField, Typography } from '@mui/material';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { Surface } from '@/components/ui';
@@ -10,7 +10,6 @@ import { tokens } from '@/theme/tokens';
 import { authErrorMessage, useLiveAuth } from '../auth';
 import { ROLE_HOME } from '../session';
 
-const MIN_PASSWORD = 8;
 const LOGIN_PATHS = ['/login', '/dev/login', '/portal/login'];
 
 /** 戻り先はこのアプリの中のパスだけ（外部 URL・ログイン画面へは戻さない） */
@@ -41,8 +40,8 @@ function Frame({ title, children }: { title: string; children: ReactNode }) {
 
 /**
  * live のログイン（/login・/dev/login・/portal/login は同じ画面。役割は accounts で決まる）。
- * - ログイン ／ 初めての方（招待されたメールで登録 → 確認メール → 受け取り）
- * - 確認待ち: 確認メールの再送・「確認した」・ログアウト
+ * - ログインだけ（この画面からの登録は無い。アカウントは招待のときに作られ、本人はパスワード設定のメールでパスワードを決める。§2.4）
+ * - 確認待ち: 確認メールの再送・「確認した」・ログアウト（パスワード設定を経ずに作られた等、メールが未確認のアカウントだけ）
  * - 招待が無い: 案内とログアウト（どのメールが招待済みかを推測させない文言にする）
  */
 export default function LiveLoginPage() {
@@ -50,13 +49,11 @@ export default function LiveLoginPage() {
   const { state } = auth;
   const [params] = useSearchParams();
   const toast = useToast();
-  const [tab, setTab] = useState<'login' | 'signup'>('login');
   // パスワードの再設定（ログインのタブから開く。送信後は、登録の有無にかかわらず同じ案内を出す）
   const [resetting, setResetting] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -99,7 +96,7 @@ export default function LiveLoginPage() {
     return (
       <Frame title="ご利用いただけません">
         <Typography variant="body2" sx={{ mb: 2 }}>
-          <b>{state.email}</b> では利用できる招待が見つかりませんでした。招待を受けたメールアドレスで登録しているか確かめ、
+          <b>{state.email}</b> では利用できる招待が見つかりませんでした。招待を受けたメールアドレスでログインしているか確かめ、
           わからない場合はアフロの担当者にお問い合わせください。
         </Typography>
         <Button variant="contained" fullWidth onClick={() => { void auth.signOut(); }}>ログアウト</Button>
@@ -148,23 +145,10 @@ export default function LiveLoginPage() {
     );
   }
 
-  const signup = tab === 'signup';
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!EMAIL_RE.test(email.trim())) {
       setError('メールアドレスの形式を確認してください');
-      return;
-    }
-    if (signup) {
-      if (password.length < MIN_PASSWORD) {
-        setError(`パスワードは ${MIN_PASSWORD} 文字以上で入力してください`);
-        return;
-      }
-      if (password !== confirm) {
-        setError('確認用のパスワードが一致しません');
-        return;
-      }
-      void run(() => auth.signUp(email, password));
       return;
     }
     if (!password) {
@@ -177,15 +161,10 @@ export default function LiveLoginPage() {
   return (
     <Frame title="アフロCMS">
       {state.reason && <Alert severity="warning" sx={{ mb: 2 }}>{state.reason}</Alert>}
-      <Tabs value={tab} onChange={(_, v: 'login' | 'signup') => { setTab(v); setError(null); }} variant="fullWidth" sx={{ mb: 2 }}>
-        <Tab value="login" label="ログイン" />
-        <Tab value="signup" label="初めての方" />
-      </Tabs>
-      {signup && (
-        <Typography variant="caption" component="p" sx={{ mb: 2 }}>
-          アフロの担当者から案内されたメールアドレスで登録してください。届いた確認メールのリンクを開くと、招待を受け取って使い始められます。
-        </Typography>
-      )}
+      <Typography variant="caption" component="p" sx={{ mb: 2 }}>
+        初めての方は、招待のメール（パスワードの設定）のリンクからパスワードを決めてから、ログインしてください。
+        メールのリンクの期限が切れた場合は「パスワードを忘れた方」から送り直せます。
+      </Typography>
       <Box component="form" noValidate onSubmit={submit}>
         <Stack spacing={2}>
           <TextField
@@ -194,18 +173,11 @@ export default function LiveLoginPage() {
           />
           <TextField
             label="パスワード" type="password" value={password} onChange={(e) => setPassword(e.target.value)} fullWidth required
-            helperText={signup ? `${MIN_PASSWORD} 文字以上` : undefined}
-            inputProps={{ autoComplete: signup ? 'new-password' : 'current-password' }}
+            inputProps={{ autoComplete: 'current-password' }}
           />
-          {signup && (
-            <TextField
-              label="パスワード（確認）" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} fullWidth required
-              inputProps={{ autoComplete: 'new-password' }}
-            />
-          )}
           {error && <Alert severity="error" role="alert">{error}</Alert>}
           <Button type="submit" variant="contained" size="large" disabled={busy}>
-            {busy ? '処理しています…' : signup ? '登録して確認メールを送る' : 'ログイン'}
+            {busy ? '処理しています…' : 'ログイン'}
           </Button>
           <Button variant="text" size="small" disabled={busy} onClick={() => { setResetting(true); setResetSent(false); setError(null); }} sx={{ alignSelf: 'center' }}>
             パスワードを忘れた方

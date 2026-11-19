@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  createUserWithEmailAndPassword, onAuthStateChanged, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut as fbSignOut, type User,
+  onAuthStateChanged, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut as fbSignOut, type User,
 } from 'firebase/auth';
 import { doc, getDoc, onSnapshot, serverTimestamp, writeBatch, type DocumentData } from 'firebase/firestore';
 import { normalizeEmail } from '@/data/users';
@@ -10,6 +10,8 @@ import type { LiveAccount, LiveSession } from './session';
 /**
  * live のログイン（BACKEND_FIREBASE §2.3〜§2.4）。demo の SESSION_KEY・DemoStore は読まない（C3）。
  * - メール＋パスワード、メール確認必須（Rules が email_verified を要求する）
+ * - アカウントは招待のときに作る（src/live/invite.ts。security M1）。この画面からの登録（signUp）は無い。
+ *   招待された人はパスワード設定のメールで自分のパスワードを決める（再設定の完了でメールも確認済みになる。§2.4）
  * - 確認済みで accounts/{uid} が無ければ、invites/{自分のメール} を読んで 1 つのバッチで受け取る（accounts 作成＋招待を claimed）
  * - accounts を購読し続ける: 無効にされた・メールが一致しない・読めなくなったら、その場でログアウトして理由を出す（§13.3）
  */
@@ -24,7 +26,6 @@ export type AuthState =
 interface AuthValue {
   state: AuthState;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
   resendVerification: () => Promise<void>;
   /** パスワードの再設定メール。登録の無いメールでも成功として返す（どのメールが登録済みかを推測させない。security M1） */
   resetPassword: (email: string) => Promise<void>;
@@ -146,12 +147,6 @@ export function LiveAuthProvider({ children }: { children: ReactNode }) {
     signIn: async (email, password) => {
       setReason(undefined);
       await signInWithEmailAndPassword(auth, normalizeEmail(email), password);
-    },
-    signUp: async (email, password) => {
-      setReason(undefined);
-      // 招待の文書 ID は小文字のメール。登録の前に小文字にそろえる（§28.2 大文字混在のメール）
-      const cred = await createUserWithEmailAndPassword(auth, normalizeEmail(email), password);
-      await sendEmailVerification(cred.user);
     },
     resendVerification: async () => {
       if (auth.currentUser) await sendEmailVerification(auth.currentUser);

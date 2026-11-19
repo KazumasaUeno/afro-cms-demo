@@ -99,13 +99,18 @@
 
 - パスワード再設定・メール確認メールの Spark 上限は **[UNKNOWN]**（上記 limits ページで確認する。§23）
 - 送信元は既定で `noreply@<project>.firebaseapp.com`。迷惑メール扱いの可能性 [INFERENCE]。独自ドメイン化は後回し
-- Auth の新規登録自体は誰でもできてしまう（Spark・Functions なしでは止められない [INFERENCE]）。**登録しただけでは何も読めない**（招待を受け取った `accounts` 文書が無ければ Rules がすべて拒否）ことで守る
+- Auth の新規登録自体は誰でもできてしまう（Spark・Functions なしでは止められない [INFERENCE]。招待のアカウント作成もクライアントの SDK で行うので「作成（登録）を許可」は ON のまま）。**登録しただけでは何も読めない**（招待を受け取った `accounts` 文書が無ければ Rules がすべて拒否）ことで守る。アプリの画面からの登録は 0.45.0 で無くした
 
 ### 2.4 招待と有効化（Functions なしで成り立たせる「招待の受け取り」方式）
 
+0.45.0（2026-11-19 ユーザー決定。security M1 の対策）で「招待の後に本人が同じメールで登録」から「招待のときにアカウントを作り、パスワード設定のメールを送る」に変えた。実装は `src/live/invite.ts`。
+
 ```
 1. admin が invites/{email小文字} を作る（role・name・company・projectId）           … status: invited
-2. 本人がログイン画面で「招待されたメール」で新規登録 → 確認メールのリンクを開く
+   続けて admin のブラウザが 2 つ目の Firebase アプリ（保存はメモリだけ）で Auth のアカウントを作る
+   （パスワードは乱数。誰にも見せず保存しない）→ その 2 つ目をログアウトして破棄 → パスワード再設定のメール（＝招待メール。
+   リンクの後はアプリの /login）を送る。invites が作れなければ（招待済み等）アカウントもメールも作らない
+2. 本人がメールのリンクで自分のパスワードを決める（再設定の完了でメールも確認済みになる。§2.4 の注）
 3. 本人がログイン → アプリが invites/{自分のメール} を読む（Rules: token.email 一致 かつ email_verified）
 4. 1 つのバッチで:
      accounts/{uid} を作る（role・projectId は招待と同じ値でなければ Rules が拒否）
@@ -115,14 +120,19 @@
 
 - 現行の状態 `invited → active → disabled`（`types/index.ts:348`）にそのまま対応（invited＝招待のみ、active＝`accounts` 作成済み、disabled＝admin が `accounts.status` を変更）
 - 無効化は **Rules が毎回 `accounts` を読む**ので即時に効く（開いている画面の Listener も permission-denied で切れる）。Auth ユーザー自体は残る（削除は Console。§17）
-- 招待の取り消し: admin が `invites.status = revoked`（未使用の招待だけ）
+- 招待の取り消し: admin が `invites.status = revoked`（未使用の招待だけ）。Auth のアカウントは残る（ログインしても「招待が見つからない」。削除は Console）
+- **同じメールのアカウントが既にある**とき（招待より前に誰かが登録した・送り直し）は、作らずにパスワード設定のメールだけ送り、管理者に「既にあった」と伝える。受信箱の持ち主が設定すると前のパスワードは使えなくなり、uid はそのまま本人のものになる。先に登録した人は、メールが未確認のままなら招待を読めず受け取れない（Rules の email_verified）。**ただし**先に登録した人が確認メールのリンクを本人に押させていた場合や、本番がパスワード再設定で前のログインを無効にしない場合は、パスワード設定の前に受け取れてしまう（security re-audit 2026-11-19 MEDIUM）。そのため初めての招待で「既にあった」ときは待たずに Console でそのアカウントを削除し、「招待メールを送り直す」で作り直す（画面の案内も同じ）
+- 管理者の一覧の招待中の行に「招待メールを送り直す」（アカウントが無ければ作る。メールの送信に失敗したときのやり直しにも使う）
+- 注（2026-11-19 確認）: [FACT] Auth エミュレータ（firebase-tools 15.x）は再設定の完了で `emailVerified = true` にする（`operations.js` の resetPassword・invite-e2e の実行で確認）。本番は [INFERENCE]（公式に明記なし）。本番で確認済みにならなくても、ログイン後に確認メールの画面が出て、確認後に受け取れる（流れは止まらない）。
+  [FACT] 公式（Manage User Sessions）: 「パスワードの再設定は既存のトークンを失効させる」。エミュレータは失効させない（再設定前の未確認のログインが、更新後に確認済みのトークンを得る）ので、この点は本番相当のプロジェクトで確かめる（TODO）
 
 ### 2.5 初代管理者の作り方（Bootstrap。Functions・Admin SDK を使わない）
 
 1. Firebase Console → Firestore → `invites` に文書 ID = 管理者のメール（小文字）で `{role:'admin', name, status:'invited', createdAt, createdBy:'console'}` を手で作る（**Console からの書き込みは Rules を通らない** [FACT] Firebase の仕様）
-2. 管理者がアプリで新規登録 → メール確認 → ログイン → §2.4 の 4 で自分の `accounts` が admin で作られる
-3. 2 人目以降の admin も同じ（Console で招待）。**アプリから admin を招待できる UI は作らない**（権限昇格の経路を 1 つ減らす）[DECISION]
-4. 手順は `docs/operations/RUNBOOK_FIREBASE.md`（実装時に作成）に置く
+2. Firebase Console → Authentication →「ユーザーを追加」で同じメール（**小文字**）と、使い捨ての長いパスワードで Auth のアカウントを作る（0.45.0 からアプリに登録の画面は無い）
+3. 管理者がアプリのログイン画面の「パスワードを忘れた方」から自分のパスワードを設定 → ログイン → §2.4 の 4 で自分の `accounts` が admin で作られる（エミュレータでは `npm run seed:emulator` → `node scripts/seed-emulator.mjs --set-password <パスワード>` が 1〜3 の代わり）
+4. 2 人目以降の admin も同じ（Console で招待）。**アプリから admin を招待できる UI は作らない**（権限昇格の経路を 1 つ減らす）[DECISION]
+5. 手順は `docs/operations/RUNBOOK_FIREBASE.md`（実装時に作成）に置く
 
 ---
 

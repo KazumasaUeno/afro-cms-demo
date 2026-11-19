@@ -5,6 +5,7 @@ import { PageHeader, StatusPill, Surface } from '@/components/ui';
 import { RouteLoader } from '@/components/layout/RouteLoader';
 import { useRepositories } from '@/repositories';
 import { useWrite } from '@/hooks/useWrite';
+import { useToast } from '@/hooks/useToast';
 import { CLIENT_STATUS, DEV_AFFILIATION, type ClientAccountDraft, type DevUserDraft } from '@/data/users';
 import { devUserToPerson, type DevPerson } from '@/data/people';
 import { ClientAccountDialog } from '@/features/users/ClientAccountDialog';
@@ -13,9 +14,21 @@ import { DevProjectsDialog } from '@/features/users/DevProjectsDialog';
 import { tokens } from '@/theme/tokens';
 import type { ClientAccount, DevUser } from '@/types';
 import { INVITE_PREFIX } from '../model';
+import { provisionInvitee, type InviteAccountResult } from '../invite';
 import { LoadError } from './shared';
 
 const isInvite = (id: string) => id.startsWith(INVITE_PREFIX);
+
+/**
+ * 初めての招待なのに同じメールのアカウントが既にあった＝本人以外が先に作った可能性がある（security re-audit 2026-11-19 MEDIUM:
+ * 先に作った人が確認メールのリンクを本人に押させていると、パスワード設定の前に招待を受け取れてしまう）。
+ * 待たずに Console でそのアカウントを消し、「招待メールを送り直す」で作り直してもらう（新しい uid になり、前のログインは使えなくなる）
+ */
+const existingMessage = (email: string) =>
+  `${email.trim()} を招待しましたが、このメールアドレスのアカウントは招待より前からありました（本人以外が作った可能性があります）。すぐに Firebase の管理画面（Authentication）でこのアカウントを削除し、一覧の「招待メールを送り直す」を押してください。アカウントの一覧に同じメールの人が出ていたら、その人を無効にしてください`;
+/** 招待は保存できたが、アカウントの作成・メールの送信に失敗した（招待は残るので送り直せる。security LOW） */
+const provisionFailedMessage = (email: string) =>
+  `${email.trim()} の招待は保存しましたが、パスワード設定のメールを送れませんでした。時間をおいて、一覧の「招待メールを送り直す」を押してください`;
 
 function Row({ title, sub, pill, children }: { title: string; sub: string; pill: ReactNode; children: ReactNode }) {
   return (
@@ -41,6 +54,7 @@ function Row({ title, sub, pill, children }: { title: string; sub: string; pill:
 /**
  * ユーザー（live の管理者画面）。招待（invites）と、受け取り後のアカウント（accounts）。
  * - 追加＝招待（メールアドレスを入れるのは招待のときだけ。登録後のメールは変えられない）
+ * - 招待すると、そのメールの Auth アカウントを作り、パスワード設定のメールを送る（src/live/invite.ts。security M1）
  * - 招待中の人は「招待を取り消す」だけ。開発者の担当は、アカウントができた後に「担当を変更」で割り当てる
  */
 export default function LiveUsersPage() {
@@ -50,6 +64,7 @@ export default function LiveUsersPage() {
   const devProjects = repo.useDevProjects();
   const { data: projects } = projectsRepo.useList();
   const write = useWrite();
+  const toast = useToast();
   const [clientEditing, setClientEditing] = useState<ClientAccountDraft | null>(null);
   const [devEditing, setDevEditing] = useState<DevUserDraft | null>(null);
   const [assigning, setAssigning] = useState<DevPerson | null>(null);
@@ -65,11 +80,35 @@ export default function LiveUsersPage() {
   const editClient = (a: ClientAccount) => setClientEditing({ id: a.id, company: a.company, name: a.name, email: a.email, projectId: a.projectId });
   const editDev = (u: DevUser) => setDevEditing({ id: u.id, name: u.name, role: u.role, email: u.email, affiliation: u.affiliation, partnerCompany: u.partnerCompany ?? '', projectIds: [] });
 
+  /**
+   * 招待: invites の文書 → Auth のアカウント → パスワード設定メール の順。文書が作れなければ（招待済み等）アカウントもメールも作らない。
+   * 文書の後で失敗したら、一覧の「招待メールを送り直す」でやり直せる
+   */
+  const invite = async (save: Promise<void>, email: string, close: () => void) => {
+    if (!(await write(save))) return;
+    close();
+    let result: InviteAccountResult;
+    try {
+      result = await provisionInvitee(email);
+    } catch (e) {
+      console.warn('invite provisioning failed', e);
+      toast(provisionFailedMessage(email), 'error');
+      return;
+    }
+    toast(result === 'existing' ? existingMessage(email) : `${email.trim()} を招待し、パスワード設定のメールを送りました`, result === 'existing' ? 'error' : 'success');
+  };
+  const resend = async (email: string) => {
+    let result: InviteAccountResult | undefined;
+    const ok = await write((async () => { result = await provisionInvitee(email); })());
+    if (ok) toast(result === 'created' ? `${email} のアカウントを作り、パスワード設定のメールを送りました` : `${email} にパスワード設定のメールを送り直しました`);
+  };
   const saveClient = (d: ClientAccountDraft) => {
-    void write(repo.saveClientAccount(d), d.id ? '担当者名を変更しました' : `${d.email.trim()} を招待しました`).then((ok) => { if (ok) setClientEditing(null); });
+    if (!d.id) { void invite(repo.saveClientAccount(d), d.email, () => setClientEditing(null)); return; }
+    void write(repo.saveClientAccount(d), '担当者名を変更しました').then((ok) => { if (ok) setClientEditing(null); });
   };
   const saveDev = (d: DevUserDraft) => {
-    void write(repo.saveDevUser(d), d.id ? '開発者の情報を変更しました' : `${d.email.trim()} を招待しました`).then((ok) => { if (ok) setDevEditing(null); });
+    if (!d.id) { void invite(repo.saveDevUser(d), d.email, () => setDevEditing(null)); return; }
+    void write(repo.saveDevUser(d), '開発者の情報を変更しました').then((ok) => { if (ok) setDevEditing(null); });
   };
 
   return (
@@ -78,7 +117,7 @@ export default function LiveUsersPage() {
         eyebrow="管理者画面"
         icon={<Users size={14} />}
         title="ユーザー"
-        description="お客様と開発者を招待します。招待メールは送られないため、招待した人に、そのメールアドレスでログイン画面の「初めての方」から登録するよう伝えてください。"
+        description="お客様と開発者を招待します。招待すると、そのメールアドレスにパスワード設定のメールが届きます。招待された人はメールのリンクでパスワードを決め、ログイン画面からログインします。"
       />
       <Stack spacing={2.5}>
         <Surface component="section" aria-labelledby="live-users-clients">
@@ -98,7 +137,10 @@ export default function LiveUsersPage() {
               return (
                 <Row key={a.id} title={`${a.name}（${a.company}）`} sub={`${a.email}・${siteName(a.projectId)}`} pill={<StatusPill tone={st.tone}>{st.label}</StatusPill>}>
                   {isInvite(a.id) ? (
-                    <Button size="small" variant="outlined" onClick={() => { void write(repo.setClientAccountStatus(a.id, false), '招待を取り消しました'); }}>招待を取り消す</Button>
+                    <>
+                      <Button size="small" variant="outlined" onClick={() => { void resend(a.email); }}>招待メールを送り直す</Button>
+                      <Button size="small" variant="text" onClick={() => { void write(repo.setClientAccountStatus(a.id, false), '招待を取り消しました'); }}>招待を取り消す</Button>
+                    </>
                   ) : (
                     <>
                       <Button size="small" variant="outlined" onClick={() => editClient(a)}>編集</Button>
@@ -134,7 +176,10 @@ export default function LiveUsersPage() {
               return (
                 <Row key={u.id} title={u.name} sub={sub} pill={pill}>
                   {invite ? (
-                    <Button size="small" variant="outlined" onClick={() => { void write(repo.setDevUserStatus(u.id, false), '招待を取り消しました'); }}>招待を取り消す</Button>
+                    <>
+                      <Button size="small" variant="outlined" onClick={() => { void resend(u.email); }}>招待メールを送り直す</Button>
+                      <Button size="small" variant="text" onClick={() => { void write(repo.setDevUserStatus(u.id, false), '招待を取り消しました'); }}>招待を取り消す</Button>
+                    </>
                   ) : (
                     <>
                       <Button size="small" variant="outlined" onClick={() => setAssigning(devUserToPerson(u))}>担当を変更</Button>

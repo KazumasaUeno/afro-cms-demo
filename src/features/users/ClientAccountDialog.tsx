@@ -71,10 +71,10 @@ export function ClientAccountDialog({ draft: initial, accounts, projects, onClos
               <Stack direction="row" spacing={1.25} sx={{ p: 1.5, borderRadius: `${tokens.radius.sm}px`, bgcolor: tokens.color.infoSoft, color: tokens.color.inkSoft }}>
                 <Info size={18} color={tokens.color.info} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
                 {DATA_MODE === 'live' ? (
-                  // live: 招待は invites の文書を作るだけ。このアプリは招待メールを送らない（届くのは登録後の確認メールだけ。§2.4）
+                  // live: 招待で Auth のアカウントを作り、パスワード設定のメール（Console のテンプレートで招待の文面にする）を送る。§2.4
                   <Typography variant="body2" sx={{ color: 'inherit' }}>
-                    登録すると「招待中」になります。このアプリから招待メールは送りません。
-                    <Box component="span" sx={{ display: 'block', mt: 0.5 }}>お客様に、ログイン画面の「初めての方」から、このメールアドレスで登録するようお伝えください。届いた確認メールのリンクを開くと「有効」になります。</Box>
+                    登録すると「招待中」になり、このメールアドレスにパスワード設定のメールが届きます。
+                    <Box component="span" sx={{ display: 'block', mt: 0.5 }}>お客様がメールのリンクでパスワードを決めてログインすると「有効」になります。</Box>
                   </Typography>
                 ) : (
                   <Typography variant="body2" sx={{ color: 'inherit' }}>
