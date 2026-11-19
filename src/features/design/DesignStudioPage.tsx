@@ -370,9 +370,10 @@ export default function DesignStudioPage() {
           <DeviceToggle value={device} onChange={setDevice} />
           <IconButton aria-label="閉じる" onClick={() => setExpanded(false)}><X size={20} /></IconButton>
         </Stack>
-        <Box sx={{ p: { xs: 1.5, md: 3 }, overflow: 'auto' }}>
-          <Box sx={{ display: { md: 'none' }, mb: 1.5 }}><ScreenToggle ctx={ctx} value={screen} onChange={setScreen} /></Box>
-          <DeviceFrame design={current.id} device={device} screen={screen} viewportHeight={device === 'pc' ? 760 : undefined} label={`${current.name}の拡大プレビュー`} />
+        {/* PC は枠なしで画面いっぱい（2026-11-19 ユーザー指示「全画面表示した時は PC 画面いっぱいに」） */}
+        <Box sx={{ p: device === 'pc' ? 0 : { xs: 1.5, md: 3 }, overflow: 'auto', flex: 1 }}>
+          <Box sx={{ display: { md: 'none' }, m: device === 'pc' ? 1.5 : 0, mb: 1.5 }}><ScreenToggle ctx={ctx} value={screen} onChange={setScreen} /></Box>
+          <DeviceFrame bare design={current.id} device={device} screen={screen} viewportHeight={device === 'pc' ? Math.max(400, window.innerHeight - 66) : undefined} label={`${current.name}の拡大プレビュー`} />
         </Box>
       </Dialog>
     </Box>

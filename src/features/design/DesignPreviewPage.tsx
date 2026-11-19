@@ -71,15 +71,15 @@ export default function DesignPreviewPage() {
       </Stack>
       {/* 端末の切り替えは帯の下の右端に、アイコンだけで浮かせる（2026-11-18 ユーザー指示）。サイトをスクロールしても同じ位置 */}
       <FloatingDeviceSwitch value={device} onChange={(d) => set('device', d)} />
-      {/* 制作中のサイトの PC 表示は枠なしで画面いっぱい（2026-11-18 ユーザー指示「全画面で」）。タブレット・スマホは端末の幅で中央に出す */}
-      <Box sx={{ p: site && device === 'pc' ? 0 : { xs: 1, sm: 2 } }}>
+      {/* PC 表示は枠なしで画面いっぱい（制作中のサイトは 2026-11-18、デザイン案も 2026-11-19 ユーザー指示「全画面表示した時は PC 画面いっぱいに」）。タブレット・スマホは端末の幅で中央に出す */}
+      <Box sx={{ p: device === 'pc' ? 0 : { xs: 1, sm: 2 } }}>
         <DeviceFrame
-          bare={site}
+          bare
           design={design}
           device={device}
           screen={screen}
           projectId={projectId}
-          viewportHeight={site && device === 'pc' ? Math.max(400, winH - BAR_H) : Math.max(400, winH - BAR_H - (site ? 0 : 34) - 40)}
+          viewportHeight={device === 'pc' ? Math.max(400, winH - BAR_H) : Math.max(400, winH - BAR_H - 40)}
           label={`${variant.name}のプレビュー`}
         />
       </Box>
