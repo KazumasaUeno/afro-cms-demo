@@ -12,7 +12,8 @@ import type { ProposalPoint } from '@/types';
 import { buildProposal } from './buildProposal';
 import { isAnswered } from './validation';
 import { pendingConfirmations } from './assignment';
-import { printRequirementsDoc } from './requirementsDoc';
+import { downloadRequirementsDoc } from './requirementsDoc';
+import { useToast } from '@/hooks/useToast';
 import { useHearingRoutes } from './hearingRoutes';
 import { useLiveRoleOptional } from '@/live/session';
 import { useDemoOptional } from '@/store/DemoStore';
@@ -38,6 +39,7 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
   const navigate = useNavigate();
   // 開発者画面（/dev/hearing）では要件定義書を見るだけ。やり直し・サイトマップへ進むは管理者画面だけに出す（0.25.0）。承認はお客様ポータルだけ（管理者・開発者には承認待ちの表示。2026-11-12）
   const { dev } = useHearingRoutes();
+  const toast = useToast();
   const write = useWrite();
   // 確認ダイアログ: sendBack＝差し戻す（回答は残す）／ reset＝回答をやり直す（demo だけ。全消去）
   const [confirmReset, setConfirmReset] = useState<false | 'sendBack' | 'reset'>(false);
@@ -170,7 +172,7 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
               {/* 差し戻す（回答を残して入力へ戻す）は demo・live 共通。demo は承認待ちの間だけ（0.29.3） */}
               {canReset && (live || req.status === 'analyzed') && <Button variant="text" startIcon={<RotateCcw size={16} />} onClick={() => setConfirmReset('sendBack')}>差し戻す</Button>}
               {canReset && !live && <Button variant="text" onClick={() => setConfirmReset('reset')}>回答をやり直す</Button>}
-              <Button variant="outlined" startIcon={<Download size={16} />} onClick={() => printRequirementsDoc({ requirements: req, projects: projectList, schedule })}>要件定義書を PDF で保存</Button>
+              <Button variant="outlined" startIcon={<Download size={16} />} onClick={() => void downloadRequirementsDoc({ requirements: req, projects: projectList, schedule }, toast)}>要件定義書をダウンロード（PDF）</Button>
               {approved ? (
                 <Box
                   role="status"

@@ -8,7 +8,7 @@ import { answerText, isAnswered } from './validation';
 
 /**
  * 要件定義書（印刷できる HTML）。改善提案（buildProposal）とヒアリングの全回答を 1 枚にまとめる。
- * 画面と同じく回答から毎回作る（別に保存しない）。保存は印刷画面から PDF にする（printRequirementsDoc）。
+ * 画面と同じく回答から毎回作る（別に保存しない）。保存は PDF のダウンロード（downloadRequirementsDoc → requirementsPdf.ts）。
  */
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -89,7 +89,7 @@ export function buildRequirementsDocHtml(state: RequirementsDocState): string {
     return `<h3>${c.no}. ${esc(c.title)}</h3><table>${rows}</table>`;
   }).join('');
   const points = proposal.points.map((p) => `<li><b>[${PRIORITY[p.priority] ?? ""}] ${esc(p.area)}: ${esc(p.title)}</b><br>${esc(p.detail)}<br><span class="muted">${esc(p.impact)}</span></li>`).join('');
-  // タイトルは PDF に保存するときの既定のファイル名になる（printRequirementsDoc）
+  // タイトルは PDF のファイル名になる（requirementsPdf.ts）
   const today = new Date().toLocaleDateString('sv-SE'); // yyyy-mm-dd（端末の日付）
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>要件定義書_${esc(project?.siteName ?? proposal.hostname)}_${today}</title>
 <style>
@@ -121,27 +121,24 @@ ${nonFunctionalSection()}
 </body></html>`;
 }
 
+let pdfBusy = false;
+
 /**
- * 要件定義書を PDF で保存する（2026-11-19 ユーザー指示「ダウンロードは html ではないものに」。以前は .html を保存していた）。
- * 見えない iframe に要件定義書を入れて印刷画面を開き、「PDF に保存」で保存してもらう（部品を増やさない。見た目は印刷用の CSS のまま）。
- * 印刷画面の既定のファイル名は <title>（要件定義書_サイト名_日付）になる。
+ * 要件定義書を PDF でダウンロードする（2026-11-19 ユーザー指示「html ではないもの」→「印刷ではなくダウンロード」）。
+ * PDF を作る部品（jspdf・html2canvas-pro）は重いので、押したときに読み込む。連打しても 1 回だけ作る。
+ * ファイル名は <title>（要件定義書_サイト名_日付）。結果は notify（画面のトースト）で知らせる。
  */
-export function printRequirementsDoc(state: RequirementsDocState): void {
-  const iframe = document.createElement('iframe');
-  iframe.setAttribute('aria-hidden', 'true');
-  iframe.tabIndex = -1;
-  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
-  let removed = false;
-  const remove = () => { if (!removed) { removed = true; iframe.remove(); } };
-  iframe.onload = () => {
-    const win = iframe.contentWindow;
-    if (!win) { remove(); return; }
-    // 印刷画面を閉じたら片付ける（afterprint が来ないブラウザ向けに 1 分で消す）
-    win.addEventListener('afterprint', () => window.setTimeout(remove, 0));
-    window.setTimeout(remove, 60_000);
-    win.focus();
-    win.print();
-  };
-  iframe.srcdoc = buildRequirementsDocHtml(state);
-  document.body.appendChild(iframe);
+export async function downloadRequirementsDoc(state: RequirementsDocState, notify: (message: string, tone?: 'error') => void): Promise<void> {
+  if (pdfBusy) return;
+  pdfBusy = true;
+  try {
+    const { downloadRequirementsPdf } = await import('./requirementsPdf');
+    await downloadRequirementsPdf(buildRequirementsDocHtml(state));
+    notify('要件定義書（PDF）をダウンロードしました');
+  } catch (e) {
+    console.error('[requirements pdf]', e);
+    notify('PDF を作れませんでした。もう一度お試しください', 'error');
+  } finally {
+    pdfBusy = false;
+  }
 }

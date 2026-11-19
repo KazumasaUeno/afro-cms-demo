@@ -21,7 +21,7 @@ import { buildProposal } from '@/features/requirements/buildProposal';
 import { approvalSteps, type ApprovalKey, type ApprovalStep } from './portalSteps';
 import { sitemapCreated } from '@/data/sitemap';
 import { pendingConfirmations } from '@/features/requirements/assignment';
-import { buildRequirementsDocHtml, printRequirementsDoc } from '@/features/requirements/requirementsDoc';
+import { buildRequirementsDocHtml, downloadRequirementsDoc } from '@/features/requirements/requirementsDoc';
 import { SitemapViewer } from '@/features/sitemap/SitemapViewer';
 import { SitemapDevCommentView } from '@/features/sitemap/DevComment';
 import { useProjectRoutes } from '@/features/projects/projectRoutes';
@@ -105,7 +105,7 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
     // 'noopener' を付けると戻り値が常に null になり開けたか分からないため、開いた後に opener を外す
     const win = window.open(url, '_blank');
     if (win) win.opener = null;
-    else toast('新しいタブを開けませんでした。ブラウザのポップアップの設定をご確認ください（「要件定義書を PDF で保存」でも全文を見られます）', 'info');
+    else toast('新しいタブを開けませんでした。ブラウザのポップアップの設定をご確認ください（「要件定義書をダウンロード（PDF）」でも全文を見られます）', 'info');
     window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
   // 全画面プレビュー（新しいタブ）の URL。basename つきにする（0.39.4）
@@ -207,8 +207,8 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
                 <Button size="small" variant="outlined" startIcon={<FileText size={15} />} endIcon={<ExternalLink size={14} />} onClick={openRequirementsDoc}>
                   全文を新しいタブで見る
                 </Button>
-                <Button size="small" variant="outlined" startIcon={<Download size={15} />} onClick={() => printRequirementsDoc(state)}>
-                  要件定義書を PDF で保存
+                <Button size="small" variant="outlined" startIcon={<Download size={15} />} onClick={() => void downloadRequirementsDoc(state, toast)}>
+                  要件定義書をダウンロード（PDF）
                 </Button>
               </Stack>
             )}
