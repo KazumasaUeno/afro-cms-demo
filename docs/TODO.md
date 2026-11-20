@@ -25,12 +25,12 @@
      - Console → Functions に `provisionInvitee`（asia-northeast1）が出ていることを確かめる
      - `--only functions,hosting` を 1 回で出すことは `deploy:firebase` が拒否する（2026-11-20）。順番（functions が先）は手順どおりに守る
   4. [x] 2026-11-20 済（feat/functions-invite 54d8ec6 のビルド）hosting をデプロイ（`npm run build:live` → `npm run deploy:firebase -- --project afro-cms-4a6ff --only hosting`）
-  5. [ ] **通しを確かめる**（作成（登録）を許可がまだ ON のうちに）: 管理者で新しいメールを招待 →「招待し、パスワード設定のメールを送りました」→ メールのリンクでパスワード設定 → ログインで「有効」。Console → Functions → ログに `invite.provision`・`status: created` が出る
-  6. [ ] **OFF の直前に** Authentication →「ユーザー」で、招待していないメールのアカウントが無いか見る。あれば削除する（OFF にしても、それより前に作られたアカウントは残り、招待を受け取れてしまう。security 2026-11-20 HIGH）
+  5. [x] 2026-11-20 済（+test1 で招待→パスワード設定→ログイン＝有効。関数のログ created）**通しを確かめる**（作成（登録）を許可がまだ ON のうちに）: 管理者で新しいメールを招待 →「招待し、パスワード設定のメールを送りました」→ メールのリンクでパスワード設定 → ログインで「有効」。Console → Functions → ログに `invite.provision`・`status: created` が出る
+  6. [x] 2026-11-20 済（Auth は招待した 2 件だけ。admin v2 config で disabledUserSignup=true。公開キーの signUp は ADMIN_ONLY_OPERATION）**OFF の直前に** Authentication →「ユーザー」で、招待していないメールのアカウントが無いか見る。あれば削除する（OFF にしても、それより前に作られたアカウントは残り、招待を受け取れてしまう。security 2026-11-20 HIGH）
      その後 Firebase Console → Authentication → 設定 →「ユーザー アクション」→ **「作成（登録）を許可」を OFF** → 保存
-  7. [ ] **OFF にした後に**もう一度通しを確かめる（別の新しいメールで招待 → パスワード設定 → ログイン）。招待が失敗したら 6 を ON に戻して連絡する（Admin SDK が OFF の影響を受けないことは公式に明記が無い [INFERENCE]）
+  7. [x] 2026-11-20 一部済（+test2 の招待で関数が created＝OFF でも Admin SDK は作れる [FACT]。test2 のパスワード設定・ログインは未実施＝ユーザー判断で省略。テスト用の 2 人は無効化・取り消し済み）**OFF にした後に**もう一度通しを確かめる（別の新しいメールで招待 → パスワード設定 → ログイン）。招待が失敗したら 6 を ON に戻して連絡する（Admin SDK が OFF の影響を受けないことは公式に明記が無い [INFERENCE]）
   - 確認済み（エミュレータ・2026-11-19）: 管理者だけが作れる（未ログイン・開発者・お客様・メール未確認・無効化・メール不一致の管理者は拒否）／招待中の文書が無ければ作らない（取り消し済みも）／既にあるアカウントは変えずに existing／メールの形・長さの検査
-  - 未確認（本番）: 上の 5・7。Auth の「作成（登録）を許可」OFF で Admin SDK の作成が通ること
+  - 本番で確認済み（2026-11-20）: 5・6、7 の作成。パスワード再設定の完了でメールが確認済みになる（最初の管理者で確認）
   - App Check: 関数側は `ENFORCE_APP_CHECK = false`（`functions/src/index.ts`）。App Check を有効にしたら（下の「App Check を有効にして enforce」）true にして functions をデプロイし直す
   - 費用の見込み: ほぼ 0 円 / 月（招待は月に数十回。Functions の無料枠は呼び出し 200 万回 / 月・40 万 GB 秒・20 万 CPU 秒。出典 https://firebase.google.com/pricing 2026-11-19 確認。設計書 §12.2）
   - 残るリスク: 登録を OFF にするまでは、誰でも未確認のアカウントを作れる（何も読めない）。OFF にする前に登録されたアカウントは残る（Console の Authentication で、招待していないメールのアカウントが無いか一度見る）
