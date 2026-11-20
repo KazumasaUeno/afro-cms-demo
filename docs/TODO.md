@@ -43,7 +43,8 @@
     - [ ] MEDIUM: 関数を専用のサービスアカウントで動かす — **コードは済み（0.47.0。`setGlobalOptions({ serviceAccount: 'afro-cms-functions@' })`）。SA の作成と役割の付与はデプロイの手順 1**
     - [ ] MEDIUM: 招待を取り消したら、関数が作った Auth アカウントも消す — **コードは済み（0.47.0。Firestore トリガー `onInviteRevoked`、asia-northeast1）**。0.47.0 より前の招待（provisionedUid なし）は対象外（Console で消す）
       - 再試行（retry: true）の期間を過ぎても消せなかったときはログ `invite.revoke`・`status: error` に残る。ログのアラートを作り、保存期間の Runbook に「accounts の無い Auth アカウント（取り残し）の棚卸し」を足す（保存期間・削除の方針と合わせて）
-    - [ ] **0.47.0 のデプロイ（この順番。作業・判断はユーザー。課金・IAM の変更を含む）**
+    - [x] **0.47.0 のデプロイ（2026-11-20 済。ユーザー承認「全て進めて」）**: SA 作成＋3 役割、functions（retry 付きトリガーは非対話で `--force` が要る＝`deploy:firebase` は未対応のため firebase CLI を直接。事前の test:functions 20/20 はスクリプトで通過）、Eventarc 初回の権限伝播エラー→2.5 分後に再デプロイで成功、run.invoker は oninviterevoked だけ、hosting、invited 0 件（1 回読み取り）、rules（301/301）。本番確認: +test3 招待で provisionedUid＝Auth uid、取り消しでトリガーが Auth を削除（status deleted）。未確認: 本番での受け取り（Rules はエミュレータ 301 件で確認）
+    - [ ] `deploy:firebase` に `--force`（retry 付きトリガーの非対話デプロイ）を通す口を足す
       1. SA を作る: Google Cloud Console → IAM → サービスアカウント →「作成」ID `afro-cms-functions`。**鍵（JSON キー）は作らない**。プロジェクトの役割: **Firebase Authentication 管理者**（roles/firebaseauth.admin）・**Cloud Datastore ユーザー**（roles/datastore.user）・**Eventarc イベント受信者**（roles/eventarc.eventReceiver。トリガーの配信）。デプロイする人にこの SA の「サービス アカウント ユーザー」（iam.serviceAccounts.actAs）
          - **Cloud Run 起動元**（roles/run.invoker）は**プロジェクト全体ではなく** `onInviteRevoked` の Cloud Run サービスだけに付ける（3 の functions のデプロイ後。Cloud Run → oninviterevoked → 権限）。[FACT] firebase-tools は run.invoker・eventReceiver を既定の compute SA にしか自動で付けない（firebase-tools 15.35 `lib/deploy/functions/checkIam.js:104-115`）。付ける前の取り消しイベントは配信に失敗する（再試行の期間内なら付けた後に通る）
       2. Firestore のロケーション: [FACT] afro-cms-4a6ff の (default) は asia-northeast1（2026-11-19 `firebase firestore:databases:get` で確認。`docs/design/DATA_RETENTION_DRAFT.md`）＝トリガーのリージョンと一致。Eventarc API が有効か（初回は権限の伝播待ちで失敗し、再デプロイで通ることがある）
