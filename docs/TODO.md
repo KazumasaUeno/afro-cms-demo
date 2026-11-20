@@ -37,6 +37,7 @@
   - **運用（security re-audit 2026-11-19 MEDIUM。登録を OFF にするまで）**: 初めての招待で「アカウントは招待より前からありました」と出たら、待たずに Console（Authentication）でそのアカウントを削除し「招待メールを送り直す」。同じメールの人がアカウント一覧に出ていたら無効にする（先に登録した人が確認メールのリンクを本人に押させていると、パスワード設定の前に招待を受け取れるため）
   - [ ] **お客様を招待する前のゲート（security audit 2026-11-20 の 0.46.0。社内試用は APPROVED WITH CONDITIONS＝上の 3〜7 の順守。お客様は下が済むまで未承認）**
     - [ ] HIGH: 招待より前からあるアカウント（関数の `existing`）を受け付けない。関数が作ったアカウントにだけサーバーで印を付け、Rules の受け取り（claimOk）でその印を必須にする（Rules の変更＝L。設計してから）
+      - 設計: `docs/design/INVITE_EXISTING_ACCOUNT.md`（2026-11-20。推奨＝関数が `invites.provisionedUid` を書き claimOk で照合。ユーザー確認待ち）
     - [ ] HIGH: Console の設定を画面で確かめて記録する（作成（登録）を許可 OFF／メール・パスワード以外のプロバイダ OFF／メール列挙の保護 ON／OFF でも Admin SDK の作成が通る＝上の 7）
     - [ ] MEDIUM: App Check を enforce（`ENFORCE_APP_CHECK = true` にしてデプロイし直す）
     - [ ] MEDIUM: 関数を専用のサービスアカウントで動かす（既定の compute SA は権限が広い。Firebase Authentication 管理者＋Datastore 閲覧のみ。platform-engineer）
