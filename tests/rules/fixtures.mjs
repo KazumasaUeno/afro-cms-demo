@@ -86,10 +86,14 @@ export async function seed(env, { reqState = 'draft' } = {}) {
     if (reqState === 'approved') {
       setDoc(doc(db, 'projects/p1/approvals/requirements-r1-approve'), approvalDoc('client1', 'approve', 1, { answers: ANSWERS, proposal: PROPOSAL, at: T0 }));
     }
-    setDoc(doc(db, 'invites/newdev@afro.example'), inviteDoc({ role: 'developer', name: '新人 開発', affiliation: 'partner', partnerCompany: '協力会社Z', devRole: 'QA' }));
-    setDoc(doc(db, 'invites/newclient@customer.example'), inviteDoc({ role: 'client', name: '新規 顧客', company: '株式会社テスト', projectId: 'p1' }));
-    setDoc(doc(db, 'invites/revoked@customer.example'), { ...inviteDoc({ role: 'client', name: '取消 顧客', company: '株式会社テスト', projectId: 'p1' }), status: 'revoked', revokedAt: T0 });
-    setDoc(doc(db, 'invites/newadmin@afro.example'), { ...inviteDoc({ role: 'admin', name: '新任 管理' }), createdBy: 'console' });
+    // provisionedUid: 関数 provisionInvitee がこの招待のために作ったアカウントの uid（0.47.0。テストの受け取り役の uid に合わせる）
+    setDoc(doc(db, 'invites/newdev@afro.example'), { ...inviteDoc({ role: 'developer', name: '新人 開発', affiliation: 'partner', partnerCompany: '協力会社Z', devRole: 'QA' }), provisionedUid: 'u-dev' });
+    setDoc(doc(db, 'invites/newclient@customer.example'), { ...inviteDoc({ role: 'client', name: '新規 顧客', company: '株式会社テスト', projectId: 'p1' }), provisionedUid: 'u-cli' });
+    setDoc(doc(db, 'invites/revoked@customer.example'), { ...inviteDoc({ role: 'client', name: '取消 顧客', company: '株式会社テスト', projectId: 'p1' }), status: 'revoked', revokedAt: T0, provisionedUid: 'u-r' });
+    // Console で作る admin（BACKEND_FIREBASE §2.5）は、Console で provisionedUid に Auth の uid を手で入れる
+    setDoc(doc(db, 'invites/newadmin@afro.example'), { ...inviteDoc({ role: 'admin', name: '新任 管理' }), createdBy: 'console', provisionedUid: 'u-adm' });
+    // 0.47.0 より前の招待（provisionedUid なし）。受け取れない
+    setDoc(doc(db, 'invites/legacy@customer.example'), inviteDoc({ role: 'client', name: '旧 招待', company: '株式会社テスト', projectId: 'p1' }));
     await batch.commit();
   });
 }
@@ -166,7 +170,7 @@ export function claimBatch(db, { uid, email, account, invite } = {}) {
 }
 
 export function claimAccount(uid, inv, email, over = {}) {
-  const { status: _s, createdAt: _c, createdBy: _b, ...copy } = inv;
+  const { status: _s, createdAt: _c, createdBy: _b, provisionedUid: _p, ...copy } = inv;
   const out = { ...copy, schemaVersion: 1, status: 'active', email, activatedAt: serverTimestamp(), updatedAt: serverTimestamp(), updatedBy: uid, ...over };
   for (const [k, v] of Object.entries(out)) if (v === undefined) delete out[k]; // undefined = その項目を落とす
   return out;

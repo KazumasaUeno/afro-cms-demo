@@ -36,12 +36,20 @@
   - 残るリスク: 登録を OFF にするまでは、誰でも未確認のアカウントを作れる（何も読めない）。OFF にする前に登録されたアカウントは残る（Console の Authentication で、招待していないメールのアカウントが無いか一度見る）
   - **運用（security re-audit 2026-11-19 MEDIUM。登録を OFF にするまで）**: 初めての招待で「アカウントは招待より前からありました」と出たら、待たずに Console（Authentication）でそのアカウントを削除し「招待メールを送り直す」。同じメールの人がアカウント一覧に出ていたら無効にする（先に登録した人が確認メールのリンクを本人に押させていると、パスワード設定の前に招待を受け取れるため）
   - [ ] **お客様を招待する前のゲート（security audit 2026-11-20 の 0.46.0。社内試用は APPROVED WITH CONDITIONS＝上の 3〜7 の順守。お客様は下が済むまで未承認）**
-    - [ ] HIGH: 招待より前からあるアカウント（関数の `existing`）を受け付けない。関数が作ったアカウントにだけサーバーで印を付け、Rules の受け取り（claimOk）でその印を必須にする（Rules の変更＝L。設計してから）
-      - 設計: `docs/design/INVITE_EXISTING_ACCOUNT.md`（2026-11-20。推奨＝関数が `invites.provisionedUid` を書き claimOk で照合。ユーザー確認待ち）
+    - [ ] HIGH: 招待より前からあるアカウント（関数の `existing`）を受け付けない — **コードは済み（0.47.0、`feat/invite-provisioned-uid`。エミュレータのテスト成功）。本番は下の「0.47.0 のデプロイ」が済むまで未対策**
+      - 設計: `docs/design/INVITE_EXISTING_ACCOUNT.md`（案 B。2026-11-20 ユーザー承認）
     - [ ] HIGH: Console の設定を画面で確かめて記録する（作成（登録）を許可 OFF／メール・パスワード以外のプロバイダ OFF／メール列挙の保護 ON／OFF でも Admin SDK の作成が通る＝上の 7）
     - [ ] MEDIUM: App Check を enforce（`ENFORCE_APP_CHECK = true` にしてデプロイし直す）
-    - [ ] MEDIUM: 関数を専用のサービスアカウントで動かす（既定の compute SA は権限が広い。Firebase Authentication 管理者＋Datastore 閲覧のみ。platform-engineer）
-    - [ ] MEDIUM: 招待を取り消したら、関数が作った Auth アカウントも消す（今は残る。保存期間の方針と合わせる）
+    - [ ] MEDIUM: 関数を専用のサービスアカウントで動かす — **コードは済み（0.47.0。`setGlobalOptions({ serviceAccount: 'afro-cms-functions@' })`）。SA の作成と役割の付与はデプロイの手順 1**
+    - [ ] MEDIUM: 招待を取り消したら、関数が作った Auth アカウントも消す — **コードは済み（0.47.0。Firestore トリガー `onInviteRevoked`、asia-northeast1）**。0.47.0 より前の招待（provisionedUid なし）は対象外（Console で消す）
+    - [ ] **0.47.0 のデプロイ（この順番。作業・判断はユーザー。課金・IAM の変更を含む）**
+      1. SA を作る: Google Cloud Console → IAM → サービスアカウント →「作成」ID `afro-cms-functions`。プロジェクトの役割: **Firebase Authentication 管理者**（roles/firebaseauth.admin）・**Cloud Datastore ユーザー**（roles/datastore.user）・**Eventarc イベント受信者**（roles/eventarc.eventReceiver。トリガーの配信）・**Cloud Run 起動元**（roles/run.invoker。トリガーが関数を呼ぶ。firebase-tools は既定の compute SA にしか自動で付けない＝`checkIam.js` [INFERENCE]）。デプロイする人にこの SA の「サービス アカウント ユーザー」（iam.serviceAccounts.actAs）
+      2. Firestore のロケーションが `asia-northeast1` であることを確かめる（トリガーのリージョンと同じでないとデプロイが失敗する。[UNKNOWN] 本番は未確認）。Eventarc API が有効か（初回は権限の伝播待ちで失敗し、再デプロイで通ることがある）
+      3. functions: `npm --prefix functions ci` → `npm run deploy:firebase -- --project afro-cms-4a6ff --only functions`（provisionInvitee が新しい SA に替わり、onInviteRevoked が増える）
+      4. hosting: `npm run build:live` → `--only hosting`（resent を成功として扱い、already-exists ではメールを送らない）
+      5. 本番 Firestore で `invites` の `status == invited` を数える（読むだけ。1 回。lead-architect が許可した後）。あれば Auth のアカウントを Console で削除 → 画面の「招待メールを送り直す」で印つきで作り直す
+      6. firestore rules: `--only firestore:rules`（`claimOk`・招待の更新に provisionedUid の照合）。戻し方は前の SHA の `firestore.rules` を出す
+      7. 確かめる: 新しいメールで招待 → パスワード設定 → ログインで「有効」／送り直しで「送り直しました」（警告なし）／関数のログ `status: created`・`resent`／招待を取り消すと Auth からも消える（ログ `invite.revoke`・`deleted`）。印の無いアカウントで受け取れないことはエミュレータで確認済み（本番で Console 追加を試さない）
     - [ ] LOW: callable の CORS を hosting のオリジンだけにする — **コードは済み（0.46.2、`functions/src/cors.ts`。本番は未デプロイ）**。デプロイ（`--only functions`、ユーザーの了承の後）の後に確かめる: web.app から招待できる（`GCLOUD_PROJECT` が実行環境に無いと許可先が空になり招待が失敗する＝fail-closed）／ 別のオリジンからの preflight に `Access-Control-Allow-Origin` が付かない
   - [ ] 上の 6・7（作成（登録）を許可 OFF と通し）を終える。加えて本番で「再設定で前のログインが失効する」ことを確かめる（公式は「再設定でトークンを失効」。エミュレータは失効しない）
 - [ ] **0.28.0 で Rules から外した質問 ID**（`q-design-dislike`・`q-image`・`q-brand`）: これらの回答を持つ `requirements/current` があると、その文書の回答の更新が Rules で拒否されうる（`validAnswers` の `hasOnly`）。本番に live のデータを入れる前なら影響なし。入った後なら、移行（キーの削除）か Rules の経過措置を決める

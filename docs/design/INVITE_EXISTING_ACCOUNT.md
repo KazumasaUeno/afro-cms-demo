@@ -3,7 +3,8 @@
 - 作成: 2026-11-20 security-engineer（設計のみ。コード・Rules は未変更）
 - 対象: `docs/TODO.md`「お客様を招待する前のゲート」HIGH の 1 件目
 - 規模: **XL**（認証・認可・Security Rules）。実装前に Plan Review（security-engineer 同席）を通す
-- 状態: **ユーザー確認待ち**（最後の「確認したいこと」）
+- 状態: **実装済み（0.47.0、branch `feat/invite-provisioned-uid`。本番は未デプロイ）**。2026-11-20 ユーザー承認「全て進めて」= §9 の 1〜4 すべて推奨どおり（B・existing は拒否・関数 SA に Datastore 書き込み・Rules を出す直前に本番の invited を 1 回数える）
+- 設計との差（実装時の判断）: existing は戻り値ではなく `already-exists` のエラーにした（クライアントが確実にメールを送らないため）／印を書いた後にアカウントが無いときは新しい uid ではなく同じ uid で作り直す（同時の二度押しでも 1 アカウントになる。その uid は Admin SDK でしか作れないので安全性は同じ）
 
 ---
 

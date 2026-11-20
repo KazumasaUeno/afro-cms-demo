@@ -124,7 +124,8 @@
 - 招待の取り消し: admin が `invites.status = revoked`（未使用の招待だけ）。Auth のアカウントは残る（ログインしても「招待が見つからない」。削除は Console）
 - **同じメールのアカウントが既にある**とき（招待より前に誰かが登録した・送り直し）は、作らずにパスワード設定のメールだけ送り、管理者に「既にあった」と伝える。受信箱の持ち主が設定すると前のパスワードは使えなくなり、uid はそのまま本人のものになる。先に登録した人は、メールが未確認のままなら招待を読めず受け取れない（Rules の email_verified）。**ただし**先に登録した人が確認メールのリンクを本人に押させていた場合や、本番がパスワード再設定で前のログインを無効にしない場合は、パスワード設定の前に受け取れてしまう（security re-audit 2026-11-19 MEDIUM）。そのため初めての招待で「既にあった」ときは待たずに Console でそのアカウントを削除し、「招待メールを送り直す」で作り直す（画面の案内も同じ）
 - 管理者の一覧の招待中の行に「招待メールを送り直す」（アカウントが無ければ作る。メールの送信に失敗したときのやり直しにも使う）
-- **provisionInvitee の契約**（0.46.0）: 入力 `{ email }`／出力 `'created' | 'existing'`。
+- **0.47.0 で下の契約の「existing」を変えた**（`docs/design/INVITE_EXISTING_ACCOUNT.md` 案 B。正はそちらと `functions/src/index.ts`）: 関数が uid を決めて `invites/{email}.provisionedUid` に書いてから作る。出力は `'created' | 'resent'`（resent＝この招待のために作ったアカウントが既にある）。それ以外の同じメールのアカウントは `already-exists` で拒否し、何も書かず、画面はメールを送らない。Rules の受け取り（`claimOk`・招待の更新）は `provisionedUid == request.auth.uid` を必須にする。招待の取り消し（invited → revoked）で Firestore トリガー `onInviteRevoked` が関数の作った Auth アカウントを消す（`accounts/{uid}` があれば消さない）。関数は専用 SA `afro-cms-functions@<ID>.iam.gserviceaccount.com` で動く（`docs/TODO.md`）
+- **provisionInvitee の契約**（0.46.0。existing の扱いは上の 0.47.0 で置き換え）: 入力 `{ email }`／出力 `'created' | 'existing'`。
   - 呼べるのは Rules の `isAdmin()` と同じ条件の人だけ（`email_verified`・`accounts/{uid}` が `status: active`・`accounts.email == token.email`・`role: admin`）。それ以外は `permission-denied`、未ログインは `unauthenticated`
   - メールは前後の空白を除いて小文字にし、254 文字以内・`[^@s]+@[^@s]+[.][^@s]+`（Rules の `validInvite` と同じ）。違えば `invalid-argument`
   - `invites/{小文字のメール}` が `status: invited` で無ければ `failed-precondition`（アカウントを作らない。取り消し・受け取り済みも同じ）
@@ -138,7 +139,7 @@
 ### 2.5 初代管理者の作り方（Bootstrap。Console で作る。招待の Functions は管理者しか呼べないため）
 
 1. Firebase Console → Firestore → `invites` に文書 ID = 管理者のメール（小文字）で `{role:'admin', name, status:'invited', createdAt, createdBy:'console'}` を手で作る（**Console からの書き込みは Rules を通らない** [FACT] Firebase の仕様）
-2. Firebase Console → Authentication →「ユーザーを追加」で同じメール（**小文字**）と、使い捨ての長いパスワードで Auth のアカウントを作る（0.45.0 からアプリに登録の画面は無い）
+2. Firebase Console → Authentication →「ユーザーを追加」で同じメール（**小文字**）と、使い捨ての長いパスワードで Auth のアカウントを作る（0.45.0 からアプリに登録の画面は無い）。**0.47.0 から**その「ユーザー UID」を 1 の招待に `provisionedUid` として足す（無いと Rules が受け取りを拒否する。`docs/operations/RUNBOOK_FIREBASE.md` §7）
 3. 管理者がアプリのログイン画面の「パスワードを忘れた方」から自分のパスワードを設定 → ログイン → §2.4 の 4 で自分の `accounts` が admin で作られる（エミュレータでは `npm run seed:emulator` → `node scripts/seed-emulator.mjs --set-password <パスワード>` が 1〜3 の代わり）
 4. 2 人目以降の admin も同じ（Console で招待）。**アプリから admin を招待できる UI は作らない**（権限昇格の経路を 1 つ減らす）[DECISION]
 5. 手順は `docs/operations/RUNBOOK_FIREBASE.md`（実装時に作成）に置く
@@ -212,6 +213,7 @@
   affiliation?: ..., partnerCompany?: ..., devRole?: ...,
   createdAt: Timestamp, createdBy: string,      // admin の uid（初代は 'console'）
   claimedBy?: string, claimedAt?: Timestamp,
+  provisionedUid?: string,                      // 0.47.0: 関数 provisionInvitee（初代 admin は Console）が書く。クライアントは書けない。受け取りの照合に使う
   revokedAt?: Timestamp
 }
 ```

@@ -20,12 +20,12 @@ import { LoadError } from './shared';
 const isInvite = (id: string) => id.startsWith(INVITE_PREFIX);
 
 /**
- * 初めての招待なのに同じメールのアカウントが既にあった＝本人以外が先に作った可能性がある（security re-audit 2026-11-19 MEDIUM:
- * 先に作った人が確認メールのリンクを本人に押させていると、パスワード設定の前に招待を受け取れてしまう）。
- * 待たずに Console でそのアカウントを消し、「招待メールを送り直す」で作り直してもらう（新しい uid になり、前のログインは使えなくなる）
+ * 招待のために作ったものではないアカウントが同じメールで既にあった（Console で追加・招待より前の登録。本人以外が作った可能性がある）。
+ * 0.47.0 からサーバーは受け付けず（already-exists）、メールも送らない。このアカウントは招待を受け取れない（Rules の provisionedUid 照合）。
+ * Console でそのアカウントを消し、「招待メールを送り直す」で作り直してもらう（新しいアカウントになり、前のログインは使えなくなる）
  */
 const existingMessage = (email: string) =>
-  `${email.trim()} を招待しましたが、このメールアドレスのアカウントは招待より前からありました（本人以外が作った可能性があります）。すぐに Firebase の管理画面（Authentication）でこのアカウントを削除し、一覧の「招待メールを送り直す」を押してください。アカウントの一覧に同じメールの人が出ていたら、その人を無効にしてください`;
+  `${email.trim()} のアカウントは招待より前からあったため（本人以外が作った可能性があります）、パスワード設定のメールは送っていません。Firebase の管理画面（Authentication）でこのアカウントを削除してから、一覧の「招待メールを送り直す」を押してください。アカウントの一覧に同じメールの人が出ていたら、その人を無効にしてください`;
 /** 招待は保存できたが、アカウントの作成・メールの送信に失敗した（招待は残るので送り直せる。security LOW） */
 const provisionFailedMessage = (email: string) =>
   `${email.trim()} の招待は保存しましたが、パスワード設定のメールを送れませんでした。時間をおいて、一覧の「招待メールを送り直す」を押してください`;
@@ -36,6 +36,8 @@ const provisionFailedMessage = (email: string) =>
 const provisionErrorMessage = (email: string, e: unknown, invited: boolean): string => {
   const who = email.trim();
   switch (provisionErrorKind(e)) {
+    case 'existing':
+      return existingMessage(email);
     case 'not-invited':
       return `${who} は招待中ではないため、アカウントを作れませんでした（取り消し済みか、受け取り済みです）。一覧を確かめてください`;
     case 'denied':
@@ -106,15 +108,15 @@ export default function LiveUsersPage() {
   const invite = async (save: Promise<void>, email: string, close: () => void) => {
     if (!(await write(save))) return;
     close();
-    let result: InviteAccountResult;
     try {
-      result = await provisionInvitee(email);
+      await provisionInvitee(email);
     } catch (e) {
       console.warn('invite provisioning failed', e);
       toast(provisionErrorMessage(email, e, true), 'error');
       return;
     }
-    toast(result === 'existing' ? existingMessage(email) : `${email.trim()} を招待し、パスワード設定のメールを送りました`, result === 'existing' ? 'error' : 'success');
+    // resent（この招待のために作ったアカウントが既にある）も成功。招待の文書は作り直せないので、初回の招待では通常 created
+    toast(`${email.trim()} を招待し、パスワード設定のメールを送りました`, 'success');
   };
   const resend = async (email: string) => {
     let result: InviteAccountResult;

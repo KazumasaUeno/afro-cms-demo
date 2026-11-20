@@ -300,8 +300,6 @@ export function seedWorkFor(projectId: string, stage: Stage): FullWork {
   // サイトマップは要件定義書の承認のときに作る（0.29.4）
   if (f.reqApproved) work.sitemap = sitemapFor(projectId);
   if (f.sitemapApproved) {
-    // 日程は要件定義書の承認の後に開発担当者が入れる（2026-11-17 会議。入れるまで制作へ進めない）
-    work.schedule = seedSchedule(work, seedProjects().find((p) => p.id === projectId)?.launchDate, seedDevOwner(projectId));
     work.sitemap = { ...work.sitemap, approvedAt: f.built ? daysAgo(70 - at * 10) : daysAgo(1.5) };
     requests.sitemap = f.built ? daysAgo(71 - at * 10) : daysAgo(2);
     const design = DESIGN[projectId] ?? {};
@@ -317,6 +315,12 @@ export function seedWorkFor(projectId: string, stage: Stage): FullWork {
     requests.quality = daysAgo(59 - at * 10);
     // 品質管理を終えた（リリース・運用・改善）案件は、お客様が品質チェックを完了済み（0.39.7）
     if (f.qualityDone) work.design = { ...work.design, qualityApprovedAt: lastClientCheck(work.qualityChecks) };
+  }
+  if (f.sitemapApproved) {
+    // 日程は要件定義書の承認の後に開発担当者が入れる（2026-11-17 会議。入れるまで制作へ進めない）。
+    // 品質チェックの完了（納品検収）を決めた後に作る: 公開済みで公開予定日（launchDate）の無い案件（SORANO・まちの学び舎）は、
+    // 公開予定日を完了の翌日にする（前は完了を決める前に作っていたため、要件定義書の承認の 120 日後＝公開済みなのに未来の日付になった。0.47.0）
+    work.schedule = seedSchedule(work, seedProjects().find((p) => p.id === projectId)?.launchDate, seedDevOwner(projectId));
   }
   work.approvalRequests = requests;
   return work;

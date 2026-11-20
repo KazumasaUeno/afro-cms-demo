@@ -49,6 +49,8 @@ const REQ = 'projects/p1/requirements/current';
 
 // ---- 攻撃（env を受け取り、書き込みの Promise を返す）----
 const attacks = {
+  // 0.47.0: 関数が作っていない uid（Console 追加・招待前の登録）で、写しは正しく受け取る
+  provisionedOther: async (env) => { await seed(env); return claimBatch(asNew(env, 'u-console', 'newdev@afro.example'), { uid: 'u-console', email: 'newdev@afro.example', account: claimAccount('u-console', NEWDEV_INV, 'newdev@afro.example') }); },
   m1Name: async (env) => { await seed(env); return claimBatch(asNew(env, 'u-dev', 'newdev@afro.example'), { uid: 'u-dev', email: 'newdev@afro.example', account: claimAccount('u-dev', NEWDEV_INV, 'newdev@afro.example', { name: '別人の名前' }) }); },
   m1Company: async (env) => { await seed(env); return claimBatch(asNew(env, 'u-cli', 'newclient@customer.example'), { uid: 'u-cli', email: 'newclient@customer.example', account: claimAccount('u-cli', NEWCLIENT_INV, 'newclient@customer.example', { company: '偽の会社' }) }); },
   m1Role: async (env) => { await seed(env); return claimBatch(asNew(env, 'u-dev', 'newdev@afro.example'), { uid: 'u-dev', email: 'newdev@afro.example', account: claimAccount('u-dev', NEWDEV_INV, 'newdev@afro.example', { role: 'admin' }) }); },
@@ -89,6 +91,8 @@ const attacks = {
 
 // ---- 変異（1 条件だけ外す。アンカーが無ければ throw）----
 const M = {
+  // claimOk と招待の受け取り更新の両方から provisionedUid の照合を外す（片方だけでは、もう片方が拒否する＝多重防御）
+  provisioned: () => mutate(mutate(BASE, "&& before.get('provisionedUid', null) == uid", ''), "&& resource.data.get('provisionedUid', null) == request.auth.uid", ''),
   m1Name: () => mutate(BASE, '&& d.role == before.role && d.name == before.name', '&& d.role == before.role'),
   m1Company: () => mutate(BASE, "&& optEq(d, before, 'company') && optEq(d, before, 'projectId')", "&& optEq(d, before, 'projectId')"),
   m1Role: () => mutate(BASE, '&& d.role == before.role && d.name == before.name', '&& d.name == before.name'),
@@ -120,6 +124,7 @@ describe('C-1: 変異テスト（元＝拒否／1 条件を外した変異＝許
   pair("M-3 開発者が承認バッチを書く ← projUpdateOk / apprCreateOk の r == 'client'", attacks.m3DevApprove, M.m3DevApprove);
   pair("M-5 admin が admin を無効化する ← resource.data.role != 'admin'", attacks.m5DisableAdmin, M.m5);
   pair("M-5 admin が admin を改名する ← resource.data.role != 'admin'", attacks.m5RenameAdmin, M.m5);
+  pair("0.47.0 関数が作っていない uid で受け取る ← provisionedUid == uid（claimOk・招待の更新）", attacks.provisionedOther, M.provisioned);
 });
 
 describe('C-2: M-4 の 3 経路は軽量化した Rules（式数の上限に当たらない）でも拒否', () => {

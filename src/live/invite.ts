@@ -9,11 +9,12 @@ import { FUNCTIONS_REGION } from './functionsRegion';
  * - アカウントはサーバー（Cloud Functions の provisionInvitee。functions/src/index.ts）が Admin SDK で作る。
  *   クライアントの SDK では作らないので、Console の「作成（登録）を許可」を OFF にできる（0.46.0）
  * - 呼べるのは有効な管理者だけ。invites/{小文字のメール} が招待中でなければ作らない（判定はサーバー側）
- * - 同じメールのアカウントが既にあれば、サーバーは何も変えずに 'existing' を返す。メールだけ送る
+ * - 同じメールのアカウントが既にあるとき（0.47.0。docs/design/INVITE_EXISTING_ACCOUNT.md 案 B）: サーバーがこの招待のために作ったもの
+ *   なら 'resent'（メールだけ送る）。それ以外（Console で追加・招待より前の登録）は already-exists のエラーで、メールは送らない
  * - 本人はパスワード再設定のメール（＝招待メール）で自分のパスワードを決める
  */
 
-export type InviteAccountResult = 'created' | 'existing';
+export type InviteAccountResult = 'created' | 'resent';
 
 /**
  * 呼び出しの待ち時間。関数の timeoutSeconds（30 秒）より長くする: 同じ長さだと、コールドスタートで画面だけ時間切れになり
@@ -34,9 +35,7 @@ function provisionCallable(): HttpsCallable<{ email: string }, InviteAccountResu
 
 async function createAccount(email: string): Promise<InviteAccountResult> {
   const { data } = await provisionCallable()({ email });
-  if (data !== 'created' && data !== 'existing') throw new Error(`invite: unexpected result ${String(data)}`);
-  // 握り潰さない: 呼び出し元が「既にあった」を管理者へ伝える
-  if (data === 'existing') console.warn('invite: auth account already exists; sending password email only');
+  if (data !== 'created' && data !== 'resent') throw new Error(`invite: unexpected result ${String(data)}`);
   return data;
 }
 
@@ -47,7 +46,7 @@ async function sendSetupEmail(email: string): Promise<void> {
 
 /**
  * 招待した人のアカウントを用意してパスワード設定メールを送る。invites の文書を作った後に呼ぶ。
- * 送り直しにも使う（アカウントが既にあればメールだけ送る）。
+ * 送り直しにも使う（この招待のために作ったアカウントが既にあればメールだけ送る）。呼び出しが失敗したら（already-exists を含む）メールは送らない。
  */
 export async function provisionInvitee(rawEmail: string): Promise<InviteAccountResult> {
   const email = normalizeEmail(rawEmail);
@@ -56,12 +55,14 @@ export async function provisionInvitee(rawEmail: string): Promise<InviteAccountR
   return result;
 }
 
-export type ProvisionErrorKind = 'not-invited' | 'denied' | 'timeout' | 'network' | 'other';
+export type ProvisionErrorKind = 'not-invited' | 'existing' | 'denied' | 'timeout' | 'network' | 'other';
 
 /** callable（functions/…）と Auth（auth/…）のエラーを、画面の案内の種類に分ける */
 export function provisionErrorKind(e: unknown): ProvisionErrorKind {
   const code = typeof e === 'object' && e && 'code' in e ? String((e as { code: unknown }).code) : '';
   if (code.endsWith('failed-precondition')) return 'not-invited';
+  // 招待のために作ったものではないアカウントが同じメールで既にある（サーバーは何も書かず、メールも送っていない）
+  if (code.endsWith('already-exists')) return 'existing';
   if (code.endsWith('permission-denied') || code.endsWith('unauthenticated')) return 'denied';
   if (code.endsWith('deadline-exceeded')) return 'timeout';
   if (code.endsWith('unavailable') || code.endsWith('network-request-failed')) return 'network';

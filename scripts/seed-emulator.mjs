@@ -50,7 +50,10 @@ async function setPasswords(password) {
   console.log(`パスワード設定: ${n} 件`);
 }
 
-/** Console の「ユーザーを追加」相当（最初の管理者は招待の Functions を呼べないため。§2.5）: 誰にも知らせないパスワードで作り、パスワード設定のメールを出す */
+/**
+ * Console の「ユーザーを追加」相当（最初の管理者は招待の Functions を呼べないため。§2.5）: 誰にも知らせないパスワードで作り、パスワード設定のメールを出す。
+ * 返り値は uid（招待の provisionedUid に入れる。0.47.0 から Rules の受け取りが照合する）
+ */
 async function createAuthUser(email) {
   const key = 'demo-api-key';
   const pw = `Aa1!${crypto.randomUUID()}`;
@@ -59,13 +62,18 @@ async function createAuthUser(email) {
   });
   const body = await res.json();
   if (!res.ok && body?.error?.message !== 'EMAIL_EXISTS') throw new Error(`signUp → ${res.status} ${JSON.stringify(body)}`);
+  const { users = [] } = await call(`${AUTH}/identitytoolkit.googleapis.com/v1/projects/${PROJECT}/accounts:lookup`, { method: 'POST', body: JSON.stringify({ email: [email] }) });
+  if (!users[0]?.localId) throw new Error(`Auth のアカウントが見つかりません: ${email}`);
   await call(`${AUTH}/identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${key}`, {
     method: 'POST', body: JSON.stringify({ requestType: 'PASSWORD_RESET', email }),
   });
+  return users[0].localId;
 }
 
 async function seedAdmin(email, name) {
   const id = email.trim().toLowerCase();
+  // Auth のアカウントが先（その uid を招待の provisionedUid に入れる。本番の Console でも同じ順。BACKEND_FIREBASE §2.5）
+  const uid = await createAuthUser(id);
   const doc = `${FIRESTORE}/v1/projects/${PROJECT}/databases/(default)/documents/invites?documentId=${encodeURIComponent(id)}`;
   await call(doc, {
     method: 'POST',
@@ -77,10 +85,10 @@ async function seedAdmin(email, name) {
         name: { stringValue: name },
         createdAt: { timestampValue: new Date().toISOString() },
         createdBy: { stringValue: 'console' },
+        provisionedUid: { stringValue: uid },
       },
     }),
   });
-  await createAuthUser(id);
   console.log(`invites/${id}（admin・${name}）と Auth のアカウントを作り、パスワード設定のメールを出しました。` +
     '`node scripts/seed-emulator.mjs --set-password <パスワード>` で設定してから、アプリの /login でログインしてください');
 }

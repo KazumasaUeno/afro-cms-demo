@@ -68,6 +68,30 @@ async function lookup(email) {
   return r.body.users ?? [];
 }
 
+/** invites/{email} の文字列の項目（無ければ null） */
+async function getInvite(email) {
+  const r = await call(fsDoc(`invites/${email}`));
+  if (r.status === 404) return null;
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  return Object.fromEntries(Object.entries(r.body.fields ?? {}).map(([k, v]) => [k, v.stringValue ?? v.integerValue ?? null]));
+}
+
+/** 招待を取り消す（管理者の画面と同じ invited → revoked。Rules を通らない REST で、残りの項目はそのまま） */
+async function revokeInvite(email) {
+  const { schemaVersion, ...rest } = await getInvite(email);
+  await putDoc(`invites/${email}`, { ...rest, schemaVersion: Number(schemaVersion), status: 'revoked' });
+}
+
+/** cond() が true になるまで待つ（Firestore トリガーは非同期。最大 timeoutMs） */
+async function waitFor(cond, timeoutMs = 15_000) {
+  const end = Date.now() + timeoutMs;
+  while (Date.now() < end) {
+    if (await cond()) return true;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return false;
+}
+
 /** callable を呼ぶ（firebase/functions の httpsCallable と同じ形） */
 function provision(idToken, data) {
   const headers = idToken ? { Authorization: `Bearer ${idToken}` } : {};
@@ -101,26 +125,116 @@ test('有効な管理者: アカウントを作り created（メール未確認�
   assert.equal(users[0].email, INVITEE);
   assert.equal(users[0].emailVerified ?? false, false);
   assert.ok((users[0].providerUserInfo ?? []).some((p) => p.providerId === 'password'), 'password provider (password reset email works)');
+  // TEST-F1: 関数が決めた uid でアカウントを作り、招待に provisionedUid として書く（Rules の受け取りが照合する）
+  assert.equal((await getInvite(INVITEE)).provisionedUid, users[0].localId);
   // パスワード設定（再設定）のメールを出せる（クライアントの sendPasswordResetEmail と同じ API）
   const oob = await call(`${AUTH}/identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${KEY}`, { method: 'POST', body: JSON.stringify({ requestType: 'PASSWORD_RESET', email: INVITEE }) }, false);
   assert.equal(oob.status, 200, JSON.stringify(oob.body));
 });
 
-test('既にアカウントがある: 何も変えずに existing（前のパスワードでログインでき、確認状態もそのまま）', async () => {
+test('TEST-F2: 送り直し（関数がこの招待のために作ったアカウント）: resent。アカウント・uid・パスワードは変わらない', async () => {
+  const admin = await makeUser('admin1@afro.example', { account: { role: 'admin' } });
+  assert.equal((await provision(admin.token, { email: INVITEE })).body.result, 'created');
+  const first = (await lookup(INVITEE))[0];
+  const r = await provision(admin.token, { email: INVITEE });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.result, 'resent');
+  const after = await lookup(INVITEE);
+  assert.equal(after.length, 1);
+  assert.equal(after[0].localId, first.localId);
+  assert.equal(after[0].passwordHash, first.passwordHash);
+  assert.equal((await getInvite(INVITEE)).provisionedUid, first.localId);
+});
+
+test('TEST-F3: 招待より前からあるアカウント（Console 追加・先の登録）: already-exists で拒否。何も書かず、アカウントも変えない', async () => {
   const admin = await makeUser('admin1@afro.example', { account: { role: 'admin' } });
   const pre = await signUp(INVITEE, 'Earlier1!pw');
   const beforeUser = (await lookup(INVITEE))[0];
-  const r = await provision(admin.token, { email: INVITEE });
-  assert.equal(r.status, 200, JSON.stringify(r.body));
-  assert.equal(r.body.result, 'existing');
+  for (let i = 0; i < 2; i++) { // 送り直しでも同じ（受け付けない）
+    const r = await provision(admin.token, { email: INVITEE });
+    assert.equal(r.status, 409, JSON.stringify(r.body));
+    assert.equal(r.body.error.status, 'ALREADY_EXISTS');
+  }
   const after = await lookup(INVITEE);
   assert.equal(after.length, 1);
   assert.equal(after[0].localId, pre);
   assert.equal(after[0].passwordHash, beforeUser.passwordHash);
   assert.equal(after[0].emailVerified ?? false, false);
   assert.equal((await signIn(INVITEE, 'Earlier1!pw')).status, 200);
-  // 2 回目（送り直し）も existing
-  assert.equal((await provision(admin.token, { email: INVITEE })).body.result, 'existing');
+  assert.equal((await getInvite(INVITEE)).provisionedUid ?? null, null, 'provisionedUid is not written');
+});
+
+test('関数が作ったアカウントを Console で消し、同じメールで別のアカウントができた: already-exists（provisionedUid と違う uid は受け付けない）', async () => {
+  const admin = await makeUser('admin1@afro.example', { account: { role: 'admin' } });
+  assert.equal((await provision(admin.token, { email: INVITEE })).body.result, 'created');
+  const provisioned = (await getInvite(INVITEE)).provisionedUid;
+  const del = await call(`${AUTH}/identitytoolkit.googleapis.com/v1/projects/${PROJECT}/accounts:delete`, { method: 'POST', body: JSON.stringify({ localId: provisioned }) });
+  assert.equal(del.status, 200, JSON.stringify(del.body));
+  const other = await signUp(INVITEE, 'Other1!pw');
+  const r = await provision(admin.token, { email: INVITEE });
+  assert.equal(r.status, 409, JSON.stringify(r.body));
+  assert.equal(r.body.error.status, 'ALREADY_EXISTS');
+  assert.equal((await lookup(INVITEE))[0].localId, other);
+  assert.equal((await getInvite(INVITEE)).provisionedUid, provisioned, 'provisionedUid unchanged');
+});
+
+test('TEST-F4: 印（provisionedUid）を書いた後にアカウントが無い（作成の失敗・Console で削除）: 同じ uid で作り直して created', async () => {
+  const admin = await makeUser('admin1@afro.example', { account: { role: 'admin' } });
+  // 作成の失敗の再現: 招待に印だけがあり、その uid のアカウントは無い
+  await putDoc(`invites/${INVITEE}`, { schemaVersion: 1, role: 'developer', status: 'invited', name: '招待 太郎', affiliation: 'internal', createdBy: 'console', provisionedUid: 'ghostUid0000000000000000001' });
+  const r = await provision(admin.token, { email: INVITEE });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.result, 'created');
+  const users = await lookup(INVITEE);
+  assert.equal(users.length, 1);
+  assert.equal(users[0].localId, 'ghostUid0000000000000000001');
+  assert.equal((await getInvite(INVITEE)).provisionedUid, 'ghostUid0000000000000000001');
+});
+
+test('同時に 2 回呼ぶ（ボタンの二度押し）: 同じ uid の 1 アカウントだけ。created と resent', async () => {
+  const admin = await makeUser('admin1@afro.example', { account: { role: 'admin' } });
+  const rs = await Promise.all([provision(admin.token, { email: INVITEE }), provision(admin.token, { email: INVITEE })]);
+  for (const r of rs) assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual(rs.map((r) => r.body.result).sort(), ['created', 'resent']);
+  const users = await lookup(INVITEE);
+  assert.equal(users.length, 1);
+  assert.equal((await getInvite(INVITEE)).provisionedUid, users[0].localId);
+});
+
+test('招待の取り消し（invited → revoked）: 関数が作った Auth アカウントを消す', async () => {
+  const admin = await makeUser('admin1@afro.example', { account: { role: 'admin' } });
+  assert.equal((await provision(admin.token, { email: INVITEE })).body.result, 'created');
+  assert.equal((await lookup(INVITEE)).length, 1);
+  await revokeInvite(INVITEE);
+  assert.ok(await waitFor(async () => (await lookup(INVITEE)).length === 0), 'auth user deleted by onInviteRevoked');
+});
+
+test('招待の取り消し: accounts/{uid} がある・provisionedUid が無い（0.47.0 より前の招待）なら消さない', async () => {
+  const admin = await makeUser('admin1@afro.example', { account: { role: 'admin' } });
+  // A: 関数が作ったが accounts/{uid} がある（受け取り済みと同じ状態）
+  assert.equal((await provision(admin.token, { email: INVITEE })).body.result, 'created');
+  const kept = (await getInvite(INVITEE)).provisionedUid;
+  await putDoc(`accounts/${kept}`, { schemaVersion: 1, status: 'active', email: INVITEE, name: '招待 太郎', role: 'developer' });
+  // B: 0.47.0 より前の招待（provisionedUid なし）と、同じメールのアカウント
+  const LEGACY = 'legacy.person@customer.example';
+  await putDoc(`invites/${LEGACY}`, { schemaVersion: 1, role: 'developer', status: 'invited', name: '旧 招待', affiliation: 'internal', createdBy: 'console' });
+  const legacyUid = await signUp(LEGACY, PW);
+  // C（対照）: 消える招待。これが消えたら、先に取り消した A・B のトリガーも動いた後とみなす
+  const CONTROL = 'control.person@customer.example';
+  await putDoc(`invites/${CONTROL}`, { schemaVersion: 1, role: 'developer', status: 'invited', name: '対照 花子', affiliation: 'internal', createdBy: 'console' });
+  assert.equal((await provision(admin.token, { email: CONTROL })).body.result, 'created');
+
+  await revokeInvite(INVITEE);
+  await revokeInvite(LEGACY);
+  await revokeInvite(CONTROL);
+  assert.ok(await waitFor(async () => (await lookup(CONTROL)).length === 0), 'control user deleted');
+  await new Promise((r) => setTimeout(r, 1500));
+  const a = await lookup(INVITEE);
+  assert.equal(a.length, 1);
+  assert.equal(a[0].localId, kept);
+  const b = await lookup(LEGACY);
+  assert.equal(b.length, 1);
+  assert.equal(b[0].localId, legacyUid);
 });
 
 test('ログインしていない: unauthenticated', async () => {

@@ -109,12 +109,16 @@ service cloud.firestore {
     // ================= accounts（§28.2・§28.3・§28.9） =================
     function invPath() { return /databases/$(db)/documents/invites/$(request.auth.token.email); }
     // M-1: 招待の全項目を写しで強制（証跡の actorName を偽れない）
+    // provisionedUid（0.47.0。docs/design/INVITE_EXISTING_ACCOUNT.md 案 B）: 関数 provisionInvitee がこの招待のために決めて作った uid だけが
+    // 受け取れる。Console で追加・招待より前の登録・他プロバイダのアカウントは受け取れない。クライアントは provisionedUid を書けない
+    // （validInvite の hasOnly と、招待の更新の changed().hasOnly に含めていない）
     function claimOk(uid) {
       let before = get(invPath()).data;
       let after  = getAfter(invPath()).data;
       let d = request.resource.data;
       return authed() && request.auth.uid == uid
         && before.status == 'invited' && after.status == 'claimed'
+        && before.get('provisionedUid', null) == uid
         && after.claimedBy == uid && after.claimedAt == request.time
         && d.role == before.role && d.name == before.name
         && optEq(d, before, 'company') && optEq(d, before, 'projectId')
@@ -189,6 +193,7 @@ service cloud.firestore {
                          && request.resource.data.status == 'claimed'
                          && request.resource.data.claimedBy == request.auth.uid
                          && request.resource.data.claimedAt == request.time
+                         && resource.data.get('provisionedUid', null) == request.auth.uid
                          && existsAfter(me()));
       allow delete: if false;
     }

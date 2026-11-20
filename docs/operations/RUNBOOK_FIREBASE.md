@@ -54,6 +54,7 @@
    - フィールド: `role`=`admin`（string）、`name`=氏名（string）、`status`=`invited`（string）、`createdAt`=今（timestamp）、`createdBy`=`console`（string）
 2. Authentication →「ユーザー」→「ユーザーを追加」で同じメール（**小文字**）と仮のパスワードを入れる → ログイン画面の「パスワードを忘れた方」で自分のパスワードを設定 → ログイン → 管理者画面が出る
    - 「作成（登録）を許可」が OFF（0.46.0 以降の運用）だと、アプリの新規登録は使えない。Console の「ユーザーを追加」は OFF でも使える [INFERENCE。初回に確かめて記録する]
+   - **0.47.0 から**: 作った Auth ユーザーの「ユーザー UID」をコピーし、1 の招待の文書に `provisionedUid`（string）＝その UID を足す（**ログインより前に**）。無いと Rules が受け取りを拒否する（招待のために作ったアカウントだけが受け取れる。`docs/design/INVITE_EXISTING_ACCOUNT.md`）。既に受け取り済みの管理者は何もしなくてよい
 3. 2 人目以降の管理者も同じ手順（アプリから管理者は招待できない）。開発者・お客様はアプリの「ユーザー」から招待する
 
 ## 8. 外部のお客様を招待する前に（`docs/TODO.md` 段階 C）

@@ -135,6 +135,36 @@ describe('招待の受け取り（claim。M-1・SEC-1・SEC-6）', () => {
     await assertSucceeds(getDoc(doc(db, 'invites/newdev@afro.example')));
     await assertFails(getDocs(collection(db, 'invites')));
   });
+  // 0.47.0（docs/design/INVITE_EXISTING_ACCOUNT.md 案 B・§6 TEST-R1〜R6）: 関数がこの招待のために作った uid（provisionedUid）だけが受け取れる
+  test('TEST-R1: provisionedUid の無い招待（0.47.0 より前・Console で印を入れ忘れた）は受け取れない', async () => {
+    const inv = inviteDoc({ role: 'client', name: '旧 招待', company: '株式会社テスト', projectId: 'p1' });
+    await assertFails(claimBatch(asNew('u-legacy', 'legacy@customer.example'), { uid: 'u-legacy', email: 'legacy@customer.example', account: claimAccount('u-legacy', inv, 'legacy@customer.example') }));
+  });
+  test('TEST-R2: provisionedUid が自分以外の uid（Console 追加・招待前の登録・他プロバイダの同じメール）は受け取れない', async () => {
+    const db = asNew('u-console', 'newdev@afro.example');
+    await assertFails(claimBatch(db, { uid: 'u-console', email: 'newdev@afro.example', account: claimAccount('u-console', NEWDEV_INV, 'newdev@afro.example') }));
+    // その後でも正しい uid は受け取れる（失敗した試みで招待は壊れない）
+    await assertSucceeds(claimBatch(asNew('u-dev', 'newdev@afro.example'), { uid: 'u-dev', email: 'newdev@afro.example', account: claimAccount('u-dev', NEWDEV_INV, 'newdev@afro.example') }));
+  });
+  test('TEST-R4: 受け取りの更新で provisionedUid を自分の uid に書き換える → 拒否', async () => {
+    const db = asNew('u-console', 'newdev@afro.example');
+    await assertFails(claimBatch(db, { uid: 'u-console', email: 'newdev@afro.example', account: claimAccount('u-console', NEWDEV_INV, 'newdev@afro.example'),
+      invite: { status: 'claimed', claimedBy: 'u-console', claimedAt: serverTimestamp(), provisionedUid: 'u-console' } }));
+    // 別の値へ書き換える（正しい uid の本人が他人の uid へ）も拒否（changed().hasOnly）
+    await assertFails(claimBatch(asNew('u-dev', 'newdev@afro.example'), { uid: 'u-dev', email: 'newdev@afro.example', account: claimAccount('u-dev', NEWDEV_INV, 'newdev@afro.example'),
+      invite: { status: 'claimed', claimedBy: 'u-dev', claimedAt: serverTimestamp(), provisionedUid: 'u-other' } }));
+  });
+  test('TEST-R6: provisionedUid が一致していても片側だけ（招待だけ更新・accounts だけ作成）は拒否', async () => {
+    const db = asNew('u-dev', 'newdev@afro.example');
+    await assertFails(updateDoc(doc(db, 'invites/newdev@afro.example'), { status: 'claimed', claimedBy: 'u-dev', claimedAt: serverTimestamp() }));
+    await assertFails(setDoc(doc(db, 'accounts/u-dev'), claimAccount('u-dev', NEWDEV_INV, 'newdev@afro.example')));
+  });
+  test('既に受け取り済みの管理者（REST で作った最初の管理者など。招待に provisionedUid なし）はそのまま使える', async () => {
+    // seed の admin1 は accounts があり、招待の受け取りはしない。claimOk は accounts の作成時だけ（読み・管理の操作は変わらない）
+    const db = dbAs(env, 'admin1');
+    await assertSucceeds(getDocs(query(collection(db, 'invites'), where('status', '==', 'invited'))));
+    await assertSucceeds(updateDoc(doc(db, 'invites/newdev@afro.example'), { status: 'revoked', revokedAt: serverTimestamp() }));
+  });
   test('SEC-6: 大文字混在の token.email は小文字の招待文書と一致せず拒否（安全側）', async () => {
     const db = asNew('u-up', 'NewDev@Afro.example');
     await assertFails(claimBatch(db, { uid: 'u-up', email: 'newdev@afro.example', account: claimAccount('u-up', NEWDEV_INV, 'NewDev@Afro.example') }));
@@ -260,6 +290,18 @@ describe('invites: create / update / list', () => {
     await assertFails(create('admin1', 'e1@afro.example', { ...base, status: 'claimed' }));
     await assertFails(create('admin1', 'e2@afro.example', { ...base, createdAt: PAST }));
     await assertFails(create('admin1', 'e3@afro.example', { ...base, createdBy: 'admin2' }));
+  });
+  test('TEST-R5: admin は provisionedUid 付きの招待を作れない・取り消しや別の更新で書き換えられない（関数だけが書く）', async () => {
+    const db = dbAs(env, 'admin1');
+    const e5 = { ...inviteDoc({ role: 'developer', name: '開発 五郎', affiliation: 'internal' }), createdAt: serverTimestamp() };
+    await assertFails(create('admin1', 'e5@afro.example', { ...e5, provisionedUid: 'u-any' }));
+    await assertSucceeds(create('admin1', 'e5@afro.example', e5)); // 対照: provisionedUid が無ければ作れる
+    await assertFails(updateDoc(doc(db, 'invites/newdev@afro.example'), { status: 'revoked', revokedAt: serverTimestamp(), provisionedUid: 'u-any' }));
+    await assertFails(updateDoc(doc(db, 'invites/newdev@afro.example'), { provisionedUid: 'u-any' }));
+    await assertFails(updateDoc(doc(db, 'invites/legacy@customer.example'), { provisionedUid: 'u-any' }));
+    // 開発者・お客様・招待された本人も書けない
+    await assertFails(updateDoc(doc(dbAs(env, 'devA'), 'invites/newdev@afro.example'), { provisionedUid: 'u-any' }));
+    await assertFails(updateDoc(doc(asNew('u-legacy', 'legacy@customer.example'), 'invites/legacy@customer.example'), { provisionedUid: 'u-legacy' }));
   });
   test('同じメールの二重招待（既存文書への set）→ 拒否', async () => {
     await assertFails(create('admin1', 'newdev@afro.example', newInv({ role: 'developer', name: '新人 開発', affiliation: 'internal' })));

@@ -105,19 +105,21 @@ export function seedDevFor(projectId: string, stage: Stage, devIds?: string[]): 
   if (phase === 'live') {
     const later: Deploy[] = stage === 'improvement'
       ? [
-        d(14, 'production', '1.1.0', daysAgo(0.6), nameOf(1), 'v1.1.0 を検証環境から昇格'),
-        d(13, 'staging', '1.1.0', daysAgo(0.8), nameOf(1), 'v1.1.0 を開発環境から昇格'),
-        d(12, 'development', '1.1.0', daysAgo(1), nameOf(0), 'AIサイト診断の改善提案を反映（トップの導線・表示速度）'),
+        d(14, 'production', '1.1.0', daysAgo(0.5), nameOf(1), 'v1.1.0 を検証環境から昇格'),
+        d(13, 'staging', '1.1.0', daysAgo(0.6), nameOf(1), 'v1.1.0 を開発環境から昇格'),
+        d(12, 'development', '1.1.0', daysAgo(0.75), nameOf(0), 'AIサイト診断の改善提案を反映（トップの導線・表示速度）'),
       ]
       : [];
+    // 本番の公開（v1.0.0）は、お客様の品質チェックの完了＝公開の承認（store/projectWork.ts の qualityChecks。約 3.15 日前）と
+    // 公開予定日（その翌日。data/schedule.ts の seedSchedule）の後にする（0.47.0。前は承認より前に本番へ出ていた）
     deploys = [
       ...later,
-      d(11, 'production', '1.0.1', daysAgo(2), nameOf(1), 'v1.0.1 を検証環境から昇格'),
-      d(10, 'staging', '1.0.1', daysAgo(2.2), nameOf(1), 'v1.0.1 を開発環境から昇格'),
-      d(9, 'development', '1.0.1', daysAgo(2.5), nameOf(0), '公開後の軽微な修正（お知らせ一覧の表示）'),
-      d(8, 'production', '1.0.0', daysAgo(5), nameOf(1), '新サイトを公開（v1.0.0 を検証環境から昇格）'),
-      d(7, 'staging', '1.0.0', daysAgo(5.2), nameOf(1), 'v1.0.0 を開発環境から昇格'),
-      d(6, 'staging', '1.0.0', daysAgo(5.3), nameOf(1), '検証環境への反映がタイムアウト（再実行で成功）', 'failed'),
+      d(11, 'production', '1.0.1', daysAgo(1), nameOf(1), 'v1.0.1 を検証環境から昇格'),
+      d(10, 'staging', '1.0.1', daysAgo(1.2), nameOf(1), 'v1.0.1 を開発環境から昇格'),
+      d(9, 'development', '1.0.1', daysAgo(1.5), nameOf(0), '公開後の軽微な修正（お知らせ一覧の表示）'),
+      d(8, 'production', '1.0.0', daysAgo(2), nameOf(1), '新サイトを公開（v1.0.0 を検証環境から昇格）'),
+      d(7, 'staging', '1.0.0', daysAgo(3.5), nameOf(1), 'v1.0.0 を開発環境から昇格'),
+      d(6, 'staging', '1.0.0', daysAgo(3.6), nameOf(1), '検証環境への反映がタイムアウト（再実行で成功）', 'failed'),
       d(5, 'development', '1.0.0', daysAgo(5.5), nameOf(0), '品質チェックの指摘をすべて反映'),
       d(4, 'staging', '0.9.4', daysAgo(9), nameOf(1), 'v0.9.4 を開発環境から昇格'),
       d(3, 'development', '0.9.4', daysAgo(9.2), nameOf(0), '全ページの構築を反映'),

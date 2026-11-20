@@ -859,3 +859,14 @@
 
 - live の招待の関数（`provisionInvitee`）を、本番ではこのプロジェクトの画面（`<ID>.web.app`・`<ID>.firebaseapp.com`）からだけ呼べるようにした（CORS。セキュリティ監査 2026-11-20 LOW）。エミュレータは従来どおり。プロジェクトが分からないときは何も許可しない。`npm run test:functions` に許可先のテストを 4 件追加（計 13 件）。予備に FIREBASE_CONFIG の projectId も見る
 - 本番への反映は未実施（functions のデプロイが必要。`docs/TODO.md`）。デモ（GitHub Pages）は変更なし
+
+## 0.47.0 — 2026-11-20
+
+- live の招待で、**招待のためにサーバーが作ったアカウントだけが招待を受け取れる**ようにした（セキュリティ監査 2026-11-20 HIGH。設計 `docs/design/INVITE_EXISTING_ACCOUNT.md` 案 B、2026-11-20 ユーザー承認）。関数 `provisionInvitee` が uid を決めて招待（`invites/{メール}`）に `provisionedUid` として記録してからアカウントを作り、Security Rules の受け取りはその uid と一致する人だけを通す。Console で追加したアカウント・招待より前に登録されたアカウント・別のログイン方式のアカウントは受け取れない。`provisionedUid` はアプリ（管理者を含む）からは書けない
+- 招待・送り直しで、同じメールのアカウントが既にあるとき: サーバーがこの招待のために作ったものなら通常の送り直し（警告を出さない）。それ以外は受け付けず、パスワード設定のメールも送らない。画面は「Firebase の管理画面でこのアカウントを削除してから送り直す」を出す
+- 招待を取り消すと、サーバーが作った Auth アカウントも消す（Firestore トリガー `onInviteRevoked`、東京リージョン。受け取り済みのアカウントは消さない。0.47.0 より前の招待は対象外）
+- 関数を専用のサービスアカウント（`afro-cms-functions@<ID>.iam.gserviceaccount.com`）で動かす設定にした（既定のサービスアカウントは権限が広い）。SA の作成と役割は `docs/TODO.md` の「0.47.0 のデプロイ」
+- Console で作る管理者（初代・2 人目以降）は、招待の文書に Auth の UID を `provisionedUid` として足す手順を加えた（`docs/operations/RUNBOOK_FIREBASE.md` §7）。既に受け取り済みの管理者は影響なし。`npm run seed:emulator` も同じ形にした
+- テスト: `npm run test:functions` 19 件（送り直し・既存アカウントの拒否・同時の二度押し・取り消しでの削除と、消さない場合を追加）、`npm run test:rules` 301 件（印の無い／違う uid の受け取り拒否・印の書き換え拒否・受け取り済み管理者・変異テスト 1 件を追加）
+- デモ: 公開済みの案件（SORANO Precision・Machi no Manabiya）で、公開予定日などの日程が未来の日付になっていたのを直した（品質チェックの完了＝公開の承認の翌日を公開予定日にする）。本番環境への公開（v1.0.0）の記録も公開の承認より後にした。保存済みのデモのデータは「デモを初期状態に戻す」で反映される
+- 本番への反映は未実施（SA の作成 → functions → hosting → 招待中の件数の確認 → rules の順。`docs/TODO.md`）
