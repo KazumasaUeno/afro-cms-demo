@@ -32,6 +32,11 @@ test('functions は許可リストの ID でだけ通す（0.46.0。招待のア
   assert.throws(() => checkDeploy({ project: 'castfile-prod', only: 'functions' }, ['afro-cms-prod']), /許可リスト/);
   assert.throws(() => checkDeploy({ project: 'demo-afro-cms', only: 'functions' }, ['demo-afro-cms']), /エミュレータ専用/);
 });
+test('functions と hosting を 1 回で出すのは拒否（functions を先に別で出す）', () => {
+  assert.throws(() => checkDeploy({ project: 'afro-cms-prod', only: 'functions,hosting' }, ['afro-cms-prod']), /1 回で出せません/);
+  assert.throws(() => checkDeploy({ project: 'afro-cms-prod', only: 'hosting,firestore:rules,functions' }, ['afro-cms-prod']), /1 回で出せません/);
+  assert.doesNotThrow(() => checkDeploy({ project: 'afro-cms-prod', only: 'functions,firestore:rules' }, ['afro-cms-prod']));
+});
 test('許可リストと完全一致し、対象が許可内なら通す', () => {
   const r = checkDeploy({ project: 'afro-cms-prod', only: 'hosting,firestore:rules,firestore:indexes' }, ['afro-cms-prod']);
   assert.deepEqual(r, { project: 'afro-cms-prod', targets: ['hosting', 'firestore:rules', 'firestore:indexes'] });

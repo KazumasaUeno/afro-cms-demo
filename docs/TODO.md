@@ -23,7 +23,7 @@
   3. [ ] **functions を先にデプロイ**: `npm --prefix functions ci` → `npm run deploy:firebase -- --project afro-cms-4a6ff --only functions`（送る前に test:functions が走る）。**hosting より先**に出す（0.46.0 の画面は Functions を呼ぶので、先に hosting を出すと招待が「メールを送れませんでした」になる）
      - 初回は「Functions successfully deployed but could not set up cleanup policy」で終了コード 1 になる見込み（firebase-tools 15.35 の --non-interactive の動き。デプロイ自体は済んでいる）。そのときは `npx firebase functions:artifacts:setpolicy --project afro-cms-4a6ff --location asia-northeast1 --days 1` で古いイメージを 1 日で消す設定を入れる（入れないと保存料が少しずつ増える）
      - Console → Functions に `provisionInvitee`（asia-northeast1）が出ていることを確かめる
-     - 注: `scripts/deploy-firebase.mjs` は順番を強制しない（`--only functions,hosting` を拒否しない。code review 2026-11-20 Minor）。必ず 2 回に分ける。スクリプトで拒否するかは次の改修で決める
+     - `--only functions,hosting` を 1 回で出すことは `deploy:firebase` が拒否する（2026-11-20）。順番（functions が先）は手順どおりに守る
   4. [ ] hosting をデプロイ（`npm run build:live` → `npm run deploy:firebase -- --project afro-cms-4a6ff --only hosting`）
   5. [ ] **通しを確かめる**（作成（登録）を許可がまだ ON のうちに）: 管理者で新しいメールを招待 →「招待し、パスワード設定のメールを送りました」→ メールのリンクでパスワード設定 → ログインで「有効」。Console → Functions → ログに `invite.provision`・`status: created` が出る
   6. [ ] **OFF の直前に** Authentication →「ユーザー」で、招待していないメールのアカウントが無いか見る。あれば削除する（OFF にしても、それより前に作られたアカウントは残り、招待を受け取れてしまう。security 2026-11-20 HIGH）

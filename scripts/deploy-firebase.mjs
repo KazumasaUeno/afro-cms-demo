@@ -2,7 +2,7 @@
 // 本番デプロイの入口（npm run deploy:firebase -- --project <ID> --only <対象>）。
 // 守ること（BACKEND_FIREBASE.md §16.1 / BACKEND_PLAN.md「Plan Review の反映」）:
 // - --project は必須。scripts/firebase-projects.mjs の許可リストと完全一致する ID だけ通す（'TBD' は常に拒否）
-// - --only は必須。hosting / firestore:rules / firestore:indexes / functions の組み合わせだけ通す
+// - --only は必須。hosting / firestore:rules / firestore:indexes / functions の組み合わせだけ通す（functions と hosting の同時は拒否）
 // - gcloud・ADC・.firebaserc の既定には頼らない（firebase CLI へ --project を必ず渡す）
 // - --dry-run は実行するコマンドを表示するだけ（何も送らない。下の事前確認は --dry-run でも行う）
 // - hosting: dist-live が同じ --project 向けにビルドされていること（ビルドに焼き込まれた projectId を見る。security M3）
@@ -43,6 +43,10 @@ export function checkDeploy({ project, only }, allowlist = PRODUCTION_PROJECT_ID
   if (targets.length === 0) throw new Error('--only が空です');
   for (const t of targets) {
     if (!DEPLOY_TARGETS.includes(t)) throw new Error(`--only ${t} はデプロイ対象外です（${DEPLOY_TARGETS.join(',')}）`);
+  }
+  // 画面が関数より先に替わると招待が失敗するので、functions と hosting は別々に出す（functions が先。docs/TODO.md。code review 2026-11-20 Minor）
+  if (targets.includes('functions') && targets.includes('hosting')) {
+    throw new Error('functions と hosting は 1 回で出せません（--only functions を先に出し、終わってから --only hosting）');
   }
   return { project, targets };
 }
