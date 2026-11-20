@@ -2,6 +2,8 @@
 
 > 未完了の作業と、既知の制限。終わったら行を消す（経緯は `docs/CHANGELOG.md`）。
 
+- [ ] **AI による改善提案＋現行サイト診断の設計案**（2026-11-20、未承認）: `docs/design/AI_REQUIREMENTS.md`。レビュー反映済み（改訂 1）→ ユーザー判断（同 §9 Q-1〜Q-7）→ 実装計画。それまで live の「サイトスコア（AI 推定）」は実測ではない（同 §0・Q-6）。`aiDrafts` の生出力を期限で消す仕組みは未実装（同 §7・Q-7。LEGAL REVIEW REQUIRED）
+
 ## 段階 C（本番の Firebase プロジェクトを作って公開する）の前に必ず行う
 
 出典: security re-audit 2026-11-12（APPROVED WITH CONDITIONS for B、C は未承認）／ code review 2026-11-12。作業の多くはユーザーの Google アカウントでの Console 操作。
