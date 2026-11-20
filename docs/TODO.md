@@ -18,13 +18,13 @@
   - [ ] Auth → テンプレート →「パスワードの再設定」の文面を招待の文面にする（このメールは招待と「パスワードを忘れた方」の両方で届く）。例: 件名「アフロCMS へのご招待／パスワードの設定」、本文「アフロCMS をご利用いただくためのパスワードを、下のリンクから設定してください。設定後はログイン画面からメールアドレスとパスワードでログインできます。お心当たりがない場合は、このメールを破棄してください」
   - [ ] 本番相当のプロジェクトで 1 回だけ通しを確かめる: 招待 → メールのリンクでパスワード設定 → ログインで「有効」になる（設定の完了でメールが確認済みになるのはエミュレータで確認済み。本番は未確認。ならなければ確認メールの画面が出て、確認後に使える）
 - [ ] **招待のアカウント作成を Cloud Functions へ移す（0.46.0。security re-audit 2026-11-19 MEDIUM の対策。2026-11-19 ユーザー決定）**。コードは済み（`functions/`・`src/live/invite.ts`。エミュレータのテスト成功。code review・security audit 2026-11-20 の指摘を 0.46.0 に反映）。以下は**この順番で**（作業はユーザー。課金の変更・デプロイはユーザーの判断で行う）
-  1. [ ] Firebase Console → 左下「Spark」→ **Blaze にアップグレード**（請求先アカウントを付ける）
-  2. [ ] Google Cloud Console → お支払い → **予算とアラート** → 予算を作る（対象: afro-cms-4a6ff、金額 **1,000 円**、通知 50%・90%・100%）。予算は上限ではなく通知だけ（超えても止まらない）
-  3. [ ] **functions を先にデプロイ**: `npm --prefix functions ci` → `npm run deploy:firebase -- --project afro-cms-4a6ff --only functions`（送る前に test:functions が走る）。**hosting より先**に出す（0.46.0 の画面は Functions を呼ぶので、先に hosting を出すと招待が「メールを送れませんでした」になる）
+  1. [x] 2026-11-20 済（請求先 016A03-…。ユーザー選択）Firebase Console → 左下「Spark」→ **Blaze にアップグレード**（請求先アカウントを付ける）
+  2. [x] 2026-11-20 済（予算 ID 81481eb8…、1,000 円・50/90/100%）Google Cloud Console → お支払い → **予算とアラート** → 予算を作る（対象: afro-cms-4a6ff、金額 **1,000 円**、通知 50%・90%・100%）。予算は上限ではなく通知だけ（超えても止まらない）
+  3. [x] 2026-11-20 済（provisionInvitee v2 asia-northeast1。cleanup policy 1 日を設定）**functions を先にデプロイ**: `npm --prefix functions ci` → `npm run deploy:firebase -- --project afro-cms-4a6ff --only functions`（送る前に test:functions が走る）。**hosting より先**に出す（0.46.0 の画面は Functions を呼ぶので、先に hosting を出すと招待が「メールを送れませんでした」になる）
      - 初回は「Functions successfully deployed but could not set up cleanup policy」で終了コード 1 になる見込み（firebase-tools 15.35 の --non-interactive の動き。デプロイ自体は済んでいる）。そのときは `npx firebase functions:artifacts:setpolicy --project afro-cms-4a6ff --location asia-northeast1 --days 1` で古いイメージを 1 日で消す設定を入れる（入れないと保存料が少しずつ増える）
      - Console → Functions に `provisionInvitee`（asia-northeast1）が出ていることを確かめる
      - `--only functions,hosting` を 1 回で出すことは `deploy:firebase` が拒否する（2026-11-20）。順番（functions が先）は手順どおりに守る
-  4. [ ] hosting をデプロイ（`npm run build:live` → `npm run deploy:firebase -- --project afro-cms-4a6ff --only hosting`）
+  4. [x] 2026-11-20 済（feat/functions-invite 54d8ec6 のビルド）hosting をデプロイ（`npm run build:live` → `npm run deploy:firebase -- --project afro-cms-4a6ff --only hosting`）
   5. [ ] **通しを確かめる**（作成（登録）を許可がまだ ON のうちに）: 管理者で新しいメールを招待 →「招待し、パスワード設定のメールを送りました」→ メールのリンクでパスワード設定 → ログインで「有効」。Console → Functions → ログに `invite.provision`・`status: created` が出る
   6. [ ] **OFF の直前に** Authentication →「ユーザー」で、招待していないメールのアカウントが無いか見る。あれば削除する（OFF にしても、それより前に作られたアカウントは残り、招待を受け取れてしまう。security 2026-11-20 HIGH）
      その後 Firebase Console → Authentication → 設定 →「ユーザー アクション」→ **「作成（登録）を許可」を OFF** → 保存
