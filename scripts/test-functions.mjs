@@ -39,8 +39,18 @@ export function isolatedEmulatorEnv(base = process.env) {
   return env;
 }
 
+/** 本物のキーでテストしない（計画 M1・T-12）: 環境の ANTHROPIC_API_KEY・functions/.secret.local があれば止める */
+export function assertNoRealSecrets(env = process.env) {
+  if (env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY が環境にあります（テストは Stub だけで行う。消してから実行する）');
+  if (existsSync(join(functionsDir, '.secret.local'))) throw new Error('functions/.secret.local があります（エミュレータが Secret として読む。消してから実行する）');
+}
+
 function main() {
   if (!EMULATOR_PROJECT_ID.startsWith('demo-')) throw new Error(`EMULATOR_PROJECT_ID=${EMULATOR_PROJECT_ID} は demo- ではありません`);
+  assertNoRealSecrets();
+  // 共有コードの写しが正と一致すること（scripts/gen-ai-shared.mjs）
+  const gen = spawnSync(process.execPath, [join(root, 'scripts', 'gen-ai-shared.mjs'), '--check'], { cwd: root, stdio: 'inherit' });
+  if (gen.status !== 0) throw new Error('functions/src/ai/shared/ が古い（node scripts/gen-ai-shared.mjs）');
   buildFunctions();
   const cli = join(dirname(createRequire(import.meta.url).resolve('firebase-tools/package.json')), 'lib', 'bin', 'firebase.js');
   const inner = 'node --test --test-concurrency=1 --test-reporter=spec tests/functions/*.test.mjs';
