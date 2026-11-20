@@ -1,0 +1,345 @@
+// AI 下書きの callable・worker・編集の保存（functions/src/ai/。計画 §4 U2）。npm run test:functions（emulators:exec）からだけ動く。
+// 本体（handleRequestDraft / handleTask / handleSaveEdits）を Admin SDK（Firestore エミュレータ）と注入した Stub で直接呼ぶ。
+// 配線（index.ts の export と既定 off）だけは Functions エミュレータへ HTTP で確かめる。Anthropic は呼ばない（Stub）
+import { before, beforeEach, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { assertDemoProject, emulatorHostFromEnv } from '../rules/guard.mjs';
+import { EDITED_CASES } from '../rules/aiEditedCases.mjs';
+import { GENERATED, EDITED } from '../rules/aiFixtures.mjs';
+
+const PROJECT = assertDemoProject(process.env.GCLOUD_PROJECT);
+const fsHost = emulatorHostFromEnv('FIRESTORE_EMULATOR_HOST');
+const freq = createRequire(new URL('../../functions/package.json', import.meta.url));
+const { initializeApp } = freq('firebase-admin/app');
+const { getFirestore, Timestamp } = freq('firebase-admin/firestore');
+const lib = (p) => freq(`./lib/ai/${p}.js`);
+const { handleRequestDraft } = lib('request');
+const { handleTask } = lib('task');
+const { handleSaveEdits } = lib('edits');
+const { parseMode, AI_MODE_DEFAULT } = lib('flags');
+const { configHash } = lib('shared/answersHash');
+const { AI_QUOTA } = lib('limits');
+const { assertNoRealSecrets } = await import('../../scripts/test-functions.mjs');
+
+initializeApp({ projectId: PROJECT });
+const db = getFirestore();
+const T = Date.parse('2026-11-20T03:00:00Z');
+const CANARY_ANS = 'CANARY-ANSWER-7f3a';
+const CANARY_SITE = 'CANARY-SITE-91bc';
+const CANARY_KEY = 'sk-ant-canary-0000';
+const CONFIG = { model: 'stub-model', promptVersion: 'PRM-REQ-001@1.0.0', effort: 'low' };
+const uuid = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const auth = (uid, verified = true) => ({ uid, token: { email: `${uid}@x.example`, email_verified: verified } });
+const AI = 'projects/p1/aiDrafts/requirements';
+
+let logs;
+let clock;
+let enqueued;
+let stubCalls;
+const logger = { info: (m, f) => logs.push(['info', m, f]), warn: (m, f) => logs.push(['warn', m, f]), error: (m, f) => logs.push(['error', m, f]) };
+const flagsOn = () => ({ mode: 'on', allowlist: [] });
+const rdeps = (o = {}) => ({ db, now: () => clock, flags: flagsOn, configHash: () => configHash(CONFIG), enqueue: async (t) => { enqueued.push(t); }, log: logger, ...o });
+const okResult = { ok: true, proposal: EDITED, flags: { unsupportedNumbers: [] }, usage: { input: 10, output: 20, cacheRead: 0, costMicroUsd: 7 }, anthropicRequestId: 'req_abc' };
+const tdeps = (result = okResult, o = {}) => ({
+  db, now: () => clock, flags: flagsOn, apiKey: () => CANARY_KEY, log: logger,
+  createGenerator: () => ({ config: CONFIG, generateDraft: async (input) => { stubCalls.push(input); return typeof result === 'function' ? result(input) : result; } }),
+  siteCheck: async () => ({ siteCheck: { status: 'ok', fetchedAt: 'x', passed: 1, total: 1, items: [] }, siteFacts: { https: true }, siteText: `body ${CANARY_SITE}`, code: null }),
+  ...o,
+});
+const call = (uid, data, o) => handleRequestDraft({ auth: uid ? auth(uid) : null, data: { projectId: 'p1', requestId: uuid(1), ...data } }, rdeps(o));
+const ai = async () => (await db.doc(AI).get()).data();
+const usage = async (id = '202611') => (await db.doc(`aiUsage/${id}`).get()).data();
+const code = (msg) => (e) => (assert.equal(e.message, msg), true);
+
+async function seed() {
+  const acct = (uid, role, status = 'active') => db.doc(`accounts/${uid}`).set({ schemaVersion: 1, status, email: `${uid}@x.example`, role, name: 'n' });
+  await Promise.all([acct('adm', 'admin'), acct('devA', 'developer'), acct('devB', 'developer'), acct('cli', 'client'), acct('off', 'developer', 'disabled')]);
+  await db.doc('projects/p1').set({ memberUids: ['devA', 'off'], archived: false, requirements: { status: 'draft', revision: 0 } });
+  await db.doc('projects/p1/requirements/current').set({ answers: {
+    'q-url': 'https://www.shop.example/', 'q-purpose': ['問い合わせを増やしたい'], 'q-issue': `スマホで見づらい ${CANARY_ANS} 03-1234-5678`,
+    'q-improve': ['スマホ表示'], 'q-infra': '管理会社 秘密', 'q-competitor': ['https://rival.example/'],
+  } });
+}
+
+before(async () => { assert.ok(existsSync(new URL('../../functions/lib/ai/index.js', import.meta.url))); });
+beforeEach(async () => {
+  const r = await fetch(`http://${fsHost.host}:${fsHost.port}/emulator/v1/projects/${PROJECT}/databases/(default)/documents`, { method: 'DELETE' });
+  assert.equal(r.status, 200);
+  logs = []; enqueued = []; stubCalls = []; clock = T;
+  await seed();
+});
+
+// ---------- テストの守り（M1・T-12） ----------
+test('守り: ANTHROPIC_API_KEY と functions/.secret.local が無い（あれば runner が止める）', () => {
+  assert.equal(process.env.ANTHROPIC_API_KEY, undefined);
+  assert.equal(existsSync(new URL('../../functions/.secret.local', import.meta.url)), false);
+  assert.throws(() => assertNoRealSecrets({ ANTHROPIC_API_KEY: 'x' }), /ANTHROPIC_API_KEY/);
+});
+
+// ---------- フラグ（H3。7 件） ----------
+test('フラグ1: 未設定・空・未知の値は off', () => {
+  for (const v of [undefined, '', 'ON!', 'true', 1]) assert.equal(parseMode(v), 'off');
+  assert.equal(parseMode(' Internal '), 'internal');
+});
+test('フラグ2: コードの既定が off（ファイルが無くても off）・本番の値も off', () => {
+  assert.equal(AI_MODE_DEFAULT, 'off');
+  assert.match(readFileSync(new URL('../../functions/src/ai/flags.ts', import.meta.url), 'utf8'), /defineString\('AI_REQUIREMENTS_MODE', \{ default: AI_MODE_DEFAULT \}\)/);
+  assert.match(readFileSync(new URL('../../functions/.env.afro-cms-4a6ff', import.meta.url), 'utf8'), /^AI_REQUIREMENTS_MODE=off$/m);
+});
+const internal = (allowlist) => () => ({ mode: 'internal', allowlist });
+test('フラグ3: internal で admin 以外は拒否', () => assert.rejects(call('devA', {}, { flags: internal(['p1']) }), code('feature-disabled')));
+test('フラグ4: internal で admin でも allowlist 外は拒否', () => assert.rejects(call('adm', {}, { flags: internal(['p9']) }), code('feature-disabled')));
+test('フラグ5: allowlist が空なら internal でも全拒否（admin も）', async () => {
+  await assert.rejects(call('adm', {}, { flags: internal([]) }), code('feature-disabled'));
+  assert.deepEqual(await call('adm', {}, { flags: internal(['p1']) }), { state: 'running', requestId: uuid(1) });
+});
+test('フラグ6: enqueue 後・worker 開始前に off → Stub 0 回・上限の返金・lease 解除', async () => {
+  await call('devA', {});
+  assert.equal((await usage()).count, 1);
+  assert.equal(await handleTask(enqueued[0], tdeps(okResult, { flags: () => ({ mode: 'off', allowlist: [] }) })), 'refunded');
+  assert.equal(stubCalls.length, 0);
+  const d = await ai();
+  assert.equal(d.job.state, 'idle');
+  assert.equal(d.quota.dayCount, 0);
+  assert.equal((await usage()).count, 0);
+  assert.equal(d.lastError.code, 'ai-feature-disabled');
+});
+test('フラグ7: off・allowlist 外で文書も上限も変わらない', async () => {
+  await assert.rejects(call('devA', {}, { flags: () => ({ mode: 'off', allowlist: [] }) }), code('feature-disabled'));
+  await assert.rejects(call('adm', {}, { flags: internal(['p9']) }), code('feature-disabled'));
+  assert.equal(await ai(), undefined);
+  assert.equal(await usage(), undefined);
+  assert.equal(enqueued.length, 0);
+});
+
+// ---------- 認可・状態 ----------
+for (const [name, uid] of [['お客様', 'cli'], ['未アサインの開発者', 'devB'], ['無効なアカウント', 'off']]) {
+  test(`認可: ${name}は拒否・何も書かない`, async () => {
+    await assert.rejects(call(uid, {}), code('not allowed'));
+    assert.equal(await ai(), undefined);
+  });
+}
+test('認可: 未確認メールは拒否', () => assert.rejects(handleRequestDraft({ auth: auth('devA', false), data: { projectId: 'p1', requestId: uuid(1) } }, rdeps()), code('not allowed')));
+test('認可: 未ログインは unauthenticated', () => assert.rejects(call(null, {}), (e) => e.code === 'unauthenticated'));
+test('状態: archived は拒否', async () => {
+  await db.doc('projects/p1').update({ archived: true });
+  await assert.rejects(call('devA', {}), code('project-archived'));
+});
+test('認可: admin（アサインなし）とアサインされた開発者は可', async () => {
+  assert.equal((await call('adm', {})).state, 'running');
+  assert.equal(enqueued.length, 1);
+});
+for (const st of ['analyzed', 'approved']) {
+  test(`状態: ${st} は failed-precondition`, async () => {
+    await db.doc('projects/p1').update({ 'requirements.status': st });
+    await assert.rejects(call('devA', {}), code('not-draft'));
+  });
+}
+test('状態: 必須回答が欠けると拒否', async () => {
+  await db.doc('projects/p1/requirements/current').update({ 'answers.q-issue': '  ' });
+  await assert.rejects(call('devA', {}), code('answers-missing'));
+  assert.equal(await ai(), undefined);
+});
+async function readyDraft(withEdits = true) {
+  await call('devA', {});
+  await handleTask(enqueued.at(-1), tdeps());
+  if (withEdits) await handleSaveEdits({ auth: auth('devA'), data: { projectId: 'p1', edited: { ...EDITED, summary: '直した' } } }, { db, now: () => clock, flags: flagsOn, log: logger });
+}
+test('状態: edited ありで discardEdits なし → edits-exist', async () => {
+  await readyDraft();
+  await assert.rejects(call('devA', { requestId: uuid(2), regenerate: true }), code('edits-exist'));
+});
+test('状態: admin の discardEdits は confirmDiscard 必須・ありなら discardLog に残る', async () => {
+  await readyDraft();
+  await assert.rejects(call('adm', { requestId: uuid(2), regenerate: true, discardEdits: true }), code('confirm-discard-required'));
+  await call('adm', { requestId: uuid(3), regenerate: true, discardEdits: true, confirmDiscard: true });
+  assert.equal(await handleTask(enqueued.at(-1), tdeps()), 'ready');
+  const d = await ai();
+  assert.equal(d.edited, undefined);
+  assert.equal(d.discardLog.length, 1);
+  assert.equal(d.discardLog[0].by, 'adm');
+});
+
+// ---------- Idempotency・lease・上限 ----------
+test('同じ requestId 2 回: enqueue 1 回・加算 1 回', async () => {
+  await call('devA', {});
+  assert.deepEqual(await call('devA', {}), { state: 'running', requestId: uuid(1) });
+  assert.equal(enqueued.length, 1);
+  assert.equal((await usage()).count, 1);
+});
+test('成功: generated・ハッシュ・usage を書き、送る回答に q-infra・連絡先が無い', async () => {
+  await call('devA', {});
+  assert.equal(await handleTask(enqueued[0], tdeps()), 'ready');
+  const d = await ai();
+  assert.equal(d.state, 'ready');
+  assert.equal(d.generated.version, 2);
+  assert.equal(d.generated.hostname, 'shop.example');
+  assert.deepEqual(d.generated.competitors, ['rival.example']);
+  assert.equal(d.configHash, configHash(CONFIG));
+  assert.match(d.answersHash, /^sha256:[0-9a-f]{64}$/);
+  assert.equal(d.job.state, 'idle');
+  assert.equal((await usage()).costMicroUsd, 7);
+  const sent = JSON.stringify(stubCalls[0].answers);
+  assert.doesNotMatch(sent, /q-infra|秘密|1234-5678|q-competitor/);
+  assert.match(sent, /\[電話\]/);
+});
+test('同じハッシュ 2 回目は reused（加算なし）・regenerate は加算あり', async () => {
+  await readyDraft(false);
+  assert.deepEqual(await call('devA', { requestId: uuid(2) }), { state: 'ready', reused: true });
+  assert.equal((await usage()).count, 1);
+  await call('devA', { requestId: uuid(3), regenerate: true });
+  assert.equal((await usage()).count, 2);
+});
+test('同時 2 本: 片方は already-running・Stub 1 回', async () => {
+  const rs = await Promise.allSettled([call('devA', { requestId: uuid(1) }), call('devA', { requestId: uuid(2) })]);
+  assert.equal(rs.filter((r) => r.status === 'fulfilled').length, 1);
+  assert.equal(rs.find((r) => r.status === 'rejected').reason.message, 'already-running');
+  for (const t of enqueued) await handleTask(t, tdeps());
+  assert.equal(stubCalls.length, 1);
+});
+test('fencing: lease 切れで引き継がれた後に古いタスクが終わっても結果を捨てる', async () => {
+  await call('devA', { requestId: uuid(1) });
+  const slow = async () => {
+    clock = T + 700_000; // 古い lease（630 秒）が切れた後に別の押下
+    await call('devA', { requestId: uuid(2) });
+    return okResult;
+  };
+  assert.equal(await handleTask(enqueued[0], tdeps(slow)), 'fenced');
+  const d = await ai();
+  assert.equal(d.job.requestId, uuid(2));
+  assert.equal(d.generated, undefined);
+});
+test('lease 切れの後の押下は引き継げる（期限内は already-running）', async () => {
+  await call('devA', { requestId: uuid(1) });
+  await assert.rejects(call('devA', { requestId: uuid(2) }), code('already-running'));
+  clock = T + 631_000;
+  assert.equal((await call('devA', { requestId: uuid(3) })).state, 'running');
+});
+test('enqueue の失敗: 返金して unavailable', async () => {
+  await assert.rejects(call('devA', {}, { enqueue: async () => { throw Object.assign(new Error(CANARY_ANS), { code: 'x' }); } }), (e) => e.code === 'unavailable');
+  const d = await ai();
+  assert.equal(d.job.state, 'idle');
+  assert.equal(d.quota.dayCount, 0);
+  assert.equal((await usage()).count, 0);
+});
+test('AI を呼ぶ前の失敗（Secret なし）: 返金・Stub 0 回', async () => {
+  await call('devA', {});
+  assert.equal(await handleTask(enqueued[0], tdeps(okResult, { apiKey: () => '' })), 'refunded');
+  assert.equal(stubCalls.length, 0);
+  assert.equal((await usage()).count, 0);
+  assert.equal((await ai()).lastError.code, 'ai-config-missing');
+});
+test('JST の日付境界: UTC 15:00 は JST の翌日（月の文書も変わる）', async () => {
+  clock = Date.parse('2026-11-30T15:00:00Z');
+  await call('devA', {});
+  assert.equal((await ai()).quota.day, '2026-12-01');
+  assert.equal((await usage('202612')).byDay['2026-12-01'], 1);
+  assert.equal(await usage('202611'), undefined);
+});
+const exhaust = [
+  ['案件の日', async () => db.doc(AI).set({ schemaVersion: 1, state: 'failed', job: { state: 'idle' }, quota: { day: '2026-11-20', dayCount: AI_QUOTA.projectPerDay, month: '2026-11', monthCount: 5 } }), 'quota-project-day'],
+  ['案件の月', async () => db.doc(AI).set({ schemaVersion: 1, state: 'failed', job: { state: 'idle' }, quota: { day: '2026-11-19', dayCount: 1, month: '2026-11', monthCount: AI_QUOTA.projectPerMonth } }), 'quota-project-month'],
+  ['利用者の日', async () => db.doc('aiUsage/202611').set({ count: 0, costMicroUsd: 0, byDay: {}, byUid: { '2026-11-20:devA': AI_QUOTA.userPerDay } }), 'quota-user-day'],
+  ['全体の月', async () => db.doc('aiUsage/202611').set({ count: AI_QUOTA.globalPerMonth, costMicroUsd: 0, byDay: {}, byUid: {} }), 'quota-global-month'],
+];
+for (const [name, prep, msg] of exhaust) {
+  test(`上限: ${name}の超過で resource-exhausted・enqueue 0 回`, async () => {
+    await prep();
+    await assert.rejects(call('devA', {}), (e) => e.code === 'resource-exhausted' && e.message === msg);
+    assert.equal(enqueued.length, 0);
+  });
+}
+
+// ---------- 失敗時の保持 ----------
+test('保持: 下書きありで再生成が失敗 → state ready のまま・lastError だけ', async () => {
+  await readyDraft(false);
+  await call('devA', { requestId: uuid(2), regenerate: true });
+  assert.equal(await handleTask(enqueued.at(-1), tdeps({ ok: false, code: 'rate_limited', httpStatus: 429, anthropicRequestId: 'req_1' })), 'failed');
+  const d = await ai();
+  assert.equal(d.state, 'ready');
+  assert.deepEqual([d.lastError.code, d.lastError.httpStatus], ['ai-rate_limited', 429]);
+  assert.equal((await usage()).count, 2); // 呼んだ後は戻さない
+});
+test('保持: discardEdits で生成が失敗 → edited が残る', async () => {
+  await readyDraft();
+  await call('devA', { requestId: uuid(2), regenerate: true, discardEdits: true });
+  await handleTask(enqueued.at(-1), tdeps({ ok: false, code: 'refusal' }));
+  assert.equal((await ai()).edited.summary, '直した');
+});
+
+// ---------- saveAiDraftEdits（F-a。tests/rules/aiEditedCases.mjs を写す） ----------
+const edeps = { db, now: () => T, flags: flagsOn, log: logger };
+const save = (uid, edited) => handleSaveEdits({ auth: auth(uid), data: { projectId: 'p1', edited } }, edeps);
+async function withGenerated() {
+  await db.doc(AI).set({ schemaVersion: 1, state: 'ready', job: { state: 'idle' }, generated: { ...GENERATED, siteCheck: { ...GENERATED.siteCheck, fetchedAt: '2026-11-01T00:00:00Z' } }, quota: { day: 'x', dayCount: 1, month: 'x', monthCount: 1 }, updatedAt: Timestamp.fromMillis(T), updatedBy: 'server' });
+}
+for (const c of EDITED_CASES) {
+  test(`編集: ${c.name} → ${c.expect}`, async () => {
+    await withGenerated();
+    if (c.expect === 'allow') {
+      assert.deepEqual(await save('devA', c.edited), { ok: true });
+      assert.deepEqual((await ai()).edited, c.edited);
+    } else {
+      await assert.rejects(save('devA', c.edited), (e) => e.code === 'invalid-argument');
+      assert.equal((await ai()).edited, undefined);
+    }
+  });
+}
+test('編集: admin・お客様・未アサインは拒否', async () => {
+  await withGenerated();
+  for (const uid of ['adm', 'cli', 'devB']) await assert.rejects(save(uid, EDITED), code('not allowed'));
+});
+test('編集: 要件が draft でない・generated が無いと拒否', async () => {
+  await assert.rejects(save('devA', EDITED), code('no-generated'));
+  await withGenerated();
+  await db.doc('projects/p1').update({ 'requirements.status': 'analyzed' });
+  await assert.rejects(save('devA', EDITED), code('not-draft'));
+});
+test('編集: 書くのは edited・editedAt・editedBy・updatedAt・updatedBy だけ（サーバー欄は不変）', async () => {
+  await withGenerated();
+  const before = await ai();
+  await save('devA', EDITED);
+  const after = await ai();
+  const changed = Object.keys(after).filter((k) => JSON.stringify(after[k]) !== JSON.stringify(before[k])).sort();
+  assert.deepEqual(changed, ['edited', 'editedAt', 'editedBy', 'updatedBy']);
+});
+test('編集: off なら拒否', () => assert.rejects(handleSaveEdits({ auth: auth('devA'), data: { projectId: 'p1', edited: EDITED } }, { ...edeps, flags: () => ({ mode: 'off', allowlist: [] }) }), code('feature-disabled')));
+
+// ---------- ログ（M4。canary） ----------
+test('canary: 回答・サイト本文・キーがログ・lastError・HttpsError のどれにも出ない', async () => {
+  const errors = [];
+  const out = [];
+  const w = process.stdout.write.bind(process.stdout);
+  process.stdout.write = (c, ...a) => { out.push(String(c)); return w(c, ...a); };
+  try {
+    const outcomes = [okResult, { ok: false, code: 'schema' }, async () => { throw new Error(`${CANARY_ANS} ${CANARY_KEY}`); }, { ok: true, proposal: { ...EDITED, summary: 1 }, usage: okResult.usage }];
+    for (const [i, r] of outcomes.entries()) {
+      clock = T + i * 1000;
+      await call('devA', { requestId: uuid(10 + i), regenerate: true, discardEdits: true });
+      await handleTask(enqueued.at(-1), tdeps(r));
+    }
+    await call('devA', { requestId: uuid(20) }, { enqueue: async () => { throw new Error(CANARY_KEY); } }).catch((e) => errors.push(e.message));
+    await save('devA', { ...EDITED, summary: CANARY_ANS.repeat(100) }).catch((e) => errors.push(e.message));
+    await save('devA', { ...EDITED, extra: CANARY_SITE }).catch((e) => errors.push(e.message));
+  } finally {
+    process.stdout.write = w;
+  }
+  const hay = JSON.stringify({ logs, errors, out, last: (await ai()).lastError });
+  for (const c of [CANARY_ANS, CANARY_SITE, CANARY_KEY]) assert.equal(hay.includes(c), false, c);
+  assert.ok(logs.length >= 8);
+});
+
+// ---------- 配線（Functions エミュレータ。既定の off） ----------
+test('配線: requestRequirementsDraft・saveAiDraftEdits が export され、既定 off で feature-disabled', async () => {
+  const hub = emulatorHostFromEnv('FIREBASE_EMULATOR_HUB');
+  const { functions } = await (await fetch(`http://${hub.host}:${hub.port}/emulators`)).json();
+  const base = `http://${functions.host === '::1' ? '[::1]' : functions.host}:${functions.port}/${PROJECT}/asia-northeast1`;
+  for (const fn of ['requestRequirementsDraft', 'saveAiDraftEdits']) {
+    const r = await fetch(`${base}/${fn}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: { projectId: 'p1', requestId: uuid(1) } }) });
+    const body = await r.json();
+    assert.equal(body.error?.status, 'FAILED_PRECONDITION', `${fn} ${JSON.stringify(body)}`);
+    assert.equal(body.error?.message, 'feature-disabled');
+  }
+});
