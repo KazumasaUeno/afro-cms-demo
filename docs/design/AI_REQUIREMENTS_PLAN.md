@@ -143,6 +143,20 @@
 - Rules の v2 受け付けは、v2 の提案が 1 件でも保存された後は**外さない**
 - **Hosting の戻し先の下限（MEDIUM-4）**: v2 の提案が 1 件でも保存された後は、**段 3 のビルドより前の版へ戻さない**（v2 を描けない画面になる）。Runbook に書く
 
+### 7.1 U1 の計測結果: Rules の式の量と参照の数（database-engineer 2026-11-20）
+
+- **公式の上限**（[FACT 2026-11-20 WebFetch https://firebase.google.com/docs/firestore/security/rules-structure]）: 1 リクエストで評価する式 **1,000**／`exists()`・`get()`・`getAfter()` は単一文書・クエリ **10**、複数文書の読み取り・transaction・batch **20**（各操作にも 10 が掛かる）。キャッシュされた呼び出しは数えない場合がある。関数の呼び出しの深さ 20・`let` 10/関数
+- 計測の方法: エミュレータ（firebase-tools 15.35・demo-afro-cms）で、**最大の payload の allow テスト**に式の詰め物（`pad10()` = 比較 10 個の関数）と存在しない文書への `exists()` を足し、通る最大数を二分探索した。ruleCoverage（`/emulator/v1/projects/demo-afro-cms:ruleCoverage`）は AST の節ごとの累計で、エミュレータが打ち切る数とは一致しない（例: 節の合計 1,145 で許可、1,097 で拒否）ため、余裕の判定には使わず内訳の確認だけに使った [FACT: probe の出力]
+
+| 経路 | 結果 | 余裕 |
+|---|---|---|
+| ① 開発者の `edited` 更新（ポイント 6×上限・根拠 5・下書き 7 欄×800・未確定 10×200） | **1,000 式の上限で拒否**。文字列の検査を区切り文字でつないで正規表現 1 回にまとめ、`is map`/`is list` を省いた書き方でも、ポイント 5 件＋未確定 0 件までしか通らない（5 件＋未確定 10 件・6 件は拒否） | **なし（超過）** → **代替 F-a を採用** |
+| ② v2 の submit（案件・回答・approvals・accounts＋`getAfter(aiDraft)`。全 20 問上限＋generated・edited とも上限ちょうど） | 許可。詰め物は trivial な書き込み（aiUsage の admin 更新）で `pad10()` 12 個、v2 submit で 10 個まで通る → submit の消費は概算 120〜240 式（1 個 ≒ 77〜83 式から逆算）[INFERENCE] | 式 **約 76% 以上**／参照: requirements/current の更新に存在しない文書の `exists()` を **さらに 8 個**足せる（trivial な操作と同じ。各操作 10 の上限に対し残り 8） |
+
+- **[DECISION database-engineer U1・計画 L-b の事前合意どおり] F-a を採る**: `aiDrafts` は**クライアントから作成・更新・削除できない**（`allow create, update, delete: if false`）。`edited` の検査と保存は **callable `saveAiDraftEdits`（Admin SDK）を U2 の Write Scope に足す**。U2 が写すテスト: `tests/rules/aiEditedCases.mjs`（許可 4・拒否 17）と、前提（アサインされた開発者だけ・admin 不可・要件が draft・generated がある・サーバー欄に触れない・**submit と同時に保存させない＝transaction で status=draft を確かめる**）
+- **F-b は不要**: v2 の submit はクライアントの batch のまま（`validStoredProposal` → `proposalV2Ok` の等式 1 本）。submit は edited を検証しないが、edited を書けるのは F-a の callable だけなので、提案の中身は callable の検査を通ったものになる
+- 計測の probe はリポジトリに入れていない（scratchpad）。Rules を変えたら同じ方法で測り直す
+
 ## 8. 影響範囲（要点）
 
 | 観点 | 内容 |

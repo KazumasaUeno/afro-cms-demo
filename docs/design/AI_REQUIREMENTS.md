@@ -187,7 +187,7 @@ ProposalV2 = {
 
 - お客様が見るのは submit で合わせた提案だけ。`generated` の生出力・`lastError`・使用量は届かない
 - サイト本文・生 HTML は保存しない（事実と抽出の SHA-256 だけ）
-- **Rules の式の量**: submit の transaction は既に案件・回答・approvals・accounts を読む。`aiDrafts` の getAfter を足した**最悪の式の数と get() の回数（上限内か）は database-engineer が `tests/rules` で計測する**（未計測）。リストの上限（points 6・evidence 5・openQuestions 10・siteCheck.items 12・discardLog 10）で抑える
+- **Rules の式の量**（計測済み 2026-11-20。数値と方法は `AI_REQUIREMENTS_PLAN.md` §7.1）: v2 の submit は上限内（式の余裕 約 76% 以上・参照の余裕 8）。**開発者の `edited` 更新は最大の payload で 1,000 式の上限を超えた → 計画の代替 F-a を採用**: `aiDrafts` はクライアントから書けない（上の表の「書ける」の開発者の行は callable `saveAiDraftEdits` が Admin SDK で行う）
 - **版の扱い（B-M4）**: 形を変えるたびに `version` を上げ、本番にある版はすべて受け付ける。表示（`ProposalView`・`requirementsDoc`）は機能フラグに関係なく v1 と v2 の両方を描ける。`proposalForSave`（`src/live/model.ts:123`）と `reqDoc`（同 85-102）は v2 の欄を落とさないよう版で分ける
 - **移行**: 既存の `requirements/current`（v1）はそのまま有効。バックフィルなし。approvals は不変。v1 の旧スコアの扱いは §9 Q-6
 - 機能フラグ `AI_REQUIREMENTS`（オフ＝現行テンプレートの経路）。**Rollback**: フラグを切るだけ。Rules は v2 を受け付けたまま残す

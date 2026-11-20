@@ -10,6 +10,9 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
 import { createRulesEnv, readRules } from './guard.mjs';
+import { readFileSync } from 'node:fs';
+import { getDoc } from 'firebase/firestore';
+import { AI_PATH, EDITED, GENERATED, MAX_EDITED, MAX_GENERATED, aiDraftDoc, proposalV2, seedAi } from './aiFixtures.mjs';
 import {
   ANSWERS, PROPOSAL, T0, approvalDoc, approveBatch, claimAccount, claimBatch, dbAs, doc, inviteDoc, seed, serverTimestamp, stamp, submitBatch, updateDoc, writeBatch,
 } from './fixtures.mjs';
@@ -153,4 +156,110 @@ describe('C-2: M-4 の 3 経路は軽量化した Rules（式数の上限に当�
       await withRules(lightRules(M.m4()), async (env) => { await assertFails(attack(env)); });
     });
   }
+});
+
+// ================= AI 下書き・提案 v2（実装計画 §4 U1。MEDIUM-3 の定数の食い違い・submit v2 の変異） =================
+// 代替 F-a により edited の上限は Rules に無い（callable saveAiDraftEdits が検査）。ここで照合するのは
+// ①Rules の v2 の等式のキー ⇔ src/types/aiDraft.ts の ProposalV2 ②aiDrafts・aiUsage がクライアントから書けないこと（F-a のアンカー）
+// ③テスト用の最大値（aiFixtures）⇔ AI_DRAFT_LIMITS ④列挙（分野・根拠キー）⇔ Rules の選択肢・質問 ID
+const AI_TS = readFileSync(new URL('../../src/types/aiDraft.ts', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+const RULES_LF = BASE.replace(/\r\n/g, '\n');
+const NL = BASE.includes('\r\n') ? '\r\n' : '\n';
+
+/** `export const NAME = [...] as const;` の文字列要素 */
+function tsStringList(name) {
+  const m = new RegExp(`export const ${name} = \\[([\\s\\S]*?)\\] as const;`).exec(AI_TS);
+  if (!m) throw new Error(`aiDraft.ts に ${name} がありません`);
+  return [...m[1].matchAll(/'([^']*)'/g)].map((x) => x[1]);
+}
+function tsLimits() {
+  const m = /export const AI_DRAFT_LIMITS = \{([\s\S]*?)\} as const;/.exec(AI_TS);
+  if (!m) throw new Error('aiDraft.ts に AI_DRAFT_LIMITS がありません');
+  return Object.fromEntries([...m[1].matchAll(/^\s+(\w+): (\d+),/gm)].map((x) => [x[1], Number(x[2])]));
+}
+function tsInterfaceKeys(name) {
+  const m = new RegExp(`export interface ${name}(?: extends [\\w, ]+)? \\{([\\s\\S]*?)\\n\\}`).exec(AI_TS);
+  if (!m) throw new Error(`aiDraft.ts に interface ${name} がありません`);
+  return [...m[1].matchAll(/^ {2}(\w+)\??:/gm)].map((x) => x[1]);
+}
+function rulesFn(name) {
+  const m = new RegExp(`function ${name}\\(([\\w, ]*)\\) \\{([\\s\\S]*?)\\n    \\}\\n`).exec(RULES_LF);
+  if (!m) throw new Error(`firestore.rules に function ${name} がありません`);
+  return m[2];
+}
+const quoted = (body) => [...body.matchAll(/'([^']*)'/g)].map((x) => x[1]);
+const allowsIn = (block) => [...block.matchAll(/allow ([\w, ]+):\s*if ([^;]+);/g)].map((x) => [x[1].trim(), x[2].trim()]);
+
+describe('AI: 定数・形の食い違い（Rules ⇔ src/types/aiDraft.ts ⇔ テストの最大値）', () => {
+  test('Rules の v2 の等式のキー ＝ ProposalV2 のキー（version＋サーバー欄＋edited の 3 欄。flags は含めない）', () => {
+    const lit = /p == \{([\s\S]*?)\};/.exec(rulesFn('proposalV2Ok'));
+    assert.ok(lit, 'proposalV2Ok にマップリテラルの等式がありません');
+    const ruleKeys = [...lit[1].matchAll(/'(\w+)':/g)].map((x) => x[1]).sort();
+    const tsKeys = ['version', ...tsInterfaceKeys('ProposalV2ServerFields'), ...tsInterfaceKeys('AiEditable')].sort();
+    assert.deepEqual(ruleKeys, tsKeys);
+    assert.ok(!ruleKeys.includes('flags'));
+    assert.deepEqual(Object.keys(proposalV2()).sort(), tsKeys, 'aiFixtures.proposalV2 の形も一致');
+    assert.deepEqual(tsInterfaceKeys('AiEditable').sort(), ['draft', 'points', 'summary']);
+  });
+  test('F-a: aiDrafts はクライアントから作成・更新・削除できない／aiUsage は admin の読み取りだけ', () => {
+    const m = /match \/aiDrafts\/\{did\} \{([\s\S]*?)\n {6}\}/.exec(RULES_LF);
+    assert.ok(m, 'aiDrafts の match がありません');
+    assert.deepEqual(allowsIn(m[1]), [['get, list', 'isAdmin() || assigned(pid)'], ['create, update, delete', 'false']]);
+    const u = /match \/aiUsage\/\{ym\} \{([\s\S]*?)\n {4}\}/.exec(RULES_LF);
+    assert.ok(u, 'aiUsage の match がありません');
+    assert.deepEqual(allowsIn(u[1]), [['get, list', 'isAdmin()'], ['write', 'false']]);
+  });
+  test('テストの最大の payload（aiFixtures）＝ AI_DRAFT_LIMITS（U2 の callable テストが同じ最大値を使う）', () => {
+    const L = tsLimits();
+    assert.deepEqual(Object.keys(L).sort(), ['discardLog', 'draftField', 'evidence', 'openQuestion', 'openQuestions', 'pointDetail', 'pointId', 'pointImpact', 'pointTitle', 'points', 'siteCheckItems', 'summary']);
+    const len = (s) => [...s].length;
+    assert.equal(len(MAX_EDITED.summary), L.summary);
+    assert.equal(MAX_EDITED.points.length, L.points);
+    for (const p of MAX_EDITED.points) {
+      assert.equal(len(p.id), L.pointId); assert.equal(len(p.title), L.pointTitle);
+      assert.equal(len(p.detail), L.pointDetail); assert.equal(len(p.impact), L.pointImpact);
+      assert.equal(p.evidence.length, L.evidence);
+    }
+    for (const k of ['goal', 'target', 'contents', 'features', 'nonFunctional', 'operation', 'schedule']) assert.equal(len(MAX_EDITED.draft[k]), L.draftField, k);
+    assert.equal(MAX_EDITED.draft.openQuestions.length, L.openQuestions);
+    for (const q of MAX_EDITED.draft.openQuestions) assert.equal(len(q), L.openQuestion);
+    assert.equal(MAX_GENERATED.siteCheck.items.length, L.siteCheckItems);
+    assert.deepEqual(Object.keys(MAX_EDITED.draft).sort(), tsInterfaceKeys('ProposalV2Draft').sort());
+    assert.deepEqual(Object.keys(MAX_EDITED.points[0]).sort(), tsInterfaceKeys('ProposalV2Point').sort());
+  });
+  test('列挙: 分野 ⊇ Rules の improveOptions()、根拠キー ＝ 送る質問 ID＋基本チェックのキー、送る質問 ID ⊂ Rules の質問 ID（q-infra・q-dns-* を含まない）', () => {
+    const areas = tsStringList('AI_POINT_AREAS');
+    for (const o of quoted(/function improveOptions\(\) \{ return (\[[^\]]*\]); \}/.exec(RULES_LF)[1])) assert.ok(areas.includes(o), `分野に ${o} がありません`);
+    const sent = tsStringList('AI_SENT_QUESTION_IDS');
+    const site = tsStringList('AI_SITE_CHECK_KEYS');
+    assert.match(AI_TS, /export const AI_EVIDENCE_KEYS = \[\.\.\.AI_SENT_QUESTION_IDS, \.\.\.AI_SITE_CHECK_KEYS\] as const;/);
+    assert.equal(new Set([...sent, ...site]).size, sent.length + site.length, '根拠キーが重複');
+    const ruleQ = quoted(/a\.keys\(\)\.hasOnly\(\[([^\]]*)\]\)/.exec(RULES_LF)[1]);
+    for (const id of sent) assert.ok(ruleQ.includes(id), `送る質問 ${id} が Rules の質問 ID にありません`);
+    for (const id of ['q-infra', 'q-dns-owner', 'q-dns-switch', 'q-dns-note']) assert.ok(!sent.includes(id), `${id} は送らない（設計 §4）`);
+    for (const k of [...MAX_EDITED.points, ...EDITED.points].flatMap((p) => p.evidence)) assert.ok([...sent, ...site].includes(k), `fixtures の根拠 ${k} が許可リスト外`);
+    for (const it of MAX_GENERATED.siteCheck.items) assert.ok(site.includes(it.key));
+  });
+});
+
+describe('AI: submit v2 ・aiDrafts の変異テスト（元＝拒否／1 条件を外した変異＝許可）', () => {
+  const pair = (name, attack, mutant) => test(name, async () => {
+    const rules = mutant();
+    assert.notEqual(rules, BASE);
+    await withRules(BASE, async (env) => { await assertFails(attack(env)); });
+    await withRules(rules, async (env) => { await assertSucceeds(attack(env)); });
+  });
+  pair("state=='failed' の下書きで submit ← ai.state == 'ready'",
+    async (env) => { await seedAi(env, { aiDraft: aiDraftDoc({ state: 'failed' }) }); return submitBatch(dbAs(env, 'devA'), { proposal: proposalV2() }); },
+    () => mutate(BASE, "return ai.state == 'ready'", 'return true'));
+  pair("siteCheck を偽造して submit ← 'siteCheck': g.siteCheck（サーバー欄の一致）",
+    async (env) => { await seedAi(env); return submitBatch(dbAs(env, 'devA'), { proposal: { ...proposalV2(), siteCheck: { ...GENERATED.siteCheck, passed: 10 } } }); },
+    () => mutate(BASE, "'siteCheck': g.siteCheck", "'siteCheck': p.siteCheck"));
+  pair("edited と違う要約で submit ← 'summary': e.summary（edited の一致）",
+    async (env) => { await seedAi(env); return submitBatch(dbAs(env, 'devA'), { proposal: { ...proposalV2(), summary: '保存していない要約' } }); },
+    () => mutate(BASE, "'summary': e.summary", "'summary': p.summary"));
+  pair('お客様が下書きを読む ← aiDrafts の get/list は isAdmin() || assigned(pid) だけ',
+    async (env) => { await seedAi(env); return getDoc(doc(dbAs(env, 'client1'), AI_PATH)); },
+    () => mutate(BASE, `allow get, list: if isAdmin() || assigned(pid);${NL}        allow create, update, delete: if false;`,
+      `allow get, list: if isAdmin() || assigned(pid) || clientOf(pid);${NL}        allow create, update, delete: if false;`));
 });

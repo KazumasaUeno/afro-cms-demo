@@ -883,3 +883,10 @@
   - demo: サイトスコアは残し、「AI 推定」ではなく「デモ用の値」と書くようにした（ポータルの要件定義カード・プチ要件定義も同じ）
 - 改善提案の文言（demo・live 共通の提案の元）から、実測していない数値（「アクセスの72%がスマホ」「4.8秒 → 1.6秒」「直帰率 −18% 見込み」など）を外し、狙いを言葉で書くようにした（例:「直帰の減少を狙う」）。AI 分析の工程の説明と演出の文言（「24ページ」「LCP 4.8 秒」など）からも数値を外した
 - live で保存済みの提案（承認の対象の写し）は書き換えない。この版より前に作った提案は、以前の文言のまま表示される
+
+## Unreleased (AI requirements)
+
+- Firestore Rules（未デプロイ）: `projects/{pid}/aiDrafts/{did}` を追加（読めるのはアサインされた開発者と admin だけ。お客様は不可。クライアントからの作成・更新・削除は全員不可＝計画の代替 F-a）。`aiUsage/{yyyymm}` を追加（admin の読み取りだけ）
+- Firestore Rules: `requirements/current.proposal` を版で受け付ける（`version` なし＝従来の v1、`version: 2`＝AI 下書きの提案）。v2 の確認依頼は `aiDrafts` の generated のサーバー欄＋edited の 3 欄との一致だけを確かめる。v1 の判定は不変
+- 型: `src/types/aiDraft.ts`（`ProposalV2`・`AiDraftDoc`・`StoredProposal`・上限と列挙の定数）。既存の `Proposal` は不変
+- Rules テスト: 301 → 375 件（aiDrafts・aiUsage・提案 v2・定数の食い違い・変異）。edited の検査ケースは `tests/rules/aiEditedCases.mjs`（U2 の callable テストへ写す）
