@@ -251,6 +251,8 @@ function CmsEditor({ kind }: { kind: PageType }) {
   const { dev } = useProjectRoutes();
   const me = useDevUser();
   const actor = dev ? { devBy: me.id } : { by: 'client' as const };
+  // お客様が書くお知らせは自分で公開・予約公開する。承認依頼はアフロ（開発者）からお客様への依頼だけ（2026-11-20 ユーザー決定）
+  const canRequestApproval = dev || kind !== 'news';
   // slug の重複検査は全種類、一覧と選択はこの画面の種類だけ
   const allPages = state.pages;
   const pages = useMemo(() => allPages.filter((p) => p.type === kind), [allPages, kind]);
@@ -506,14 +508,14 @@ function CmsEditor({ kind }: { kind: PageType }) {
               </Stack>
               {/* スマホは「プレビュー・比較・保存・承認依頼」を1行、主操作の「公開」を幅いっぱいの2行目に置く */}
               <Box sx={{
-                display: { xs: 'grid', sm: 'flex' }, gridTemplateColumns: 'auto auto minmax(0,1fr) minmax(0,1fr)', flexWrap: 'wrap', gap: 1,
+                display: { xs: 'grid', sm: 'flex' }, gridTemplateColumns: canRequestApproval ? 'auto auto minmax(0,1fr) minmax(0,1fr)' : 'auto auto minmax(0,1fr)', flexWrap: 'wrap', gap: 1,
                 '& > .MuiButton-root': { whiteSpace: 'nowrap', px: { xs: 1.25, sm: 2 } },
                 '& > .MuiButton-containedPrimary': { gridColumn: { xs: '1 / -1' } },
               }}>
                 <IconButton onClick={() => setPreview(true)} aria-label="公開プレビュー" sx={{ border: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface }}><Eye size={17} /></IconButton>
                 <IconButton onClick={() => setCompare(true)} aria-label="変更前後の比較" sx={{ border: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface }}><GitCompare size={17} /></IconButton>
                 <Button variant="outlined" startIcon={<Save size={16} />} onClick={() => save()} disabled={!dirty}>下書き保存</Button>
-                <Button variant="outlined" startIcon={<Send size={16} />} onClick={() => setStatus('review')} disabled={draft.status === 'review' && !dirty}>承認依頼</Button>
+                {canRequestApproval && <Button variant="outlined" startIcon={<Send size={16} />} onClick={() => setStatus('review')} disabled={draft.status === 'review' && !dirty}>承認依頼</Button>}
                 {!dev && <Button variant="contained" endIcon={<ChevronDown size={16} />} startIcon={<Rocket size={16} />} onClick={(e) => setPublishAnchor(e.currentTarget)} aria-haspopup="menu">公開</Button>}
                 <Menu anchorEl={publishAnchor} open={!!publishAnchor} onClose={() => setPublishAnchor(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
                   <MenuItem onClick={() => { setPublishAnchor(null); setStatus('published'); }}>
