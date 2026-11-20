@@ -109,7 +109,7 @@ ${DATA_MODE === 'live' ? '' : DEMO_NOTE}<h1>要件定義書</h1>
 </dl>
 <h2>1. 改善提案</h2>
 ${proposal.issue ? `<p><b>課題</b>：${esc(proposal.issue)}</p>` : ''}
-<p>サイトスコア（AI 推定${DATA_MODE === 'live' ? '' : '・デモ用の値'}）：現状 ${Number(proposal.currentScore) || 0} → 改善後の見込み ${Number(proposal.projectedScore) || 0}</p>
+${DATA_MODE === 'live' ? '' : `<p>サイトスコア（デモ用の値）：現状 ${Number(proposal.currentScore) || 0} → 改善後の見込み ${Number(proposal.projectedScore) || 0}</p>`}
 ${proposal.competitors.length ? `<p>競合サイト：${esc(proposal.competitors.join('・'))}</p>` : ''}
 <ol>${points}</ol>
 <h2>2. ヒアリングの回答</h2>

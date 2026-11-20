@@ -61,7 +61,8 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
       {/* 提案書の表紙 */}
       <Reveal>
         <Surface padding={0} sx={{ overflow: 'hidden' }}>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1.4fr 1fr' } }}>
+          {/* live ではサイトスコアを出さない（実測の根拠が無い値を見せない。2026-11-20 ユーザー判断・AI_REQUIREMENTS Q-6）。demo は「デモ用の値」と明記して残す */}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: live ? '1fr' : '1.4fr 1fr' } }}>
             <Box sx={{ p: { xs: 2.5, md: 4 } }}>
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
                 <AiBadge />
@@ -89,8 +90,8 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
                 ))}
               </Stack>
             </Box>
-            <Box sx={{ p: { xs: 2.5, md: 4 }, bgcolor: tokens.color.scoreboardBg, color: '#fff', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2.5 }}>
-              <Typography variant="overline" sx={{ color: 'rgba(255,255,255,.6)' }}>サイトスコア（AI推定）</Typography>
+            {!live && <Box sx={{ p: { xs: 2.5, md: 4 }, bgcolor: tokens.color.scoreboardBg, color: '#fff', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2.5 }}>
+              <Typography variant="overline" sx={{ color: 'rgba(255,255,255,.6)' }}>サイトスコア（デモ用の値）</Typography>
               <Stack direction="row" spacing={3} alignItems="center">
                 <ProgressRing value={proposal.currentScore} size={84} stroke={7} color="#94A3B8" track="rgba(255,255,255,.12)" label="現状スコア">
                   <Box sx={{ textAlign: 'center' }}>
@@ -113,9 +114,9 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
                 </Typography>
               </Stack>
               <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.55)' }}>
-                ヒアリングの回答 {answered}問から作成。{live ? 'AI による推定値です。' : 'デモ用の推定値です。'}
+                ヒアリングの回答 {answered}問から作成。デモ用の値で、実際のサイトを測ったものではありません。
               </Typography>
-            </Box>
+            </Box>}
           </Box>
         </Surface>
       </Reveal>

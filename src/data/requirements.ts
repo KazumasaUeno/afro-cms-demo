@@ -56,25 +56,26 @@ export const REQUIREMENT_QUESTIONS: RequirementQuestion[] = [
   { id: 'q-dns-note', categoryId: 'rc13', priority: 'B', kind: 'longtext', text: '同じドメインで使っている他のシステム・サブドメインなど、切り替えで注意することはありますか？', placeholder: '例：メール（Google Workspace）と予約システム（reserve.example.co.jp）を同じドメインで使っている', owner: 'afro' },
 ];
 
-/** AI分析（シミュレーション）の工程 */
+/** AI分析（シミュレーション）の工程。実測していない数値（ページ数・項目数など）は書かない（2026-11-20） */
 export const ANALYSIS_STEPS = [
-  { key: 'crawl', label: '調査', detail: '現行サイト 24ページを巡回して構造を取得' },
-  { key: 'analyze', label: '分析', detail: '競合 2サイトと比較し、導線・表示速度・訴求を評価' },
-  { key: 'organize', label: '整理', detail: '課題を 12項目の要件に分類し、優先度をつける' },
+  { key: 'crawl', label: '調査', detail: '現行サイトのページを巡回して構造を取得' },
+  { key: 'analyze', label: '分析', detail: '競合サイトと比較し、導線・表示速度・訴求を評価' },
+  { key: 'organize', label: '整理', detail: '課題を要件に分類し、優先度をつける' },
   { key: 'propose', label: '提案作成', detail: '改善ポイントと新しいサイト構成をまとめる' },
 ] as const;
 
 /**
  * 事前に用意した提案（AIの実生成ではない）。
  * 回答内容に応じて並びと文言の一部を差し替える（features/requirements/buildProposal.ts）。
+ * 実測していない数値（アクセス比率・表示秒数・改善率など）は書かない。impact は「狙い」を定性的に書く（2026-11-20）
  */
 export const PROPOSAL_LIBRARY: ProposalPoint[] = [
-  { id: 'pp1', area: 'ファーストビュー', priority: 'high', title: '3秒で事業が伝わるファーストビューへ', detail: 'キャッチコピー・実績数値・主要CTAを1画面に集約し、現在のスライダーを廃止します。', impact: '直帰率 −18% 見込み' },
-  { id: 'pp2', area: '問い合わせ導線', priority: 'high', title: '問い合わせまでを最短2クリックに', detail: '全ページ下部と固定ヘッダーに相談ボタンを配置し、フォーム項目を11→5に削減します。', impact: '問い合わせ +35% 見込み' },
-  { id: 'pp3', area: 'スマホ表示', priority: 'high', title: 'スマートフォンを主役にした設計', detail: 'アクセスの72%がスマホです。親指で届く位置にナビを置き、文字サイズを16px以上に統一します。', impact: 'スマホCVR +0.8pt 見込み' },
-  { id: 'pp4', area: '表示速度', priority: 'medium', title: '表示速度を 4.8秒 → 1.6秒へ', detail: '画像を次世代形式に変換し、遅延読み込みと不要スクリプトの削除を行います。', impact: 'LCP 改善' },
-  { id: 'pp5', area: 'ナビゲーション', priority: 'medium', title: '情報を7つの入口に再編', detail: '現在21あるメニューを目的別に統合し、迷わず目的のページへ届く構造にします。', impact: '回遊率 +22% 見込み' },
-  { id: 'pp6', area: 'SEO', priority: 'medium', title: '地域×サービスのページを新設', detail: '検索需要の高い「地域名＋サービス名」の専用ページを用意し、構造化データを付与します。', impact: '自然検索 +40% 見込み' },
+  { id: 'pp1', area: 'ファーストビュー', priority: 'high', title: 'ひと目で事業が伝わるファーストビューへ', detail: 'キャッチコピー・実績・主要CTAを最初の画面に集約し、伝わりにくいスライダーは見直します。', impact: '直帰の減少を狙う' },
+  { id: 'pp2', area: '問い合わせ導線', priority: 'high', title: '問い合わせまでの手順を短く', detail: '全ページ下部と固定ヘッダーに相談ボタンを配置し、フォームは必要な項目だけに絞ります。', impact: '問い合わせの増加を狙う' },
+  { id: 'pp3', area: 'スマホ表示', priority: 'high', title: 'スマートフォンを主役にした設計', detail: 'スマホからの閲覧を前提に、親指で届く位置にナビを置き、本文を読みやすい文字サイズに揃えます。', impact: 'スマホからの成約の改善を狙う' },
+  { id: 'pp4', area: '表示速度', priority: 'medium', title: 'ページの表示を速く', detail: '画像を次世代形式に変換し、遅延読み込みと不要スクリプトの削除を行います。', impact: '表示の待ち時間の短縮を狙う' },
+  { id: 'pp5', area: 'ナビゲーション', priority: 'medium', title: '情報を目的別の入口に再編', detail: 'メニューを目的別に統合し、迷わず目的のページへ届く構造にします。', impact: 'サイト内の回遊の改善を狙う' },
+  { id: 'pp6', area: 'SEO', priority: 'medium', title: '地域×サービスのページを新設', detail: '検索需要の高い「地域名＋サービス名」の専用ページを用意し、構造化データを付与します。', impact: '自然検索からの流入の増加を狙う' },
   { id: 'pp7', area: '写真・ビジュアル', priority: 'low', title: '素材写真を自社の実写へ', detail: 'フリー素材を撮り下ろし写真に置き換え、信頼感と独自性を高めます。', impact: 'ブランド想起の向上' },
-  { id: 'pp8', area: '更新のしやすさ', priority: 'low', title: '社内で更新できるCMSへ', detail: 'お知らせ・実績を担当者がブラウザから更新でき、公開前に承認できる運用にします。', impact: '更新頻度 月1→週1' },
+  { id: 'pp8', area: '更新のしやすさ', priority: 'low', title: '社内で更新できるCMSへ', detail: 'お知らせ・実績を担当者がブラウザから更新でき、公開前に承認できる運用にします。', impact: '更新頻度の向上を狙う' },
 ];
