@@ -7,6 +7,8 @@ import type { DesignId } from '@/types';
 import { DeviceFrame } from './DeviceFrame';
 import { FloatingDeviceSwitch, ScreenToggle } from './DesignStudioPage';
 import { personalize, useDesignContext } from './designContext';
+import { currentProject, useDemoOptional } from '@/store/DemoStore';
+import { isSiteLive } from '@/data/projectContent';
 import type { Device } from './previews/shared';
 
 const BAR_H = 56;
@@ -28,6 +30,10 @@ export default function DesignPreviewPage() {
   const device: Device = DEVICES.find((d) => d === params.get('device')) ?? 'pc';
   const variant = personalize(DESIGN_VARIANTS.find((v) => v.id === design)!, ctx);
   const site = params.get('mode') === 'site';
+  // 公開後の案件は「公開中のサイト」と呼ぶ（0.46.1。開いたボタンの名前と同じ判定。SitePreviewButton）
+  const demo = useDemoOptional();
+  const launched = !!demo && isSiteLive((projectId ? demo.state.projects.find((p) => p.id === projectId) : currentProject(demo.state))?.stage ?? 'hearing');
+  const siteName = launched ? '公開中のサイト' : '制作中のサイト';
   // チェックする画面の名前（管理者・開発者は「品質チェック」、お客様は「品質確認」）。表示に使うだけなので許す値に絞る
   const checkScreen = params.get('check') === '品質確認' ? '品質確認' : '品質チェック';
 
@@ -51,8 +57,8 @@ export default function DesignPreviewPage() {
   }, []);
 
   useEffect(() => {
-    document.title = site ? `制作中のサイト — ${ctx.siteName}` : `${variant.name}（${variant.label}）のプレビュー — ${ctx.siteName}`;
-  }, [site, variant.name, variant.label, ctx.siteName]);
+    document.title = site ? `${siteName} — ${ctx.siteName}` : `${variant.name}（${variant.label}）のプレビュー — ${ctx.siteName}`;
+  }, [site, siteName, variant.name, variant.label, ctx.siteName]);
 
   const set = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -71,9 +77,9 @@ export default function DesignPreviewPage() {
         sx={{ minHeight: BAR_H, px: 2, py: 1, flexWrap: 'wrap', bgcolor: tokens.color.surface, borderBottom: `1px solid ${tokens.color.border}`, position: 'sticky', top: 0, zIndex: 1 }}
       >
         {/* 他の案へ切り替えるボタンは出さない。開いた案だけを見る（2026-11-19 ユーザー指示「全画面表示、他のデザインに切り替えるボタンをなくす」）。案を変えるのは元の画面で */}
-        <Typography variant="body2" sx={{ fontWeight: 650, mr: 1 }} noWrap>{ctx.siteName} の{site ? '制作中のサイト' : `デザイン案（${variant.label}・${variant.name}）`}</Typography>
+        <Typography variant="body2" sx={{ fontWeight: 650, mr: 1 }} noWrap>{ctx.siteName} の{site ? siteName : `デザイン案（${variant.label}・${variant.name}）`}</Typography>
         {ctx.pages.length > 0 && <ScreenToggle ctx={ctx} value={screen} onChange={(n) => set('screen', String(n))} />}
-        <Typography variant="caption" sx={{ ml: 'auto' }}>{site ? `公開前の制作中のサイトです（デモの見本）。チェックは${checkScreen}の画面で行ってください。` : '見本の表示だけです。承認は元の画面で行ってください。'}</Typography>
+        <Typography variant="caption" sx={{ ml: 'auto' }}>{site ? (launched ? '公開中のサイトです（デモの見本）。' : `公開前の制作中のサイトです（デモの見本）。チェックは${checkScreen}の画面で行ってください。`) : '見本の表示だけです。承認は元の画面で行ってください。'}</Typography>
       </Stack>
       {/* 端末の切り替えは帯の下の右端に、アイコンだけで浮かせる（2026-11-18 ユーザー指示）。サイトをスクロールしても同じ位置 */}
       <FloatingDeviceSwitch value={device} onChange={(d) => set('device', d)} top={barH + 12} />

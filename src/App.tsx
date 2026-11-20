@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate, RouterProvider, useLocation } from 'reac
 import { AppShell } from '@/components/layout/AppShell';
 import { RouteLoader } from '@/components/layout/RouteLoader';
 import { AreaGuard } from '@/components/layout/AreaGuard';
+import { SIGNAGE_PAUSED } from '@/components/layout/nav';
 import HomePage from '@/features/home/HomePage';
 import LoginPage from '@/features/auth/LoginPage';
 
@@ -122,7 +123,8 @@ const router = createBrowserRouter([
       { path: 'portal/schedule', element: <PortalSchedulePage /> },
       { path: 'portal/quality', element: <PortalQualityPage /> },
       { path: 'portal/reports', element: <PortalReportsPage /> },
-      { path: 'portal/signage', element: <PortalSignagePage /> },
+      // サイネージを止めている間は URL を直接開いてもホームへ（0.46.1。nav.ts の SIGNAGE_PAUSED）
+      { path: 'portal/signage', element: SIGNAGE_PAUSED ? <Navigate to="/portal" replace /> : <PortalSignagePage /> },
       // 問い合わせの確認・対応状況（0.37.0）。フォームの定義は見るだけ
       { path: 'portal/forms', element: <FormsPage /> },
       // 担当者への相談（0.38.0）。開発者画面の /dev/chat・管理者画面の /chat（見るだけ）と同じ会話

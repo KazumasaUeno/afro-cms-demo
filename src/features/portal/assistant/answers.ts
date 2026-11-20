@@ -7,6 +7,7 @@ import { approvalSteps } from '../portalSteps';
 import { hasUndelivered } from '@/data/signage';
 import { releaseDateOf } from '@/data/schedule';
 import { isSiteLive } from '@/data/projectContent';
+import { SIGNAGE_PAUSED } from '@/components/layout/nav';
 
 /** ページ・公開承認・サイネージ・レポートはサイトの公開後（運用の段階）から使える（0.30.0。2026-11-13 ユーザー指示） */
 const live = (state: DemoState) => isSiteLive(currentProject(state).stage);
@@ -109,8 +110,6 @@ interface Topic {
   answer: (state: DemoState) => AssistantReply;
 }
 
-/** サイネージを一旦止めている（2026-11-18 ユーザー指示「サイネージも一旦非表示」）。戻すときは false にし、nav.ts のメニューも戻す */
-const SIGNAGE_PAUSED = true;
 
 export const TOPICS: Topic[] = [
   { id: 'next', label: 'いま何をすればいい？', keywords: ['何をすれば', 'やること', '次', 'お願い', 'todo', 'タスク'], answer: nextTodo },
@@ -126,7 +125,7 @@ export const TOPICS: Topic[] = [
   {
     id: 'signage', label: 'サイネージを更新したい', // 「画面」は「承認の画面」などにも当たるので入れない
     // サイネージは一旦非表示（2026-11-18 ユーザー指示）。候補に出さず、聞かれたら準備中と答える（下の元の答えは戻すときのために残す）
-    hidden: true,
+    hidden: SIGNAGE_PAUSED,
     keywords: ['サイネージ', '店頭', 'モニター'],
     answer: (state) => {
       if (SIGNAGE_PAUSED) return { text: 'サイネージ（店頭の画面）は現在準備中です。ご利用いただけるようになったらお知らせします。' };

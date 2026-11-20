@@ -307,7 +307,10 @@ function BottomTabs({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
   const items = visibleItems(area.bottom, state);
   // 件数バッジ（2026-11-17 会議）。下部タブに無い項目（開発者の「相談」など）の件数は「メニュー」に合計して出す
   const badge = useNavBadge();
-  const inMenu = visibleItems(area.items, state).filter((i) => !items.some((b) => b.to === i.to)).reduce((n, i) => n + badge(i), 0);
+  const menuOnly = visibleItems(area.items, state).filter((i) => !items.some((b) => b.to === i.to));
+  const inMenu = menuOnly.reduce((n, i) => n + badge(i), 0);
+  // 下部タブに無い画面（ポータルのスケジュールなど）を開いている間は「メニュー」を選択中にする（0.46.1。以前はどのタブも選択中にならなかった）
+  const menuActive = !items.some((i) => isActive(i, pathname)) && [...menuOnly, ...(area.settings ? [area.settings] : [])].some((i) => isActive(i, pathname));
   return (
     <Box
       component="nav"
@@ -339,8 +342,8 @@ function BottomTabs({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
           </ButtonBase>
         );
       })}
-      <ButtonBase onClick={onMenu} aria-label={`すべてのメニュー${badgeLabel(inMenu)}`} sx={{ flex: 1, flexDirection: 'column', gap: 0.5, height: 64, fontSize: 12, lineHeight: 1.2, whiteSpace: 'nowrap', fontWeight: 500, color: tokens.color.onSurfaceVariant, ...navIndicatorSx(false) }}>
-        <Box component="span" className="nav-ind" sx={{ position: 'relative', display: 'grid', placeItems: 'center', width: 56, height: 28 }}><MenuIcon size={20} /><NavCountBadge count={inMenu} /></Box>
+      <ButtonBase onClick={onMenu} aria-current={menuActive ? 'page' : undefined} aria-label={`すべてのメニュー${badgeLabel(inMenu)}`} sx={{ flex: 1, flexDirection: 'column', gap: 0.5, height: 64, fontSize: 12, lineHeight: 1.2, whiteSpace: 'nowrap', fontWeight: menuActive ? 700 : 500, color: menuActive ? tokens.color.onSurface : tokens.color.onSurfaceVariant, ...navIndicatorSx(menuActive) }}>
+        <Box component="span" className="nav-ind" sx={{ position: 'relative', display: 'grid', placeItems: 'center', width: 56, height: 28, color: menuActive ? tokens.color.onSecondaryContainer : 'inherit' }}><MenuIcon size={20} strokeWidth={menuActive ? 2.2 : 1.8} /><NavCountBadge count={inMenu} /></Box>
         メニュー
       </ButtonBase>
     </Box>

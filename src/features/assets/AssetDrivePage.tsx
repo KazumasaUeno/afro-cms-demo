@@ -97,20 +97,24 @@ function AssetDrive({ dev, client = false }: { dev: boolean; client?: boolean })
     .filter((g) => g.list.length > 0);
   const used = uploadCount(items);
   const pageCount = (path: string) => items.filter((a) => (a.page ?? NONE) === path).length;
+  // アップロード先はサイトマップのページか未設定だけ（サイトマップに無いページで絞り込んでも、選べない値にしない。0.46.1）
+  const uploadable = (path: string) => path === NONE || pages.some((p) => p.inSitemap && p.path === path);
   const choosePage = (v: string) => {
     setPage(v);
-    if (v !== ALL) setTarget(v);
+    if (v !== ALL) setTarget(uploadable(v) ? v : NONE);
   };
+  // サイトマップの変更で選んでいたページが無くなったときも未設定に戻す
+  const uploadTarget = uploadable(target) ? target : NONE;
 
   const uploadActions = (
     <>
-      <input ref={fileRef} type="file" accept={ASSET_ACCEPT} hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void upload(f, '', target); }} />
-      <TextField select size="small" label="アップロード先のページ" value={target} onChange={(e) => setTarget(e.target.value)} sx={{ minWidth: 200, maxWidth: '100%' }}>
+      <input ref={fileRef} type="file" accept={ASSET_ACCEPT} hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void upload(f, '', uploadTarget); }} />
+      <TextField select size="small" label="アップロード先のページ" value={uploadTarget} onChange={(e) => setTarget(e.target.value)} sx={{ minWidth: 200, maxWidth: '100%' }}>
         <MenuItem value={NONE}>ページ未設定</MenuItem>
         {pages.filter((p) => p.inSitemap).map((p) => <MenuItem key={p.path} value={p.path}>{p.label}（{p.path}）</MenuItem>)}
       </TextField>
       <Button variant="contained" startIcon={busy ? <CircularProgress size={15} color="inherit" /> : <Upload size={16} />} disabled={busy} onClick={() => fileRef.current?.click()}>
-        {target ? `「${labelOf(target)}」にアップロード` : 'アップロード'}
+        {uploadTarget ? `「${labelOf(uploadTarget)}」にアップロード` : 'アップロード'}
       </Button>
     </>
   );

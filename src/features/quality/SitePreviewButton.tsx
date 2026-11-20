@@ -3,6 +3,7 @@ import { ExternalLink } from 'lucide-react';
 import { useHref } from 'react-router-dom';
 import { currentProject, useDemoOptional } from '@/store/DemoStore';
 import { workOf } from '@/store/projectWork';
+import { isSiteLive } from '@/data/projectContent';
 
 /**
  * 制作中のサイトを新しいタブで見る（2026-11-18 ユーザー指示「品質チェック中に、制作中のサイトを見れるボタンが欲しい」）。
@@ -19,6 +20,8 @@ export function SitePreviewButton({ checkScreen = '品質チェック', projectI
   const { state } = demo;
   const projectId = projectIdProp ?? currentProject(state).id;
   const design = workOf(state, projectId).design.selected;
+  // 公開後（運用・改善の段階）は「公開中のサイト」と呼ぶ（0.46.1。開いた先の見出し・説明も同じ判定。DesignPreviewPage）
+  const launched = isSiteLive(state.projects.find((p) => p.id === projectId)?.stage ?? 'hearing');
   if (!design && hideUntilReady) return null;
   const button = (
     <Button
@@ -26,7 +29,7 @@ export function SitePreviewButton({ checkScreen = '品質チェック', projectI
       target="_blank" rel="noopener noreferrer" variant="outlined" size={size} startIcon={<ExternalLink size={16} />} disabled={!design}
       sx={{ flexShrink: 0 }}
     >
-      制作中のサイトを見る
+      {launched ? '公開中のサイトを見る' : '制作中のサイトを見る'}
     </Button>
   );
   // 押せないボタンにも理由を出す（disabled の要素はマウスの出来事を受けないので span で包む）

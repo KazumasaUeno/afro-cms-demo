@@ -30,7 +30,12 @@ export default function ReleasePage() {
   const view = workView(state, project.id);
   const r = releaseState(view);
   const schedule = view.schedule;
+  // reducer（launchSite）と同じ条件の canLaunch で先に確かめ、公開できなかったときに「公開しました」と出さない（0.46.1）
   const launch = () => {
+    if (!r.canLaunch) {
+      toast('公開の条件がそろっていないため、公開できませんでした', 'info');
+      return;
+    }
     dispatch({ type: 'launchSite', devBy });
     toast('サイトを公開しました。運用の段階へ進みます', 'success');
   };

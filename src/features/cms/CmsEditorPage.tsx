@@ -1,7 +1,7 @@
 import { Box, Button, ButtonBase, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, InputAdornment, Menu, MenuItem, Stack, TextField, Typography, ListItemText } from '@mui/material';
 import { ArrowLeft, ChevronDown, Eye, GitCompare, History, LayoutTemplate, Megaphone, Plus, Search, Send, SlidersHorizontal, Save, Rocket, CalendarClock, Trash2, Undo2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { Link as RouterLink, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link as RouterLink, Navigate, useBlocker, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import type { CmsPage, PageType } from '@/types';
 import { currentProject, useDemo } from '@/store/DemoStore';
 import { isSiteLive } from '@/data/projectContent';
@@ -35,11 +35,18 @@ function newsDate(p: CmsPage): string {
   return Number.isNaN(d.getTime()) ? '' : `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/** 作成中（未保存）のお知らせの呼び名。題が空のときに「」と出さない（0.46.1） */
+const CREATING_NAME = '作成中のお知らせ';
+/** ダイアログ・読み上げに出す名前（題が空なら作成中のお知らせ／無題） */
+function displayName(p: CmsPage, isNew: boolean): string {
+  return p.title.trim() || (isNew ? CREATING_NAME : `無題の${TYPE_LABEL[p.type]}`);
+}
+
 /**
  * 一覧（ページ・お知らせのどちらか一方だけ）。2026-11-18 ユーザー指示「ページとお知らせを別物に」で、タブで切り替える 1 画面から 2 画面に分けた
  * （以前はお知らせのタブを開いても編集欄がトップページのままだった）。お知らせは日付・カテゴリーを先に、ページは URL を出す
  */
-function PageList({ pages, kind, selectedId, creating, onSelect, onNew }: { pages: CmsPage[]; kind: PageType; selectedId?: string; /** 作成中（未保存）のお知らせの題（一覧の先頭に選択中として出す） */ creating?: string; onSelect: (id: string) => void; onNew: () => void }) {
+function PageList({ pages, kind, selectedId, creating, onSelect, onSelectCreating, onNew }: { pages: CmsPage[]; kind: PageType; selectedId?: string; /** 作成中（未保存）のお知らせの題（一覧の先頭に選択中として出す） */ creating?: string; onSelect: (id: string) => void; /** 作成中の行を押したとき（スマホで編集欄へ戻る。0.46.1） */ onSelectCreating?: () => void; onNew: () => void }) {
   const [q, setQ] = useState('');
   const news = kind === 'news';
   const list = pages.filter((p) => !q || p.title.includes(q) || p.slug.includes(q.toLowerCase()) || !!p.newsCategory?.includes(q));
@@ -56,10 +63,15 @@ function PageList({ pages, kind, selectedId, creating, onSelect, onNew }: { page
       <Stack spacing={0.75} component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
         {creating !== undefined && (
           <li>
-            <Box aria-current="true" sx={{ p: 1.5, borderRadius: '14px', bgcolor: tokens.color.surface, border: `1px dashed ${tokens.color.primary}` }}>
+            {/* 他の行と同じく押せる（0.46.1。以前は押せず、スマホで一覧へ戻ると作成中のお知らせを開き直せなかった） */}
+            <ButtonBase
+              onClick={onSelectCreating}
+              aria-current="true"
+              sx={{ width: '100%', display: 'block', textAlign: 'left', p: 1.5, borderRadius: '14px', bgcolor: tokens.color.surface, border: `1px dashed ${tokens.color.primary}`, '&:hover': { bgcolor: tokens.color.surface } }}
+            >
               <Typography variant="caption" sx={{ color: tokens.color.primary, fontWeight: 650 }}>作成中</Typography>
               <Typography variant="body2" sx={{ fontWeight: 650, color: tokens.color.ink }} noWrap>{creating}</Typography>
-            </Box>
+            </ButtonBase>
           </li>
         )}
         {list.map((p) => {
@@ -131,15 +143,30 @@ function ScheduleDialog({ open, onClose, onConfirm, initial }: { open: boolean; 
 }
 
 /** 削除の確認（0.33.0）。消せないページは理由と次にすることだけ出す */
-function DeleteDialog({ open, page, dirty, dev, onClose, onDelete }: { open: boolean; page: CmsPage; dirty: boolean; dev: boolean; onClose: () => void; onDelete: () => void }) {
+function DeleteDialog({ open, page, dirty, dev, isNew, onClose, onDelete }: { open: boolean; page: CmsPage; dirty: boolean; dev: boolean; /** 保存前の作成中のお知らせ（削除ではなく破棄。0.46.1） */ isNew: boolean; onClose: () => void; onDelete: () => void }) {
+  if (isNew) {
+    return (
+      <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth aria-labelledby="page-delete-title">
+        <DialogTitle id="page-delete-title">{`${CREATING_NAME}を破棄しますか？`}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">まだ保存していないお知らせです。破棄すると、書いた内容は残りません。</Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button variant="outlined" onClick={onClose}>キャンセル</Button>
+          <Button variant="contained" color="error" onClick={onDelete}>破棄する</Button>
+        </DialogActions>
+      </Dialog>
+    );
+  }
   const block = pageDeleteBlock(page, dev);
+  const name = displayName(page, false);
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth aria-labelledby="page-delete-title">
-      <DialogTitle id="page-delete-title">{block ? `「${page.title}」は削除できません` : `「${page.title}」を削除しますか？`}</DialogTitle>
+      <DialogTitle id="page-delete-title">{block ? `「${name}」は削除できません` : `「${name}」を削除しますか？`}</DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary">
           {block ?? [
-            `${TYPE_LABEL[page.type]}「${page.title}」（${page.slug}）を削除します。`,
+            `${TYPE_LABEL[page.type]}「${name}」（${page.slug}）を削除します。`,
             page.status === 'review' ? '承認待ちの依頼も取り下げられ、公開承認の一覧から消えます。' : '',
             dirty ? '保存していない変更も破棄されます。' : '',
             '削除は元に戻せません（デモではこのブラウザのデータから消えます）。',
@@ -241,9 +268,12 @@ function CmsEditor({ kind }: { kind: PageType }) {
   // 履歴の版を読み込んだらエディタを作り直す（RichEditor は最初の content だけを読むため。0.39.1。2026-11-16 QA で発見）
   const [editorRev, setEditorRev] = useState(0);
   const [mobileView, setMobileView] = useState<'list' | 'editor'>(() => (params.get('page') ? 'editor' : 'list'));
-  const [newType, setNewType] = useState<PageType | null>(() => {
-    return params.get('new') === kind ? kind : null;
-  });
+  // お知らせ（?new=news）はダイアログを出さず編集欄で書き始めるので newType は使わない（0.46.1。以前は一瞬ページ作成のダイアログが出ていた）
+  const [newType, setNewType] = useState<PageType | null>(() => (kind !== 'news' && params.get('new') === kind ? kind : null));
+  const [newsOnOpen] = useState(() => kind === 'news' && params.get('new') === 'news');
+  // 保存しようとしてタイトルが空だったら、作成直後でもタイトル欄に理由を出してフォーカスする（0.46.1）
+  const [titleTouched, setTitleTouched] = useState(false);
+  const titleRef = useRef<HTMLInputElement>(null);
 
   // URL のパラメータは開いた時点で使い終わるので消す（再読み込みで同じダイアログが開き直さないように）
   useEffect(() => {
@@ -261,6 +291,8 @@ function CmsEditor({ kind }: { kind: PageType }) {
   // 削除の確認（0.33.0）。消せないページは理由だけ出す
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteSnap, setDeleteSnap] = useState<CmsPage | null>(null);
+  // 閉じる動きの間も「破棄」の見出しのままにする（作成中のお知らせを破棄したとき）
+  const [deleteSnapNew, setDeleteSnapNew] = useState(false);
 
   // 保存・状態変更で store 側が変わったら、編集中でなければ追従
   useEffect(() => {
@@ -288,6 +320,7 @@ function CmsEditor({ kind }: { kind: PageType }) {
     };
     setIsNew(true);
     setRestoredFrom(null);
+    setTitleTouched(false);
     setSelectedId(page.id);
     setDraft(page);
     setMobileView('editor');
@@ -295,10 +328,7 @@ function CmsEditor({ kind }: { kind: PageType }) {
   const startNews = () => (dirty ? setPendingNew(true) : startNewsNow());
   // ホームの「お知らせを書く」（?new=news）で来たときも、ダイアログではなく編集欄で書き始める
   useEffect(() => {
-    if (newType === 'news') {
-      setNewType(null);
-      startNewsNow();
-    }
+    if (newsOnOpen) startNewsNow();
     // 開いたときの 1 回だけ
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -307,6 +337,7 @@ function CmsEditor({ kind }: { kind: PageType }) {
   const open = (id: string) => {
     setIsNew(false);
     setRestoredFrom(null);
+    setTitleTouched(false);
     setSelectedId(id);
     setDraft(pages.find((p) => p.id === id));
     setMobileView('editor');
@@ -321,6 +352,12 @@ function CmsEditor({ kind }: { kind: PageType }) {
     if (!draft) return false;
     if (titleErr || slugErr) {
       toast(titleErr ?? slugErr ?? '入力内容を確認してください', 'info');
+      if (titleErr) {
+        // 確認のダイアログから呼ばれたときは閉じた後でタイトル欄へ（そのダイアログはフォーカスを戻さない: disableRestoreFocus）
+        setTitleTouched(true);
+        setMobileView('editor');
+        setTimeout(() => titleRef.current?.focus(), 0);
+      }
       return false;
     }
     if (dirty) dispatch({ type: 'savePage', page: draft, ...actor, ...(restoredFrom ? { restoredFrom } : {}) });
@@ -346,6 +383,7 @@ function CmsEditor({ kind }: { kind: PageType }) {
     // 保存前の作成中のお知らせは、捨てるだけ（ストアに無い）
     if (isNew) {
       const next = pages[0];
+      setDeleteSnap(draft);
       setIsNew(false);
       setDeleteOpen(false);
       setSelectedId(next?.id ?? '');
@@ -367,20 +405,31 @@ function CmsEditor({ kind }: { kind: PageType }) {
     toast(`「${gone.title}」を削除しました`, 'info');
   };
 
-  // 戻る: 未保存の変更があれば確かめてから離れる
+  // 戻る・サイドメニュー・下部タブ: 未保存の変更があれば確かめてから離れる（0.46.1。以前は戻るボタンだけで、メニューからの移動では黙って消えていた）。
+  // 同じ画面の中の URL の変化（?page= を消すなど）は止めない。案件の切り替えは画面の移動ではないので止められない（CHANGELOG 0.46.1）
   const back = useBackTarget();
   const navigate = useNavigate();
-  const [leaving, setLeaving] = useState(false);
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => dirty && currentLocation.pathname !== nextLocation.pathname);
+  // 再読み込み・タブを閉じるときはブラウザの確認を出す
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [dirty]);
   const KindIcon = KIND_META[kind].icon;
   const header = (
     <>
-    <Button size="small" startIcon={<ArrowLeft size={16} />} onClick={() => (dirty ? setLeaving(true) : navigate(back.to))} sx={{ mb: 2, ml: -1 }}>{back.label}</Button>
-    <Dialog open={leaving} onClose={() => setLeaving(false)} maxWidth="xs" fullWidth>
+    <Button size="small" startIcon={<ArrowLeft size={16} />} onClick={() => navigate(back.to)} sx={{ mb: 2, ml: -1 }}>{back.label}</Button>
+    <Dialog open={blocker.state === 'blocked'} onClose={() => blocker.reset?.()} maxWidth="xs" fullWidth>
       <DialogTitle>保存していない変更があります</DialogTitle>
-      <DialogContent><Typography variant="body2">このまま戻ると、保存していない変更は破棄されます。</Typography></DialogContent>
+      <DialogContent><Typography variant="body2">{draft ? `このまま移動すると、「${displayName(draft, isNew)}」の保存していない変更は破棄されます。` : 'このまま移動すると、保存していない変更は破棄されます。'}</Typography></DialogContent>
       <DialogActions>
-        <Button onClick={() => setLeaving(false)}>編集を続ける</Button>
-        <Button color="error" onClick={() => { setLeaving(false); navigate(back.to); }}>破棄して戻る</Button>
+        <Button onClick={() => blocker.reset?.()}>編集を続ける</Button>
+        <Button color="error" onClick={() => blocker.proceed?.()}>破棄して移動</Button>
       </DialogActions>
     </Dialog>
     <PageHeader
@@ -432,7 +481,7 @@ function CmsEditor({ kind }: { kind: PageType }) {
         {showList && (
           // 追従する一覧・設定は画面より高くなると下端に届かないので、画面の高さで区切って中をスクロールさせる
           <Box sx={{ position: { sm: 'sticky' }, top: { sm: tokens.layout.topbar + 16 }, maxHeight: { sm: STICKY_MAX_HEIGHT }, overflowY: { sm: 'auto' }, p: { sm: 0.5 }, m: { sm: -0.5 } }}>
-            <PageList pages={pages} kind={kind} selectedId={isMobile ? undefined : draft.id} creating={isNew ? draft.title || '新しいお知らせ' : undefined} onSelect={requestOpen} onNew={() => (kind === 'news' ? startNews() : setNewType(kind))} />
+            <PageList pages={pages} kind={kind} selectedId={isMobile ? undefined : draft.id} creating={isNew ? draft.title || '新しいお知らせ' : undefined} onSelect={requestOpen} onSelectCreating={() => setMobileView('editor')} onNew={() => (kind === 'news' ? startNews() : setNewType(kind))} />
           </Box>
         )}
 
@@ -453,7 +502,7 @@ function CmsEditor({ kind }: { kind: PageType }) {
                 {/* ページの履歴（0.35.0）。スマホの操作バーは 1 行に収まらないので、状態の行に置く */}
                 <IconButton onClick={() => setHistory(true)} aria-label="ページの履歴" sx={{ flexShrink: 0, color: tokens.color.muted, '&:hover': { color: tokens.color.primary } }}><History size={17} /></IconButton>
                 {/* 削除（0.33.0）。消せないページ（公開中・予約公開・トップページ）でも押せて、理由を出す */}
-                <IconButton onClick={() => setDeleteOpen(true)} aria-label={`「${draft.title}」を削除`} sx={{ flexShrink: 0, color: tokens.color.muted, '&:hover': { color: tokens.color.danger } }}><Trash2 size={17} /></IconButton>
+                <IconButton onClick={() => { setDeleteSnap(null); setDeleteSnapNew(isNew); setDeleteOpen(true); }} aria-label={isNew ? `${CREATING_NAME}を破棄` : `「${displayName(draft, false)}」を削除`} sx={{ flexShrink: 0, color: tokens.color.muted, '&:hover': { color: tokens.color.danger } }}><Trash2 size={17} /></IconButton>
               </Stack>
               {/* スマホは「プレビュー・比較・保存・承認依頼」を1行、主操作の「公開」を幅いっぱいの2行目に置く */}
               <Box sx={{
@@ -491,9 +540,10 @@ function CmsEditor({ kind }: { kind: PageType }) {
               variant="standard"
               placeholder={kind === 'news' ? 'お知らせのタイトルを入力' : 'タイトル'}
               autoFocus={isNew}
+              inputRef={titleRef}
               // 作成直後の空のタイトルは赤くしない（保存しようとしたときに知らせる）
-              error={!!titleErr && !(isNew && !draft.title)}
-              helperText={(isNew && !draft.title ? null : titleErr) ?? `${draft.title.length} / ${TITLE_MAX}`}
+              error={!!titleErr && (titleTouched || !(isNew && !draft.title))}
+              helperText={(isNew && !draft.title && !titleTouched ? null : titleErr) ?? `${draft.title.length} / ${TITLE_MAX}`}
               inputProps={{ 'aria-label': 'タイトル' }}
               InputProps={{ disableUnderline: true, sx: { fontSize: { xs: 24, md: 30 }, fontWeight: 720, letterSpacing: '-0.02em' } }}
             />
@@ -524,23 +574,23 @@ function CmsEditor({ kind }: { kind: PageType }) {
       </Box>
 
       {newPageDialog}
-      <Dialog open={!!pending} onClose={() => setPending(null)} maxWidth="xs" fullWidth>
+      <Dialog open={!!pending} onClose={() => setPending(null)} maxWidth="xs" fullWidth disableRestoreFocus>
         <DialogTitle>保存していない変更があります</DialogTitle>
-        <DialogContent><Typography variant="body2" color="text.secondary">「{draft.title}」の変更を保存してから移動しますか？</Typography></DialogContent>
+        <DialogContent><Typography variant="body2" color="text.secondary">「{displayName(draft, isNew)}」の変更を保存してから移動しますか？</Typography></DialogContent>
         <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
           <Button onClick={() => { const id = pending; setPending(null); if (id) open(id); }}>破棄して移動</Button>
           <Button variant="contained" onClick={() => { const id = pending; setPending(null); if (id && save()) open(id); }}>保存して移動</Button>
         </DialogActions>
       </Dialog>
-      <Dialog open={pendingNew} onClose={() => setPendingNew(false)} maxWidth="xs" fullWidth>
+      <Dialog open={pendingNew} onClose={() => setPendingNew(false)} maxWidth="xs" fullWidth disableRestoreFocus>
         <DialogTitle>保存していない変更があります</DialogTitle>
-        <DialogContent><Typography variant="body2" color="text.secondary">「{draft.title || '新しいお知らせ'}」の変更を保存してから、新しいお知らせを作りますか？</Typography></DialogContent>
+        <DialogContent><Typography variant="body2" color="text.secondary">「{displayName(draft, isNew)}」の変更を保存してから、新しいお知らせを作りますか？</Typography></DialogContent>
         <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
           <Button onClick={() => { setPendingNew(false); setIsNew(false); startNewsNow(); }}>破棄して作成</Button>
           <Button variant="contained" onClick={() => { setPendingNew(false); if (save()) startNewsNow(); }}>保存して作成</Button>
         </DialogActions>
       </Dialog>
-      <DeleteDialog open={deleteOpen} page={deleteOpen ? draft : deleteSnap ?? draft} dirty={dirty} dev={dev} onClose={() => setDeleteOpen(false)} onDelete={remove} />
+      <DeleteDialog open={deleteOpen} page={deleteOpen ? draft : deleteSnap ?? draft} dirty={dirty} dev={dev} isNew={deleteOpen ? isNew : deleteSnapNew} onClose={() => setDeleteOpen(false)} onDelete={remove} />
       <PreviewDialog page={draft} open={preview} onClose={() => setPreview(false)} />
       <CompareDialog page={draft} open={compare} onClose={() => setCompare(false)} />
       <PageHistoryDialog

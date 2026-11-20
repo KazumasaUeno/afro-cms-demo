@@ -116,6 +116,9 @@ const DEV_ITEMS: NavItem[] = [
   { to: '/dev/chat', label: '相談', icon: MessageSquare, match: ['/dev/chat'], hint: 'お客様からの相談に返信', badge: (state, scope) => unansweredCount(state, scope.directorProjectIds) },
 ];
 
+/** サイネージを一旦止めている（2026-11-18 ユーザー指示「サイネージも一旦非表示」）。アシスタントの候補・/portal/signage の転送（App.tsx）もこれを見る。戻すときは false にし、上のメニューも戻す */
+export const SIGNAGE_PAUSED = true;
+
 export const SETTINGS_ITEM: NavItem = { to: '/settings', label: '設定', icon: Settings, match: ['/settings'], hint: 'デモの設定' };
 
 export const AREAS: Record<AreaId, AreaDef> = {
