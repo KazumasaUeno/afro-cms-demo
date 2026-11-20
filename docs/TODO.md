@@ -41,7 +41,7 @@
     - [ ] MEDIUM: App Check を enforce（`ENFORCE_APP_CHECK = true` にしてデプロイし直す）
     - [ ] MEDIUM: 関数を専用のサービスアカウントで動かす（既定の compute SA は権限が広い。Firebase Authentication 管理者＋Datastore 閲覧のみ。platform-engineer）
     - [ ] MEDIUM: 招待を取り消したら、関数が作った Auth アカウントも消す（今は残る。保存期間の方針と合わせる）
-    - [ ] LOW: callable の CORS を hosting のオリジンだけにする
+    - [ ] LOW: callable の CORS を hosting のオリジンだけにする — **コードは済み（0.46.2、`functions/src/cors.ts`。本番は未デプロイ）**。デプロイ（`--only functions`、ユーザーの了承の後）の後に確かめる: web.app から招待できる（`GCLOUD_PROJECT` が実行環境に無いと許可先が空になり招待が失敗する＝fail-closed）／ 別のオリジンからの preflight に `Access-Control-Allow-Origin` が付かない
   - [ ] 上の 6・7（作成（登録）を許可 OFF と通し）を終える。加えて本番で「再設定で前のログインが失効する」ことを確かめる（公式は「再設定でトークンを失効」。エミュレータは失効しない）
 - [ ] **0.28.0 で Rules から外した質問 ID**（`q-design-dislike`・`q-image`・`q-brand`）: これらの回答を持つ `requirements/current` があると、その文書の回答の更新が Rules で拒否されうる（`validAnswers` の `hasOnly`）。本番に live のデータを入れる前なら影響なし。入った後なら、移行（キーの削除）か Rules の経過措置を決める
 - [ ] **npm audit の @grpc/grpc-js（high 4 件）を firebase の更新時に確かめ直す**（security L2。サーバー側の依存でバンドルには入らない＝受け入れ中）

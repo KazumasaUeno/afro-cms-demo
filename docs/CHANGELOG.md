@@ -841,3 +841,8 @@
 - エミュレータ（`npm run emulators`）に Functions を加えた。`npm run test:functions` で招待のサーバー側を確かめる（8 件）。デプロイ（`npm run deploy:firebase`）の対象に `functions` を加え、送る前にこのテストを通す
 - レビュー（2026-11-20）の反映: 本番ビルドの CSP（connect-src）に Functions の送り先（`https://asia-northeast1-<ID>.cloudfunctions.net`、エミュレータは 127.0.0.1:5001）を加えた（無いと build 後の画面で招待が必ず失敗していた）。招待・送り直しの失敗を「招待中ではない」「権限がない」「時間切れ」「通信できない」で別の案内にした。画面の待ち時間を 60 秒にした（関数の 30 秒より長く）。リージョンの値を `src/live/functionsRegion.ts` にまとめ、関数側と一致するかをテストする。Runbook を Blaze・functions のデプロイ順・Console での初代管理者の作り方に更新。`deploy:firebase` は functions と hosting の同時デプロイを拒否する
 - デモ（GitHub Pages）は変更なし
+
+## 0.46.2 — 2026-11-20
+
+- live の招待の関数（`provisionInvitee`）を、本番ではこのプロジェクトの画面（`<ID>.web.app`・`<ID>.firebaseapp.com`）からだけ呼べるようにした（CORS。セキュリティ監査 2026-11-20 LOW）。エミュレータは従来どおり。プロジェクトが分からないときは何も許可しない。`npm run test:functions` に許可先のテストを 3 件追加（計 12 件）
+- 本番への反映は未実施（functions のデプロイが必要。`docs/TODO.md`）。デモ（GitHub Pages）は変更なし

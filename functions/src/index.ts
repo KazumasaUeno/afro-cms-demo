@@ -16,6 +16,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/https';
 import { setGlobalOptions } from 'firebase-functions/options';
+import { callableCors } from './cors';
 
 // エミュレータで動くときは、Auth・Firestore もエミュレータでなければ起動しない（本番へ書き込まない。BACKEND_FIREBASE §16.1）
 if (process.env.FUNCTIONS_EMULATOR === 'true'
@@ -73,7 +74,7 @@ async function assertActiveAdmin(req: CallableRequest<unknown>): Promise<string>
   return auth.uid;
 }
 
-export const provisionInvitee = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (req): Promise<ProvisionResult> => {
+export const provisionInvitee = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, cors: callableCors(process.env) }, async (req): Promise<ProvisionResult> => {
   const started = Date.now();
   const callerUid = await assertActiveAdmin(req);
   const email = parseEmail(req.data);
