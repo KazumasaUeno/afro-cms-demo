@@ -175,8 +175,15 @@ export const provisionInvitee = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, cor
       throw rejectExisting(raced ?? 'unknown');
     }
     // 4) 作成の間に招待が取り消されていたら、作ったアカウントを消して失敗にする（取り消しのトリガーより先に作った場合の取り残しを防ぐ）
+    // 消すのは「取り消し済み（または文書が無い）」かつ accounts/{uid} が無いときだけ。受け取り済み（claimed）は本人が使い始めているので消さない
+    // （同時に呼ばれた片方が resent でメールを送り、本人が先に受け取る場合。Codex 2026-11-20 P1）
     const after = await ref.get();
-    if (!after.exists || after.get('status') !== 'invited') {
+    const status = after.exists ? after.get('status') : null;
+    if (status === 'claimed') {
+      log('info', 'invite.provision created (already claimed by a concurrent resend)', { status: 'created', uid });
+      return 'created';
+    }
+    if (status !== 'invited' && !(await getFirestore().doc(`accounts/${uid}`).get()).exists) {
       try {
         await getAuth().deleteUser(uid);
       } catch (e) {
