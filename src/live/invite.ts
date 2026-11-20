@@ -61,7 +61,7 @@ export type ProvisionErrorKind = 'not-invited' | 'denied' | 'timeout' | 'network
 /** callable（functions/…）と Auth（auth/…）のエラーを、画面の案内の種類に分ける */
 export function provisionErrorKind(e: unknown): ProvisionErrorKind {
   const code = typeof e === 'object' && e && 'code' in e ? String((e as { code: unknown }).code) : '';
-  if (code.endsWith('failed-precondition') || code.endsWith('invalid-argument')) return 'not-invited';
+  if (code.endsWith('failed-precondition')) return 'not-invited';
   if (code.endsWith('permission-denied') || code.endsWith('unauthenticated')) return 'denied';
   if (code.endsWith('deadline-exceeded')) return 'timeout';
   if (code.endsWith('unavailable') || code.endsWith('network-request-failed')) return 'network';
