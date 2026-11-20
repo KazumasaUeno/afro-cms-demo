@@ -44,7 +44,7 @@ function Summary({ input }: { input: PetitInput }) {
             </Stack>
           </Box>
           <Box sx={{ p: { xs: 2.5, md: 3 }, bgcolor: c.scoreboardBg, color: '#fff', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2 }}>
-            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,.6)' }}>サイトスコア（AI推定）</Typography>
+            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,.6)' }}>サイトスコア（デモ用の値）</Typography>
             <Stack direction="row" spacing={3} alignItems="center">
               <ProgressRing value={proposal.currentScore} size={84} stroke={7} color="#94A3B8" track="rgba(255,255,255,.12)" label="現状スコア">
                 <Box sx={{ textAlign: 'center' }}>
@@ -64,7 +64,7 @@ function Summary({ input }: { input: PetitInput }) {
               <TrendingUp size={16} color="#6EE7B7" aria-hidden />
               <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.85)' }}>提案を実施すると <b>+{proposal.projectedScore - proposal.currentScore}pt</b> の改善見込み</Typography>
             </Stack>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.55)' }}>デモ用の推定値です。</Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.55)' }}>デモ用の値で、実際のサイトを測ったものではありません。</Typography>
           </Box>
         </Box>
       </Surface>

@@ -218,7 +218,8 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
               </Typography>
             ) : (
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '200px minmax(0,1fr)' }, gap: 2 }}>
-                <Stack direction="row" spacing={2} sx={{ p: 2, borderRadius: 3, bgcolor: tokens.color.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}>
+                <Stack direction="row" spacing={2} useFlexGap sx={{ p: 2, borderRadius: 3, bgcolor: tokens.color.surfaceMuted, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
+                  <Typography variant="caption" sx={{ width: '100%', textAlign: 'center' }}>サイトスコア（デモ用の値）</Typography>
                   <Box sx={{ textAlign: 'center' }}>
                     <Typography variant="caption">現状</Typography>
                     <Typography sx={{ fontSize: 26, fontWeight: 750, color: tokens.color.muted }}>{proposal.currentScore}</Typography>
