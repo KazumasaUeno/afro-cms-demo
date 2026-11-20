@@ -68,4 +68,4 @@
 - オフラインでログインすると読み込み中のまま止まり、案内が出ない（`src/live/auth.tsx` の fromCache 待ち。live は接続が前提）
 - 自動テストが無い: `scripts/deploy-firebase.mjs` の `checkHostingBuild`・`parseTestCounts`（127.0.0.1 の検査は assets/*.js だけ）／「別の画面で予約した書き込みも saveNow が待つ」（エミュレータで手動確認のみ）
 - Auth の「ユーザー アクション」: 作成（登録）を許可は 0.46.0 の functions をデプロイして通しを確かめた後に OFF にする（上の「招待のアカウント作成を Cloud Functions へ移す」）。**削除を許可 ON**（本人が SDK から Auth アカウントを消せる。`accounts`・承認の記録は残る）は、削除依頼の手順（設計書 §17.2）と合わせて OFF にするかを決める
-- [ ] **Anthropic API キーの期限 2027-11-20 15:00 JST**（キー名 `afro-cms-functions`、Workspace `afro-cms`（個人の組織・地域 US・月 $20 上限）、2026-11-20 作成。連携済みアカウントは個人なので、組織を離れると無効になる）。期限の 1 か月前に作り直して `ANTHROPIC_API_KEY`（Secret Manager）を差し替え、関数をデプロイし直す。手順は AI 実装時に `docs/operations/RUNBOOK_FIREBASE.md` へ書く
+- [ ] **Anthropic API キーの期限 2027-11-20 15:00 JST**（キー名 `afro-cms-functions-3`（2026-11-20 に 2 本を漏えいのため削除し作り直し。Secret は v3 のみ有効）、Workspace `afro-cms`（個人の組織・地域 US・月 $20 上限）、2026-11-20 作成。連携済みアカウントは個人なので、組織を離れると無効になる）。期限の 1 か月前に作り直して `ANTHROPIC_API_KEY`（Secret Manager）を差し替え、関数をデプロイし直す。手順は AI 実装時に `docs/operations/RUNBOOK_FIREBASE.md` へ書く
