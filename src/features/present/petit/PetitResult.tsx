@@ -64,7 +64,7 @@ function Summary({ input }: { input: PetitInput }) {
               <TrendingUp size={16} color="#6EE7B7" aria-hidden />
               <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.85)' }}>提案を実施すると <b>+{proposal.projectedScore - proposal.currentScore}pt</b> の改善見込み</Typography>
             </Stack>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.55)' }}>デモ用の推定値です。</Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.55)' }}>デモ用の値で、実際のサイトを測ったものではありません。</Typography>
           </Box>
         </Box>
       </Surface>
