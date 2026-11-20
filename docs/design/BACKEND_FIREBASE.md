@@ -121,8 +121,8 @@
 
 - 現行の状態 `invited → active → disabled`（`types/index.ts:348`）にそのまま対応（invited＝招待のみ、active＝`accounts` 作成済み、disabled＝admin が `accounts.status` を変更）
 - 無効化は **Rules が毎回 `accounts` を読む**ので即時に効く（開いている画面の Listener も permission-denied で切れる）。Auth ユーザー自体は残る（削除は Console。§17）
-- 招待の取り消し: admin が `invites.status = revoked`（未使用の招待だけ）。Auth のアカウントは残る（ログインしても「招待が見つからない」。削除は Console）
-- **同じメールのアカウントが既にある**とき（招待より前に誰かが登録した・送り直し）は、作らずにパスワード設定のメールだけ送り、管理者に「既にあった」と伝える。受信箱の持ち主が設定すると前のパスワードは使えなくなり、uid はそのまま本人のものになる。先に登録した人は、メールが未確認のままなら招待を読めず受け取れない（Rules の email_verified）。**ただし**先に登録した人が確認メールのリンクを本人に押させていた場合や、本番がパスワード再設定で前のログインを無効にしない場合は、パスワード設定の前に受け取れてしまう（security re-audit 2026-11-19 MEDIUM）。そのため初めての招待で「既にあった」ときは待たずに Console でそのアカウントを削除し、「招待メールを送り直す」で作り直す（画面の案内も同じ）
+- 招待の取り消し: admin が `invites.status = revoked`（未使用の招待だけ）。0.47.0 から Firestore トリガー `onInviteRevoked` が、関数がこの招待のために作った Auth アカウント（`provisionedUid`）を消す（`accounts/{uid}` があれば消さない。一時的な失敗は再試行。0.47.0 より前の招待のアカウントは残るので Console で消す）
+- **同じメールのアカウントが既にある**とき（0.47.0）: 関数がこの招待のために作ったもの（uid == `provisionedUid`）なら `resent`（パスワード設定のメールだけ送り直す）。それ以外（Console で追加・招待より前の登録・他プロバイダ）は `already-exists` で拒否し、何も書かず、メールも送らない。画面は「Console でこのアカウントを削除してから送り直す」を出す。そのアカウントは Rules の `provisionedUid` 照合で招待を受け取れない（`docs/design/INVITE_EXISTING_ACCOUNT.md`）
 - 管理者の一覧の招待中の行に「招待メールを送り直す」（アカウントが無ければ作る。メールの送信に失敗したときのやり直しにも使う）
 - **0.47.0 で下の契約の「existing」を変えた**（`docs/design/INVITE_EXISTING_ACCOUNT.md` 案 B。正はそちらと `functions/src/index.ts`）: 関数が uid を決めて `invites/{email}.provisionedUid` に書いてから作る。出力は `'created' | 'resent'`（resent＝この招待のために作ったアカウントが既にある）。それ以外の同じメールのアカウントは `already-exists` で拒否し、何も書かず、画面はメールを送らない。Rules の受け取り（`claimOk`・招待の更新）は `provisionedUid == request.auth.uid` を必須にする。招待の取り消し（invited → revoked）で Firestore トリガー `onInviteRevoked` が関数の作った Auth アカウントを消す（`accounts/{uid}` があれば消さない）。関数は専用 SA `afro-cms-functions@<ID>.iam.gserviceaccount.com` で動く（`docs/TODO.md`）
 - **provisionInvitee の契約**（0.46.0。existing の扱いは上の 0.47.0 で置き換え）: 入力 `{ email }`／出力 `'created' | 'existing'`。

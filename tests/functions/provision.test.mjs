@@ -191,7 +191,8 @@ test('TEST-F4: 印（provisionedUid）を書いた後にアカウントが無い
   assert.equal((await getInvite(INVITEE)).provisionedUid, 'ghostUid0000000000000000001');
 });
 
-test('同時に 2 回呼ぶ（ボタンの二度押し）: 同じ uid の 1 アカウントだけ。created と resent', async () => {
+// どちらの分岐（先の確認で resent／作成の失敗の後で resent）を通ったかは問わない（関数のログを読まないため）。結果だけを確かめる
+test('同時に 2 回呼ぶ（ボタンの二度押し）: 結果として同じ uid の 1 アカウントだけ・created と resent が 1 つずつ', async () => {
   const admin = await makeUser('admin1@afro.example', { account: { role: 'admin' } });
   const rs = await Promise.all([provision(admin.token, { email: INVITEE }), provision(admin.token, { email: INVITEE })]);
   for (const r of rs) assert.equal(r.status, 200, JSON.stringify(r.body));
@@ -199,6 +200,21 @@ test('同時に 2 回呼ぶ（ボタンの二度押し）: 同じ uid の 1 ア�
   const users = await lookup(INVITEE);
   assert.equal(users.length, 1);
   assert.equal((await getInvite(INVITEE)).provisionedUid, users[0].localId);
+});
+
+test('予約と作成のあいだに招待が取り消された: アカウントを残さず failed-precondition（created を返さない）', async () => {
+  const admin = await makeUser('admin1@afro.example', { account: { role: 'admin' } });
+  // テスト専用の印（関数はエミュレータでだけ読む）: uid を予約した直後に関数自身が招待を revoked にする
+  const body = fields({ schemaVersion: 1, role: 'developer', status: 'invited', name: '招待 太郎', affiliation: 'internal', createdBy: 'console' });
+  body.fields.testRevokeAfterReserve = { booleanValue: true };
+  const put = await call(fsDoc(`invites/${INVITEE}`), { method: 'PATCH', body: JSON.stringify(body) });
+  assert.equal(put.status, 200, JSON.stringify(put.body));
+  const r = await provision(admin.token, { email: INVITEE });
+  assert.equal(r.status, 400, JSON.stringify(r.body));
+  assert.equal(r.body.error.status, 'FAILED_PRECONDITION');
+  assert.equal((await getInvite(INVITEE)).status, 'revoked');
+  assert.ok((await getInvite(INVITEE)).provisionedUid, 'uid was reserved before the revoke');
+  assert.equal((await lookup(INVITEE)).length, 0, 'no auth user remains');
 });
 
 test('招待の取り消し（invited → revoked）: 関数が作った Auth アカウントを消す', async () => {

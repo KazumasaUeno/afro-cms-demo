@@ -42,9 +42,11 @@
     - [ ] MEDIUM: App Check を enforce（`ENFORCE_APP_CHECK = true` にしてデプロイし直す）
     - [ ] MEDIUM: 関数を専用のサービスアカウントで動かす — **コードは済み（0.47.0。`setGlobalOptions({ serviceAccount: 'afro-cms-functions@' })`）。SA の作成と役割の付与はデプロイの手順 1**
     - [ ] MEDIUM: 招待を取り消したら、関数が作った Auth アカウントも消す — **コードは済み（0.47.0。Firestore トリガー `onInviteRevoked`、asia-northeast1）**。0.47.0 より前の招待（provisionedUid なし）は対象外（Console で消す）
+      - 再試行（retry: true）の期間を過ぎても消せなかったときはログ `invite.revoke`・`status: error` に残る。ログのアラートを作り、保存期間の Runbook に「accounts の無い Auth アカウント（取り残し）の棚卸し」を足す（保存期間・削除の方針と合わせて）
     - [ ] **0.47.0 のデプロイ（この順番。作業・判断はユーザー。課金・IAM の変更を含む）**
-      1. SA を作る: Google Cloud Console → IAM → サービスアカウント →「作成」ID `afro-cms-functions`。プロジェクトの役割: **Firebase Authentication 管理者**（roles/firebaseauth.admin）・**Cloud Datastore ユーザー**（roles/datastore.user）・**Eventarc イベント受信者**（roles/eventarc.eventReceiver。トリガーの配信）・**Cloud Run 起動元**（roles/run.invoker。トリガーが関数を呼ぶ。firebase-tools は既定の compute SA にしか自動で付けない＝`checkIam.js` [INFERENCE]）。デプロイする人にこの SA の「サービス アカウント ユーザー」（iam.serviceAccounts.actAs）
-      2. Firestore のロケーションが `asia-northeast1` であることを確かめる（トリガーのリージョンと同じでないとデプロイが失敗する。[UNKNOWN] 本番は未確認）。Eventarc API が有効か（初回は権限の伝播待ちで失敗し、再デプロイで通ることがある）
+      1. SA を作る: Google Cloud Console → IAM → サービスアカウント →「作成」ID `afro-cms-functions`。**鍵（JSON キー）は作らない**。プロジェクトの役割: **Firebase Authentication 管理者**（roles/firebaseauth.admin）・**Cloud Datastore ユーザー**（roles/datastore.user）・**Eventarc イベント受信者**（roles/eventarc.eventReceiver。トリガーの配信）。デプロイする人にこの SA の「サービス アカウント ユーザー」（iam.serviceAccounts.actAs）
+         - **Cloud Run 起動元**（roles/run.invoker）は**プロジェクト全体ではなく** `onInviteRevoked` の Cloud Run サービスだけに付ける（3 の functions のデプロイ後。Cloud Run → oninviterevoked → 権限）。[FACT] firebase-tools は run.invoker・eventReceiver を既定の compute SA にしか自動で付けない（firebase-tools 15.35 `lib/deploy/functions/checkIam.js:104-115`）。付ける前の取り消しイベントは配信に失敗する（再試行の期間内なら付けた後に通る）
+      2. Firestore のロケーション: [FACT] afro-cms-4a6ff の (default) は asia-northeast1（2026-11-19 `firebase firestore:databases:get` で確認。`docs/design/DATA_RETENTION_DRAFT.md`）＝トリガーのリージョンと一致。Eventarc API が有効か（初回は権限の伝播待ちで失敗し、再デプロイで通ることがある）
       3. functions: `npm --prefix functions ci` → `npm run deploy:firebase -- --project afro-cms-4a6ff --only functions`（provisionInvitee が新しい SA に替わり、onInviteRevoked が増える）
       4. hosting: `npm run build:live` → `--only hosting`（resent を成功として扱い、already-exists ではメールを送らない）
       5. 本番 Firestore で `invites` の `status == invited` を数える（読むだけ。1 回。lead-architect が許可した後）。あれば Auth のアカウントを Console で削除 → 画面の「招待メールを送り直す」で印つきで作り直す

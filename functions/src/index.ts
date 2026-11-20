@@ -151,6 +151,11 @@ export const provisionInvitee = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, cor
       return fresh;
     });
 
+    // テスト専用（エミュレータだけ）: 予約と作成のあいだに招待が取り消される競合を再現する。本番では読まない（FUNCTIONS_EMULATOR）
+    if (process.env.FUNCTIONS_EMULATOR === 'true' && invite.get('testRevokeAfterReserve') === true) {
+      await ref.update({ status: 'revoked' });
+    }
+
     // 3) その uid でアカウントを作る。間に同じメールのアカウントができていたら 1) と同じ判定
     try {
       await getAuth().createUser({ uid, email, password: throwawayPassword(), emailVerified: false, disabled: false });
@@ -162,7 +167,23 @@ export const provisionInvitee = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, cor
         log('info', 'invite.provision resent (concurrent call created it)', { status: 'resent', uid });
         return 'resent';
       }
+      if (code === 'auth/uid-already-exists') {
+        // その uid が別のメールのアカウントに使われている（乱数の衝突・手作業）。既存アカウントの案内は出さない
+        log('error', 'invite.provision uid conflict', { status: 'uid_conflict', uid });
+        throw new HttpsError('aborted', 'could not create the account');
+      }
       throw rejectExisting(raced ?? 'unknown');
+    }
+    // 4) 作成の間に招待が取り消されていたら、作ったアカウントを消して失敗にする（取り消しのトリガーより先に作った場合の取り残しを防ぐ）
+    const after = await ref.get();
+    if (!after.exists || after.get('status') !== 'invited') {
+      try {
+        await getAuth().deleteUser(uid);
+      } catch (e) {
+        if (errCode(e) !== 'auth/user-not-found') throw e;
+      }
+      log('warn', 'invite.provision revoked during create; account removed', { status: 'revoked_during_create', uid });
+      throw new HttpsError('failed-precondition', 'no open invite for this email');
     }
     log('info', 'invite.provision created', { status: 'created', uid });
     return 'created';
@@ -178,8 +199,10 @@ export const provisionInvitee = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, cor
  * - provisionedUid が無い（0.47.0 より前の招待）なら何もしない
  * - accounts/{uid} がある＝受け取り済みなら消さない（Rules では invited → revoked と受け取りは両立しないが、念のため）
  * - 既に無ければ（Console で削除済み）何もしない。ログは uid だけ（メールは出さない）
+ * - 一時的な失敗は throw して再試行させる（retry: true。上の「消さない／既に無い」は成功として終える）。再試行の期間を過ぎた失敗は
+ *   ログ（status: error）に残る。取り残しの棚卸しは docs/TODO.md
  */
-export const onInviteRevoked = onDocumentUpdated({ document: 'invites/{email}', region: REGION }, async (event) => {
+export const onInviteRevoked = onDocumentUpdated({ document: 'invites/{email}', region: REGION, retry: true }, async (event) => {
   const before = event.data?.before.data();
   const after = event.data?.after.data();
   if (!before || !after || before.status !== 'invited' || after.status !== 'revoked') return;

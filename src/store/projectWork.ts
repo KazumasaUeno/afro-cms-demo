@@ -318,7 +318,7 @@ export function seedWorkFor(projectId: string, stage: Stage): FullWork {
   }
   if (f.sitemapApproved) {
     // 日程は要件定義書の承認の後に開発担当者が入れる（2026-11-17 会議。入れるまで制作へ進めない）。
-    // 品質チェックの完了（納品検収）を決めた後に作る: 公開済みで公開予定日（launchDate）の無い案件（SORANO・まちの学び舎）は、
+    // 品質チェックの完了（納品検収）を決めた後に作る: 公開済みで公開予定日（launchDate）の無い案件（SORANO・まちの学び舎・はなみ旅館）は、
     // 公開予定日を完了の翌日にする（前は完了を決める前に作っていたため、要件定義書の承認の 120 日後＝公開済みなのに未来の日付になった。0.47.0）
     work.schedule = seedSchedule(work, seedProjects().find((p) => p.id === projectId)?.launchDate, seedDevOwner(projectId));
   }
