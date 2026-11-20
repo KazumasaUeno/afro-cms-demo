@@ -844,5 +844,5 @@
 
 ## 0.46.2 — 2026-11-20
 
-- live の招待の関数（`provisionInvitee`）を、本番ではこのプロジェクトの画面（`<ID>.web.app`・`<ID>.firebaseapp.com`）からだけ呼べるようにした（CORS。セキュリティ監査 2026-11-20 LOW）。エミュレータは従来どおり。プロジェクトが分からないときは何も許可しない。`npm run test:functions` に許可先のテストを 3 件追加（計 12 件）
+- live の招待の関数（`provisionInvitee`）を、本番ではこのプロジェクトの画面（`<ID>.web.app`・`<ID>.firebaseapp.com`）からだけ呼べるようにした（CORS。セキュリティ監査 2026-11-20 LOW）。エミュレータは従来どおり。プロジェクトが分からないときは何も許可しない。`npm run test:functions` に許可先のテストを 4 件追加（計 13 件）。予備に FIREBASE_CONFIG の projectId も見る
 - 本番への反映は未実施（functions のデプロイが必要。`docs/TODO.md`）。デモ（GitHub Pages）は変更なし

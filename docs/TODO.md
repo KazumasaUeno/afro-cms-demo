@@ -8,10 +8,10 @@
 
 - [ ] **App Check を有効にして enforce**（Firestore・Auth）。メール列挙（signUp の email-already-in-use。security L1）を受け入れる条件
 - [ ] **Console の設定**（作業はユーザー。結果をここへ記録する）
-  - [ ] Auth: メール列挙の保護 ON
+  - [x] Auth: メール列挙の保護 ON（2026-11-20 API で確認）
   - [ ] Auth: 匿名ログイン OFF（メール／パスワード以外のプロバイダは OFF）
   - [ ] Auth: パスワードポリシー 8 文字以上（画面の検査と合わせる）
-  - [ ] Auth: 承認済みドメインは `<projectId>.web.app`・`<projectId>.firebaseapp.com`（＋独自ドメイン）だけ。`localhost` を消す
+  - [ ] Auth: 承認済みドメインは `<projectId>.web.app`・`<projectId>.firebaseapp.com`（＋独自ドメイン）だけ。`localhost` を消す（独自ドメインを足すときは `functions/src/cors.ts` の許可先にも足して functions をデプロイし直す）
   - [ ] Google Cloud: API キーを HTTP リファラー（上のドメイン。`localhost` なし）と API（Identity Toolkit / Token Service / Cloud Firestore）で制限
   - [ ] `scripts/firebase-projects.mjs` の `PRODUCTION_PROJECT_IDS` に本番 ID を入れる（`TBD` のままでは全デプロイ拒否。変更は lead-architect 確認）
 - [ ] **招待メール（パスワード設定）の Console 設定**（security M1 は 0.45.0 で対策。2026-11-19 ユーザー決定「招待時にアカウントを作り、パスワード設定のメールを送る」。作業はユーザー）
