@@ -1,0 +1,11 @@
+{
+  "unit": "USD per 1M tokens (= micro-USD per token)",
+  "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+  "verifiedAt": "2026-11-20",
+  "note": "design AI_REQUIREMENTS.md 5.1 [FACT WebFetch 2026-11-20]. Haiku 5.5 over 100K prompt tokens: input/output from claude-api skill table (cached 2026-11-03); cache rates over 100K are [INFERENCE] x5 of base. Re-verify before use",
+  "models": {
+    "claude-haiku-5-5": { "input": 0.10, "cacheWrite5m": 0.125, "cacheRead": 0.01, "output": 0.50, "longContext": { "overPromptTokens": 100000, "input": 0.50, "cacheWrite5m": 0.625, "cacheRead": 0.05, "output": 2.50 } },
+    "claude-sonnet-5-5": { "input": 2.00, "cacheWrite5m": 2.50, "cacheRead": 0.10, "output": 10.00 },
+    "claude-opus-5-5": { "input": 4.00, "cacheWrite5m": 5.00, "cacheRead": 0.20, "output": 20.00 }
+  }
+}

@@ -41,6 +41,9 @@ export function isolatedEmulatorEnv(base = process.env) {
 
 function main() {
   if (!EMULATOR_PROJECT_ID.startsWith('demo-')) throw new Error(`EMULATOR_PROJECT_ID=${EMULATOR_PROJECT_ID} は demo- ではありません`);
+  // AI の共有コードの写しが正と一致すること（scripts/gen-ai-shared.mjs。実装計画 §4 U3）
+  const g = spawnSync(process.execPath, [join(root, 'scripts', 'gen-ai-shared.mjs'), '--check'], { cwd: root, stdio: 'inherit' });
+  if (g.status !== 0) throw new Error('functions/src/ai/shared/ が古い（node scripts/gen-ai-shared.mjs）');
   buildFunctions();
   const cli = join(dirname(createRequire(import.meta.url).resolve('firebase-tools/package.json')), 'lib', 'bin', 'firebase.js');
   const inner = 'node --test --test-concurrency=1 --test-reporter=spec tests/functions/*.test.mjs';
