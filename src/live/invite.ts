@@ -2,6 +2,7 @@ import { sendPasswordResetEmail } from 'firebase/auth';
 import { connectFunctionsEmulator, getFunctions, httpsCallable, type HttpsCallable } from 'firebase/functions';
 import { normalizeEmail } from '@/data/users';
 import { app, auth, EMULATOR } from './firebase';
+import { FUNCTIONS_REGION } from './functionsRegion';
 
 /**
  * 招待のアカウント作成とパスワード設定メール（BACKEND_FIREBASE §2.4。security M1 の対策）。
@@ -14,15 +15,19 @@ import { app, auth, EMULATOR } from './firebase';
 
 export type InviteAccountResult = 'created' | 'existing';
 
-const REGION = 'asia-northeast1'; // functions/src/index.ts の REGION と同じ
+/**
+ * 呼び出しの待ち時間。関数の timeoutSeconds（30 秒）より長くする: 同じ長さだと、コールドスタートで画面だけ時間切れになり
+ * サーバーではアカウントができている、が起きやすい（code review 2026-11-20 M2）
+ */
+const CALL_TIMEOUT_MS = 60_000;
 
 let callable: HttpsCallable<{ email: string }, InviteAccountResult> | null = null;
 
 function provisionCallable(): HttpsCallable<{ email: string }, InviteAccountResult> {
   if (!callable) {
-    const functions = getFunctions(app, REGION);
+    const functions = getFunctions(app, FUNCTIONS_REGION);
     if (EMULATOR) connectFunctionsEmulator(functions, '127.0.0.1', 5001);
-    callable = httpsCallable<{ email: string }, InviteAccountResult>(functions, 'provisionInvitee', { timeout: 30_000 });
+    callable = httpsCallable<{ email: string }, InviteAccountResult>(functions, 'provisionInvitee', { timeout: CALL_TIMEOUT_MS });
   }
   return callable;
 }
@@ -49,4 +54,16 @@ export async function provisionInvitee(rawEmail: string): Promise<InviteAccountR
   const result = await createAccount(email);
   await sendSetupEmail(email);
   return result;
+}
+
+export type ProvisionErrorKind = 'not-invited' | 'denied' | 'timeout' | 'network' | 'other';
+
+/** callable（functions/…）と Auth（auth/…）のエラーを、画面の案内の種類に分ける */
+export function provisionErrorKind(e: unknown): ProvisionErrorKind {
+  const code = typeof e === 'object' && e && 'code' in e ? String((e as { code: unknown }).code) : '';
+  if (code.endsWith('failed-precondition') || code.endsWith('invalid-argument')) return 'not-invited';
+  if (code.endsWith('permission-denied') || code.endsWith('unauthenticated')) return 'denied';
+  if (code.endsWith('deadline-exceeded')) return 'timeout';
+  if (code.endsWith('unavailable') || code.endsWith('network-request-failed')) return 'network';
+  return 'other';
 }

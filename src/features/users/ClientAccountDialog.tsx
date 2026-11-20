@@ -118,7 +118,7 @@ export function ClientAccountDialog({ draft: initial, accounts, projects, onClos
             <TextField
               fullWidth required label="メールアドレス" type="email" value={draft.email} disabled={locked}
               onChange={(e) => set({ email: e.target.value })}
-              error={!!show('email')} helperText={show('email') ?? (locked ? 'ログインに使うため変更できません' : DATA_MODE === 'live' ? 'お客様がこのメールアドレスで登録し、お客様ポータルのログインに使います' : 'お客様ポータルのログインに使います')}
+              error={!!show('email')} helperText={show('email') ?? (locked ? 'ログインに使うため変更できません' : DATA_MODE === 'live' ? 'このメールアドレスにパスワード設定のメールが届きます。お客様ポータルのログインに使います' : 'お客様ポータルのログインに使います')}
               inputRef={(el: HTMLElement | null) => { refs.current.email = el; }}
               inputProps={{ maxLength: CLIENT_LIMITS.email + 10, inputMode: 'email', autoComplete: 'off', spellCheck: false, autoCapitalize: 'none' }}
             />

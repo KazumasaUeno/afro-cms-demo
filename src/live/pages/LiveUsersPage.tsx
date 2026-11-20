@@ -14,7 +14,7 @@ import { DevProjectsDialog } from '@/features/users/DevProjectsDialog';
 import { tokens } from '@/theme/tokens';
 import type { ClientAccount, DevUser } from '@/types';
 import { INVITE_PREFIX } from '../model';
-import { provisionInvitee, type InviteAccountResult } from '../invite';
+import { provisionErrorKind, provisionInvitee, type InviteAccountResult } from '../invite';
 import { LoadError } from './shared';
 
 const isInvite = (id: string) => id.startsWith(INVITE_PREFIX);
@@ -29,6 +29,25 @@ const existingMessage = (email: string) =>
 /** 招待は保存できたが、アカウントの作成・メールの送信に失敗した（招待は残るので送り直せる。security LOW） */
 const provisionFailedMessage = (email: string) =>
   `${email.trim()} の招待は保存しましたが、パスワード設定のメールを送れませんでした。時間をおいて、一覧の「招待メールを送り直す」を押してください`;
+/**
+ * アカウント作成・メール送信の失敗の案内（code review 2026-11-20 M2: 取り消し済み・権限なし・時間切れを「時間をおいて」でまとめない）。
+ * invited = 招待の保存は済んでいる（初回の招待）。false は送り直し
+ */
+const provisionErrorMessage = (email: string, e: unknown, invited: boolean): string => {
+  const who = email.trim();
+  switch (provisionErrorKind(e)) {
+    case 'not-invited':
+      return `${who} は招待中ではないため、アカウントを作れませんでした（取り消し済みか、受け取り済みです）。一覧を確かめてください`;
+    case 'denied':
+      return 'アカウントを作る権限がありません。管理者のアカウントでログインし直してください';
+    case 'timeout':
+      return `${who} のアカウントを作れたか確認できませんでした（時間切れ）。少し待ってから一覧の「招待メールを送り直す」を押してください（作れていればメールだけ送ります）`;
+    case 'network':
+      return `通信できないため ${who} にメールを送れませんでした。接続を確かめて、一覧の「招待メールを送り直す」を押してください`;
+    default:
+      return invited ? provisionFailedMessage(email) : `${who} にパスワード設定のメールを送れませんでした。時間をおいてもう一度お試しください`;
+  }
+};
 
 function Row({ title, sub, pill, children }: { title: string; sub: string; pill: ReactNode; children: ReactNode }) {
   return (
@@ -92,15 +111,21 @@ export default function LiveUsersPage() {
       result = await provisionInvitee(email);
     } catch (e) {
       console.warn('invite provisioning failed', e);
-      toast(provisionFailedMessage(email), 'error');
+      toast(provisionErrorMessage(email, e, true), 'error');
       return;
     }
     toast(result === 'existing' ? existingMessage(email) : `${email.trim()} を招待し、パスワード設定のメールを送りました`, result === 'existing' ? 'error' : 'success');
   };
   const resend = async (email: string) => {
-    let result: InviteAccountResult | undefined;
-    const ok = await write((async () => { result = await provisionInvitee(email); })());
-    if (ok) toast(result === 'created' ? `${email} のアカウントを作り、パスワード設定のメールを送りました` : `${email} にパスワード設定のメールを送り直しました`);
+    let result: InviteAccountResult;
+    try {
+      result = await provisionInvitee(email);
+    } catch (e) {
+      console.warn('invite resend failed', e);
+      toast(provisionErrorMessage(email, e, false), 'error');
+      return;
+    }
+    toast(result === 'created' ? `${email} のアカウントを作り、パスワード設定のメールを送りました` : `${email} にパスワード設定のメールを送り直しました`);
   };
   const saveClient = (d: ClientAccountDraft) => {
     if (!d.id) { void invite(repo.saveClientAccount(d), d.email, () => setClientEditing(null)); return; }

@@ -839,4 +839,5 @@
 - サーバーでアカウントを作れるのは有効な管理者だけ（Security Rules の管理者の判定と同じ条件）。招待中の文書が無いメールには作らない。同じメールのアカウントが既にあれば何も変えない
 - 使うには Firebase を Blaze（従量課金）に切り替える必要がある。費用の見込みはほぼ 0 円 / 月（招待は月に数十回で、Functions の無料枠 月 200 万回などに収まる。出典: Firebase の料金ページ、2026-11-19 確認）。予算アラートの設定・Functions のデプロイ・「作成（登録）を許可」を OFF にする手順は `docs/TODO.md`（作業はユーザー。hosting より先に Functions を出す）
 - エミュレータ（`npm run emulators`）に Functions を加えた。`npm run test:functions` で招待のサーバー側を確かめる（8 件）。デプロイ（`npm run deploy:firebase`）の対象に `functions` を加え、送る前にこのテストを通す
+- レビュー（2026-11-20）の反映: 本番ビルドの CSP（connect-src）に Functions の送り先（`https://asia-northeast1-<ID>.cloudfunctions.net`、エミュレータは 127.0.0.1:5001）を加えた（無いと build 後の画面で招待が必ず失敗していた）。招待・送り直しの失敗を「招待中ではない」「権限がない」「時間切れ」「通信できない」で別の案内にした。画面の待ち時間を 60 秒にした（関数の 30 秒より長く）。リージョンの値を `src/live/functionsRegion.ts` にまとめ、関数側と一致するかをテストする。Runbook を Blaze・functions のデプロイ順・Console での初代管理者の作り方に更新
 - デモ（GitHub Pages）は変更なし

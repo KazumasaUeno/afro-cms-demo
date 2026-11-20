@@ -2,6 +2,7 @@ import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { createHash } from 'node:crypto';
 import { fileURLToPath, URL } from 'node:url';
+import { functionsOrigin } from './src/live/functionsRegion';
 
 /**
  * データモード（BACKEND_PLAN C1・C2）は **vite の --mode だけ**で決める（.env.local の値では切り替わらない＝demo の回帰 ⑦）。
@@ -19,7 +20,7 @@ const REQUIRED_FIREBASE_KEYS = ['VITE_FIREBASE_API_KEY', 'VITE_FIREBASE_AUTH_DOM
  *   同じ入口から分岐すると live でも demo のルーターが動く）
  * - ビルドのときだけ CSP（meta）を入れる。インラインの配色スクリプトは sha256 で許可する（dev サーバーは HMR のため入れない）
  */
-function liveHtml(emulator: boolean, build: boolean): Plugin {
+function liveHtml(emulator: boolean, build: boolean, projectId: string): Plugin {
   return {
     name: 'afro-live-html',
     transformIndexHtml: {
@@ -32,7 +33,9 @@ function liveHtml(emulator: boolean, build: boolean): Plugin {
         if (!build) return out;
         const scripts = [...out.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => `'sha256-${createHash('sha256').update(m[1]).digest('base64')}'`);
         const connect = ["'self'", 'https://firestore.googleapis.com', 'https://identitytoolkit.googleapis.com', 'https://securetoken.googleapis.com'];
-        if (emulator) connect.push('http://127.0.0.1:8080', 'ws://127.0.0.1:8080', 'http://127.0.0.1:9099');
+        // 招待の callable（provisionInvitee。0.46.0）。無いと build 後の画面で招待が CSP に拒否される（code review 2026-11-20 B1）
+        if (!emulator) connect.push(functionsOrigin(projectId));
+        if (emulator) connect.push('http://127.0.0.1:8080', 'ws://127.0.0.1:8080', 'http://127.0.0.1:9099', 'http://127.0.0.1:5001');
         const csp = [
           "default-src 'self'",
           `script-src 'self' ${scripts.join(' ')}`,
@@ -57,6 +60,7 @@ function liveHtml(emulator: boolean, build: boolean): Plugin {
 export default defineConfig(({ mode, command }) => {
   const live = LIVE_MODES.includes(mode);
   const emulator = mode === 'emulator';
+  let projectId = EMULATOR_PROJECT_ID;
   if (live && command === 'build') {
     const env = loadEnv(mode, process.cwd(), 'VITE_FIREBASE_');
     if (emulator) {
@@ -67,12 +71,13 @@ export default defineConfig(({ mode, command }) => {
       const missing = REQUIRED_FIREBASE_KEYS.filter((k) => !env[k]?.trim());
       if (missing.length) throw new Error(`live のビルドに必要な設定がありません: ${missing.join(', ')}（.env.live.local。.env.example を参照）`);
       if (env.VITE_FIREBASE_PROJECT_ID.startsWith('demo-')) throw new Error('live のビルドに demo- のプロジェクトは使えません（--mode emulator を使う）');
+      projectId = env.VITE_FIREBASE_PROJECT_ID.trim();
     }
   }
   return {
     // GitHub Pages 用のビルドだけサブパスにする（.github/workflows/pages.yml が VITE_BASE を渡す）
     base: process.env.VITE_BASE ?? '/',
-    plugins: [react(), ...(live ? [liveHtml(emulator, command === 'build')] : [])],
+    plugins: [react(), ...(live ? [liveHtml(emulator, command === 'build', projectId)] : [])],
     resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
     // ビルド時定数（文字列で置き換える）。demo では `'demo' === 'live'` が偽になり、live の import ごと落ちる
     define: {

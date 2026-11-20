@@ -101,7 +101,7 @@ export function DevUserDialog({ draft: initial, devUsers, accounts, projects, on
               onChange={(e) => set({ email: e.target.value })}
               // live: メールの変更は作らない（ログインの ID のため。§28.8）。招待のときだけ入力する
               disabled={lockEmail}
-              error={!!show('email')} helperText={show('email') ?? (lockEmail ? 'ログインに使うため変更できません' : live ? '本人がこのメールアドレスで登録し、開発者画面のログインに使います' : '開発者画面のログインに使います')}
+              error={!!show('email')} helperText={show('email') ?? (lockEmail ? 'ログインに使うため変更できません' : live ? 'このメールアドレスにパスワード設定のメールが届きます。開発者画面のログインに使います' : '開発者画面のログインに使います')}
               inputRef={(el: HTMLElement | null) => { refs.current.email = el; }}
               inputProps={{ maxLength: DEV_USER_LIMITS.email + 10, inputMode: 'email', autoComplete: 'off', spellCheck: false, autoCapitalize: 'none' }}
             />

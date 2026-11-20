@@ -11,7 +11,7 @@
 1. https://console.firebase.google.com →「プロジェクトを作成」
 2. 名前: 例 `afro-cms`（プロジェクト ID は自動で付く。**ID は後から変えられない**ので確認する）
 3. Google アナリティクス: **オフ**（使わない。個人情報を増やさない）
-4. 料金プラン: **Spark（無料）のまま**。Blaze へは上げない（上げる条件は設計書 §21）
+4. 料金プラン: 作成時は Spark（無料）。**0.46.0 から Blaze**（招待のアカウント作成を Cloud Functions で行うため。2026-11-19 ユーザー決定。手順と予算アラート 1,000 円は `docs/TODO.md`、条件は設計書 §21）
 
 ## 2. Authentication【ユーザー】
 
@@ -44,14 +44,16 @@
 
 1. `scripts/firebase-projects.mjs` の `PRODUCTION_PROJECT_IDS` を `['<ID>']` に（lead-architect 確認）
 2. `.env.live.local`（コミットしない）に 4 の値
-3. `npm run build:live` → `npm run deploy:firebase -- --project <ID> --only firestore:rules,firestore:indexes` → `--only hosting`
+3. `npm run build:live` → `npm run deploy:firebase -- --project <ID> --only firestore:rules,firestore:indexes` → **`--only functions`（0.46.0 から。`npm --prefix functions ci` の後。hosting より先）** → `--only hosting`
+   - functions と hosting を 1 回（`--only functions,hosting`）で出さない。画面が先に替わると招待が失敗する（順番の詳細は `docs/TODO.md`）
 4. `https://<ID>.web.app` を開いてログイン画面が出ること、応答ヘッダ（X-Frame-Options 等）を確認
 
 ## 7. 初代管理者【ユーザー → 開発が確認】（§2.5）
 
 1. Firestore →「コレクションを開始」→ `invites`、文書 ID = 管理者のメール（**小文字**）
    - フィールド: `role`=`admin`（string）、`name`=氏名（string）、`status`=`invited`（string）、`createdAt`=今（timestamp）、`createdBy`=`console`（string）
-2. `https://<ID>.web.app` で同じメールで新規登録 → 確認メールのリンク → ログイン → 管理者画面が出る
+2. Authentication →「ユーザー」→「ユーザーを追加」で同じメール（**小文字**）と仮のパスワードを入れる → ログイン画面の「パスワードを忘れた方」で自分のパスワードを設定 → ログイン → 管理者画面が出る
+   - 「作成（登録）を許可」が OFF（0.46.0 以降の運用）だと、アプリの新規登録は使えない。Console の「ユーザーを追加」は OFF でも使える [INFERENCE。初回に確かめて記録する]
 3. 2 人目以降の管理者も同じ手順（アプリから管理者は招待できない）。開発者・お客様はアプリの「ユーザー」から招待する
 
 ## 8. 外部のお客様を招待する前に（`docs/TODO.md` 段階 C）
