@@ -11,7 +11,9 @@ import { assertCanGenerate, resolveCaller, type AuthLike, type ProjectLike } fro
 import { generationAllowed, type AiFlags } from './flags';
 import { AI_LEASE } from './limits';
 import { currentDraftQuota, jstDay, readUsage, refund, reserve, usageDocId } from './quota';
-import { answersHash, missingRequired } from './shared/answersHash';
+import { answersHash } from './shared/answersHash';
+import { missingRequired } from './shared/redact';
+import type { AnswerValue } from './shared/types';
 import { errorCodeOf, type AiLogger } from './log';
 
 export interface RequestInput {
@@ -29,7 +31,7 @@ export interface RequestDeps {
   now: () => number;
   flags: () => AiFlags;
   /** 今の AI 設定のハッシュ（モデル・promptVersion・effort。U3 の設定から） */
-  configHash: () => string;
+  configHash: () => Promise<string>;
   enqueue: (task: { projectId: string; requestId: string }) => Promise<void>;
   log: AiLogger;
 }
@@ -72,7 +74,7 @@ export async function handleRequestDraft(req: { auth?: AuthLike | null; data: un
   const projRef = db.doc(`projects/${input.projectId}`);
   const reqRef = db.doc(`projects/${input.projectId}/requirements/current`);
   const aiRef = draftRef(db, input.projectId);
-  const cfgHash = deps.configHash();
+  const cfgHash = await deps.configHash();
 
   let outcome: RequestOutput;
   let reservedDay = '';
@@ -100,7 +102,7 @@ export async function handleRequestDraft(req: { auth?: AuthLike | null; data: un
       const hasEdits = !!ai?.edited;
       if (hasEdits && !input.discardEdits) throw new HttpsError('failed-precondition', 'edits-exist');
       if (input.discardEdits && caller.role === 'admin' && !input.confirmDiscard) throw new HttpsError('failed-precondition', 'confirm-discard-required');
-      const aHash = answersHash(answers);
+      const aHash = await answersHash(answers as Record<string, AnswerValue>);
       if (!input.regenerate && ai?.generated && ai.state === 'ready' && ai.answersHash === aHash && ai.configHash === cfgHash) {
         return { state: 'ready', reused: true } as const;
       }

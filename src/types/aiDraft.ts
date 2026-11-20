@@ -152,8 +152,24 @@ export type AiJobState = 'idle' | 'running';
 export interface AiDraftDoc {
   schemaVersion: 1;
   state: AiDraftState;
-  job: { state: AiJobState; requestId?: string; by?: string; startedAt?: ISODate; leaseUntil?: ISODate };
-  lastError?: { code: string; at: ISODate; requestId: string };
+  /**
+   * 生成ジョブ（lease）。新しい下書きの作成は requestRequirementsDraft だけが行い、そのとき job は必ず running（state は failed で作り、結果で ready へ）。
+   * running は leaseUntil を過ぎるまで実行中とみなす（過ぎれば次の押下が奪える）。結果を書けるのは job.requestId が自分のまま running の worker だけ（fencing）。
+   * 終わると idle（requestId は最後の押下のまま。同じ requestId の再送は結果を返す）。role・discardEdits・quotaDay は running の間だけ意味を持つ
+   */
+  job: {
+    state: AiJobState;
+    requestId?: string;
+    by?: string;
+    startedAt?: ISODate;
+    leaseUntil?: ISODate;
+    role?: string;
+    discardEdits?: boolean;
+    /** 上限を加算した JST の日（返金はこの日の鍵で戻す） */
+    quotaDay?: string;
+  };
+  /** 最後の失敗（種別だけ。本文・メッセージは入れない）。httpStatus・anthropicRequestId は Anthropic の失敗のときだけ */
+  lastError?: { code: string; at: ISODate; requestId: string; httpStatus?: number; anthropicRequestId?: string };
   answersHash?: string;
   configHash?: string;
   generated?: AiGenerated;
@@ -172,5 +188,6 @@ export interface AiUsageDoc {
   count: number;
   costMicroUsd: number;
   byDay: Record<string, number>;
+  /** 利用者の日次の件数（quota.ts の上限に使う）。鍵は `${JST の yyyy-mm-dd}:${uid}`（月の文書の中に日付つきで持つ） */
   byUid: Record<string, number>;
 }

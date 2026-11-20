@@ -37,6 +37,7 @@
 | 範囲 | **`functions/` だけ**。Web バンドルに入れない（ルート `package.json` に足さない。`dist-live` を grep して 0 件） |
 | 条件 | ①版は**完全固定**（`^` なし）。`functions/package-lock.json` をコミットし、採用した版をこの表に追記 ②`npm view @anthropic-ai/sdk` で発行元・版・依存数を記録。**`npm audit signatures --prefix functions` が通る**。**install scripts を持たない**（`npm view … scripts` と lock の `hasInstallScript` で確認）（security M6）③`output_config.format`・`output_config.effort`・adaptive thinking・streaming を**その版が持つこと**を公式ドキュメントで確認（[UNKNOWN] → U3 の最初。無ければ Plan Review へ戻す）④`npm audit --omit=dev` の HIGH 以上 0 ⑤**`ANTHROPIC_LOG` を設定しない**（SDK のデバッグログで本文が出ない。security M4。デプロイの env に無いことを U5 で確認） |
 | 却下した案 | HTML 抽出・Cloud Tasks のための依存は**追加しない**（抽出は自前、enqueue は `firebase-admin/functions` の `taskQueue()`。[INFERENCE: firebase-admin 14.5.1 に有る。U2 で型を確認]） |
+| **採用した版（U3 2026-11-20 ai-engineer）** | `@anthropic-ai/sdk` **1.11.0**（`^` なし。2026-11-19 公開・latest。発行元 npm の anthropic メンテナ。直接依存 3: `json-schema-to-ts`・`standardwebhooks`・`@opentelemetry/api`。lock の追加 7 パッケージ）。[FACT 型定義 `resources/messages/messages.d.ts`] `OutputConfig.format`（`json_schema`）・`OutputConfig.effort`（low〜max）・`ThinkingConfigAdaptive`・`messages.stream()`＋`finalMessage()`・`request_id`・型付きエラー・`maxRetries`/`timeout` を持つ ／ `npm audit --omit=dev` 0 件 ／ `npm audit signatures` 214 verified・21 attestations ／ install scripts: 追加分 0（lock の `hasInstallScript` は既存の `@firebase/util`・`protobufjs` だけ）／ `ANTHROPIC_LOG` 等の環境変数に左右されないよう、クライアントは `apiKey`・`baseURL` を明示し `logLevel:"off"`・`openTelemetry:false`（`functions/src/ai/anthropicClient.ts`）／ `dist-live` に 0 件（grep） |
 
 ## 4. ユニット（Write Scope は重ならない）
 
@@ -113,6 +114,7 @@
 | サーバー（正） | `functions/src/ai/flags.ts` が `defineString('AI_REQUIREMENTS_MODE')`（`off`｜`internal`｜`on`。それ以外・未設定・空は `off`）と `defineString('AI_REQUIREMENTS_PROJECT_ALLOWLIST')` を読む。値は `functions/.env.afro-cms-4a6ff`（コミット。U5 M1） | `off` |
 | 判定 | `off` → `failed-precondition: feature-disabled`。`internal` → **admin かつ allowlist の案件だけ**（allowlist 空なら全拒否）。`on` → 設計どおり。**判定は callable の最初（上限の加算より前）と worker の開始時の両方**（worker で off なら返金して終わる） | — |
 | 画面 | `VITE_FEATURE_AI_REQUIREMENTS`（`off`｜`internal`｜`on`）。`internal` は admin にだけパネルを出す。境界はサーバー（1.8） | `off` |
+| 編集の判定（`internal`） | **[DECISION lead-architect 2026-11-20]** `saveAiDraftEdits` は `internal` で **allowlist の案件 ＋ アサインされた開発者**だけ（admin・お客様は不可。役割は authz、案件は `flags.ts` の `editAllowed`）。生成の「admin だけ」を編集に当てはめると、社内試験で 生成→編集→承認依頼 を通せないため（U2 の提案を承認） | — |
 | 社内限定の経路 | 社内の試験用案件（**合成データだけ**）を 1 件作り、その ID を allowlist に入れて `internal` で出す。お客様の案件では押せない | — |
 | お客様へ公開（`on`） | **L-c**: LEGAL Q-4・Q-7 の結論 ＋（削除の仕組み実装済み または ユーザーの書面受け入れ）＋ 同意文言の反映 ＋ 評価結果とモデルのユーザー確定 ＋ **R-7 の security 再レビュー** ＋ Release Readiness の GO。`deploy-firebase` が記録の無い `on` を拒否 | — |
 | 戻す | `off` に戻して functions を出し直す。Rules は v2 を受け付けたまま。v2 の提案は描ける（描画はフラグに関係しない） | — |

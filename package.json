@@ -16,6 +16,8 @@
     "test:functions": "node scripts/test-functions.mjs",
     "build:functions": "npm --prefix functions run build",
     "rules:gen": "node --experimental-strip-types --no-warnings scripts/gen-rules-questions.mjs",
+    "ai:gen": "node scripts/gen-ai-shared.mjs",
+    "ai:check": "node scripts/gen-ai-shared.mjs --check",
     "rules:check": "node --experimental-strip-types --no-warnings scripts/gen-rules-questions.mjs --check",
     "deploy:firebase": "node scripts/deploy-firebase.mjs",
     "emulators": "node scripts/emulators.mjs",

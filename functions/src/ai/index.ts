@@ -10,7 +10,7 @@ import { defineSecret } from 'firebase-functions/params';
 import { onTaskDispatched } from 'firebase-functions/tasks';
 import { handleSaveEdits } from './edits';
 import { readFlags } from './flags';
-import { createGenerator, NOT_WIRED_CONFIG } from './generatePort';
+import { createGenerator, CURRENT_CONFIG_KEY } from './generatePort';
 import { AI_WORKER } from './limits';
 import { functionsLogger } from './log';
 import { handleRequestDraft } from './request';
@@ -30,12 +30,13 @@ export function makeAiFunctions(opts: { region: string; enforceAppCheck: boolean
       db: getFirestore(),
       now: Date.now,
       flags: readFlags,
-      configHash: () => configHash(NOT_WIRED_CONFIG),
-      enqueue: ({ projectId, requestId }) =>
+      // 今の設定のハッシュだけ（callable は AI のクライアントを作らない・Secret を持たない）
+      configHash: () => configHash(CURRENT_CONFIG_KEY),
+      enqueue: async ({ projectId, requestId }) =>
         getFunctions().taskQueue(`locations/${opts.region}/functions/${AI_TASK_FUNCTION}`).enqueue(
           { projectId, requestId },
           // 押下ごとの requestId を鍵にする（同じ押下の二重投入だけを止める。世代＝requestId）
-          { id: sha256Hex(`${projectId}:${requestId}`), dispatchDeadlineSeconds: AI_WORKER.dispatchDeadlineSeconds },
+          { id: await sha256Hex(`${projectId}:${requestId}`), dispatchDeadlineSeconds: AI_WORKER.dispatchDeadlineSeconds },
         ),
       log: functionsLogger,
     }));
@@ -58,7 +59,8 @@ export function makeAiFunctions(opts: { region: string; enforceAppCheck: boolean
       now: Date.now,
       flags: readFlags,
       apiKey: () => ANTHROPIC_API_KEY.value() ?? '',
-      createGenerator,
+      // 本物のクライアントはここ（worker）でだけ Secret の値から作る
+      createGenerator: (key) => createGenerator(key),
       siteCheck: (url) => runSiteCheck(url, { resolve: systemResolver, nowIso: () => new Date().toISOString() }),
       log: functionsLogger,
     });

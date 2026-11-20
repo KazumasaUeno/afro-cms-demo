@@ -9,12 +9,14 @@
 import { FieldValue, Timestamp, type Firestore } from 'firebase-admin/firestore';
 import { validateEditable, EditableError } from './editable';
 import { generationAllowed, type AiFlags, type FlagRole } from './flags';
-import { NotWiredError, type GenerateDraftResult, type Generator } from './generatePort';
+import type { GenerateDraftResult, Generator } from './generatePort';
 import { AI_LEASE } from './limits';
 import { errorCodeOf, type AiLogger } from './log';
 import { readUsage } from './quota';
 import { draftRef, parseRequestInput, releaseReservation, usageRef } from './request';
-import { answersHash, buildSentAnswers, configHash, missingRequired } from './shared/answersHash';
+import { answersHash, configHash } from './shared/answersHash';
+import { buildSentAnswers, competitorHostsOf, hostnameOf, missingRequired } from './shared/redact';
+import type { AnswerValue } from './shared/types';
 import { AI_DRAFT_LIMITS } from './shared/aiDraft';
 import type { SiteCheckResult } from './site/checks';
 
@@ -77,7 +79,7 @@ export async function handleTask(data: unknown, deps: TaskDeps): Promise<TaskOut
       const job = (aSnap.data()?.job ?? {}) as Record<string, unknown>;
       if (job.state !== 'running' || job.requestId !== requestId) return { kind: 'stale' as const };
       const p = pSnap.data();
-      const answers = (rSnap.data()?.answers ?? {}) as Record<string, unknown>;
+      const answers = (rSnap.data()?.answers ?? {}) as Record<string, AnswerValue>;
       if (!p || p.archived === true || p.requirements?.status !== 'draft' || missingRequired(answers).length > 0) return { kind: 'precondition' as const };
       tx.update(aiRef, { 'job.leaseUntil': Timestamp.fromMillis(deps.now() + AI_LEASE.workerSeconds * 1000) });
       return { kind: 'go' as const, answers, hasGenerated: !!aSnap.data()?.generated };
@@ -88,29 +90,34 @@ export async function handleTask(data: unknown, deps: TaskDeps): Promise<TaskOut
     }
     if (start.kind === 'precondition') return await refundWith('ai-precondition-changed', 'info');
 
-    const sent = buildSentAnswers(start.answers);
-    const site = await deps.siteCheck(sent.siteUrl);
+    const raw = start.answers;
+    const siteUrl = asList(raw['q-url'])[0]?.trim() ?? '';
+    const sent = { answers: buildSentAnswers(raw), hostname: hostnameOf(siteUrl), competitorHosts: competitorHostsOf(raw) };
+    const site = await deps.siteCheck(siteUrl);
+    // 生成器（本物のクライアント）はここで初めて作る（Secret の値は worker の中だけ）
     const generator = deps.createGenerator(key);
+    const [aHash, cHash] = await Promise.all([answersHash(raw), configHash(generator.config)]);
     let result: GenerateDraftResult;
     try {
       aiCalled = true;
       result = await generator.generateDraft({
-        answers: sent.answers, siteFacts: site.siteFacts, siteText: site.siteText, competitorHosts: sent.competitorHosts, config: generator.config,
+        answers: sent.answers,
+        siteFacts: site.siteCheck.items.length > 0 ? site.siteCheck : null,
+        siteText: site.siteText,
+        competitorHosts: sent.competitorHosts,
       });
-    } catch (e) {
-      if (e instanceof NotWiredError) {
-        aiCalled = false;
-        return await refundWith('ai-not-wired', 'warn');
-      }
-      result = { ok: false, code: 'upstream' };
+    } catch {
+      // generateDraft は失敗を値で返す。ここに来るのは想定外（設定の誤りなど）。本文は持たないので種別だけ
+      result = { ok: false, code: 'upstream', durationMs: 0 };
     }
     let editable = null;
     if (result.ok) {
       try {
-        editable = validateEditable(result.proposal);
+        const p = result.proposal;
+        editable = validateEditable({ summary: p.summary, points: p.points, draft: p.draft });
       } catch (e) {
         if (!(e instanceof EditableError)) throw e;
-        result = { ok: false, code: 'schema', anthropicRequestId: result.anthropicRequestId };
+        result = { ok: false, code: 'schema', anthropicRequestId: result.anthropicRequestId, usage: result.usage, durationMs: result.durationMs };
       }
     }
 
@@ -126,7 +133,6 @@ export async function handleTask(data: unknown, deps: TaskDeps): Promise<TaskOut
       const uSnap = uRef ? await tx.get(uRef) : null;
       const idleJob = { state: 'idle', requestId, by: job.by ?? 'unknown', startedAt: job.startedAt ?? nowTs };
       if (result.ok && editable) {
-        const raw = start.answers;
         const generated = {
           version: 2,
           hostname: sent.hostname,
@@ -142,8 +148,8 @@ export async function handleTask(data: unknown, deps: TaskDeps): Promise<TaskOut
         const update: Record<string, unknown> = {
           state: 'ready',
           generated,
-          answersHash: answersHash(raw),
-          configHash: configHash(generator.config),
+          answersHash: aHash,
+          configHash: cHash,
           usage: result.usage,
           job: idleJob,
           lastError: FieldValue.delete(),
@@ -170,10 +176,19 @@ export async function handleTask(data: unknown, deps: TaskDeps): Promise<TaskOut
       const rid = safeId(fail.anthropicRequestId);
       if (rid) lastError.anthropicRequestId = rid;
       tx.update(aiRef, { state: ai.generated ? 'ready' : 'failed', lastError, job: idleJob, updatedAt: nowTs, updatedBy: 'server' });
+      // AI が応答した失敗（schema・refusal・max_tokens）も費用は発生している。回数は戻さず、推定費用だけ足す
+      const failCost = Math.max(0, Math.floor(fail.usage?.costMicroUsd || 0));
+      if (uRef && uSnap && failCost > 0) {
+        const u = readUsage(uSnap.data());
+        tx.set(uRef, { ...u, costMicroUsd: u.costMicroUsd + failCost }, { merge: false });
+      }
       return 'failed' as const;
     });
 
+    // 本文は出さない（件数・種別・所要時間だけ）
     const fields: Record<string, unknown> = { siteCode: site.code ?? 'ok', siteStatus: site.siteCheck.status };
+    if (typeof result.durationMs === 'number') fields.aiDurationMs = result.durationMs;
+    if (!result.ok && result.usage) Object.assign(fields, { input: result.usage.input, output: result.usage.output, cacheRead: result.usage.cacheRead });
     if (result.ok) Object.assign(fields, { input: result.usage.input, output: result.usage.output, cacheRead: result.usage.cacheRead });
     else Object.assign(fields, { errorCode: `ai-${result.code}`, httpStatus: result.httpStatus });
     const rid = safeId(result.anthropicRequestId);

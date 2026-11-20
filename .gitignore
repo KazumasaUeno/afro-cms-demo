@@ -22,3 +22,6 @@ dist-emulator
 
 # Cloud Functions のビルド出力（npm --prefix functions run build）
 functions/lib
+
+# AI 評価の出力（生の出力・採点表。実装計画 §6 L1）
+prototypes/ai-requirements-eval/out/

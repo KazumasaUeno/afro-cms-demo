@@ -20,6 +20,8 @@ const { handleTask } = lib('task');
 const { handleSaveEdits } = lib('edits');
 const { parseMode, AI_MODE_DEFAULT } = lib('flags');
 const { configHash } = lib('shared/answersHash');
+const { createGenerator, CURRENT_CONFIG_KEY } = lib('generatePort');
+const { DEFAULT_AI_CONFIG } = lib('generateDraft');
 const { AI_QUOTA } = lib('limits');
 const { assertNoRealSecrets } = await import('../../scripts/test-functions.mjs');
 
@@ -177,8 +179,8 @@ test('成功: generated・ハッシュ・usage を書き、送る回答に q-inf
   assert.equal(d.generated.version, 2);
   assert.equal(d.generated.hostname, 'shop.example');
   assert.deepEqual(d.generated.competitors, ['rival.example']);
-  assert.equal(d.configHash, configHash(CONFIG));
-  assert.match(d.answersHash, /^sha256:[0-9a-f]{64}$/);
+  assert.equal(d.configHash, await configHash(CONFIG));
+  assert.match(d.answersHash, /^[0-9a-f]{64}$/);
   assert.equal(d.job.state, 'idle');
   assert.equal((await usage()).costMicroUsd, 7);
   const sent = JSON.stringify(stubCalls[0].answers);
@@ -329,6 +331,73 @@ test('canary: 回答・サイト本文・キーがログ・lastError・HttpsErro
   const hay = JSON.stringify({ logs, errors, out, last: (await ai()).lastError });
   for (const c of [CANARY_ANS, CANARY_SITE, CANARY_KEY]) assert.equal(hay.includes(c), false, c);
   assert.ok(logs.length >= 8);
+});
+
+// ---------- 配線: worker → 本物の createGenerator → U3 generateDraft（クライアントだけ Stub。本物のキー・API なし） ----------
+const VALID_OUT = {
+  summary: 'スマホで見やすくします。',
+  points: [{ area: 'スマホ表示', priority: 'high', title: 'スマホ前提', detail: '文字を大きくします。', impact: '問い合わせの増加', evidence: ['q-issue'] }],
+  draft: { goal: '問い合わせを増やす', target: '', contents: '', features: '', nonFunctional: '', operation: '', schedule: '', openQuestions: [] },
+};
+const stubMsg = (over = {}) => ({ id: 'msg_1', type: 'message', role: 'assistant', model: DEFAULT_AI_CONFIG.model, stop_reason: 'end_turn', stop_sequence: null,
+  content: [{ type: 'text', text: JSON.stringify(VALID_OUT) }], usage: { input_tokens: 1000, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 500 }, ...over });
+function wiredDeps(msgOver) {
+  const seen = { keys: [], params: [] };
+  const deps = tdeps(okResult, {
+    createGenerator: (key) => createGenerator(key, {
+      makeClient: ({ apiKey }) => { seen.keys.push(apiKey); return { create: async (params) => { seen.params.push(params); return { message: stubMsg(msgOver), requestId: 'req_wired' }; } }; },
+    }),
+  });
+  return { deps, seen };
+}
+test('配線: worker は本物の createGenerator を通して U3 generateDraft を呼ぶ（Stub クライアント・キーは worker の値だけ）', async () => {
+  await call('devA', {}, { configHash: () => configHash(CURRENT_CONFIG_KEY) });
+  const { deps, seen } = wiredDeps();
+  assert.equal(await handleTask(enqueued[0], deps), 'ready');
+  assert.deepEqual(seen.keys, [CANARY_KEY]);
+  assert.equal(seen.params.length, 1);
+  assert.equal(seen.params[0].model, DEFAULT_AI_CONFIG.model);
+  const body = JSON.stringify(seen.params[0].messages);
+  assert.doesNotMatch(body, /管理会社|1234-5678|q-infra/);
+  assert.match(body, /shop\.example/);
+  const d = await ai();
+  assert.equal(d.state, 'ready');
+  assert.equal(d.generated.summary, VALID_OUT.summary);
+  assert.equal(d.generated.origin.model, DEFAULT_AI_CONFIG.model);
+  assert.equal(d.configHash, await configHash(CURRENT_CONFIG_KEY));
+  assert.ok(d.usage.costMicroUsd > 0);
+  assert.equal((await usage()).costMicroUsd, d.usage.costMicroUsd);
+  const done = logs.find((l) => l[1] === 'ai.task' && l[2].status === 'ready');
+  assert.equal(done[2].anthropicRequestId, 'req_wired');
+  assert.equal(typeof done[2].aiDurationMs, 'number');
+  // 同じ回答・同じ設定なら再利用（クライアントは作られない）
+  assert.deepEqual(await call('devA', { requestId: uuid(2) }, { configHash: () => configHash(CURRENT_CONFIG_KEY) }), { state: 'ready', reused: true });
+});
+test('配線: AI が応答した失敗（refusal）も推定費用を aiUsage に足し、回数は戻さない・lastError に request-id', async () => {
+  await call('devA', {});
+  const { deps } = wiredDeps({ stop_reason: 'refusal' });
+  assert.equal(await handleTask(enqueued[0], deps), 'failed');
+  const d = await ai();
+  assert.equal(d.lastError.code, 'ai-refusal');
+  assert.equal(d.lastError.anthropicRequestId, 'req_wired');
+  const u = await usage();
+  assert.equal(u.count, 1);
+  assert.ok(u.costMicroUsd > 0);
+  const done = logs.find((l) => l[1] === 'ai.task' && l[2].status === 'failed');
+  assert.equal(done[2].output, 500);
+  assert.equal(typeof done[2].aiDurationMs, 'number');
+});
+test('配線: Stub の ok:false に usage があれば費用だけ足す（schema）', async () => {
+  await call('devA', {});
+  const r = { ok: false, code: 'schema', usage: { input: 1, output: 2, cacheRead: 0, costMicroUsd: 9 }, durationMs: 4 };
+  assert.equal(await handleTask(enqueued[0], tdeps(r)), 'failed');
+  assert.equal((await usage()).costMicroUsd, 9);
+});
+test('配線: callable の配線はクライアントを作らない（index.ts で createGenerator を呼ぶのは worker だけ）', () => {
+  const src = readFileSync(new URL('../../functions/src/ai/index.ts', import.meta.url), 'utf8');
+  assert.equal((src.match(/createGenerator\(/g) ?? []).length, 1);
+  assert.ok(src.indexOf('createGenerator(') > src.indexOf('onTaskDispatched('));
+  assert.doesNotMatch(readFileSync(new URL('../../functions/src/ai/request.ts', import.meta.url), 'utf8'), /anthropic|createGenerator/i);
 });
 
 // ---------- 配線（Functions エミュレータ。既定の off） ----------
