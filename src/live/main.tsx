@@ -7,6 +7,8 @@ import '../global.css';
 import { ThemeModeProvider } from '@/theme/ThemeMode';
 import { ToastProvider } from '@/hooks/useToast';
 import { registerLiveRepositories } from '@/repositories';
+import { registerAiDraftPort } from '@/features/requirements/aiDraft/aiDraftPort';
+import { liveAiDraftPort } from './aiDraftPort';
 import { LiveAuthProvider } from './auth';
 import { useLiveRepositoriesImpl } from './repositories';
 import LiveApp from './LiveApp';
@@ -17,6 +19,8 @@ import LiveApp from './LiveApp';
  * 画面の useRepositories() は、ここで登録した Firestore の実装を使う（LiveDataProvider の内側でだけ呼ばれる）
  */
 registerLiveRepositories(useLiveRepositoriesImpl);
+// AI 下書きの通信口（DEC lead F2）。画面は VITE_FEATURE_AI_REQUIREMENTS が off なら呼ばない
+registerAiDraftPort(liveAiDraftPort);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

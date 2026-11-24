@@ -32,6 +32,9 @@ const PRIORITY: Record<ProposalPoint['priority'], { label: string; tone: PillTon
  * live の開発者: 承認待ちの間だけ「差し戻す」（requirements.reset＝analyzed → draft。回答は残す。§6）。
  * live では保存した提案（req.proposal＝承認の対象と同じ写し）を見せる。無ければ回答から作る（demo は常に回答から作る）
  */
+/** v2 の印の説明（事実どおり。DEC lead F4。お客様向けの確定文言は LEGAL Q-4） */
+const V2_BADGE_TOOLTIP = 'AI が作成した下書きを、担当者が確認・編集した内容です。';
+
 export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'client' }) {
   const { requirements, approvals, projects } = useRepositories();
   const { data: req } = useCurrentRequirements();
@@ -72,7 +75,7 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
             <Box sx={{ p: { xs: 2.5, md: 4 } }}>
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
                 {/* v2 の印の文言は PENDING Q-4（お客様への表示文言。法務） */}
-                {v2 ? <AiBadge label={AI_DRAFT_COPY.v2Badge} /> : <AiBadge />}
+                {v2 ? <AiBadge label={AI_DRAFT_COPY.v2Badge} tooltip={V2_BADGE_TOOLTIP} /> : <AiBadge />}
                 <Typography variant="caption">作成 {formatDateTime(req.analyzedAt)}</Typography>
               </Stack>
               <Typography variant="overline" sx={{ display: 'block' }}>Renewal Proposal</Typography>

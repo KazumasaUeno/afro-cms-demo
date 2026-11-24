@@ -20,6 +20,19 @@ export function toIso(v: unknown): string | undefined {
   return undefined;
 }
 
+/** Timestamp を中まで ISO 文字列へ（aiDrafts の文書。aiDraftState.ts は ISO を前提にする。U4b） */
+export function deepIso(v: unknown): unknown {
+  if (v && typeof v === 'object') {
+    const iso = toIso(v);
+    if (iso !== undefined) return iso;
+    if (Array.isArray(v)) return v.map(deepIso);
+    const out: Record<string, unknown> = {};
+    for (const [k, x] of Object.entries(v)) out[k] = deepIso(x);
+    return out;
+  }
+  return v;
+}
+
 export interface ProjectDoc {
   id: string;
   clientName: string;
