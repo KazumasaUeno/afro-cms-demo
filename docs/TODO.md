@@ -4,6 +4,10 @@
 
 - [ ] **AI による改善提案＋現行サイト診断の設計案**（2026-11-20、未承認）: `docs/design/AI_REQUIREMENTS.md`。レビュー反映済み（改訂 1）→ ユーザー判断（同 §9 Q-1〜Q-7）→ 実装計画。それまで live の「サイトスコア（AI 推定）」は実測ではない（同 §0・Q-6）。`aiDrafts` の生出力を期限で消す仕組みは未実装（同 §7・Q-7。LEGAL REVIEW REQUIRED）
 - [ ] **AI 下書きの「AI 設定が変わった」注記（画面設計 `docs/design/AI_REQUIREMENTS_UI.md` §2 状態 8・Q-U1）**: クライアントが今の `configHash` を知る手段（callable の返り値・公開の設定文書・ビルド時定数）が無いため、`aiDraftState.ts` は `configChanged` を常に false にしている（DEC lead 2026-11-24）。手段を決めたら `deriveAiDraftState` の `configHashNow` を使う
+- [ ] **AI 下書きの `aiDrafts` の生出力を期限で消すバッチ**（設計 `docs/design/AI_REQUIREMENTS.md` §7・Q-7。案は承認から 90 日で `generated` を削除。**LEGAL REVIEW REQUIRED**・期間は未確定）: 定期実行の関数（Cloud Scheduler）は未実装。お客様公開（`AI_REQUIREMENTS_MODE=on`）は、これが実装済みか、ユーザーの書面での受け入れが `docs/legal/AI_REQUIREMENTS_LEGAL_CLEARANCE.md` にあるまで出さない（計画 §5 L-c）
+- [ ] **AI 下書きの callable の App Check**: `requestRequirementsDraft`・`saveAiDraftEdits` も全体の `ENFORCE_APP_CHECK`（`functions/src/index.ts`。今は false）に従う。下の「App Check を有効にして enforce」と同時に true にする（お客様公開＝段 5 の前に済ませる）
+- [ ] **表示速度の実測（PageSpeed Insights 等）は v1 で見送り**（ユーザー 2026-11-20・設計 Q-3。新しい外部サービス＝ユーザー判断）。それまでサイト診断は基本チェックだけで、速度の数値を出さない
+- [ ] **AI 下書きのクラウド作業（U5。未実施）**: `docs/operations/RUNBOOK_FIREBASE.md` §9.10 の G-0〜G-7 をユーザーの GO ごとに行い、§9.9 の Release Gate の出力を記録する（段 4 の前）
 
 ## 段階 C（本番の Firebase プロジェクトを作って公開する）の前に必ず行う
 
@@ -71,4 +75,4 @@
 - オフラインでログインすると読み込み中のまま止まり、案内が出ない（`src/live/auth.tsx` の fromCache 待ち。live は接続が前提）
 - 自動テストが無い: `scripts/deploy-firebase.mjs` の `checkHostingBuild`・`parseTestCounts`（127.0.0.1 の検査は assets/*.js だけ）／「別の画面で予約した書き込みも saveNow が待つ」（エミュレータで手動確認のみ）
 - Auth の「ユーザー アクション」: 作成（登録）を許可は 0.46.0 の functions をデプロイして通しを確かめた後に OFF にする（上の「招待のアカウント作成を Cloud Functions へ移す」）。**削除を許可 ON**（本人が SDK から Auth アカウントを消せる。`accounts`・承認の記録は残る）は、削除依頼の手順（設計書 §17.2）と合わせて OFF にするかを決める
-- [ ] **Anthropic API キーの期限 2027-11-20 15:00 JST**（キー名 `afro-cms-functions-3`（2026-11-20 に 2 本を漏えいのため削除し作り直し。Secret は v3 のみ有効）、Workspace `afro-cms`（個人の組織・地域 US・月 $20 上限）、2026-11-20 作成。連携済みアカウントは個人なので、組織を離れると無効になる）。期限の 1 か月前に作り直して `ANTHROPIC_API_KEY`（Secret Manager）を差し替え、関数をデプロイし直す。手順は AI 実装時に `docs/operations/RUNBOOK_FIREBASE.md` へ書く
+- [ ] **Anthropic API キーの期限 2027-11-20 15:00 JST**（キー名 `afro-cms-functions-3`（2026-11-20 に 2 本を漏えいのため削除し作り直し。Secret は v3 のみ有効）、Workspace `afro-cms`（個人の組織・地域 US・月 $20 上限）、2026-11-20 作成。連携済みアカウントは個人なので、組織を離れると無効になる）。期限の 1 か月前に作り直して `ANTHROPIC_API_KEY`（Secret Manager）を差し替え、関数をデプロイし直す。手順は `docs/operations/RUNBOOK_FIREBASE.md` §9.2

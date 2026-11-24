@@ -885,6 +885,7 @@
 - live で保存済みの提案（承認の対象の写し）は書き換えない。この版より前に作った提案は、以前の文言のまま表示される
 
 ## Unreleased (AI requirements)
+- U5（運用の文書だけ・クラウドは未変更）: `docs/operations/RUNBOOK_FIREBASE.md` §9「AI 下書き」（Secret と実行 SA の一覧・ローテーション・漏えい時・フラグ・上限・止める手順・Hosting の戻し先の下限・月 1 回の請求の突き合わせ・IAM の Release Gate・ユーザーの GO が要る作業 G-0〜G-7）。`docs/TODO.md` に削除バッチ（Q-7）・App Check・PSI 見送り・U5 のクラウド作業
 - U4b（画面。フラグ `VITE_FEATURE_AI_REQUIREMENTS` 既定 off＝今と同じ・未デプロイ）: live の入口が AI 下書きの通信口（`src/live/aiDraftPort.ts`: aiDrafts の購読・`requestRequirementsDraft`／`saveAiDraftEdits`）を登録。internal/on で要件の draft 画面に「ヒアリング｜AI 下書き」のタブ（`AiDraftPanel`・`AiDraftEditor`: 未生成／生成中／失敗／止まった／下書きあり・確認済み、要確認の数字の印、1.5 秒の自動保存、作り直しの確認、承認の依頼＝`completeAnalysis(pid,{proposal:'aiDraft'})`）。internal の開発者には生成のボタンを出さない。社内の入力欄に送信の注意（【下書きの文言】）。`AiBadge` に任意の `tooltip`、`HearingEditor` に任意の `analyzeLabel`（既定は不変）。demo のビルドは Firebase なしのまま
 - U3（AI 層。フラグの内側・未デプロイ）: `functions/src/ai/`（PRM-REQ-001・構造化出力の Schema と再検証・Anthropic クライアント maxRetries 0・generateDraft・後処理・pricing.json）、共有の除去とハッシュ `src/shared/ai/`（`scripts/gen-ai-shared.mjs` が functions へ写す）、評価の道具 `prototypes/ai-requirements-eval/`（未実行）。依存 `@anthropic-ai/sdk` 1.11.0（functions のみ）
 - U2＋U3 統合（フラグ既定 off・未デプロイ）: worker（`generateRequirementsDraftTask`）が Secret の値から本物の Anthropic クライアントを作り U3 の `generateDraft` を呼ぶ（callable はクライアントを作らない）。configHash は U3 の `DEFAULT_AI_CONFIG`（モデルは [PENDING U-3]）。ハッシュは U3 の共有モジュール（非同期 SHA-256・接頭辞なし）に統一。AI が応答した失敗も推定費用を `aiUsage` に足す。ログに `aiDurationMs`（本文なし）

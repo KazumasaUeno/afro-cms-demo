@@ -221,6 +221,8 @@
 | T-13 | 依存の改ざん（M6） | §3 条件② | TEST-13 `npm audit signatures`・install scripts なし |
 | T-14 | 評価キー・評価出力の残留（L1） | §6 | TEST-14 gitignore の確認・失効をユーザーが報告 |
 
+- **TEST-05・TEST-06 の手順（SEC-H2）**: `docs/operations/RUNBOOK_FIREBASE.md` §9.9（Release Gate のコマンドと確認項目。全コマンド `--project afro-cms-4a6ff`）。クラウドの作業そのものは同 §9.10 の G-0〜G-7（それぞれユーザーの GO の後。2026-11-24 時点で未実施）
+
 - [UNKNOWN] 設計 rev1 の本文には `S-H1`・`S-H2`・`S-M3` のラベルだけがある（`git show …:docs/design/AI_REQUIREMENTS.md` を grep）。**`S-M1`・`S-M2` のラベルは本文に見つからない**。T-07（ログ）と T-08（個人情報の除去）に当たると推定 [INFERENCE] → security-engineer が r2 で対応を確認する
 
 ## 12. 完了条件（CLAUDE.md 3.10）
