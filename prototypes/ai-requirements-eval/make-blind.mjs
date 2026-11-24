@@ -64,11 +64,12 @@ const card = (it) => `<section><h2>${it.id}</h2><details open><summary>ヒアリ
 writeFileSync(join(dir, 'sheet.html'), `<!doctype html><meta charset="utf-8"><title>盲検 採点表</title>
 <style>body{font:15px/1.7 system-ui,sans-serif;max-width:860px;margin:2em auto;padding:0 16px}section{border-top:2px solid #888;margin-top:2em}dt{font-weight:bold;float:left;width:9em;clear:left}dd{margin-left:10em}small{color:#555}</style>
 <h1>改善提案の盲検 採点表（${order.length} 件）</h1>
-<p>各件の「提案ポイント」を、ヒアリングに対して 1〜5 で採点し、scores.csv の自分の列に書いてください。<b>出し手（AI のモデル名・テンプレート）は伏せてあります。key.json は採点が終わるまで開かないでください。</b></p>
+<p>各件の「提案ポイント」を、ヒアリングに対して 1〜5 で採点し、自分の scores-scorerN.csv の score 列に書いてください（もう 1 人のファイルは見ない）。<b>出し手（AI のモデル名・テンプレート）は伏せてあります。key.json は採点が終わるまで開かないでください。</b></p>
 <p>5 = そのままお客様に出せる ／ 4 = 少し直せば出せる ／ 3 = 使える部分が半分ほど ／ 2 = ほぼ書き直し ／ 1 = 使えない・誤り・不適切</p>
 <p>見る点: ヒアリングの内容に合っているか・具体的か・根拠のない数字や約束が無いか・優先度が妥当か・お客様向けの言葉か</p>
 ${order.map(card).join('\n')}`);
-writeFileSync(join(dir, 'scores.csv'), '﻿id,scorer1,scorer2,comment\n' + order.map((it) => `${it.id},,,`).join('\n') + '\n');
+// 採点者ごとに別ファイル（お互いの点を見ない）。先頭は BOM（Excel で文字化けさせない）
+for (const who of ['scorer1', 'scorer2']) writeFileSync(join(dir, `scores-${who}.csv`), '﻿id,score,comment\n' + order.map((it) => `${it.id},,`).join('\n') + '\n');
 writeFileSync(join(dir, 'key.json'), JSON.stringify(Object.fromEntries(order.map((it) => [it.id, { source: it.source, hearing: it.hearing.id }])), null, 2));
 console.log(`採点表: ${dir}（${order.length} 件 = ${HEARINGS.length} 件 × [template, ${models.join(', ')}]）`);
 if (missing.length) console.log(`出力が無く外したもの ${missing.length} 件: ${missing.join(' ')}`);

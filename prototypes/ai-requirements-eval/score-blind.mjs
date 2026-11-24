@@ -11,7 +11,11 @@ if (!arg) { console.error('out/<実行日時> を指定'); process.exit(2); }
 const runDir = existsSync(arg) ? arg : join(here, 'out', arg);
 const dir = join(runDir, 'blind');
 const key = JSON.parse(readFileSync(join(dir, 'key.json'), 'utf8'));
-const lines = readFileSync(join(dir, 'scores.csv'), 'utf8').replace(/^﻿/, '').trim().split(/\r?\n/).slice(1);
+const read = (who) => new Map(readFileSync(join(dir, `scores-${who}.csv`), 'utf8').replace(/^﻿/, '').trim().split(/\r?\n/).slice(1)
+  .map((l) => { const [id, score] = l.split(','); return [id, (score ?? '').trim()]; }));
+const s1 = read('scorer1');
+const s2 = read('scorer2');
+const lines = [...new Set([...s1.keys(), ...s2.keys()])].map((id) => `${id},${s1.get(id) ?? ''},${s2.get(id) ?? ''}`);
 
 const by = {};
 const blank = [];
