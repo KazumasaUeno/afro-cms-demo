@@ -6,7 +6,7 @@
  * 結果: 最後の transaction で job が自分で running のときだけ書く（fencing）。AI を呼ぶ前の失敗は加算を戻す。呼んだ後は戻さない
  * 例外を外へ投げない（retryConfig.maxAttempts 1。失敗は lastError とログに残す）
  */
-import { FieldValue, Timestamp, type Firestore } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp, type DocumentReference, type DocumentSnapshot, type Firestore, type Transaction } from 'firebase-admin/firestore';
 import { validateEditable, EditableError } from './editable';
 import { generationAllowed, type AiFlags, type FlagRole } from './flags';
 import type { GenerateDraftResult, Generator } from './generatePort';
@@ -15,7 +15,7 @@ import { errorCodeOf, type AiLogger } from './log';
 import { readUsage } from './quota';
 import { draftRef, parseRequestInput, releaseReservation, usageRef } from './request';
 import { answersHash, configHash } from './shared/answersHash';
-import { buildSentAnswers, competitorHostsOf, hostnameOf, missingRequired } from './shared/redact';
+import { buildSentAnswers, competitorHostsOf, missingRequired } from './shared/redact';
 import type { AnswerValue } from './shared/types';
 import { AI_DRAFT_LIMITS } from './shared/aiDraft';
 import type { SiteCheckResult } from './site/checks';
@@ -58,6 +58,14 @@ export async function handleTask(data: unknown, deps: TaskDeps): Promise<TaskOut
   };
 
   let aiCalled = false;
+  // AI を呼んだ後の推定費用（fencing・想定外の失敗でも aiUsage へ足す）と、自分の予約の日（job0.quotaDay）
+  let spentMicroUsd = 0;
+  let myDay = '';
+  const addCost = (tx: Transaction, uRef: DocumentReference, uSnap: DocumentSnapshot, cost: number) => {
+    if (!uSnap.exists || cost <= 0) return;
+    const u = readUsage(uSnap.data());
+    tx.set(uRef, { ...u, costMicroUsd: u.costMicroUsd + cost }, { merge: false });
+  };
   try {
     // 開始前の確認（フラグ・Secret）。どちらも AI を呼ぶ前なので返金する
     const pre = (await aiRef.get()).data();
@@ -66,6 +74,7 @@ export async function handleTask(data: unknown, deps: TaskDeps): Promise<TaskOut
       log('info', 'stale');
       return 'stale';
     }
+    myDay = typeof job0.quotaDay === 'string' ? job0.quotaDay : '';
     const role = (typeof job0.role === 'string' ? job0.role : 'none') as FlagRole;
     if (!generationAllowed(deps.flags(), role, projectId)) return await refundWith('ai-feature-disabled', 'warn');
     const key = deps.apiKey();
@@ -82,7 +91,7 @@ export async function handleTask(data: unknown, deps: TaskDeps): Promise<TaskOut
       const answers = (rSnap.data()?.answers ?? {}) as Record<string, AnswerValue>;
       if (!p || p.archived === true || p.requirements?.status !== 'draft' || missingRequired(answers).length > 0) return { kind: 'precondition' as const };
       tx.update(aiRef, { 'job.leaseUntil': Timestamp.fromMillis(deps.now() + AI_LEASE.workerSeconds * 1000) });
-      return { kind: 'go' as const, answers, hasGenerated: !!aSnap.data()?.generated };
+      return { kind: 'go' as const, answers };
     });
     if (start.kind === 'stale') {
       log('info', 'stale');
@@ -92,7 +101,7 @@ export async function handleTask(data: unknown, deps: TaskDeps): Promise<TaskOut
 
     const raw = start.answers;
     const siteUrl = asList(raw['q-url'])[0]?.trim() ?? '';
-    const sent = { answers: buildSentAnswers(raw), hostname: hostnameOf(siteUrl), competitorHosts: competitorHostsOf(raw) };
+    const sent = { answers: buildSentAnswers(raw), competitorHosts: competitorHostsOf(raw) };
     const site = await deps.siteCheck(siteUrl);
     // 生成器（本物のクライアント）はここで初めて作る（Secret の値は worker の中だけ）
     const generator = deps.createGenerator(key);
@@ -106,10 +115,17 @@ export async function handleTask(data: unknown, deps: TaskDeps): Promise<TaskOut
         siteText: site.siteText,
         competitorHosts: sent.competitorHosts,
       });
-    } catch {
-      // generateDraft は失敗を値で返す。ここに来るのは想定外（設定の誤りなど）。本文は持たないので種別だけ
+    } catch (e) {
+      // generateDraft は失敗を値で返す。ここに来るのは想定外。本文は持たないので種別だけ（握り潰さずログに残す）
+      log('error', 'generator_threw', { errorCode: errorCodeOf(e) });
       result = { ok: false, code: 'upstream', durationMs: 0 };
     }
+    // 送る前の設定の誤り（未知のモデル。U3 が code 'config' で返す）は AI を呼んでいないので返金する
+    if (!result.ok && result.code === 'config') {
+      aiCalled = false;
+      return await refundWith('ai-config', 'error');
+    }
+    spentMicroUsd = Math.max(0, Math.floor(result.usage?.costMicroUsd || 0));
     let editable = null;
     if (result.ok) {
       try {
@@ -124,24 +140,28 @@ export async function handleTask(data: unknown, deps: TaskDeps): Promise<TaskOut
     // 結果の書き込み（fencing）
     const nowTs = Timestamp.fromMillis(deps.now());
     const outcome = await db.runTransaction(async (tx) => {
-      const aSnap = await tx.get(aiRef);
+      const uRef = myDay ? usageRef(db, myDay) : null;
+      const [aSnap, uSnap] = await Promise.all([tx.get(aiRef), uRef ? tx.get(uRef) : Promise.resolve(null)]);
       const ai = aSnap.data();
       const job = (ai?.job ?? {}) as Record<string, unknown>;
-      if (!ai || job.state !== 'running' || job.requestId !== requestId) return 'fenced' as const;
-      const day = typeof job.quotaDay === 'string' ? job.quotaDay : '';
-      const uRef = day ? usageRef(db, day) : null;
-      const uSnap = uRef ? await tx.get(uRef) : null;
+      if (!ai || job.state !== 'running' || job.requestId !== requestId) {
+        // 結果は捨てるが、費用は発生している（自分の予約の日へ足す）
+        if (uRef && uSnap) addCost(tx, uRef, uSnap, spentMicroUsd);
+        return 'fenced' as const;
+      }
       const idleJob = { state: 'idle', requestId, by: job.by ?? 'unknown', startedAt: job.startedAt ?? nowTs };
       if (result.ok && editable) {
+        // サーバー欄の正は U3 の result.proposal（除去済みの文・siteCheck は項目が無ければ null。Lead DECISION 2026-11-24 CR-M2）
+        const p = result.proposal;
         const generated = {
           version: 2,
-          hostname: sent.hostname,
-          issue: asList(raw['q-issue']).join('、').trim(),
-          purposes: asList(raw['q-purpose']),
-          improves: asList(raw['q-improve']),
-          competitors: sent.competitorHosts,
-          siteCheck: site.siteCheck,
-          origin: { kind: 'ai', promptVersion: generator.config.promptVersion, model: generator.config.model },
+          hostname: p.hostname,
+          issue: p.issue,
+          purposes: p.purposes,
+          improves: p.improves,
+          competitors: p.competitors,
+          siteCheck: p.siteCheck,
+          origin: p.origin,
           ...editable,
           flags: { unsupportedNumbers: (result.flags?.unsupportedNumbers ?? []).filter((x) => typeof x === 'string').slice(0, 50).map((x) => x.slice(0, 50)) },
         };
@@ -164,10 +184,7 @@ export async function handleTask(data: unknown, deps: TaskDeps): Promise<TaskOut
           }
         }
         tx.update(aiRef, update);
-        if (uRef && uSnap) {
-          const u = readUsage(uSnap.data());
-          tx.set(uRef, { ...u, costMicroUsd: u.costMicroUsd + Math.max(0, Math.floor(result.usage.costMicroUsd || 0)) }, { merge: false });
-        }
+        if (uRef && uSnap) addCost(tx, uRef, uSnap, spentMicroUsd);
         return 'ready' as const;
       }
       const fail = result as Extract<GenerateDraftResult, { ok: false }>;
@@ -177,11 +194,7 @@ export async function handleTask(data: unknown, deps: TaskDeps): Promise<TaskOut
       if (rid) lastError.anthropicRequestId = rid;
       tx.update(aiRef, { state: ai.generated ? 'ready' : 'failed', lastError, job: idleJob, updatedAt: nowTs, updatedBy: 'server' });
       // AI が応答した失敗（schema・refusal・max_tokens）も費用は発生している。回数は戻さず、推定費用だけ足す
-      const failCost = Math.max(0, Math.floor(fail.usage?.costMicroUsd || 0));
-      if (uRef && uSnap && failCost > 0) {
-        const u = readUsage(uSnap.data());
-        tx.set(uRef, { ...u, costMicroUsd: u.costMicroUsd + failCost }, { merge: false });
-      }
+      if (uRef && uSnap) addCost(tx, uRef, uSnap, spentMicroUsd);
       return 'failed' as const;
     });
 
@@ -201,7 +214,10 @@ export async function handleTask(data: unknown, deps: TaskDeps): Promise<TaskOut
     try {
       if (!aiCalled) return await refundWith('ai-internal', 'error');
       await db.runTransaction(async (tx) => {
-        const s = await tx.get(aiRef);
+        const uRef = myDay ? usageRef(db, myDay) : null;
+        const [s, uSnap] = await Promise.all([tx.get(aiRef), uRef ? tx.get(uRef) : Promise.resolve(null)]);
+        // 呼んだ後の費用は、job が自分のものでなくても足す（結果の transaction は失敗して何も書いていない）
+        if (uRef && uSnap) addCost(tx, uRef, uSnap, spentMicroUsd);
         const ai = s.data();
         const job = (ai?.job ?? {}) as Record<string, unknown>;
         if (!ai || job.state !== 'running' || job.requestId !== requestId) return;

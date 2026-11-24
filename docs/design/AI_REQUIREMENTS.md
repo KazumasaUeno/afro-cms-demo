@@ -58,7 +58,7 @@
 | 入力 | `{ projectId, requestId /* UUID v4。押下ごとにクライアントが作る */, regenerate?: boolean, discardEdits?: boolean }`。**回答・URL はクライアントから受け取らない**（サーバーが Firestore から読む） |
 | 出力 | `{ state: 'running', requestId }` ／ 同一入力の下書きがあり `regenerate` でない場合は `{ state: 'ready', reused: true }`（上限に数えない）。本文は返さない |
 | 認可 | `auth` あり・`email_verified`・`accounts/{uid}` が active でメール一致（`firestore.rules:40` の `roleOf` と同じ判定）→ `admin`、または `developer` かつ `uid ∈ memberUids`。archived の案件は拒否。管理者の `discardEdits` は `confirmDiscard: true` も必須（L-4） |
-| 1 つの transaction の順序（B-M2） | ①案件・回答・draft 文書を読む ②前提（status=draft・必須回答・edits-exist）③lease と Idempotency（`job.state=='running' && leaseUntil > now` → `aborted: already-running`。同じ `requestId` → その状態を返す。`answersHash`＋`configHash` が同じで下書きあり・`regenerate` なし → reused）④**ここで初めて上限を加算**（案件の日/月・利用者の日・全体の日/月。日付は **JST**）⑤`job = {state:'running', requestId, by, startedAt, leaseUntil: now+630s}` |
+| 1 つの transaction の順序（B-M2） | ①案件・回答・draft 文書を読む ②前提（status=draft・必須回答・edits-exist）③lease と Idempotency（`job.state=='running' && leaseUntil > now` → `aborted: already-running`。同じ `requestId` → その状態を返す（予約し直さない。`running` のまま lease が切れていれば `failed` を返し、画面は新しい `requestId` で押し直す。CR-M1 2026-11-24）。`answersHash`＋`configHash` が同じで下書きあり・`regenerate` なし → reused）④**ここで初めて上限を加算**（案件の日/月・利用者の日・全体の日/月。日付は **JST**）⑤`job = {state:'running', requestId, by, startedAt, leaseUntil: now+630s}` |
 | enqueue | commit 後に Cloud Tasks へ `{projectId, requestId}` を入れる。失敗したら返金の transaction（lease を外し加算を戻す）をして `unavailable` |
 | 前提で落ちたとき | `permission-denied` / `failed-precondition` / `resource-exhausted` / `aborted`。**この段階の失敗は文書に何も書かない** |
 
@@ -66,7 +66,7 @@
 
 | 項目 | 内容 |
 |---|---|
-| 設定 | `timeoutSeconds: 540`・`retryConfig.maxAttempts: 1`（再実行しない）・`rateLimits.maxConcurrentDispatches: 2`・`maxInstances: 2`・`concurrency: 1`・`cpu: 1`・`memory: 512MiB`・`secrets: [ANTHROPIC_API_KEY]`（**Secret はこの関数にだけ結ぶ**）・SA `afro-cms-functions@` |
+| 設定 | `timeoutSeconds: 540`・`retryConfig.maxAttempts: 1`（再実行しない）・`rateLimits.maxConcurrentDispatches: 2`・`maxInstances: 2`・`concurrency: 1`・`cpu: 1`・`memory: 512MiB`・`secrets: [ANTHROPIC_API_KEY]`（**Secret はこの関数にだけ結ぶ**）・SA `afro-cms-ai-worker@`（L-a。callable は全体既定の `afro-cms-functions@`） |
 | 開始 | transaction で `job.requestId == 自分 && job.state=='running'` を確かめ、`leaseUntil = 開始時刻 + 540s + 30s` に延ばす。違えば何もせず終わる |
 | 処理 | 回答の読み直しと前提の再確認 → 送信用の回答を作る（§4）→ サイト取得（§3。失敗しても回答だけで続ける）→ Anthropic へ 1 回（streaming、SDK `timeout` 400s・**`maxRetries: 0`**）→ Schema 検証・後処理（§5.3） |
 | 結果の書き込み（fencing。B-H2） | 最後の transaction で `job.state=='running' && job.requestId==自分` のときだけ書く（違えば結果を捨てる）。成功: `generated`・ハッシュ・`usage` を書き、`discardEdits` なら同じ transaction で `edited` を消す。`state='ready'`、`job.state='idle'` |
@@ -195,7 +195,7 @@ ProposalV2 = {
 
 ### 7.1 Secret（S-M3）
 
-- `ANTHROPIC_API_KEY` は Secret Manager。`secretAccessor` は**そのシークレットだけ**に、**`afro-cms-functions@` だけ**へ付ける（プロジェクト単位で付けない）。結ぶのは `generateRequirementsDraftTask` だけ
+- `ANTHROPIC_API_KEY` は Secret Manager。`secretAccessor` は**そのシークレットだけ**に、**worker の SA `afro-cms-ai-worker@` だけ**へ付ける（L-a。`afro-cms-functions@` には付けない。プロジェクト単位で付けない。SEC-M1 2026-11-24）。結ぶのは `generateRequirementsDraftTask` だけ
 - キーは Anthropic のこの用途専用 Workspace のもの（他の用途と共有しない）
 - 一覧と更新手順（ローテーション・漏えい時の失効）を `docs/operations/RUNBOOK_FIREBASE.md` に節として足す（このリポジトリに SECRETS_INVENTORY は無い）
 

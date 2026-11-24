@@ -33,7 +33,8 @@ export interface GenerateDraftInput {
 export interface GenerateDraftDeps { client: DraftClient; now: () => number }
 
 export interface AiUsage { input: number; output: number; cacheRead: number; costMicroUsd: number }
-export type GenerateDraftErrorCode = 'schema' | 'refusal' | 'max_tokens' | 'rate_limited' | 'upstream' | 'timeout';
+/** config: 送る前の設定の誤り（未知のモデル）。Anthropic を呼んでいない（worker は返金する） */
+export type GenerateDraftErrorCode = 'config' | 'schema' | 'refusal' | 'max_tokens' | 'rate_limited' | 'upstream' | 'timeout';
 export type GenerateDraftResult =
   | { ok: true; proposal: ProposalV2; flags: { unsupportedNumbers: string[] }; usage: AiUsage; anthropicRequestId?: string; durationMs: number }
   | { ok: false; code: GenerateDraftErrorCode; httpStatus?: number; anthropicRequestId?: string; usage?: AiUsage; durationMs: number };
@@ -71,7 +72,12 @@ function usageOf(model: string, m: Anthropic.Message): AiUsage {
 
 export async function generateDraft(input: GenerateDraftInput, deps: GenerateDraftDeps): Promise<GenerateDraftResult> {
   const started = deps.now();
-  const params = buildRequest(input);
+  let params: Anthropic.MessageStreamParams;
+  try {
+    params = buildRequest(input);
+  } catch {
+    return { ok: false, code: 'config', durationMs: deps.now() - started };
+  }
   const payload = buildPayload(input);
   let res;
   try {

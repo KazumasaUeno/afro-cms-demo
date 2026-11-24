@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { assertDemoProject, emulatorHostFromEnv } from '../rules/guard.mjs';
 import { EDITED_CASES } from '../rules/aiEditedCases.mjs';
-import { GENERATED, EDITED } from '../rules/aiFixtures.mjs';
+import { GENERATED, EDITED, proposalV2 } from '../rules/aiFixtures.mjs';
 
 const PROJECT = assertDemoProject(process.env.GCLOUD_PROJECT);
 const fsHost = emulatorHostFromEnv('FIRESTORE_EMULATOR_HOST');
@@ -43,7 +43,9 @@ let stubCalls;
 const logger = { info: (m, f) => logs.push(['info', m, f]), warn: (m, f) => logs.push(['warn', m, f]), error: (m, f) => logs.push(['error', m, f]) };
 const flagsOn = () => ({ mode: 'on', allowlist: [] });
 const rdeps = (o = {}) => ({ db, now: () => clock, flags: flagsOn, configHash: () => configHash(CONFIG), enqueue: async (t) => { enqueued.push(t); }, log: logger, ...o });
-const okResult = { ok: true, proposal: EDITED, flags: { unsupportedNumbers: [] }, usage: { input: 10, output: 20, cacheRead: 0, costMicroUsd: 7 }, anthropicRequestId: 'req_abc' };
+// U3 の契約（result.proposal がサーバー欄の正。CR-M2）: Stub も完全な ProposalV2 を返す
+const STUB_PROPOSAL = { ...proposalV2(GENERATED), hostname: 'stub.example', issue: '除去済みの課題', competitors: ['rival.example'], siteCheck: null };
+const okResult = { ok: true, proposal: STUB_PROPOSAL, flags: { unsupportedNumbers: [] }, usage: { input: 10, output: 20, cacheRead: 0, costMicroUsd: 7 }, anthropicRequestId: 'req_abc' };
 const tdeps = (result = okResult, o = {}) => ({
   db, now: () => clock, flags: flagsOn, apiKey: () => CANARY_KEY, log: logger,
   createGenerator: () => ({ config: CONFIG, generateDraft: async (input) => { stubCalls.push(input); return typeof result === 'function' ? result(input) : result; } }),
@@ -177,8 +179,10 @@ test('成功: generated・ハッシュ・usage を書き、送る回答に q-inf
   const d = await ai();
   assert.equal(d.state, 'ready');
   assert.equal(d.generated.version, 2);
-  assert.equal(d.generated.hostname, 'shop.example');
-  assert.deepEqual(d.generated.competitors, ['rival.example']);
+  // サーバー欄は result.proposal のまま（worker は回答から組み立て直さない）
+  const { flags: _f, ...stored } = d.generated;
+  assert.deepEqual(stored, STUB_PROPOSAL);
+  assert.deepEqual(d.generated.flags, { unsupportedNumbers: [] });
   assert.equal(d.configHash, await configHash(CONFIG));
   assert.match(d.answersHash, /^[0-9a-f]{64}$/);
   assert.equal(d.job.state, 'idle');
@@ -218,6 +222,59 @@ test('lease 切れの後の押下は引き継げる（期限内は already-runni
   await assert.rejects(call('devA', { requestId: uuid(2) }), code('already-running'));
   clock = T + 631_000;
   assert.equal((await call('devA', { requestId: uuid(3) })).state, 'running');
+});
+test('同じ requestId が lease 切れ（T+631s）で届く: failed を返し、加算・lease・enqueue をし直さない（CR-M1）', async () => {
+  await call('devA', { requestId: uuid(1) });
+  const before = await ai();
+  clock = T + 631_000;
+  assert.deepEqual(await call('devA', { requestId: uuid(1) }), { state: 'failed', requestId: uuid(1) });
+  const d = await ai();
+  assert.equal(d.job.state, 'running');
+  assert.equal(d.job.leaseUntil.toMillis(), before.job.leaseUntil.toMillis());
+  assert.equal(d.quota.dayCount, 1);
+  assert.equal((await usage()).count, 1);
+  assert.equal(enqueued.length, 1);
+  // 新しい requestId なら引き継げる
+  assert.equal((await call('devA', { requestId: uuid(2) })).state, 'running');
+  assert.equal((await usage()).count, 2);
+});
+test('fencing で捨てた結果も費用は自分の予約の日へ足す', async () => {
+  await call('devA', { requestId: uuid(1) });
+  const slow = async () => {
+    clock = T + 700_000;
+    await call('devA', { requestId: uuid(2) });
+    return okResult;
+  };
+  assert.equal(await handleTask(enqueued[0], tdeps(slow)), 'fenced');
+  assert.equal((await usage()).costMicroUsd, 7);
+});
+test('AI を呼んだ後の想定外の失敗（外側の catch）も費用を足し、回数は戻さない', async () => {
+  await call('devA', {});
+  const broken = { ok: true, proposal: null, usage: { input: 1, output: 1, cacheRead: 0, costMicroUsd: 5 }, durationMs: 1 };
+  assert.equal(await handleTask(enqueued[0], tdeps(broken)), 'failed');
+  const u = await usage();
+  assert.deepEqual([u.count, u.costMicroUsd], [1, 5]);
+  const d = await ai();
+  assert.deepEqual([d.lastError.code, d.job.state], ['ai-internal', 'idle']);
+});
+test('generateDraft が例外を投げたら generator_threw をログに残す（失敗・回数は戻さない）', async () => {
+  await call('devA', {});
+  assert.equal(await handleTask(enqueued[0], tdeps(async () => { throw new Error('boom'); })), 'failed');
+  const l = logs.find((x) => x[2].status === 'generator_threw');
+  assert.equal(l?.[0], 'error');
+  assert.equal((await usage()).count, 1);
+});
+test('送る前の設定の誤り（未知のモデル）は config: Anthropic 0 回・返金', async () => {
+  await call('devA', {});
+  let created = 0;
+  const deps = tdeps(okResult, {
+    createGenerator: (key) => createGenerator(key, { config: { ...DEFAULT_AI_CONFIG, model: 'no-such-model' }, makeClient: () => ({ create: async () => { created++; throw new Error('x'); } }) }),
+  });
+  assert.equal(await handleTask(enqueued[0], deps), 'refunded');
+  assert.equal(created, 0);
+  assert.equal((await usage()).count, 0);
+  const d = await ai();
+  assert.deepEqual([d.lastError.code, d.job.state, d.quota.dayCount], ['ai-config', 'idle', 0]);
 });
 test('enqueue の失敗: 返金して unavailable', async () => {
   await assert.rejects(call('devA', {}, { enqueue: async () => { throw Object.assign(new Error(CANARY_ANS), { code: 'x' }); } }), (e) => e.code === 'unavailable');
@@ -299,6 +356,12 @@ test('編集: 要件が draft でない・generated が無いと拒否', async (
   await db.doc('projects/p1').update({ 'requirements.status': 'analyzed' });
   await assert.rejects(save('devA', EDITED), code('not-draft'));
 });
+test('編集: 生成中（job running）は failed-precondition（Lead DECISION）', async () => {
+  await readyDraft(false);
+  await call('devA', { requestId: uuid(2), regenerate: true });
+  await assert.rejects(save('devA', EDITED), code('generation-running'));
+  assert.equal((await ai()).edited, undefined);
+});
 test('編集: 書くのは edited・editedAt・editedBy・updatedAt・updatedBy だけ（サーバー欄は不変）', async () => {
   await withGenerated();
   const before = await ai();
@@ -364,6 +427,12 @@ test('配線: worker は本物の createGenerator を通して U3 generateDraft 
   assert.equal(d.state, 'ready');
   assert.equal(d.generated.summary, VALID_OUT.summary);
   assert.equal(d.generated.origin.model, DEFAULT_AI_CONFIG.model);
+  // サーバー欄は U3 の proposal（除去済み・項目の無い siteCheck は null）
+  assert.equal(d.generated.hostname, 'shop.example');
+  assert.deepEqual(d.generated.competitors, ['rival.example']);
+  assert.equal(d.generated.siteCheck, null);
+  assert.doesNotMatch(d.generated.issue, /1234-5678/);
+  assert.match(d.generated.issue, /スマホで見づらい/);
   assert.equal(d.configHash, await configHash(CURRENT_CONFIG_KEY));
   assert.ok(d.usage.costMicroUsd > 0);
   assert.equal((await usage()).costMicroUsd, d.usage.costMicroUsd);

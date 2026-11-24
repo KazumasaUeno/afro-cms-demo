@@ -9,7 +9,7 @@ import * as http from 'node:http';
 import * as https from 'node:https';
 import { createGunzip } from 'node:zlib';
 import { SITE_LIMITS } from '../limits';
-import { guardedLookup, type Resolver } from './lookup';
+import { assertTestRouteAllowed, guardedLookup, type Resolver } from './lookup';
 import { parseRedirect, parseSiteUrl } from './url';
 
 export type FetchFailCode = 'timeout' | 'too-large' | 'bad-encoding' | 'too-many-redirects' | 'network' | 'bad-redirect';
@@ -46,6 +46,7 @@ function limitsOf(deps: FetchDeps) {
 
 /** 1 回だけ取る（リダイレクトは追わない） */
 export function fetchOnce(url: URL, deps: FetchDeps): Promise<{ status: number; headers: http.IncomingHttpHeaders; body: Buffer; bytes: number }> {
+  assertTestRouteAllowed(deps.route);
   const lim = limitsOf(deps);
   const mod = deps.route ? http : url.protocol === 'https:' ? https : http;
   return new Promise((resolve, reject) => {

@@ -1,7 +1,7 @@
 /**
  * saveAiDraftEdits（onCall。計画 §4 U1 の代替 F-a）: 開発者の edited を検査して Admin SDK で書く（aiDrafts はクライアントから書けない）。
  * - アサインされた開発者だけ（admin・お客様は不可）。フラグの内側（editAllowed）
- * - transaction で 要件が draft・aiDraft と generated があること を確かめる（submit と同時に保存させない）
+ * - transaction で 要件が draft・aiDraft と generated があること・生成中（job running）でないこと を確かめる（submit と同時に保存させない）
  * - 書くのは edited / editedAt / editedBy / updatedAt / updatedBy だけ（サーバー欄に触れない）
  */
 import { Timestamp, type Firestore } from 'firebase-admin/firestore';
@@ -10,7 +10,7 @@ import { assertCanEdit, resolveCaller, type AuthLike, type ProjectLike } from '.
 import { EditableError, validateEditable } from './editable';
 import { editAllowed, type AiFlags } from './flags';
 import { errorCodeOf, type AiLogger } from './log';
-import { draftRef } from './request';
+import { draftRef, jobRunning } from './request';
 
 export interface EditsDeps {
   db: Firestore;
@@ -43,6 +43,8 @@ export async function handleSaveEdits(req: { auth?: AuthLike | null; data: unkno
       assertCanEdit(caller, pSnap.data() as ProjectLike | undefined);
       if ((pSnap.data() as ProjectLike).requirements?.status !== 'draft') throw new HttpsError('failed-precondition', 'not-draft');
       if (!aSnap.exists || !aSnap.data()?.generated) throw new HttpsError('failed-precondition', 'no-generated');
+      // 生成中は保存させない（Lead DECISION 2026-11-24。discardEdits の生成が終わると edited が消え、保存が黙って失われるため）
+      if (jobRunning(aSnap.data()?.job, deps.now())) throw new HttpsError('failed-precondition', 'generation-running');
       const ts = Timestamp.fromMillis(deps.now());
       tx.update(aSnap.ref, { edited, editedAt: ts, editedBy: caller.uid, updatedAt: ts, updatedBy: caller.uid });
     });

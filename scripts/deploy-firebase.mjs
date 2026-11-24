@@ -7,6 +7,7 @@
 // - --dry-run は実行するコマンドを表示するだけ（何も送らない。下の事前確認は --dry-run でも行う）
 // - hosting: dist-live が同じ --project 向けにビルドされていること（ビルドに焼き込まれた projectId を見る。security M3）
 // - firestore:rules: 送る前に rules:check（質問の定義と Rules の一致）と test:rules（エミュレータ。1 件以上・失敗 0）を通す
+// - functions: AI_REQUIREMENTS_MODE=on（functions/.env・.env.<project>）なら docs/legal/AI_REQUIREMENTS_LEGAL_CLEARANCE.md が無いと止める（AI 計画 §4 U5・§5 L-c・T-11）
 // - functions: 送る前に functions をビルドし、test:functions（エミュレータ。1 件以上・失敗 0）を通す。Blaze でなければ firebase CLI が失敗する（課金の変更はユーザーが Console で行う）
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -66,6 +67,37 @@ export function checkHostingBuild(project, dir = join(root, 'dist-live'), allowl
   if (others.length) throw new Error(`dist-live に別のプロジェクトの ID（${others.join(', ')}）が入っています`);
 }
 
+/** functions/.env と functions/.env.<project>（後が優先。firebase CLI と同じ順）から 1 つのキーの値を読む。無ければ undefined */
+export function readFunctionsEnvValue(key, project, functionsDir = join(root, 'functions')) {
+  let value;
+  for (const name of ['.env', `.env.${project}`]) {
+    const file = join(functionsDir, name);
+    if (!existsSync(file)) continue;
+    for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
+      const m = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+      if (!m || m[1] !== key) continue;
+      const v = m[2].trim();
+      const q = /^(['"])(.*)\1$/.exec(v);
+      value = q ? q[2] : v.replace(/\s+#.*$/, '');
+    }
+  }
+  return value;
+}
+
+export const AI_LEGAL_CLEARANCE_FILE = join(root, 'docs', 'legal', 'AI_REQUIREMENTS_LEGAL_CLEARANCE.md');
+
+/**
+ * AI 下書きのお客様公開（MODE=on）は法務済みの記録が無ければ送らない（AI_REQUIREMENTS_PLAN.md §5 L-c・T-11・SEC-H1）。
+ * 値の解釈は functions/src/ai/flags.ts の parseMode と同じ（前後の空白を除いて小文字）。internal・off・未設定は通す
+ */
+export function checkAiLegalClearance(project, { functionsDir = join(root, 'functions'), legalFile = AI_LEGAL_CLEARANCE_FILE } = {}) {
+  const mode = String(readFunctionsEnvValue('AI_REQUIREMENTS_MODE', project, functionsDir) ?? '').trim().toLowerCase();
+  if (mode === 'on' && !existsSync(legalFile)) {
+    throw new Error('AI_REQUIREMENTS_MODE=on ですが docs/legal/AI_REQUIREMENTS_LEGAL_CLEARANCE.md（法務の結論の記録）がありません。internal までにするか、ユーザーの承認後に記録を作ってから出す');
+  }
+  return mode;
+}
+
 /** test:rules の出力（node --test の spec）から件数を読む */
 export function parseTestCounts(out) {
   const num = (k) => {
@@ -106,7 +138,10 @@ function main() {
   const { project, targets } = checkDeploy(args);
   if (targets.includes('hosting')) checkHostingBuild(project);
   if (targets.includes('firestore:rules')) checkRulesBeforeDeploy();
-  if (targets.includes('functions')) checkFunctionsBeforeDeploy();
+  if (targets.includes('functions')) {
+    checkAiLegalClearance(project);
+    checkFunctionsBeforeDeploy();
+  }
   const require = createRequire(import.meta.url);
   const cli = join(dirname(require.resolve('firebase-tools/package.json')), 'lib', 'bin', 'firebase.js');
   const cmd = [cli, 'deploy', '--project', project, '--only', targets.join(','), '--non-interactive'];

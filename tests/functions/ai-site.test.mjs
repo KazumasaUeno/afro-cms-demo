@@ -9,7 +9,7 @@ import { createRequire } from 'node:module';
 const req = createRequire(import.meta.url);
 const { parseSiteUrl, parseRedirect } = req('../../functions/lib/ai/site/url.js');
 const { isPublicAddress } = req('../../functions/lib/ai/site/ipGuard.js');
-const { resolveChecked, guardedLookup } = req('../../functions/lib/ai/site/lookup.js');
+const { resolveChecked, guardedLookup, assertTestRouteAllowed } = req('../../functions/lib/ai/site/lookup.js');
 const { fetchFollow } = req('../../functions/lib/ai/site/fetch.js');
 const { runSiteCheck, robotsDisallowsRoot } = req('../../functions/lib/ai/site/checks.js');
 const { extractHtml } = req('../../functions/lib/ai/site/extract.js');
@@ -193,4 +193,24 @@ test('抽出: 構造化データ・ナビのリンク・description', () => {
   assert.equal(e.hasStructuredData, true);
   assert.deepEqual(e.navLinks, ['ホーム', 'メニュー']);
   assert.equal(e.description, '説明');
+});
+
+// ---------- テスト専用の route を本番で使わせない（SEC-L2） ----------
+test('route: NODE_ENV=production・エミュレータ外の K_SERVICE では throw（テスト・エミュレータ・route なしは通す）', async () => {
+  const r = { address: '127.0.0.1', port: 1 };
+  assert.throws(() => assertTestRouteAllowed(r, { NODE_ENV: 'production' }), /test-only/);
+  assert.throws(() => assertTestRouteAllowed(r, { K_SERVICE: 'generaterequirementsdrafttask' }), /test-only/);
+  assert.doesNotThrow(() => assertTestRouteAllowed(r, { K_SERVICE: 'x', FUNCTIONS_EMULATOR: 'true' }));
+  assert.doesNotThrow(() => assertTestRouteAllowed(r, {}));
+  assert.doesNotThrow(() => assertTestRouteAllowed(undefined, { NODE_ENV: 'production' }));
+  // 実際の入口（guardedLookup・fetchFollow）も process.env を見て止まる
+  const prev = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+  try {
+    assert.throws(() => guardedLookup(fixed([PUB4]), { route: { address: '127.0.0.1' } }), /test-only/);
+    await assert.rejects(fetchFollow(new URL('http://pub.example/'), { resolve: fixed([PUB4]), route: r }), /test-only/);
+  } finally {
+    if (prev === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = prev;
+  }
 });

@@ -217,3 +217,9 @@ test('SDK: SSE の streaming を finalMessage で受けて ok', async () => {
     assert.equal(r.ok, true, JSON.stringify(r)); assert.equal(r.anthropicRequestId, 'req_sse'); assert.equal(r.usage.output, 20);
   } finally { srv.close(); }
 });
+
+test('未知のモデル: 送る前に code config（Anthropic 0 回。worker は返金する）', async () => {
+  const c = ok();
+  const r = await generateDraft(input({ config: { ...DEFAULT_AI_CONFIG, model: 'no-such-model' } }), deps(c));
+  assert.deepEqual([r.ok, r.code, c.calls.length, r.usage], [false, 'config', 0, undefined]);
+});

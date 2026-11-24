@@ -94,9 +94,12 @@ export async function handleRequestDraft(req: { auth?: AuthLike | null; data: un
       const ai = aSnap.data() as Record<string, unknown> | undefined;
       const job = (ai?.job ?? {}) as Record<string, unknown>;
       // ③ lease と Idempotency
+      // 同じ requestId は状態を返すだけで予約し直さない（設計 §2.1③。CR-M1）。running のまま lease が切れた押下は failed で返し、
+      // 画面は新しい requestId で押し直す（再予約すると二重加算になり、同じタスク ID の enqueue は task-already-exists で進まない）
       if (job.requestId === input.requestId) {
         if (jobRunning(job, now)) return { state: 'running', requestId: input.requestId } as const;
-        if (job.state !== 'running') return { state: ai?.state === 'ready' ? 'ready' : 'failed', requestId: input.requestId } as const;
+        if (job.state === 'running') return { state: 'failed', requestId: input.requestId } as const;
+        return { state: ai?.state === 'ready' ? 'ready' : 'failed', requestId: input.requestId } as const;
       }
       if (jobRunning(job, now)) throw new HttpsError('aborted', 'already-running');
       const hasEdits = !!ai?.edited;

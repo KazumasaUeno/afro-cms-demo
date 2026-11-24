@@ -36,6 +36,16 @@ export async function resolveChecked(hostname: string, resolve: Resolver): Promi
   return list.map((a) => ({ address: a.address, family: a.family === 6 ? 6 : 4 }));
 }
 
+/**
+ * テスト専用の `route` を本番で使わせない（SEC-L2）。NODE_ENV=production、またはエミュレータ外の Cloud Run / Functions（K_SERVICE あり）なら throw。
+ * エミュレータの判定は既存と同じ FUNCTIONS_EMULATOR === 'true'（functions/src/cors.ts・index.ts）
+ */
+export function assertTestRouteAllowed(route: unknown, env: NodeJS.ProcessEnv = process.env): void {
+  if (route === undefined || route === null) return;
+  const deployed = !!env.K_SERVICE && env.FUNCTIONS_EMULATOR !== 'true';
+  if (env.NODE_ENV === 'production' || deployed) throw new Error('site route is test-only');
+}
+
 type LookupCb = (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void;
 
 /**
@@ -43,6 +53,7 @@ type LookupCb = (err: NodeJS.ErrnoException | null, address: string | LookupAddr
  * `route` はテスト専用の宛先の付け替え（検査の後でだけ効く。本番の呼び出しは渡さない）
  */
 export function guardedLookup(resolve: Resolver, opts: { route?: { address: string } } = {}) {
+  assertTestRouteAllowed(opts.route);
   return (hostname: string, options: { all?: boolean } | number | undefined, cb: LookupCb): void => {
     const all = typeof options === 'object' && options !== null && options.all === true;
     resolveChecked(hostname, resolve).then(

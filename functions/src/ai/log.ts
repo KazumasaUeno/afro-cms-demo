@@ -1,6 +1,6 @@
 /**
  * AI 下書きのログ（設計 §2.2「ログ」・計画 M4）。出すのは種別・状態・HTTP 状態・Anthropic の request-id・トークン数・所要時間・ID だけ。
- * **回答・サイト本文・プロンプト・キー・例外のメッセージを出さない**（テストは canary で確かめる。tests/functions/ai-logs.test.mjs）。
+ * **回答・サイト本文・プロンプト・キー・例外のメッセージを出さない**（テストは canary で確かめる。tests/functions/ai-flow.test.mjs の canary）。
  * テストから捕捉できるよう注入にする。既定は firebase-functions の logger
  */
 import { logger } from 'firebase-functions';

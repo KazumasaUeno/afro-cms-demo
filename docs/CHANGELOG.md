@@ -887,6 +887,7 @@
 ## Unreleased (AI requirements)
 - U3（AI 層。フラグの内側・未デプロイ）: `functions/src/ai/`（PRM-REQ-001・構造化出力の Schema と再検証・Anthropic クライアント maxRetries 0・generateDraft・後処理・pricing.json）、共有の除去とハッシュ `src/shared/ai/`（`scripts/gen-ai-shared.mjs` が functions へ写す）、評価の道具 `prototypes/ai-requirements-eval/`（未実行）。依存 `@anthropic-ai/sdk` 1.11.0（functions のみ）
 - U2＋U3 統合（フラグ既定 off・未デプロイ）: worker（`generateRequirementsDraftTask`）が Secret の値から本物の Anthropic クライアントを作り U3 の `generateDraft` を呼ぶ（callable はクライアントを作らない）。configHash は U3 の `DEFAULT_AI_CONFIG`（モデルは [PENDING U-3]）。ハッシュは U3 の共有モジュール（非同期 SHA-256・接頭辞なし）に統一。AI が応答した失敗も推定費用を `aiUsage` に足す。ログに `aiDurationMs`（本文なし）
+- U1〜U3 レビューの修正（未デプロイ）: 同じ requestId が lease 切れで届いても再予約しない（failed を返す）・generated のサーバー欄は U3 の proposal（除去済み）を正にする・fencing と想定外の失敗でも AI の費用を `aiUsage` へ足す・未知のモデルは `ai-config` で返金・生成中は編集の保存を拒否・`deploy:firebase` が法務の記録の無い `AI_REQUIREMENTS_MODE=on` を拒否・サイト取得のテスト用 `route` を本番で拒否（`docs/reviews/2026-11-24-ai-u1-u3.md`）
 
 - Firestore Rules（未デプロイ）: `projects/{pid}/aiDrafts/{did}` を追加（読めるのはアサインされた開発者と admin だけ。お客様は不可。クライアントからの作成・更新・削除は全員不可＝計画の代替 F-a）。`aiUsage/{yyyymm}` を追加（admin の読み取りだけ）
 - Firestore Rules: `requirements/current.proposal` を版で受け付ける（`version` なし＝従来の v1、`version: 2`＝AI 下書きの提案）。v2 の確認依頼は `aiDrafts` の generated のサーバー欄＋edited の 3 欄との一致だけを確かめる。v1 の判定は不変

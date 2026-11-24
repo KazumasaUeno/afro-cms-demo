@@ -1,7 +1,10 @@
 // デプロイスクリプトの拒否条件（何も実行しない。checkDeploy は判定だけ）
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkDeploy, parseDeployArgs } from '../../scripts/deploy-firebase.mjs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { checkAiLegalClearance, checkDeploy, parseDeployArgs } from '../../scripts/deploy-firebase.mjs';
 import { PRODUCTION_PROJECT_IDS } from '../../scripts/firebase-projects.mjs';
 
 test('--project が無ければ拒否', () => {
@@ -44,4 +47,33 @@ test('許可リストと完全一致し、対象が許可内なら通す', () =>
 test('引数の解析と不明な引数の拒否', () => {
   assert.deepEqual(parseDeployArgs(['--project', 'x', '--only=hosting', '--dry-run']), { project: 'x', only: 'hosting', dryRun: true });
   assert.throws(() => parseDeployArgs(['--force']), /不明な引数/);
+});
+
+// ---------- AI 下書きの MODE=on は法務の記録が無ければ止める（AI 計画 §5 L-c・T-11・SEC-H1。一時ディレクトリだけを使う） ----------
+function aiEnvDir(files) {
+  const dir = mkdtempSync(join(tmpdir(), 'afro-ai-legal-'));
+  for (const [name, body] of Object.entries(files)) writeFileSync(join(dir, name), body);
+  return dir;
+}
+test('AI 法務: MODE が off・internal・未設定なら記録が無くても通す', () => {
+  const dir = aiEnvDir({ '.env.p1': 'AI_REQUIREMENTS_MODE=off\n' });
+  const legalFile = join(dir, 'missing.md');
+  try {
+    assert.equal(checkAiLegalClearance('p1', { functionsDir: dir, legalFile }), 'off');
+    writeFileSync(join(dir, '.env.p1'), 'AI_REQUIREMENTS_MODE=internal\n');
+    assert.equal(checkAiLegalClearance('p1', { functionsDir: dir, legalFile }), 'internal');
+    assert.equal(checkAiLegalClearance('p2', { functionsDir: dir, legalFile }), '');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+test('AI 法務: MODE=on で記録が無ければ拒否（.env.<project> が .env より優先・大文字・引用符・CRLF も on）', () => {
+  const dir = aiEnvDir({ '.env': 'AI_REQUIREMENTS_MODE=off\n', '.env.p1': '# c\r\nAI_REQUIREMENTS_MODE=" ON "\r\n' });
+  try {
+    assert.throws(() => checkAiLegalClearance('p1', { functionsDir: dir, legalFile: join(dir, 'missing.md') }), /LEGAL_CLEARANCE/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+test('AI 法務: MODE=on でも記録があれば通す', () => {
+  const dir = aiEnvDir({ '.env.p1': 'AI_REQUIREMENTS_MODE=on\n', 'clearance.md': '# test\n' });
+  try {
+    assert.equal(checkAiLegalClearance('p1', { functionsDir: dir, legalFile: join(dir, 'clearance.md') }), 'on');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
