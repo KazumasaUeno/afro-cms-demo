@@ -6,12 +6,10 @@ import { AI_DRAFT_LIMITS as L } from './shared/aiDraft';
 import type { AiEditable, AiEvidenceKey, ProposalV2Point } from './shared/aiDraft';
 import { redactText } from './shared/redact';
 import { DRAFT_FIELDS, type RawOutput } from './schema';
+import { numbersIn } from './shared/numbersIn';
 
-const toHalf = (s: string) => s.replace(/[０-９．，]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
-/** 数字の並び（3,000 → 3000、1.5 → 1.5）。1 桁の数字も数える */
-export function numbersIn(s: string): string[] {
-  return (toHalf(s).match(/\d+(?:[.,]\d+)*/g) ?? []).map((n) => n.replace(/,/g, ''));
-}
+// 数字の正規化の正は src/shared/ai/numbersIn.ts（画面の「要確認の数字」と同じ判定。gen-ai-shared が写す）
+export { numbersIn };
 
 export function postprocess(raw: RawOutput, ctx: { allowedEvidence: ReadonlySet<string>; inputText: string }): { editable: AiEditable; unsupportedNumbers: string[] } {
   const known = new Set(numbersIn(ctx.inputText));
