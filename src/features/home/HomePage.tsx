@@ -10,7 +10,7 @@ import { CountUp, MemberAvatar, Reveal, SectionTitle, Surface } from '@/componen
 import { formatDate, nowIso, relativeTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
 import { unansweredOf } from '@/features/chat/unanswered';
-import { ymdToIso } from '@/features/projects/projectForm';
+import { isoToYmd, ymdToIso } from '@/features/projects/projectForm';
 import { buildDues, deliveryDues, monthDeliveries, releaseDues, type DueRow } from './homeDues';
 import { memberById } from '@/data/members';
 import { STAGES } from '@/data/projects';
@@ -98,7 +98,7 @@ function ShortList({ title, icon, empty, rows, onOpen, action, openLabel = 'の�
   const shown = overflow && !expanded ? rows.slice(0, limit) : rows;
   return (
     <Surface padding={{ xs: 2, md: 2.5 }} sx={{ minWidth: 0 }}>
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.25, minHeight: 32 }}>
+      <Stack direction="row" alignItems="center" flexWrap="wrap" useFlexGap sx={{ gap: 1, mb: 1.25, minHeight: 32 }}>
         {icon}
         <Typography variant="h5" component="h2">{title}</Typography>
         <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums', flex: 1 }}>{rows.length}件</Typography>
@@ -279,10 +279,10 @@ export default function HomePage() {
   // 予定の集計は homeDues.ts（純粋関数。2026-11-24 会議の指摘で切り出し、今日・今月を日本時間に固定）
   const dueRows: DueRow<Project>[] = state.projects.map((p) => {
     const w = workOf(state, p.id);
-    return { p, stage: p.stage, schedule: w.schedule, buildCompleted: !!w.design?.buildCompletedAt, qualityApproved: !!w.design?.qualityApprovedAt };
+    return { p, stage: p.stage, schedule: w.schedule, launchDate: p.launchDate ? isoToYmd(p.launchDate) || undefined : undefined, buildCompleted: !!w.design?.buildCompletedAt, qualityApproved: !!w.design?.qualityApprovedAt };
   });
   // 今月の納品予定: 日程（schedule）の納品予定日が日本時間の今月の案件。日程の無い案件は数えない。
-  // 納品済み（納品検収済み・公開済み）も含めて「納品済み」の印を付ける（2026-11-24 会議「終了済みと見分けられない」。外すかは未決）
+  // 納品済み（納品検収済み・公開済み）も含めて「納品済み」の印を付ける（2026-11-24 会議「終了済みと見分けられない」。含めるのは SAFE ASSUMPTION lead 2026-11-24）
   const deliveries = monthDeliveries(dueRows, new Date())
     .map(({ p, date, delivered }) => ({ p, sub: `納品予定日 ${formatDate(ymdToIso(date) ?? undefined)}`, badge: delivered ? '納品済み' : undefined }));
   // 制作の完了予定（2026-11-17 ユーザー指示「制作の完了予定を追加」）: スケジュールに制作の完了予定があり、まだ全ページの構築が終わっていない案件。近い順
@@ -343,7 +343,7 @@ export default function HomePage() {
             title="相談の未対応" icon={<MessageCircle size={18} color={tokens.color.muted} aria-hidden />}
             empty="お客様からの相談は、すべて返信済みです。" rows={unanswered}
             onOpen={(p) => navigate(`/chat?p=${encodeURIComponent(p.id)}`)}
-            openLabel="の相談を開く"
+            openLabel="の相談を開く" limit={4}
             action={<Button size="small" endIcon={<ArrowRight size={15} />} onClick={() => navigate('/chat')} sx={{ flexShrink: 0, [TOUCH]: { minHeight: 44 } }}>一覧を表示</Button>}
           />
           <ShortList

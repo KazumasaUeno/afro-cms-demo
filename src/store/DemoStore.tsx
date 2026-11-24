@@ -21,6 +21,7 @@ import { withProjectPresets } from '@/data/assets';
 import { moveDesignAnswers } from '@/features/design/designReq';
 import { emptySitemap, sitemapCreated } from '@/data/sitemap';
 import { useToast } from '@/hooks/useToast';
+import { jstDay, reanchor } from './seedAnchor';
 
 interface StoreValue {
   state: DemoState;
@@ -233,7 +234,8 @@ function init(): DemoState {
   // 要件定義書の承認前に持っているサイトマップは外す（0.29.4。版は上げない）
   // 公開後のデータ（ページ・診断・サイネージ）を案件ごとに分ける（0.30.0。版は上げない）
   // 日程・承認の依頼・承認履歴を補う（2026-11-17 会議。版は上げない）
-  return syncDemoProject(withScheduleAndRequests(withQualityApproval(withDevSeed(withClientMarks(withoutEarlySitemap(withCurrentWork(withProjectDev(withProjectContent(withSeedProjects(moveDesignAnswers(withAfroMode(loadJson(STORAGE_KEY, isDemoState) ?? createSeedState()))))))))))));
+  // 保存データの日付を今日へ合わせ直す（seedAnchor.ts。SAFE ASSUMPTION lead 2026-11-24）。今日の時刻で補う処理より先に行う
+  return syncDemoProject(withScheduleAndRequests(withQualityApproval(withDevSeed(withClientMarks(withoutEarlySitemap(withCurrentWork(withProjectDev(withProjectContent(withSeedProjects(moveDesignAnswers(withAfroMode(reanchor(loadJson(STORAGE_KEY, isDemoState) ?? createSeedState(), jstDay(new Date()))))))))))))));
 }
 
 export function DemoStoreProvider({ children }: { children: ReactNode }) {

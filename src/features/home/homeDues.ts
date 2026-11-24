@@ -18,6 +18,8 @@ export interface DueRow<P> {
   /** 案件の段階（operation・improvement は公開済み） */
   stage: string;
   schedule?: { buildDue?: string; deliveryDate?: string; releaseDate?: string };
+  /** 案件の公開予定日（yyyy-mm-dd。Project.launchDate を日付にしたもの）。日程に公開予定日が無いときに使う（カードの releaseDateOf と同じ。2026-11-24） */
+  launchDate?: string;
   /** 全ページの構築が完了している */
   buildCompleted: boolean;
   /** お客様の品質チェックの完了（納品検収）がある */
@@ -48,8 +50,11 @@ export const buildDues = <P>(rows: DueRow<P>[]) => collect(rows, (r) => (r.build
 /** 納品完了予定: 日程に納品予定日があり、まだ納品していない案件（期間は問わない。過ぎた日付も数える）。近い順 */
 export const deliveryDues = <P>(rows: DueRow<P>[]) => collect(rows, (r) => (isDelivered(r) ? undefined : r.schedule?.deliveryDate));
 
-/** 公開予定: 日程に公開予定日があり、まだ公開していない案件。近い順 */
-export const releaseDues = <P>(rows: DueRow<P>[]) => collect(rows, (r) => (isLaunched(r.stage) ? undefined : r.schedule?.releaseDate));
+/**
+ * 公開予定: 公開予定日（日程の公開予定日、無ければ案件の公開予定日 launchDate）があり、まだ公開していない案件。近い順。
+ * launchDate だけの案件も数える（カードの「公開予定」表示 releaseDateOf と件数をそろえる。SAFE ASSUMPTION lead 2026-11-24）
+ */
+export const releaseDues = <P>(rows: DueRow<P>[]) => collect(rows, (r) => (isLaunched(r.stage) ? undefined : r.schedule?.releaseDate || r.launchDate));
 
 /**
  * 今月の納品予定: 納品予定日が日本時間の今月（1 日〜末日）の案件。納品済みの案件も含め、delivered で見分ける。

@@ -69,3 +69,15 @@ test('isDelivered: 納品検収済みか公開済み', () => {
   assert.equal(isDelivered(row('x', 'release', undefined, { qualityApproved: true })), true);
   assert.equal(isDelivered(row('x', 'operation', undefined)), true);
 });
+
+test('releaseDues: 日程の無い案件も launchDate があれば数える（日程の公開予定日を優先。公開済みは除く）', () => {
+  const rows = [
+    row('launchOnly', 'design', undefined, { launchDate: '2026-12-10' }),
+    row('both', 'build', { releaseDate: '2026-12-01' }, { launchDate: '2027-02-01' }),
+    row('none', 'hearing', undefined),
+    row('live', 'operation', undefined, { launchDate: '2026-11-01' }),
+  ];
+  const list = releaseDues(rows);
+  assert.deepEqual(ids(list), ['both', 'launchOnly']);
+  assert.equal(list[0].date, '2026-12-01');
+});
