@@ -112,3 +112,48 @@
 2. compute 既定 SA が**プロジェクト全体**の `roles/run.invoker` を持つ（全 Cloud Run を呼べる）。Eventarc トリガーの名残と推定 [INFERENCE]。今後の worker もこの SA から呼べる状態になる
 3. `provisionInvitee` の `allUsers` invoker は callable として想定どおり
 4. `cloudtasks` の一覧コマンドは、API が無効だと**有効化するかを聞いてくる**。対話できる端末で y を押すと有効化されてしまうので、G-4 より前に Tasks のコマンドを打つときは注意する。今回は標準入力が無く N で終わった
+
+## 実行記録 2026-11-24（G-1・G-2・G-3・G-4・G-6）
+
+- 実施: 2026-11-24（JST）、platform-engineer。ユーザーがチャットで G-1・G-2・G-3・G-4・G-6 を承認（G-5 は該当なし、G-7 デプロイは未承認で未実施）
+- すべてのコマンドに `--project afro-cms-4a6ff` を付け、標準入力を閉じて 1 本ずつ実行し、結果を見てから次へ進んだ。既定 SA の Editor は触っていない。Secret の値は読んでいない（`versions access` 未実行）
+- プロジェクトの IAM 変更コマンドは、人のメールを含むポリシー全体が出力されないよう `--format=none` を付けた
+
+### 1. 変更（実行順）
+
+| # | コマンド | 結果 | 戻し方 |
+|---|---|---|---|
+| G-1 | `gcloud iam service-accounts create afro-cms-ai-worker --display-name "AFRO CMS AI worker" --project afro-cms-4a6ff --quiet` | rc=0 `Created service account [afro-cms-ai-worker]` | `gcloud iam service-accounts delete afro-cms-ai-worker@afro-cms-4a6ff.iam.gserviceaccount.com --project afro-cms-4a6ff` |
+| G-2a | `gcloud secrets add-iam-policy-binding ANTHROPIC_API_KEY --member serviceAccount:afro-cms-ai-worker@afro-cms-4a6ff.iam.gserviceaccount.com --role roles/secretmanager.secretAccessor --project afro-cms-4a6ff` | rc=0。Secret のポリシーは worker SA の `secretAccessor` 1 件だけ | 同じ引数で `gcloud secrets remove-iam-policy-binding …` |
+| G-2b | `gcloud projects add-iam-policy-binding afro-cms-4a6ff --member serviceAccount:afro-cms-ai-worker@afro-cms-4a6ff.iam.gserviceaccount.com --role roles/datastore.user --condition=None --project afro-cms-4a6ff --format=none` | rc=0 | 同じ引数で `gcloud projects remove-iam-policy-binding …` |
+| G-3a | `gcloud projects add-iam-policy-binding afro-cms-4a6ff --member serviceAccount:afro-cms-functions@afro-cms-4a6ff.iam.gserviceaccount.com --role roles/cloudtasks.enqueuer --condition=None --project afro-cms-4a6ff --format=none` | rc=0 | 同じ引数で `gcloud projects remove-iam-policy-binding …` |
+| G-3b | `gcloud iam service-accounts add-iam-policy-binding afro-cms-functions@afro-cms-4a6ff.iam.gserviceaccount.com --member serviceAccount:afro-cms-functions@afro-cms-4a6ff.iam.gserviceaccount.com --role roles/iam.serviceAccountUser --project afro-cms-4a6ff` | rc=0。SA のポリシーは自分自身の `serviceAccountUser` 1 件だけ | 同じ引数で `gcloud iam service-accounts remove-iam-policy-binding …` |
+| G-4 | `gcloud services enable cloudtasks.googleapis.com --project afro-cms-4a6ff` | rc=0 `finished successfully`。有効化に伴い Google 管理の `service-640072999586@gcp-sa-cloudtasks` に `roles/cloudtasks.serviceAgent` が自動で付いた | `gcloud services disable cloudtasks.googleapis.com --project afro-cms-4a6ff`（キューが無いときだけ） |
+| G-6 | **作成しなかった**（下の 2.） | — | — |
+
+### 2. G-6 予算アラート — 既存の予算が条件と一致したため新規作成しない
+
+- `gcloud billing projects describe afro-cms-4a6ff` → 請求先は有効（請求先 ID は `billingAccounts/016A03-…`。全体は gcloud で引ける）
+- `gcloud billing budgets list --billing-account <請求先 ID> --project afro-cms-4a6ff --billing-project afro-cms-4a6ff`（クォータを既定の別プロジェクトに付けないため `--billing-project` を明示）→ 既に **`afro-cms-4a6ff 月1000円`**（予算 ID `81481eb8-c9ca-4125-aad3-4188f13887c5`）がある
+- `describe` の結果: JPY 1000／月次／対象 `projects/640072999586`（＝afro-cms-4a6ff のプロジェクト番号）のみ／しきい値 0.5・0.9・1.0（CURRENT_SPEND）／`notificationsRule: {}`（既定の請求 IAM 宛の通知だけ。請求は止めない）
+- [DECISION] platform-engineer: RUNBOOK §9.10 G-6 の条件（¥1,000・このプロジェクトだけ・50/90/100%・通知だけ）をすべて満たすため、作ると同じ通知が 2 通届くだけになる。新規作成はしない。§9.9 の予算の項目はこの既存予算で満たす
+- 戻し方: 変更していないので無し（既存予算を消す場合は `gcloud billing budgets delete 81481eb8-c9ca-4125-aad3-4188f13887c5 --billing-account <請求先 ID>`。消さない）
+- 同じ請求先に他プロジェクトの予算も 6 件ある（読んだだけ。触っていない）
+
+### 3. 変更後の確認（読むだけ。§9.9 のうち今回の作業に関係するもの）
+
+| 確認 | コマンド | 結果 |
+|---|---|---|
+| worker SA がある | `gcloud iam service-accounts describe afro-cms-ai-worker@… --project afro-cms-4a6ff` | [FACT] あり、表示名 `AFRO CMS AI worker`、無効化されていない |
+| worker SA を使える主体 | `gcloud iam service-accounts get-iam-policy afro-cms-ai-worker@… --project afro-cms-4a6ff` | [FACT] ポリシーは空（使えるのはプロジェクト Owner `user:<人>` だけ） |
+| Secret の IAM | `gcloud secrets get-iam-policy ANTHROPIC_API_KEY --project afro-cms-4a6ff` | [FACT] `secretAccessor` は `afro-cms-ai-worker@` だけ（他の binding 無し） |
+| プロジェクトの binding | `gcloud projects get-iam-policy afro-cms-4a6ff --project afro-cms-4a6ff --flatten=… \| grep` | [FACT] `datastore.user`: `afro-cms-ai-worker@`・`afro-cms-functions@`／`cloudtasks.enqueuer`: `afro-cms-functions@`／`cloudtasks.serviceAgent`: Google 管理 SA／`afro-cms-ai-worker@` のプロジェクト role は `datastore.user` だけ／プロジェクト単位の `roles/secretmanager.*` は引き続き 0 件 |
+| callable SA の SA ポリシー | `gcloud iam service-accounts get-iam-policy afro-cms-functions@… --project afro-cms-4a6ff` | [FACT] `serviceAccountUser` は自分自身だけ |
+| API | `gcloud services list --enabled --project afro-cms-4a6ff` | [FACT] `cloudtasks.googleapis.com` が有効 |
+| キュー | `gcloud tasks queues list --location asia-northeast1 --project afro-cms-4a6ff` | [FACT] 0 件（キューは G-7 のデプロイで作られる） |
+| 予算 | 上の 2. | [FACT] ¥1,000 の予算あり |
+
+### 4. 残り
+
+- G-7（functions のデプロイ・invoker・OIDC の SA の確定）は未承認・未実施。§9.9 のキュー・OIDC・worker の Cloud Run の項目は G-7 の後
+- 2.3 の [UNKNOWN]（既定 SA の Editor が Secret を読めるか）は未確認のまま。security-engineer の判定事項
