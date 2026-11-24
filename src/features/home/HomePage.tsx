@@ -104,7 +104,7 @@ function ShortList({ title, icon, empty, rows, onOpen, action, openLabel = 'の�
         <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums', flex: 1 }}>{rows.length}件</Typography>
         {action}
         {overflow && (
-          <Button size="small" aria-expanded={expanded} aria-controls={listId} onClick={() => setExpanded((v) => !v)} sx={{ flexShrink: 0, [TOUCH]: { minHeight: 44 } }}>
+          <Button size="small" aria-expanded={expanded} aria-controls={listId} aria-label={expanded ? `${title}を閉じる` : undefined} onClick={() => setExpanded((v) => !v)} sx={{ flexShrink: 0, [TOUCH]: { minHeight: 44 } }}>
             {expanded ? '閉じる' : `すべて見る（${rows.length}件）`}
           </Button>
         )}

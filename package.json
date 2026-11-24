@@ -14,7 +14,7 @@
     "typecheck": "tsc -p tsconfig.json",
     "test:rules": "node scripts/test-rules.mjs",
     "test:functions": "node scripts/test-functions.mjs",
-    "test:unit": "node --experimental-strip-types --no-warnings --test --test-reporter=spec tests/unit/homeDues.test.mjs tests/unit/seedAnchor.test.mjs",
+    "test:unit": "node --experimental-strip-types --no-warnings --test \"tests/unit/*.test.mjs\"",
     "build:functions": "npm --prefix functions run build",
     "rules:gen": "node --experimental-strip-types --no-warnings scripts/gen-rules-questions.mjs",
     "rules:check": "node --experimental-strip-types --no-warnings scripts/gen-rules-questions.mjs --check",

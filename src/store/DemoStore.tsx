@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import type { DemoState, ProjectWork } from '@/types';
 import { loadJson, removeKey, saveJson, STORAGE_KEY } from '@/services/storage';
 import { createSeedState, isDemoState } from './seed';
@@ -21,7 +21,8 @@ import { withProjectPresets } from '@/data/assets';
 import { moveDesignAnswers } from '@/features/design/designReq';
 import { emptySitemap, sitemapCreated } from '@/data/sitemap';
 import { useToast } from '@/hooks/useToast';
-import { jstDay, reanchor } from './seedAnchor';
+import { needsReanchor, reanchor } from './seedAnchor';
+import { jstYmd } from '@/features/home/homeDues';
 
 interface StoreValue {
   state: DemoState;
@@ -235,25 +236,46 @@ function init(): DemoState {
   // 公開後のデータ（ページ・診断・サイネージ）を案件ごとに分ける（0.30.0。版は上げない）
   // 日程・承認の依頼・承認履歴を補う（2026-11-17 会議。版は上げない）
   // 保存データの日付を今日へ合わせ直す（seedAnchor.ts。SAFE ASSUMPTION lead 2026-11-24）。今日の時刻で補う処理より先に行う
-  return syncDemoProject(withScheduleAndRequests(withQualityApproval(withDevSeed(withClientMarks(withoutEarlySitemap(withCurrentWork(withProjectDev(withProjectContent(withSeedProjects(moveDesignAnswers(withAfroMode(reanchor(loadJson(STORAGE_KEY, isDemoState) ?? createSeedState(), jstDay(new Date()))))))))))))));
+  return syncDemoProject(withScheduleAndRequests(withQualityApproval(withDevSeed(withClientMarks(withoutEarlySitemap(withCurrentWork(withProjectDev(withProjectContent(withSeedProjects(moveDesignAnswers(withAfroMode(reanchor(loadJson(STORAGE_KEY, isDemoState) ?? createSeedState(), jstYmd(new Date()))))))))))))));
 }
 
 export function DemoStoreProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, undefined, init);
+  const [state, baseDispatch] = useReducer(reducer, undefined, init);
   const timer = useRef<number | undefined>(undefined);
   const [saveFailed, setSaveFailed] = useState(false);
+  const latest = useRef(state);
+  latest.current = state;
+
+  // 開いたまま日本時間の 0 時をまたいだら、先に日付を今日へ合わせ直してから操作を反映する
+  // （合わせ直す前に今の時刻で記録すると、次に開いたときに 1 日先へずれるため。seedAnchor.ts。2026-11-24）
+  const dispatch = useCallback<React.Dispatch<Action>>((action) => {
+    const today = jstYmd(new Date());
+    if (action.type !== 'reset' && needsReanchor(latest.current, today)) baseDispatch({ type: 'reanchor', today });
+    baseDispatch(action);
+  }, []);
+  useEffect(() => {
+    const onVisible = () => {
+      const today = jstYmd(new Date());
+      if (document.visibilityState === 'visible' && needsReanchor(latest.current, today)) baseDispatch({ type: 'reanchor', today });
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   // 書き込みはまとめて行う（ドラッグ中などの連続更新で localStorage を叩きすぎない）。
   // 失敗は黙って捨てず、画面へ知らせる（SaveFailureNotice。0.39.1。2026-11-16）
+  // 保存の時点で日付が変わっていたら、合わせ直した状態を保存する（その変更でもう一度ここを通る）
   useEffect(() => {
     window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setSaveFailed(!saveJson(STORAGE_KEY, state)), 250);
+    timer.current = window.setTimeout(() => {
+      const today = jstYmd(new Date());
+      if (needsReanchor(latest.current, today)) baseDispatch({ type: 'reanchor', today });
+      else setSaveFailed(!saveJson(STORAGE_KEY, latest.current));
+    }, 250);
     return () => window.clearTimeout(timer.current);
   }, [state]);
 
   // 250ms 以内にタブを閉じた・再読み込みした場合も、最後の操作を失わない
-  const latest = useRef(state);
-  latest.current = state;
   useEffect(() => {
     const flush = () => saveJson(STORAGE_KEY, latest.current);
     window.addEventListener('pagehide', flush);
@@ -276,7 +298,7 @@ export function DemoStoreProvider({ children }: { children: ReactNode }) {
       },
       saveFailed,
     }),
-    [state, saveFailed],
+    [state, saveFailed, dispatch],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
