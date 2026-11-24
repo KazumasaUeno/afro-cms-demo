@@ -5,16 +5,15 @@ import { ymdToIso } from '@/features/projects/projectForm';
 import { buildProposal } from './buildProposal';
 import { DATA_MODE } from '@/repositories/mode';
 import { answerText, isAnswered } from './validation';
+import { isProposalV2, type StoredProposal } from '@/types/aiDraft';
+import { esc, proposalV1Html, proposalV2Html } from './aiDraft/proposalV2Format';
 
 /**
  * 要件定義書（印刷できる HTML）。改善提案（buildProposal）とヒアリングの全回答を 1 枚にまとめる。
  * 画面と同じく回答から毎回作る（別に保存しない）。保存は PDF のダウンロード（downloadRequirementsDoc → requirementsPdf.ts）。
  */
 
-const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const DEMO_NOTE = '<p class="note"><b>デモデータ</b>：アフロCMSデモが作成したサンプルです。印刷（PDF 保存）するとこの注記は出ません。</p>\n';
-
-const PRIORITY = { high: '優先度 高', medium: '優先度 中', low: '優先度 低' } as const;
 
 /** 要件定義書に入れる state（schedule はその案件の日程。live・日程の無い案件は無い） */
 export type RequirementsDocState = Pick<DemoState, 'requirements' | 'projects'> & { schedule?: ProjectSchedule };
@@ -76,8 +75,9 @@ function nonFunctionalSection(): string {
 export function buildRequirementsDocHtml(state: RequirementsDocState): string {
   const req = state.requirements;
   const project = state.projects.find((p) => p.id === req.projectId);
-  // live は保存した提案（承認の対象と同じ写し）を使う。保存値は信用せず、点数は数値に直し、文字列はすべて esc() を通す
-  const proposal = req.proposal ?? buildProposal(req.answers, req.competitors);
+  // live は保存した提案（承認の対象と同じ写し）を使う。保存値は信用せず、点数は数値に直し、文字列はすべて esc() を通す。
+  // v2（AI 下書き）はサイトスコアの行を出さない（AI_REQUIREMENTS_UI.md §6.1）。節の中身は aiDraft/proposalV2Format.ts
+  const proposal: StoredProposal = req.proposal ?? buildProposal(req.answers, req.competitors);
   const status = req.status === 'approved' ? `承認済み（${formatDateTime(req.approvedAt)}）` : req.status === 'analyzed' ? 'お客様の承認待ち' : '作成中（AI 分析前）';
   const answers = REQUIREMENT_CATEGORIES.map((c) => {
     const qs = REQUIREMENT_QUESTIONS.filter((q) => q.categoryId === c.id);
@@ -88,7 +88,6 @@ export function buildRequirementsDocHtml(state: RequirementsDocState): string {
     }).join('');
     return `<h3>${c.no}. ${esc(c.title)}</h3><table>${rows}</table>`;
   }).join('');
-  const points = proposal.points.map((p) => `<li><b>[${PRIORITY[p.priority] ?? ""}] ${esc(p.area)}: ${esc(p.title)}</b><br>${esc(p.detail)}<br><span class="muted">${esc(p.impact)}</span></li>`).join('');
   // タイトルは PDF のファイル名になる（requirementsPdf.ts）
   const today = new Date().toLocaleDateString('sv-SE'); // yyyy-mm-dd（端末の日付）
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>要件定義書_${esc(project?.siteName ?? proposal.hostname)}_${today}</title>
@@ -108,10 +107,7 @@ ${DATA_MODE === 'live' ? '' : DEMO_NOTE}<h1>要件定義書</h1>
 <dt>出力</dt><dd>${esc(formatDateTime(new Date().toISOString()))}</dd>
 </dl>
 <h2>1. 改善提案</h2>
-${proposal.issue ? `<p><b>課題</b>：${esc(proposal.issue)}</p>` : ''}
-${DATA_MODE === 'live' ? '' : `<p>サイトスコア（デモ用の値）：現状 ${Number(proposal.currentScore) || 0} → 改善後の見込み ${Number(proposal.projectedScore) || 0}</p>`}
-${proposal.competitors.length ? `<p>競合サイト：${esc(proposal.competitors.join('・'))}</p>` : ''}
-<ol>${points}</ol>
+${isProposalV2(proposal) ? proposalV2Html(proposal) : proposalV1Html(proposal, DATA_MODE !== 'live')}
 <h2>2. ヒアリングの回答</h2>
 ${answers}
 <h2>3. スケジュール</h2>

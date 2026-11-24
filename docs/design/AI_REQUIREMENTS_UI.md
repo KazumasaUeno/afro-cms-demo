@@ -265,3 +265,11 @@
 | Q-U4 | 改善ポイントの追加・削除を編集でできるようにするか（上限 6 件） | product-manager | 件数は AI の出力のまま |
 | Q-4（既存） | §5 の送信の注意の確定文言、お客様向けの v2 の印の文言 | 法務（LEGAL REVIEW REQUIRED） | 【下書きの文言】を表示したまま |
 | Q-U5 | 回数の残り（今日あと何回）を出すか。`quota` は文書にあるが上限値は functions 側にしか無い | product-manager | 出さない（上限に達したときだけ §4.1 の文言） |
+
+- DECISION lead 2026-11-24 Q-U1: 状態 8（configChanged）は出さない。`deriveAiDraftState` は常に `configChanged: false` を返す。configHash をクライアントへ出す手段は `docs/TODO.md` で追う
+- DECISION lead 2026-11-24 Q-U2: サーバーが `feature-disabled` を返したら §4.1 の文言だけを出す。v1 の「AI分析を実行」へは戻さない
+- DECISION lead 2026-11-24 Q-U3: 生成中の工程の現在地は出さない（一覧として出すだけ。job に工程の欄を足さない）
+- DECISION lead 2026-11-24 Q-U4: 改善ポイントの追加・削除はしない（件数は AI の出力のまま）
+- DECISION lead 2026-11-24 Q-U5: 回数の残りは出さない（上限に達したときだけ §4.1 の文言）
+- DECISION lead 2026-11-24 §5: 送信の注意は DRAFT（【下書きの文言】の接頭辞つき）のまま、フラグ internal / on のときだけ出す
+- DECISION lead 2026-11-24 F5（internal の開発者）: internal は管理者が生成する（allowlist は Functions）。アサインされた開発者にもパネルを出し、編集と「承認を依頼する」はできるが、生成・再試行・作り直しのボタンは出さない（`aiCanGenerate`。計画 §5 の編集の条件と一致）。§1 の「internal は管理者にだけ」はこの決定で置き換える

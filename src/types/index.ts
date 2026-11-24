@@ -4,6 +4,8 @@
  * （日時は ISO 文字列で保持し、Timestamp への変換は repository 層で行う）。
  */
 
+import type { StoredProposal } from './aiDraft';
+
 export type ISODate = string;
 
 /* ---------- 共通 ---------- */
@@ -188,8 +190,8 @@ export interface RequirementSession {
   answerMeta?: Record<string, AnswerMeta>;
   analyzedAt?: ISODate;
   approvedAt?: ISODate;
-  /** live だけ: 確認依頼（分析完了）のときに保存した要件定義書の写し（BACKEND_FIREBASE §3・§5.5）。demo は持たず回答から毎回作る */
-  proposal?: Proposal;
+  /** live だけ: 確認依頼（分析完了）のときに保存した要件定義書の写し（BACKEND_FIREBASE §3・§5.5）。demo は持たず回答から毎回作る。v1（Proposal）か v2（AI 下書き。isProposalV2 で分ける） */
+  proposal?: StoredProposal;
 }
 
 export interface ProposalPoint {

@@ -1,5 +1,6 @@
 import type { DocumentData, DocumentSnapshot, QueryDocumentSnapshot } from 'firebase/firestore';
 import type { AnswerMeta, AnswerValue, ApprovalLog, ClientAccount, DevUser, Project, Proposal, ProposalPoint, RequirementSession, Stage } from '@/types';
+import { isProposalV2, type ProposalV2, type StoredProposal } from '@/types/aiDraft';
 
 /**
  * Firestore の文書（BACKEND_FIREBASE §5）⇔ 画面の型（types/index.ts）。日時は Timestamp → ISO 文字列。
@@ -78,7 +79,7 @@ export function toProject(p: ProjectDoc): Project {
 export interface ReqDoc {
   answers: Record<string, AnswerValue>;
   answerMeta: Record<string, AnswerMeta>;
-  proposal?: Proposal;
+  proposal?: StoredProposal;
   proposalRevision?: number;
 }
 
@@ -96,7 +97,8 @@ export function reqDoc(s: Snap): ReqDoc {
   return {
     answers,
     answerMeta,
-    proposal: d.proposal && typeof d.proposal === 'object' ? (d.proposal as Proposal) : undefined,
+    // 版で分ける（version を持たない = v1、version == 2 = v2。それ以外の版は読まない＝回答から作る）
+    proposal: storedProposalOf(d.proposal),
     proposalRevision: typeof d.proposalRevision === 'number' ? d.proposalRevision : undefined,
   };
 }
@@ -119,8 +121,35 @@ export function toSession(projectId: string, p: ProjectDoc | null, r: ReqDoc | n
   };
 }
 
-/** 保存する提案（validProposal と同じ形だけ。点数は number に、項目は決めたキーだけにする。M-11） */
-export function proposalForSave(p: Proposal): Proposal {
+/** 保存された提案の版を見分ける（Rules の validStoredProposal と同じ分け方） */
+export function storedProposalOf(v: unknown): StoredProposal | undefined {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
+  if (!('version' in v)) return v as Proposal;
+  return isProposalV2(v as StoredProposal) ? (v as ProposalV2) : undefined;
+}
+
+/**
+ * v2 の提案（firestore.rules proposalV2Ok と同じ 11 キー）。generated のサーバー欄（flags を除く）＋ edited の 3 欄を**値を変えずに**写す
+ * （Rules はマップの等式で比べるので、切り詰め・並べ替え・型の変換をしない。Timestamp 等もそのまま渡す）
+ */
+export function proposalV2FromDraft(g: DocumentData, e: DocumentData): ProposalV2 {
+  return {
+    version: 2, hostname: g.hostname, issue: g.issue, purposes: g.purposes, improves: g.improves,
+    competitors: g.competitors, siteCheck: g.siteCheck, origin: g.origin,
+    summary: e.summary, points: e.points, draft: e.draft,
+  } as ProposalV2;
+}
+
+/** 保存する提案。v1 は validProposal と同じ形だけ（点数は number に、項目は決めたキーだけ。M-11）。v2 は 11 キーだけを写す（flags は落ちる） */
+export function proposalForSave(p: Proposal): Proposal;
+export function proposalForSave(p: ProposalV2): ProposalV2;
+export function proposalForSave(p: StoredProposal): StoredProposal;
+export function proposalForSave(p: StoredProposal): StoredProposal {
+  if (isProposalV2(p)) return proposalV2FromDraft(p, p);
+  return proposalV1ForSave(p);
+}
+
+function proposalV1ForSave(p: Proposal): Proposal {
   const point = (x: ProposalPoint): ProposalPoint => ({
     id: String(x.id).slice(0, 40), title: String(x.title).slice(0, 80), detail: String(x.detail).slice(0, 600),
     priority: x.priority, impact: String(x.impact).slice(0, 200), area: String(x.area).slice(0, 40),
