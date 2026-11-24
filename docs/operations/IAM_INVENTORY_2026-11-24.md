@@ -157,3 +157,68 @@
 
 - G-7（functions のデプロイ・invoker・OIDC の SA の確定）は未承認・未実施。§9.9 のキュー・OIDC・worker の Cloud Run の項目は G-7 の後
 - 2.3 の [UNKNOWN]（既定 SA の Editor が Secret を読めるか）は未確認のまま。security-engineer の判定事項
+
+## セキュリティ確認 2026-11-24（Editor とシークレット）
+
+- 実施: 2026-11-24（JST）、security-engineer。**読むだけ**（追加・削除・設定・デプロイなし。Secret の値は読んでいない＝`versions access` 未実行）。プロジェクトに属するコマンドはすべて `--project afro-cms-4a6ff`、標準入力は閉じて実行（Compute API の有効化確認には N で終了）
+- 2.3 の [UNKNOWN] を閉じる
+
+### 1. 結論
+
+| 問い | 答え |
+|---|---|
+| `roles/editor` は Secret の中身を**直接**読めるか | **読めない** [FACT] |
+| Editor を持つ主体は**間接的に**読めるか | **読める経路がある** [FACT: 権限の組み合わせ]／[INFERENCE: 実際に悪用できる条件は下の 3.] |
+| 今日 `ANTHROPIC_API_KEY` を読める主体 | 直接: `afro-cms-ai-worker@`（Secret 単位の `secretAccessor`）とプロジェクト Owner（`user:<人>`）だけ。間接: Editor を持つ既定 SA（実際にコードが動くのは compute 既定 SA のビルド時だけ） |
+| 危険度 | **Medium** |
+| AI 機能のリリースを止めるか | MODE=off / internal は**止めない**。MODE=on は**条件付き**（下の 4.） |
+
+### 2. 根拠
+
+| # | 確認 | 結果 |
+|---|---|---|
+| S1 | `gcloud iam roles describe roles/editor --format=json`（グローバル・読むだけ） | [FACT] title `Editor (Legacy)`。`secretmanager.*` は 26 個あり、`versions.add`／`versions.destroy`／`versions.disable`／`versions.enable`／`versions.get`／`versions.list`／`secrets.create`／`secrets.delete`／`secrets.update`／`secrets.getIamPolicy` 等を含むが、**`secretmanager.versions.access` と `secretmanager.secrets.setIamPolicy` は含まない**（grep 0 件） |
+| S2 | 同じ出力で権限昇格に使える権限を grep | [FACT] **`iam.serviceAccounts.actAs`**・**`iam.serviceAccountKeys.create`**・`run.services.create`・`cloudfunctions.functions.create`・`cloudbuild.builds.create` を含む |
+| S3 | 公式 docs: https://docs.cloud.google.com/secret-manager/docs/access-control（2026-11-24 取得。旧 URL cloud.google.com/… から 301） | [FACT] "The role `roles/owner` includes the `secretmanager.versions.access` permission, but the `roles/editor` and `roles/viewer` do not." |
+| S4 | `gcloud functions list --project afro-cms-4a6ff` | [FACT] 2 本とも実行 SA は `afro-cms-functions@`、**ビルド SA は `640072999586-compute@developer`** |
+| S5 | `gcloud run services list --project afro-cms-4a6ff`／`gcloud run jobs list` | [FACT] サービス 2 本（上の 2 関数）とも `afro-cms-functions@`。ジョブ 0 件。**compute 既定 SA で実行時に動いているものは無い** |
+| S6 | `gcloud app describe`／`gcloud compute instances list` | [FACT] App Engine アプリ無し、Compute Engine API 無効（＝VM 無し） |
+| S7 | `gcloud iam service-accounts get-iam-policy`（compute 既定・appspot） | [FACT] どちらも空。この 2 つを使える（actAs）のはプロジェクト Owner（と Editor 保持者）だけ |
+| S8 | `gcloud iam service-accounts keys list --managed-by=user`（compute 既定・appspot・ai-worker） | [FACT] 3 つとも利用者管理の鍵 0 件 |
+| S9 | `gcloud projects describe` の parent | [FACT] 空（組織に属さない）。`iam.disableServiceAccountKeyCreation` の実効値は `booleanPolicy: {}`（＝鍵作成は禁止されていない） |
+| S10 | `gcloud secrets get-iam-policy ANTHROPIC_API_KEY --project afro-cms-4a6ff` | [FACT] `secretAccessor` は `afro-cms-ai-worker@` の 1 件だけ（G-2 のとおり。増えていない） |
+| S11 | 公式 docs: https://docs.cloud.google.com/functions/docs/securing/build-custom-sa（2026-11-24 取得） | [FACT] ビルドは既定の Cloud Build 用 SA を使い、compute 既定 SA がビルド主体になりうる。既定 SA を使えなくすると「a new service account を割り当てるまで全デプロイが壊れる」。代替は compute SA へ `roles/cloudbuild.builds.builder` を付ける、または専用ビルド SA（logging・Artifact Registry writer・Storage object viewer） |
+
+### 3. 間接経路（攻撃シナリオ）
+
+- [FACT: S2] Editor はプロジェクト単位で `actAs` を持つ → **任意の SA（`afro-cms-ai-worker@` を含む）として Cloud Run／Functions をデプロイできる**。さらに `serviceAccountKeys.create` で **worker SA の鍵を発行できる**（S9 により禁止されていない）。どちらでも `afro-cms-ai-worker@` の権限で Secret を読める
+- [FACT: S1] 読めなくても、Editor は `versions.add`／`disable`／`destroy` で **鍵の差し替え・無効化（改ざん／停止）**ができる
+- **誰が Editor として動けるか**:
+  - compute 既定 SA: **関数のビルド時**に動く（S4）。[INFERENCE] ビルド中の `npm install`（依存の postinstall 等）はビルド SA の資格情報に届く。依存がサプライチェーン攻撃を受けると、デプロイの瞬間に worker SA の鍵発行 → `ANTHROPIC_API_KEY` の取得が成立しうる。実行時（関数の稼働中）には compute 既定 SA を使うものは無い（S5）
+  - appspot SA: 使っているもの無し（S6）、鍵 0 件、actAs できるのは Owner だけ（S7・S8）→ 実害の経路は今は無い [INFERENCE]
+  - cloudservices SA: Google 管理（Google API の内部処理用）。利用者のコードは動かない → 対象外
+- 外部（インターネット）から直接届く経路は無い。前提は「依存の汚染」か「Owner の資格情報の漏洩」（後者は Editor と無関係に全権）
+- 影響: Anthropic の API キー 1 本の漏洩 → 課金の不正利用（個人情報は含まない）。GCP の予算 ¥1,000 は Anthropic 側の課金を止めない [INFERENCE]
+
+### 4. 推奨と壊れる可能性
+
+| # | 推奨 | いつ | 壊れる可能性 | ユーザー承認 |
+|---|---|---|---|---|
+| R1 | **Anthropic 側でこのキーに月の上限（spend limit）を設定**し、使用量の通知を受ける（漏れた場合の損害の上限） | MODE=on の前 | 無し | 要（課金設定） |
+| R2 | **compute 既定 SA の Editor を外す**。先に compute SA へ `roles/cloudbuild.builds.builder`（S11 の代替。actAs・鍵発行・Secret の権限を含まない）を付け、既存 2 関数を 1 回デプロイし直してビルドが通ることを確かめてから Editor を外す。戻し方は Editor を付け直す | MODE=on の前を推奨（遅くとも次の依存更新の前） | **gen2 のデプロイが失敗しうる**（ビルド SA の権限不足。S11）。稼働中の関数は止まらない（実行 SA は `afro-cms-functions@`）。compute SA の `eventarc.eventReceiver`・`run.invoker` は残す | 要（IAM 変更） |
+| R3 | appspot SA の Editor を外す | R2 の後・任意 | 低（App Engine アプリ無し・使っているもの無し）。[UNKNOWN] Firebase の一部機能が appspot SA を前提にしていないかは未確認 | 要 |
+| R4 | cloudservices SA の Editor は**触らない** | — | 外すと Google 側の処理が壊れうる | — |
+| R5 | IAM Deny ポリシーで `secretmanager.versions.access` を拒否する案は**不要**（Editor はもともと持たない。S1・S3）。間接経路は R2 で塞ぐ | — | — | — |
+| R6 | G-7 デプロイ後に S10 を再確認（Firebase CLI が `afro-cms-functions@`・compute SA に `secretAccessor` を自動で足していないか。§3 の G-7 注意と同じ） | G-7 直後 | 無し | 不要（読むだけ） |
+
+- [UNKNOWN] 組織に属さないプロジェクトで `iam.disableServiceAccountKeyCreation` をプロジェクト単位に設定できるかは未確認（今回は調べていない）。R2 で compute SA が `serviceAccountKeys.create` を持たなくなれば、この制約は無くても経路は閉じる
+
+### 5. リリース判定（AI 機能）
+
+| MODE | 判定 | 理由 |
+|---|---|---|
+| off | **止めない** | Secret を読む関数が動かない |
+| internal | **止めない** | 間接経路の前提（依存汚染・Owner 漏洩）は内部利用でも変わらず、利用者が少なく損害も小さい。R6 は実施 |
+| on | **WITH CONDITIONS** | R1（上限）を満たすこと。R2 は強く推奨。R2 を先送りする場合は「ビルド時の依存汚染で API キーが漏れうる」を受容リスクとしてユーザーが判断し記録する |
+
+- 受容するリスク（現時点）: 既定 SA 3 つの Editor を残す（R2 実施まで）。理由: 稼働中の実行時経路は無く、外すとデプロイが壊れうるため、ビルド確認とセットで行う
