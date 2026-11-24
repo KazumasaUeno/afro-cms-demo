@@ -248,6 +248,54 @@ test('保存の例外（§3.3）: generation-running だけ「変更をコピー
   assert.match(S.saveErrorMessage(new Error('offline')).message, /^保存できませんでした。通信状態/);
 });
 
+// 実際の SDK（firebase/functions v13）の形: code は functions/…、message の末尾に HTTP の状態が付く（QA 2026-11-24 HIGH）
+const sdkErr = (code, reason, status) => Object.assign(new Error(`${reason} [${status}]`), { code: `functions/${code}`, details: undefined });
+
+test("理由の取り出し: 末尾の [NNN] を外す・details を優先する", () => {
+  assert.equal(S.errorReasonOf(sdkErr("resource-exhausted", "quota-project-day", 429)), "quota-project-day");
+  assert.equal(S.errorReasonOf({ code: "functions/failed-precondition", message: "generation-running [400]" }), "generation-running");
+  assert.equal(S.errorReasonOf({ code: "functions/failed-precondition", message: "generation-running" }), "generation-running");
+  assert.equal(S.errorReasonOf({ code: "functions/failed-precondition", message: "x [400]", details: "edits-exist" }), "edits-exist");
+  assert.equal(S.errorReasonOf({ code: "functions/failed-precondition", message: "x [400]", details: { reason: "not-draft" } }), "not-draft");
+  assert.equal(S.errorReasonOf(new TypeError("Failed to fetch")), "Failed to fetch");
+  assert.equal(S.errorReasonOf(null), "");
+});
+
+test("開始の例外（実際の SDK の形）: 理由ごとの文言になり、受け皿に落ちない", () => {
+  const q = S.startErrorMessage(sdkErr("resource-exhausted", "quota-project-day", 429));
+  assert.match(q.message, /^この案件で今日使える回数に達しました/);
+  assert.equal(q.retry, "none");
+  assert.match(S.startErrorMessage(sdkErr("resource-exhausted", "quota-user-day", 429)).message, /^あなたが今日使える回数/);
+  assert.match(S.startErrorMessage(sdkErr("resource-exhausted", "quota-project-month", 429)).message, /^この案件で今月/);
+  assert.match(S.startErrorMessage(sdkErr("resource-exhausted", "quota-global-month", 429)).message, /^今月の AI 下書きの上限/);
+  assert.equal(S.startErrorMessage(sdkErr("failed-precondition", "feature-disabled", 400)).retry, "none");
+  assert.equal(S.startErrorMessage(sdkErr("failed-precondition", "answers-missing", 400)).retry, "answers");
+  assert.equal(S.startErrorMessage(sdkErr("failed-precondition", "edits-exist", 400)).retry, "dialog");
+  assert.equal(S.startErrorMessage(sdkErr("failed-precondition", "confirm-discard-required", 400)).retry, "dialog");
+  assert.equal(S.startErrorMessage(sdkErr("aborted", "already-running", 409)).toRunning, true);
+  // 応答なし（通信エラー）は同じ requestId で再試行
+  assert.equal(S.startErrorMessage(new TypeError("Failed to fetch")).retry, "same");
+  assert.equal(S.startErrorMessage(sdkErr("internal", "internal", 500)).retry, "same");
+});
+
+test("保存の例外（実際の SDK の形）: generation-running で「変更をコピー」→ 生成が終わったら取り込み直す", () => {
+  const v = S.saveErrorMessage(sdkErr("failed-precondition", "generation-running", 400));
+  assert.equal(v.offerCopy, true);
+  assert.match(v.message, /^作り直しが始まったため/);
+  assert.match(S.saveErrorMessage(sdkErr("failed-precondition", "not-draft", 400)).message, /^承認を依頼した後のため/);
+  assert.match(S.saveErrorMessage(sdkErr("failed-precondition", "no-generated", 400)).message, /^下書きが見つからない/);
+  assert.match(S.saveErrorMessage(sdkErr("failed-precondition", "feature-disabled", 400)).message, /^AI 下書きが無効/);
+  const net = S.saveErrorMessage(new TypeError("Failed to fetch"));
+  assert.equal(net.offerCopy, false);
+  assert.match(net.message, /^保存できませんでした。通信状態/);
+  // useAiDraft の流れ: staleByRegen = offerCopy。生成中は古い編集を残し、終わったら新しい内容へ置き換える（古い V1+編集を V2 に上書きさせない）
+  const staleByRegen = v.offerCopy;
+  assert.deepEqual(S.decideResync({ save: "failed", staleByRegen, jobRunning: true }), { resync: false, clearSaveError: false, clearStale: false });
+  assert.deepEqual(S.decideResync({ save: "failed", staleByRegen, jobRunning: false }), { resync: true, clearSaveError: true, clearStale: true });
+  // 通信エラーの失敗は黙って捨てない（従来どおり）
+  assert.equal(S.decideResync({ save: "failed", staleByRegen: net.offerCopy, jobRunning: false }).resync, false);
+});
+
 // ---------- 要確認の数字（§3.2）・根拠の名前（§6.2） ----------
 
 test('要確認の数字: 今の文に残っているものだけ（全角・桁区切りを同じに数える）', () => {

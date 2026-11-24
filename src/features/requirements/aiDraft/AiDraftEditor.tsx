@@ -89,6 +89,8 @@ export function AiDraftEditor({ ai, view, generated, role, isAssignedDeveloper, 
   const confirmed = view.key === 'confirmed';
   const block = approvalBlock({ hasEdited: view.hasEdited, save: ai.save, running: ai.running, reqStatus, role, isAssignedDeveloper });
   const showActions = view.canEdit;
+  // 生成中は編集できない（view.canEdit=false）が、保存の失敗（generation-running）と「変更をコピー」は見せる。未保存の変更を控える手段を消さない
+  const showSaveStatus = showActions || (ai.running && ai.save !== "idle");
 
   const set = (patch: Partial<AiEditable>) => ai.update({ ...local, ...patch });
   const setPoint = (idx: number, patch: Partial<AiEditable['points'][number]>) =>
@@ -108,7 +110,7 @@ export function AiDraftEditor({ ai, view, generated, role, isAssignedDeveloper, 
       {ai.save === 'failed' && ai.saveError && (
         <>
           <Typography variant="caption" sx={{ color: tokens.color.dangerInk, fontWeight: 650, ...longText }}>{ai.saveError.message}</Typography>
-          <Button size="small" variant="outlined" onClick={() => void ai.flush()}>{AI_DRAFT_COPY.autosave.retry}</Button>
+          {!ai.running && <Button size="small" variant="outlined" onClick={() => void ai.flush()}>{AI_DRAFT_COPY.autosave.retry}</Button>}
           {ai.saveError.offerCopy && (
             <Button size="small" startIcon={<Copy size={14} />} onClick={() => void navigator.clipboard?.writeText(ai.pendingText())}>{AI_DRAFT_COPY.autosave.copy}</Button>
           )}
@@ -251,7 +253,7 @@ export function AiDraftEditor({ ai, view, generated, role, isAssignedDeveloper, 
       <Surface padding={{ xs: 2, md: 2.5 }}>
         {header}
         {notes && <Stack spacing={1} sx={{ mt: 1.5 }}>{notes}</Stack>}
-        {showActions && <Box sx={{ mt: 1.5 }}>{saveStatus}</Box>}
+        {showSaveStatus && <Box sx={{ mt: 1.5 }}>{saveStatus}</Box>}
       </Surface>
       <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', lg: '7fr 5fr' }, alignItems: 'start' }}>
         <Box sx={{ minWidth: 0, pb: { xs: showActions ? 'calc(88px + env(safe-area-inset-bottom))' : 0, md: 0 } }}>{fields}</Box>

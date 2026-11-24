@@ -204,7 +204,21 @@ export function errorCodeOf(e: unknown): string {
   return c.replace(/^functions\//, '');
 }
 
-const messageOf = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : '');
+/**
+ * callable の例外の理由（サーバーの `new HttpsError(code, reason)` の reason）。
+ * - details に理由があればそれを優先する（文字列、または { reason }）。いまのサーバーは details を付けていない
+ * - SDK（firebase/functions v13）は message の末尾に HTTP の状態を付ける（例 "quota-project-day [429]"）ので外す
+ */
+export function errorReasonOf(e: unknown): string {
+  if (!e || typeof e !== 'object') return '';
+  const d = 'details' in e ? (e as { details: unknown }).details : undefined;
+  if (typeof d === 'string' && d.trim()) return d.trim();
+  if (d && typeof d === 'object' && 'reason' in d && typeof (d as { reason: unknown }).reason === 'string') return String((d as { reason: string }).reason).trim();
+  const m = 'message' in e ? String((e as { message: unknown }).message) : '';
+  return m.replace(/\s*\[\d{3}\]\s*$/, '').trim();
+}
+
+const messageOf = errorReasonOf;
 
 /** 応答を受け取れずに終わった（通信エラー・internal・deadline-exceeded）。このときだけ同じ requestId で再試行する */
 export function isNoResponseError(e: unknown): boolean {

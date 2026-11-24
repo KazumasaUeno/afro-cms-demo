@@ -74,8 +74,9 @@ export function ProposalV2Body({ proposal, highlight, withSummary = false }: { p
             return (
               <Reveal key={p.id || i} delay={0.05 + i * 0.06}>
                 <Surface sx={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 1.25, borderTop: `3px solid ${pr.color}` }}>
-                  <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
-                    <Typography variant="overline" sx={{ color: tokens.color.muted }}>{String(i + 1).padStart(2, '0')} · {p.area}</Typography>
+                  {/* 狭い列（編集画面のプレビュー）で見出しが 1 文字ずつ折り返さないよう、見出しは縮めず、入らなければ優先度を次の行へ送る */}
+                  <Stack direction="row" alignItems="center" justifyContent="space-between" useFlexGap sx={{ flexWrap: 'wrap', columnGap: 1, rowGap: 0.5 }}>
+                    <Typography variant="overline" sx={{ color: tokens.color.muted, flex: '1 0 auto', maxWidth: '100%' }}>{String(i + 1).padStart(2, '0')} · {p.area}</Typography>
                     <StatusPill tone={pr.tone}>{PRIORITY_TEXT[p.priority] ?? ''}</StatusPill>
                   </Stack>
                   <Typography variant="h4" component="h3" sx={longText}><FlaggedText text={p.title} flags={highlight} /></Typography>
