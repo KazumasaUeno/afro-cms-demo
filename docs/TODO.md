@@ -68,6 +68,8 @@
 - 開発者の一覧の並び（`memberUids` array-contains ＋ `updatedAt` desc）は `firestore.indexes.json` の複合 Index が要る（定義済み。エミュレータは Index を要求しないため、本番で `firestore:indexes` を先にデプロイして確かめる）
 - 書き込み待ちのタイマーは LiveDataProvider のアンマウント（ログアウト）で片付けていない。ログアウト直前の入力は permission-denied で失われうる（re-review 2026-11-12 Minor。0.28.1 より前から）
 - オフラインでログインすると読み込み中のまま止まり、案内が出ない（`src/live/auth.tsx` の fromCache 待ち。live は接続が前提）
-- 自動テストが無い: `scripts/deploy-firebase.mjs` の `checkHostingBuild`・`parseTestCounts`（127.0.0.1 の検査は assets/*.js だけ）／「別の画面で予約した書き込みも saveNow が待つ」（エミュレータで手動確認のみ）
+- 自動テストが無い: 「別の画面で予約した書き込みも saveNow が待つ」（エミュレータで手動確認のみ）
+  - ~~`scripts/deploy-firebase.mjs` の `checkHostingBuild`・`parseTestCounts`~~ → 2026-11-24 `tests/rules/deploy-build.test.mjs`（14 件。`npm run test:rules` で実行。一時ディレクトリの偽 dist）で対応済み
+  - 残る穴（テストで現状の挙動として確認。直すかは未決）: エミュレータ接続先の検査は `assets/` 直下の `*.js` だけ（`index.html`・`assets/` の下位フォルダ・`*.mjs`・ルートの `sw.js` は見ない）。文字列は `127.0.0.1:8080` / `:9099` / `:5001` の 3 つで、実際の `build:emulator` の成果物では Firestore（`` `127.0.0.1`,8080 ``）と Functions（`` `127.0.0.1`,5001 ``）は分かれて出るため、検出は Auth の `http://127.0.0.1:9099` 1 つに頼っている（`localhost:` や Storage 9199 も見ない）
 - Auth の「ユーザー アクション」: 作成（登録）を許可は 0.46.0 の functions をデプロイして通しを確かめた後に OFF にする（上の「招待のアカウント作成を Cloud Functions へ移す」）。**削除を許可 ON**（本人が SDK から Auth アカウントを消せる。`accounts`・承認の記録は残る）は、削除依頼の手順（設計書 §17.2）と合わせて OFF にするかを決める
 - [ ] **Anthropic API キーの期限 2027-11-20 15:00 JST**（キー名 `afro-cms-functions-3`（2026-11-20 に 2 本を漏えいのため削除し作り直し。Secret は v3 のみ有効）、Workspace `afro-cms`（個人の組織・地域 US・月 $20 上限）、2026-11-20 作成。連携済みアカウントは個人なので、組織を離れると無効になる）。期限の 1 か月前に作り直して `ANTHROPIC_API_KEY`（Secret Manager）を差し替え、関数をデプロイし直す。手順は AI 実装時に `docs/operations/RUNBOOK_FIREBASE.md` へ書く
