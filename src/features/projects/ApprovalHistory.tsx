@@ -1,4 +1,4 @@
-import { Box, Button, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Stack, Typography } from '@mui/material';
 import { Download, History } from 'lucide-react';
 import { useState } from 'react';
 import { StatusPill, Surface } from '@/components/ui';
@@ -17,7 +17,9 @@ const SHOW = 8;
 
 export function ApprovalHistory({ projectId, siteName }: { projectId: string; siteName: string }) {
   // 依頼の行の補い（demo の approvalRequests）は repository の demo 実装が行う（ここで DemoStore を読まない＝live でも動く。0.47.4）
-  const { data: logs } = useRepositories().approvals.useHistory(projectId);
+  // live の読み込み中は data が [] なので「記録なし」と判定しない（repositories/types.ts の決まり）。demo は常に loading: false
+  const { data: logs, loading, error } = useRepositories().approvals.useHistory(projectId);
+  const ready = !loading && !error;
   const [all, setAll] = useState(false);
   const shown = all ? logs : logs.slice(0, SHOW);
 
@@ -31,12 +33,18 @@ export function ApprovalHistory({ projectId, siteName }: { projectId: string; si
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1, flexWrap: 'wrap', rowGap: 1 }}>
         <History size={18} color={tokens.color.muted} aria-hidden />
         <Typography id={`approval-history-${projectId}`} variant="h5" component="h2" sx={{ flex: 1, minWidth: 0 }}>承認の履歴</Typography>
-        {logs.length > 0 && <Button size="small" variant="outlined" startIcon={<Download size={15} />} onClick={download}>CSVで保存</Button>}
+        {ready && logs.length > 0 && <Button size="small" variant="outlined" startIcon={<Download size={15} />} onClick={download}>CSVで保存</Button>}
       </Stack>
       <Typography variant="caption" component="p" sx={{ mb: 1.5 }}>
-        誰が・いつ（日本時間）・何を承認したか（承認の依頼も）を秒まで記録しています（{logs.length} 件）。後から内容を確認するときの証跡になります。
+        誰が・いつ（日本時間）・何を承認したか（承認の依頼も）を秒まで記録しています{ready && `（${logs.length} 件）`}。後から内容を確認するときの証跡になります。
       </Typography>
-      {logs.length === 0 ? (
+      {loading ? (
+        <Typography variant="body2" color="text.secondary" role="status" aria-live="polite" sx={{ py: 1 }}>承認の履歴を読み込み中…</Typography>
+      ) : error ? (
+        <Alert severity="error" action={<Button color="inherit" size="small" onClick={() => window.location.reload()}>再読み込み</Button>}>
+          承認の履歴を読み込めませんでした。接続を確かめて再読み込みしてください。
+        </Alert>
+      ) : logs.length === 0 ? (
         <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>まだ承認の記録はありません。</Typography>
       ) : (
         <Box component="ol" sx={{ listStyle: 'none', m: 0, p: 0 }}>
@@ -54,7 +62,7 @@ export function ApprovalHistory({ projectId, siteName }: { projectId: string; si
           ))}
         </Box>
       )}
-      {logs.length > SHOW && (
+      {ready && logs.length > SHOW && (
         <Button size="small" onClick={() => setAll((v) => !v)} sx={{ mt: 1 }}>{all ? '最近の 8 件だけ表示' : `すべて表示（${logs.length} 件）`}</Button>
       )}
     </Surface>

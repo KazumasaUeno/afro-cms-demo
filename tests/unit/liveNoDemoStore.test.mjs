@@ -14,6 +14,7 @@ const src = path.join(root, 'src');
 const rel = (f) => path.relative(root, f).split(path.sep).join('/');
 const ALLOWED = new Set(['src/repositories/demo.ts', 'src/store/DemoStore.tsx']);
 
+// 外部パッケージは null（たどらない）。ローカル（@/ と ./）で解決できないものは undefined（黙って飛ばさず、テストで失敗にする）
 function resolve(from, spec) {
   let base;
   if (spec.startsWith('@/')) base = path.join(src, spec.slice(2));
@@ -22,11 +23,12 @@ function resolve(from, spec) {
   for (const c of [base, `${base}.tsx`, `${base}.ts`, path.join(base, 'index.tsx'), path.join(base, 'index.ts')]) {
     if (fs.existsSync(c) && fs.statSync(c).isFile()) return c;
   }
-  return null;
+  return undefined;
 }
 
 function liveReachable() {
   const seen = new Map();
+  const unresolved = [];
   const queue = [[path.join(src, 'live/main.tsx'), null]];
   while (queue.length) {
     const [file, parent] = queue.shift();
@@ -34,15 +36,19 @@ function liveReachable() {
     seen.set(file, parent);
     const text = fs.readFileSync(file, 'utf8');
     for (const m of text.matchAll(/(?:import|export)\s[^'"]*?from\s*['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)|import\s+['"]([^'"]+)['"]/g)) {
-      const next = resolve(file, m[1] || m[2] || m[3]);
-      if (next) queue.push([next, file]);
+      const spec = m[1] || m[2] || m[3];
+      const next = resolve(file, spec);
+      if (next === undefined) unresolved.push(`${rel(file)}: ${spec}`);
+      else if (next) queue.push([next, file]);
     }
   }
-  return seen;
+  return { seen, unresolved };
 }
 
 test('live から届くモジュールが useDemo() を呼ばない（useDemoOptional か repository を使う）', () => {
-  const reach = liveReachable();
+  const { seen: reach, unresolved } = liveReachable();
+  // 解決できないローカル import があると、その先を調べないまま緑になる（偽の緑）。拡張子・解決規則が増えたら resolve() を直す
+  assert.deepEqual(unresolved, [], `解決できないローカル import がある（resolve() の見直しが要る）`);
   assert.ok(reach.size > 50, `live の import をたどれていない（${reach.size} 件）`);
   assert.ok(reach.has(path.join(src, 'features/projects/ApprovalHistory.tsx')), 'ApprovalHistory が live から届く前提が崩れた（テストの見直しが要る）');
   const bad = [...reach]
