@@ -1,6 +1,6 @@
 import { Box, Button, Stack, Typography } from '@mui/material';
 import { ArrowRight, CalendarCheck, Hammer, PackageCheck, Rocket, CalendarDays, Clock, FolderKanban, MessageCircle, Stamp } from 'lucide-react';
-import { type KeyboardEvent, type ReactNode } from 'react';
+import { type KeyboardEvent, type ReactNode, useId, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useRepositories } from '@/repositories';
 import { useDemo } from '@/store/DemoStore';
@@ -10,7 +10,8 @@ import { CountUp, MemberAvatar, Reveal, SectionTitle, Surface } from '@/componen
 import { formatDate, nowIso, relativeTime } from '@/services/time';
 import { tokens } from '@/theme/tokens';
 import { unansweredOf } from '@/features/chat/unanswered';
-import { todayYmd, ymdToIso } from '@/features/projects/projectForm';
+import { ymdToIso } from '@/features/projects/projectForm';
+import { buildDues, deliveryDues, monthDeliveries, releaseDues, type DueRow } from './homeDues';
 import { memberById } from '@/data/members';
 import { STAGES } from '@/data/projects';
 import { releaseDateOf } from '@/data/schedule';
@@ -81,14 +82,20 @@ function KpiItem({ label, value, suffix, foot, icon, tone, onOpen, wide = false 
 /**
  * KPI の下の短い一覧（相談の未対応・今月の納品予定。2026-11-17 会議）。行を押すと onOpen（プロジェクト詳細・相談）を開く。
  * action: 見出しの右のボタン（相談の「一覧を表示」。0 件でも出す）。openLabel: 行の読み上げ（例「の相談を開く」）
+ * limit: 先に出す行の数。超える分は見出しの右の「すべて見る」で開く（2026-11-24 会議「最大 4 件＋すべて見る」）。badge: 行の印（例「納品済み」）
  */
-function ShortList({ title, icon, empty, rows, onOpen, action, openLabel = 'の詳細を開く' }: {
+function ShortList({ title, icon, empty, rows, onOpen, action, openLabel = 'の詳細を開く', limit }: {
   title: string; icon: ReactNode; empty: string;
-  rows: { p: Project; sub: string }[];
+  rows: { p: Project; sub: string; badge?: string }[];
   onOpen: (p: Project) => void;
   action?: ReactNode;
   openLabel?: string;
+  limit?: number;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const listId = useId();
+  const overflow = limit !== undefined && rows.length > limit;
+  const shown = overflow && !expanded ? rows.slice(0, limit) : rows;
   return (
     <Surface padding={{ xs: 2, md: 2.5 }} sx={{ minWidth: 0 }}>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.25, minHeight: 32 }}>
@@ -96,18 +103,23 @@ function ShortList({ title, icon, empty, rows, onOpen, action, openLabel = 'の�
         <Typography variant="h5" component="h2">{title}</Typography>
         <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums', flex: 1 }}>{rows.length}件</Typography>
         {action}
+        {overflow && (
+          <Button size="small" aria-expanded={expanded} aria-controls={listId} onClick={() => setExpanded((v) => !v)} sx={{ flexShrink: 0, [TOUCH]: { minHeight: 44 } }}>
+            {expanded ? '閉じる' : `すべて見る（${rows.length}件）`}
+          </Button>
+        )}
       </Stack>
       {rows.length === 0 ? (
         <Typography variant="body2" color="text.secondary">{empty}</Typography>
       ) : (
-        <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
-          {rows.map(({ p, sub }) => (
+        <Box component="ul" id={listId} sx={{ listStyle: 'none', m: 0, p: 0 }}>
+          {shown.map(({ p, sub, badge }) => (
             <Box component="li" key={p.id} sx={{ '& + &': { borderTop: `1px solid ${tokens.color.border}` } }}>
               <Box
                 component="button"
                 type="button"
                 onClick={() => onOpen(p)}
-                aria-label={`${p.siteName} ${openLabel}`}
+                aria-label={`${p.siteName}${badge ? `（${badge}）` : ''} ${openLabel}`}
                 sx={{
                   all: 'unset', boxSizing: 'border-box', width: '100%', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 1.25,
                   minHeight: 44, py: 1, px: 0.5, borderRadius: '8px',
@@ -117,7 +129,14 @@ function ShortList({ title, icon, empty, rows, onOpen, action, openLabel = 'の�
               >
                 <Box aria-hidden sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: p.accent, flexShrink: 0 }} />
                 <Box sx={{ minWidth: 0, flex: 1 }}>
-                  <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>{p.siteName}</Typography>
+                  <Stack direction="row" spacing={0.75} alignItems="center" sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" noWrap sx={{ fontWeight: 600, minWidth: 0 }}>{p.siteName}</Typography>
+                    {badge && (
+                      <Box component="span" sx={{ px: 0.75, borderRadius: 999, bgcolor: tokens.color.successSoft, color: tokens.color.successInk, fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        {badge}
+                      </Box>
+                    )}
+                  </Stack>
                   <Typography variant="caption" noWrap sx={{ display: 'block' }}>{sub}</Typography>
                 </Box>
                 <ArrowRight size={15} color={tokens.color.muted} style={{ flexShrink: 0 }} aria-hidden />
@@ -257,26 +276,20 @@ export default function HomePage() {
   // （2026-11-17 ユーザー指示「担当ディレクターがチャット対応できる、担当開発者は複数選択可」。以前は開発担当の名前）
   const unanswered = state.projects.filter((p) => unansweredOf(state, p.id))
     .map((p) => ({ p, sub: `担当ディレクター: ${memberById(p.ownerId).name}` }));
-  // 今月の納品予定: 日程（schedule）の納品予定日が今月の案件。日程の無い案件は数えない。近い順
-  const month = todayYmd().slice(0, 7);
-  const deliveries = state.projects
-    .map((p) => ({ p, date: workOf(state, p.id).schedule?.deliveryDate }))
-    .filter((x): x is { p: Project; date: string } => !!x.date && x.date.slice(0, 7) === month)
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .map(({ p, date }) => ({ p, day: formatDate(ymdToIso(date) ?? undefined), sub: `納品予定日 ${formatDate(ymdToIso(date) ?? undefined)}` }));
+  // 予定の集計は homeDues.ts（純粋関数。2026-11-24 会議の指摘で切り出し、今日・今月を日本時間に固定）
+  const dueRows: DueRow<Project>[] = state.projects.map((p) => {
+    const w = workOf(state, p.id);
+    return { p, stage: p.stage, schedule: w.schedule, buildCompleted: !!w.design?.buildCompletedAt, qualityApproved: !!w.design?.qualityApprovedAt };
+  });
+  // 今月の納品予定: 日程（schedule）の納品予定日が日本時間の今月の案件。日程の無い案件は数えない。
+  // 納品済み（納品検収済み・公開済み）も含めて「納品済み」の印を付ける（2026-11-24 会議「終了済みと見分けられない」。外すかは未決）
+  const deliveries = monthDeliveries(dueRows, new Date())
+    .map(({ p, date, delivered }) => ({ p, sub: `納品予定日 ${formatDate(ymdToIso(date) ?? undefined)}`, badge: delivered ? '納品済み' : undefined }));
   // 制作の完了予定（2026-11-17 ユーザー指示「制作の完了予定を追加」）: スケジュールに制作の完了予定があり、まだ全ページの構築が終わっていない案件。近い順
-  const buildDues = state.projects
-    .map((p) => { const w = workOf(state, p.id); return { p, date: w.design?.buildCompletedAt ? undefined : w.schedule?.buildDue }; })
-    .filter((x): x is { p: Project; date: string } => !!x.date)
-    .sort((a, b) => a.date.localeCompare(b.date));
+  const buildDueList = buildDues(dueRows);
   // 納品完了予定・公開予定（同日ユーザー指示「制作完了予定、納品完了予定、公開予定の順に追加」）: まだ済んでいない案件の数と、いちばん近い日
-  const upcoming = (pick: (p: Project) => string | undefined) => state.projects
-    .map((p) => ({ p, date: pick(p) }))
-    .filter((x): x is { p: Project; date: string } => !!x.date)
-    .sort((a, b) => a.date.localeCompare(b.date));
-  const launched = (p: Project) => p.stage === 'operation' || p.stage === 'improvement';
-  const deliveryDues = upcoming((p) => { const w = workOf(state, p.id); return w.design?.qualityApprovedAt || launched(p) ? undefined : w.schedule?.deliveryDate; });
-  const releaseDues = upcoming((p) => (launched(p) ? undefined : workOf(state, p.id).schedule?.releaseDate));
+  const deliveryDueList = deliveryDues(dueRows);
+  const releaseDueList = releaseDues(dueRows);
   const nextText = (list: { p: Project; date: string }[], none: string) => (list[0] ? `次回 ${formatDate(ymdToIso(list[0].date) ?? undefined)}・${list[0].p.siteName}` : none);
 
   const open = (projectId: string, to: string) => {
@@ -314,10 +327,10 @@ export default function HomePage() {
           {/* 「公開予定ページ」のタイルは外した（同日ユーザー指示「公開予定ページは要らない」） */}
           {/* 「相談の未対応」のタイルは外した（下の「相談の未対応」の欄と重なるため。2026-11-17 ユーザー指示「編集した欄の相談の未対応は要らない」） */}
           {/* 「今月の納品予定」のタイルも外した（下の「今月の納品予定」の欄と重なるため。同日ユーザー指示） */}
-          <KpiItem label="制作の完了予定" value={buildDues.length} suffix="件" foot={buildDues[0] ? `次回 ${formatDate(ymdToIso(buildDues[0].date) ?? undefined)}・${buildDues[0].p.siteName}` : '制作中の案件はありません'}
+          <KpiItem label="制作の完了予定" value={buildDueList.length} suffix="件" foot={nextText(buildDueList, '制作中の案件はありません')}
             icon={<Hammer size={18} />} tone="success" />
-          <KpiItem label="納品完了予定" value={deliveryDues.length} suffix="件" foot={nextText(deliveryDues, '納品前の案件はありません')} icon={<PackageCheck size={18} />} tone="info" />
-          <KpiItem label="公開予定" value={releaseDues.length} suffix="件" foot={nextText(releaseDues, '公開前の案件はありません')} icon={<Rocket size={18} />} tone="primary" />
+          <KpiItem label="納品完了予定" value={deliveryDueList.length} suffix="件" foot={nextText(deliveryDueList, '納品前の案件はありません')} icon={<PackageCheck size={18} />} tone="info" />
+          <KpiItem label="公開予定" value={releaseDueList.length} suffix="件" foot={nextText(releaseDueList, '公開前の案件はありません')} icon={<Rocket size={18} />} tone="primary" />
         </Box>
       </Reveal>
 
@@ -335,7 +348,7 @@ export default function HomePage() {
           />
           <ShortList
             title="今月の納品予定" icon={<CalendarCheck size={18} color={tokens.color.muted} aria-hidden />}
-            empty="今月が納品予定日のプロジェクトはありません（スケジュールを入れた案件だけを数えます）。" rows={deliveries}
+            empty="今月が納品予定日のプロジェクトはありません（スケジュールを入れた案件だけを数えます）。" rows={deliveries} limit={4}
             onOpen={(p) => open(p.id, `/projects/${p.id}`)}
           />
         </Box>
