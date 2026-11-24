@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { Navigate, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { LogoMark } from '@/components/layout/Logo';
 import { RouteLoader } from '@/components/layout/RouteLoader';
+import { useToast } from '@/hooks/useToast';
 import { useRepositories } from '@/repositories';
 import { useThemeMode } from '@/theme/ThemeMode';
 import { tokens } from '@/theme/tokens';
@@ -58,14 +59,32 @@ function LiveLogoutButton({ signOut }: { signOut: () => Promise<void> }) {
   const { requirements } = useRepositories();
   const [busy, setBusy] = useState(false);
   const [blocked, setBlocked] = useState<Exclude<FlushResult, 'saved'> | null>(null);
+  const toast = useToast();
+  /** signOut が失敗したらボタンを戻して理由を出す（押せないまま・未処理の reject にしない） */
+  const doSignOut = async () => {
+    setBusy(true);
+    try {
+      await signOut();
+    } catch {
+      toast('ログアウトできませんでした。接続を確かめて、もう一度お試しください', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
   const logout = async () => {
     setBusy(true);
-    const r = await flushBeforeSignOut(() => requirements.saveNow());
+    let r: FlushResult;
+    try {
+      r = await flushBeforeSignOut(() => requirements.saveNow());
+    } catch {
+      r = 'failed';
+    } finally {
+      setBusy(false);
+    }
     if (r === 'saved') {
-      await signOut();
+      await doSignOut();
       return;
     }
-    setBusy(false);
     setBlocked(r);
   };
   return (
@@ -88,7 +107,7 @@ function LiveLogoutButton({ signOut }: { signOut: () => Promise<void> }) {
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
-          <Button variant="outlined" color="error" onClick={() => { setBlocked(null); void signOut(); }}>保存せずにログアウト</Button>
+          <Button variant="outlined" color="error" onClick={() => { setBlocked(null); void doSignOut(); }}>保存せずにログアウト</Button>
           <Button variant="contained" onClick={() => setBlocked(null)}>ログアウトしない</Button>
         </DialogActions>
       </Dialog>
