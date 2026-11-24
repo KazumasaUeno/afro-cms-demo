@@ -66,7 +66,7 @@
 
 - プロジェクトの一覧は更新の新しい順に最大 500 件（`src/live/repositories.tsx` の `LIST_LIMIT`）。超えると古い案件が一覧に出ない。件数が近づいたらページングを入れる
 - 開発者の一覧の並び（`memberUids` array-contains ＋ `updatedAt` desc）は `firestore.indexes.json` の複合 Index が要る（定義済み。エミュレータは Index を要求しないため、本番で `firestore:indexes` を先にデプロイして確かめる）
-- 書き込み待ちのタイマーは LiveDataProvider のアンマウント（ログアウト）で片付けていない。ログアウト直前の入力は permission-denied で失われうる（re-review 2026-11-12 Minor。0.28.1 より前から）
+- ログアウトの前の書き込み待ちの送信（0.47.4 で対応。`src/live/pendingWrites.ts`）: 画面の確認（ダイアログの 6 枚のスクショ）は未実施。ヘッダーのログアウト以外から signOut する経路（LiveLoginPage の未確認・招待なし）は LiveDataProvider の外なので対象外。保存に失敗した回答は PendingAnswers から外れる（settle）ため、ダイアログの「ログアウトしない」の後に「保存」を押しても同じ値は再送されない（0.47.4 より前からの挙動）
 - オフラインでログインすると読み込み中のまま止まり、案内が出ない（`src/live/auth.tsx` の fromCache 待ち。live は接続が前提）
 - 自動テストが無い: `scripts/deploy-firebase.mjs` の `checkHostingBuild`・`parseTestCounts`（127.0.0.1 の検査は assets/*.js だけ）／「別の画面で予約した書き込みも saveNow が待つ」（エミュレータで手動確認のみ）
 - Auth の「ユーザー アクション」: 作成（登録）を許可は 0.46.0 の functions をデプロイして通しを確かめた後に OFF にする（上の「招待のアカウント作成を Cloud Functions へ移す」）。**削除を許可 ON**（本人が SDK から Auth アカウントを消せる。`accounts`・承認の記録は残る）は、削除依頼の手順（設計書 §17.2）と合わせて OFF にするかを決める
