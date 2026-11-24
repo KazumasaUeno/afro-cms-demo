@@ -893,3 +893,8 @@
   - 制作の完了予定・納品完了予定・公開予定・今月の納品予定の数え方を `src/features/home/homeDues.ts`（純粋関数）へ切り出し、単体テストを追加（`npm run test:unit`）
 - demo: 利用者ごとに件数・日付が違う件を直した。初期データを作った日（日本時間）を保存データに `seedAnchor` として持ち、読み込みのたびに「今日 − その日」日だけ保存データの日付をずらす（`src/store/seedAnchor.ts`。単体テストあり）。ずらすのは日付の項目だけ（許可リスト: 名前が At で終わる項目・at・start・end・buildDue・deliveryDate・releaseDate・launchDate・承認の依頼の日時）で、文章・名前・メモ・チャットは日付の形でもずらさない。お客様の回答・フォームの入力値・素材ドライブの見本の日時もずらさない。デモで入力した日程・掲載期間などの日付も初期データと同じく毎日ずれる（デモの仕様。前後関係は変わらない）。`seedAnchor` の無い保存データは、今日を `seedAnchor` にするだけでずらさない。開いたまま日本時間の 0 時をまたいだときは、次の操作・保存・タブへ戻ったときに先に合わせ直す。存在しない日付（2026-02-30 など）はずらさない。「すべて見る」を開いた後のボタンの読み上げを「（見出し）を閉じる」にした
 - SAFE ASSUMPTION lead 2026-11-24（user may change）: Q1 デモの日付は毎回今日に合わせ直す（全員が同じ相対の予定を見る）／ Q2 今月の納品予定に納品済みを含めて印で見分ける／ Q3 印の文言は「納品済み」／ Q4 相談の未対応も 4 件＋「すべて見る」／ Q5 公開予定の KPI は launchDate だけの案件も数える
+
+## 0.47.4 — 2026-11-24
+
+- live（本番・エミュレータ）でプロジェクトの詳細（`/projects/:id`・`/dev/projects/:id`）とお客様の確認・承認（`/portal/approvals`）を開くと「useDemo must be used inside DemoStoreProvider」で画面が落ちる不具合を直した（0.42.0 から）。原因は承認の履歴（`ApprovalHistory`）が demo だけの承認の依頼の記録（`approvalRequests`）を DemoStore から直接読んでいたこと。依頼の行を補う処理を repository の demo 実装（`approvals.useHistory` → `approvalHistoryOf`。`src/repositories/demo.ts`）へ移し、画面は repository だけを読む。live は依頼そのものを `projects/{id}/approvals` に記録しているので補わない（demo の表示は変わらない）
+- live の入口から届くモジュールが `useDemo()` を呼ばないことの静的テストを追加（`tests/unit/liveNoDemoStore.test.mjs`）

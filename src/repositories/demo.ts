@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
-import type { ApprovalLog, DemoState } from '@/types';
+import type { ApprovalKey, ApprovalLog, DemoState } from '@/types';
 import { allDevPeople } from '@/data/people';
 import { clientAccountsState, devAccessState, devProjectsState, devUsersState, useDemo } from '@/store/DemoStore';
+import { workView } from '@/store/projectWork';
+import { REQUEST_TITLE } from '@/store/reducer';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import type { Query, Repositories } from './types';
 
@@ -16,6 +18,21 @@ const ready = <T>(data: T): Query<T> => ({ data, loading: false, error: null });
 export function approvalLogsOf(state: DemoState, projectId: string): ApprovalLog[] {
   // projectId の無い古い記録は MINAMO COFFEE（0.28 までは制作データがこの案件の分だけだった）
   return state.approvalLogs.filter((l) => (l.projectId ?? CLIENT_PROJECT_ID) === projectId);
+}
+
+/**
+ * 承認の履歴として画面に出す行（approvals.useHistory の demo 実装）。承認の依頼も履歴に出す（2026-11-17 ユーザー指示）。
+ * 依頼の記録（ProjectWork.approvalRequests。demo だけの持ち方）はあるのに履歴の行が無いもの（この機能より前の依頼・初期データ）は、
+ * 依頼の日時から行を補う（操作した人は分からないので「アフロ」）。
+ * live は依頼そのものを projects/{id}/approvals に記録するので補わない（0.47.4 で画面 ApprovalHistory から移した。live で useDemo が落ちたため）
+ */
+export function approvalHistoryOf(state: DemoState, projectId: string): ApprovalLog[] {
+  const stored = approvalLogsOf(state, projectId);
+  const requests = workView(state, projectId).approvalRequests;
+  const extra: ApprovalLog[] = Object.entries(requests ?? {})
+    .filter(([key, at]) => !!at && !stored.some((l) => l.action === `${REQUEST_TITLE[key as ApprovalKey]}の承認を依頼`))
+    .map(([key, at]) => ({ id: `req-${key}`, at: at as string, actor: 'アフロ', side: 'afro' as const, action: `${REQUEST_TITLE[key as ApprovalKey]}の承認を依頼`, target: 'お客様への承認依頼', projectId }));
+  return extra.length ? [...stored, ...extra].sort((a, b) => b.at.localeCompare(a.at)) : stored;
 }
 
 export function useDemoRepositories(): Repositories {
@@ -47,7 +64,10 @@ export function useDemoRepositories(): Repositories {
         saveNow: () => Promise.resolve(flush()),
       },
       approvals: {
-        useHistory: (projectId) => ready(approvalLogsOf(useDemo().state, projectId)),
+        useHistory: (projectId) => {
+          const { state } = useDemo();
+          return ready(useMemo(() => approvalHistoryOf(state, projectId), [state, projectId]));
+        },
         approveRequirements: (_projectId, by) => run({ type: 'approveRequirements', by }),
       },
       accounts: {

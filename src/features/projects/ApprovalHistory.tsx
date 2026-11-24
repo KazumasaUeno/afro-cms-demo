@@ -1,10 +1,6 @@
 import { Box, Button, Stack, Typography } from '@mui/material';
 import { Download, History } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import type { ApprovalKey, ApprovalLog } from '@/types';
-import { useDemo } from '@/store/DemoStore';
-import { workView } from '@/store/projectWork';
-import { REQUEST_TITLE } from '@/store/reducer';
+import { useState } from 'react';
 import { StatusPill, Surface } from '@/components/ui';
 import { useRepositories } from '@/repositories';
 import { downloadText } from '@/services/download';
@@ -13,24 +9,15 @@ import { tokens } from '@/theme/tokens';
 
 /**
  * 承認の履歴（日時つき）。後で「承認しましたよね」と示せる証跡として、管理者画面（プロジェクト詳細）と開発者画面の両方に出す。
- * 記録は reducer の approval() が残す（件数で消さない）。projectId の無い古い記録は、デモのデータを持つ案件のものとみなす。
+ * 記録は reducer の approval() / live は projects/{id}/approvals が残す（件数で消さない）。データは repository（approvals.useHistory）からだけ読む（DemoStore を直接読まない）。
  */
 
 const SIDE = { client: { label: 'お客様', tone: 'success' }, afro: { label: 'アフロ', tone: 'info' } } as const;
 const SHOW = 8;
 
 export function ApprovalHistory({ projectId, siteName }: { projectId: string; siteName: string }) {
-  const { data: stored } = useRepositories().approvals.useHistory(projectId);
-  // 承認の依頼も履歴に出す（2026-11-17 ユーザー指示）。依頼の記録（approvalRequests）はあるのに履歴の行が無いもの
-  // （この機能より前の依頼・初期データ）は、依頼の日時から行を補う（操作した人は分からないので「アフロ」）
-  const { state } = useDemo();
-  const requests = workView(state, projectId).approvalRequests;
-  const logs = useMemo(() => {
-    const extra: ApprovalLog[] = Object.entries(requests ?? {})
-      .filter(([key, at]) => !!at && !stored.some((l) => l.action === `${REQUEST_TITLE[key as ApprovalKey]}の承認を依頼`))
-      .map(([key, at]) => ({ id: `req-${key}`, at: at as string, actor: 'アフロ', side: 'afro' as const, action: `${REQUEST_TITLE[key as ApprovalKey]}の承認を依頼`, target: 'お客様への承認依頼', projectId }));
-    return extra.length ? [...stored, ...extra].sort((a, b) => b.at.localeCompare(a.at)) : stored;
-  }, [stored, requests, projectId]);
+  // 依頼の行の補い（demo の approvalRequests）は repository の demo 実装が行う（ここで DemoStore を読まない＝live でも動く。0.47.4）
+  const { data: logs } = useRepositories().approvals.useHistory(projectId);
   const [all, setAll] = useState(false);
   const shown = all ? logs : logs.slice(0, SHOW);
 
