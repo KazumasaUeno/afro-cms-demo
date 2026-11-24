@@ -5,7 +5,7 @@ import { answersHash } from '@/shared/ai/answersHash';
 import { useToast } from '@/hooks/useToast';
 import { getAiDraftPort } from './aiDraftPort';
 import {
-  AI_DRAFT_COPY, AUTOSAVE_DEBOUNCE_MS, deriveAiDraftState, isJobRunning, isNoResponseError, nextRequestId, outcomeOfResponse,
+  AI_DRAFT_COPY, AUTOSAVE_DEBOUNCE_MS, aiDraftServerKey, decideResync, deriveAiDraftState, isJobRunning, isNoResponseError, nextRequestId, outcomeOfResponse,
   saveErrorMessage, startErrorMessage, type AiFlagMode, type AiViewerRole, type AutosaveState, type LastRequest, type SaveErrorView,
   type StartErrorView,
 } from './aiDraftState';
@@ -124,55 +124,62 @@ export function useAiDraft(i: AiDraftHookInput) {
   const latest = useRef<AiEditable | null>(null);
   const version = useRef(0);
   const sentVersion = useRef(0);
-  const inFlight = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveRef = useRef<AutosaveState>('idle');
   const staleByRegen = useRef(false);
   saveRef.current = save;
 
-  // サーバーの値が変わったら（生成・他の人の保存）、未保存の変更が無いときだけ取り込む
-  const serverKey = `${doc?.job?.requestId ?? ''}|${doc?.editedAt ?? ''}|${doc?.generated ? 'g' : ''}|${doc?.edited ? 'e' : ''}`;
+  // サーバーの値が変わったら（生成の開始・完了・他の人の保存）取り込み直す。判定は decideResync（未保存の変更は黙って捨てない）
+  const serverKey = aiDraftServerKey(doc);
   useEffect(() => {
-    const s = saveRef.current;
-    // generation-running で保存できなかった変更は、作り直しの結果で置き換える（§3.3 の文言どおり）
-    const replacedByRegen = s === 'failed' && staleByRegen.current && doc?.job?.state !== 'running';
-    if (!replacedByRegen && (s === 'pending' || s === 'saving' || s === 'failed')) return;
-    if (replacedByRegen) { staleByRegen.current = false; setSave('idle'); setSaveError(null); }
+    const d = decideResync({ save: saveRef.current, staleByRegen: staleByRegen.current, jobRunning: doc?.job?.state === 'running' });
+    if (d.clearStale) staleByRegen.current = false;
+    if (d.clearSaveError) { setSave('idle'); setSaveError(null); }
+    if (!d.resync) return;
     const e = editableOf(doc);
     setLocal(e);
     latest.current = e;
+    sentVersion.current = version.current; // サーバーの値＝送るものは無い
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverKey]);
 
+  const inFlight = useRef<Promise<boolean> | null>(null);
   const flush = useCallback(async (): Promise<boolean> => {
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    // 送信中なら同じ結果を待つ（ループが応答の後に version を見てもう一度送る）
+    if (inFlight.current) return inFlight.current;
     if (!port || !latest.current) return false;
-    if (inFlight.current) return true; // 応答の後に version を見てもう一度送る
-    inFlight.current = true;
-    try {
-      for (;;) {
-        const v = version.current;
-        const body = latest.current;
-        setSave('saving');
-        await port.saveEdits(i.projectId, body);
-        sentVersion.current = v;
-        if (version.current === v) break;
+    if (version.current === sentVersion.current) return true; // 変更なし（もう送ってある・サーバーの値のまま）
+    const run = (async () => {
+      try {
+        for (;;) {
+          const v = version.current;
+          const body = latest.current as AiEditable;
+          setSave('saving');
+          await port.saveEdits(i.projectId, body);
+          sentVersion.current = v;
+          if (version.current === v) break;
+        }
+        setSave('saved');
+        setSavedAt(new Date());
+        setSaveError(null);
+        return true;
+      } catch (e) {
+        console.warn('saveAiDraftEdits failed', e);
+        const v = saveErrorMessage(e);
+        staleByRegen.current = v.offerCopy;
+        setSave('failed');
+        setSaveError(v);
+        return false;
+      } finally {
+        inFlight.current = null;
       }
-      setSave('saved');
-      setSavedAt(new Date());
-      setSaveError(null);
-      return true;
-    } catch (e) {
-      console.warn('saveAiDraftEdits failed', e);
-      const v = saveErrorMessage(e);
-      staleByRegen.current = v.offerCopy;
-      setSave('failed');
-      setSaveError(v);
-      return false;
-    } finally {
-      inFlight.current = false;
-    }
+    })();
+    inFlight.current = run;
+    return run;
   }, [port, i.projectId]);
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
 
   const update = useCallback((next: AiEditable) => {
     setLocal(next);
@@ -206,10 +213,14 @@ export function useAiDraft(i: AiDraftHookInput) {
     ].join('\n');
   }, []);
 
-  // 画面を離れるとき: 未保存なら即時に送る。失敗のままならブラウザの確認を出す
+  // 画面を離れるとき: 待っている保存（pending、または送信中に入った次の入力）を即時に送り、タイマーを残さない。
+  // 失敗のままならブラウザの確認を出す。flush の作り直しで後片付けが走らないよう ref で呼ぶ（依存なし）
   useEffect(() => () => {
-    if (timer.current && saveRef.current === 'pending') void flush();
-  }, [flush]);
+    if (!timer.current) return;
+    clearTimeout(timer.current);
+    timer.current = null;
+    void flushRef.current();
+  }, []);
   useEffect(() => {
     if (save !== 'pending' && save !== 'failed' && save !== 'saving') return undefined;
     const h = (ev: BeforeUnloadEvent) => { ev.preventDefault(); ev.returnValue = ''; };

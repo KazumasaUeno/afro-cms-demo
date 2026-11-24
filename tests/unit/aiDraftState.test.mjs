@@ -269,3 +269,36 @@ test('aiDraftState.ts・proposalV2Format.ts は React・Firebase・mode.ts を i
     assert.doesNotMatch(src, /from '(react|firebase[^']*|@mui[^']*|@\/repositories[^']*|@\/live[^']*)'/, f);
   }
 });
+
+// ---------- サーバー値の取り込み（§3.3・§3.5。CR U4 BLOCKER: 作り直しの完了で編集欄が古いまま） ----------
+
+const running = (over = {}) => doc({ job: { state: 'running', requestId: 'r1', leaseUntil: iso(NOW + 60_000) }, ...over });
+
+test('取り込みの鍵: requestId が同じでも作り直しの完了（running→idle）で変わる', () => {
+  assert.notEqual(S.aiDraftServerKey(running()), S.aiDraftServerKey(doc()));
+  // 失敗した作り直し（generated は同じ・lastError が付く）でも変わる
+  const failed = doc({ lastError: { code: 'internal', at: iso(NOW), requestId: 'r1' } });
+  assert.notEqual(S.aiDraftServerKey(running()), S.aiDraftServerKey(failed));
+  assert.equal(S.aiDraftServerKey(doc()), S.aiDraftServerKey(doc({ updatedAt: iso(NOW + 1) })));
+  assert.equal(S.aiDraftServerKey(null), '');
+});
+
+test('作り直しの完了: 未保存の変更が無ければ新しい内容を取り込む', () => {
+  for (const save of ['idle', 'saved']) {
+    assert.deepEqual(S.decideResync({ save, staleByRegen: false, jobRunning: false }), { resync: true, clearSaveError: false, clearStale: true }, save);
+  }
+});
+
+test('編集中（pending・saving・その他の保存失敗）は黙って置き換えない', () => {
+  for (const save of ['pending', 'saving', 'failed']) {
+    assert.equal(S.decideResync({ save, staleByRegen: false, jobRunning: false }).resync, false, save);
+    assert.equal(S.decideResync({ save, staleByRegen: false, jobRunning: true }).resync, false, `${save} running`);
+  }
+  // 生成中に入力し直した（stale のまま pending）: 置き換えず、印だけ下ろす
+  assert.deepEqual(S.decideResync({ save: 'pending', staleByRegen: true, jobRunning: false }), { resync: false, clearSaveError: false, clearStale: true });
+});
+
+test('generation-running で保存できなかった変更: 生成中は待ち、終われば（失敗でも）置き換えて印を下ろす', () => {
+  assert.deepEqual(S.decideResync({ save: 'failed', staleByRegen: true, jobRunning: true }), { resync: false, clearSaveError: false, clearStale: false });
+  assert.deepEqual(S.decideResync({ save: 'failed', staleByRegen: true, jobRunning: false }), { resync: true, clearSaveError: true, clearStale: true });
+});

@@ -14,7 +14,8 @@ import { hostnameOf } from './buildProposal';
 import { useHearingRoutes } from './hearingRoutes';
 import { analysisBlockers } from './validation';
 import { AI_FLAG_MODE, getAiDraftPort } from './aiDraft/aiDraftPort';
-import { AI_DRAFT_COPY, aiCanGenerate, aiPanelVisible } from './aiDraft/aiDraftState';
+import { AI_DRAFT_COPY, APPROVAL_BLOCK_COPY, aiCanGenerate, aiPanelVisible } from './aiDraft/aiDraftState';
+import { useToast } from '@/hooks/useToast';
 import { useAiDraft } from './aiDraft/useAiDraft';
 import { AiDraftPanel } from './aiDraft/AiDraftPanel';
 
@@ -32,6 +33,7 @@ export default function RequirementsPage() {
   const { requirements } = useRepositories();
   const { data: req, loading } = useCurrentRequirements();
   const write = useWrite();
+  const toast = useToast();
   const navigate = useNavigate();
   const routes = useHearingRoutes();
   const status = req.status;
@@ -141,7 +143,11 @@ export default function RequirementsPage() {
                 autoStart={autoStart}
                 onAutoStarted={() => setAutoStart(false)}
                 onRequestApproval={async () => {
-                  await ai.flush();
+                  // 保存できなかったら依頼しない（保存の失敗の文言は編集画面の保存の状態に出る。§3.3）
+                  if (!(await ai.flush())) {
+                    toast(APPROVAL_BLOCK_COPY['save-failed'], 'error');
+                    return false;
+                  }
                   const ok = await write(requirements.completeAnalysis(req.projectId, { proposal: 'aiDraft' }), AI_DRAFT_COPY.approval.done, 'ai');
                   if (ok) window.scrollTo({ top: 0 });
                   return ok;

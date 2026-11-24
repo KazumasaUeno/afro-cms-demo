@@ -145,6 +145,50 @@ export function canRequestApproval(a: ApprovalInput): boolean {
   return approvalBlock(a) === null;
 }
 
+// ---------------- サーバー値の取り込み（§3.3・§3.5） ----------------
+
+/**
+ * 編集欄へ取り込み直す契機の鍵。作り直しの完了では job.requestId が変わらない（functions/src/ai/task.ts は requestId を残して idle にする）ため、
+ * job.state・doc.state・lastError.at を含める（running→idle で必ず変わる）。updatedAt は使わない（自分の保存の反映は editedAt で足りる）
+ */
+export function aiDraftServerKey(doc: AiDraftDoc | null | undefined): string {
+  if (!doc) return '';
+  return [
+    doc.job?.state ?? '', doc.job?.requestId ?? '', doc.state, doc.editedAt ?? '', doc.lastError?.at ?? '',
+    doc.generated ? 'g' : '', doc.edited ? 'e' : '',
+  ].join('|');
+}
+
+export interface ResyncInput {
+  save: AutosaveState;
+  /** 直前の保存が generation-running で失敗した（§3.3「生成が終わると下書きは新しい内容に置き換わります」） */
+  staleByRegen: boolean;
+  /** job.state==='running'（lease 切れも含む。結果が書かれるまで置き換えない） */
+  jobRunning: boolean;
+}
+
+export interface ResyncDecision {
+  /** サーバーの edited（無ければ generated）で編集欄を置き換える */
+  resync: boolean;
+  /** 保存の失敗表示を消して idle に戻す */
+  clearSaveError: boolean;
+  /** staleByRegen を下ろす */
+  clearStale: boolean;
+}
+
+/**
+ * サーバーの値が変わったときに編集欄を取り込み直すか（aiDraftServerKey が変わったときに呼ぶ）。
+ * - 未保存の変更（pending・saving・failed）は黙って捨てない。例外は generation-running で保存できなかった変更で、
+ *   生成が終わった時点（成功・失敗とも）でサーバーの内容に置き換える（§3.3 の文言で予告し「変更をコピー」を出している）
+ * - 生成が終わったら staleByRegen は必ず下ろす（失敗・入力し直しで立ったまま残らない）
+ */
+export function decideResync(i: ResyncInput): ResyncDecision {
+  const dirty = i.save === 'pending' || i.save === 'saving' || i.save === 'failed';
+  if (i.jobRunning) return { resync: !dirty, clearSaveError: false, clearStale: false };
+  if (i.staleByRegen && i.save === 'failed') return { resync: true, clearSaveError: true, clearStale: true };
+  return { resync: !dirty, clearSaveError: false, clearStale: true };
+}
+
 export const APPROVAL_BLOCK_COPY: Record<Exclude<ApprovalBlock, 'not-allowed' | 'not-draft'>, string> = {
   'no-edited': '下書きを直すか「内容を確認した」を押すと、承認を依頼できます。',
   saving: '保存が終わると依頼できます。',

@@ -11,10 +11,11 @@ import { isAnswered, validateAnswer } from '@/features/requirements/validation';
 import { projectFromDraft, siteHost } from '@/features/projects/projectForm';
 import type { Query, Repositories } from '@/repositories/types';
 import type { AnswerValue, ApprovalLog, ClientAccount, DevUser } from '@/types';
-import type { StoredProposal } from '@/types/aiDraft';
+import type { AiDraftDoc, StoredProposal } from '@/types/aiDraft';
+import { isJobRunning } from '@/features/requirements/aiDraft/aiDraftState';
 import { db } from './firebase';
 import {
-  clientFromAccount, clientFromInvite, devFromAccount, devFromInvite, INVITE_PREFIX, projectDoc, proposalForSave, proposalV2FromDraft, reqDoc, toApprovalLog, toProject,
+  clientFromAccount, clientFromInvite, deepIso, devFromAccount, devFromInvite, INVITE_PREFIX, projectDoc, proposalForSave, proposalV2FromDraft, reqDoc, toApprovalLog, toProject,
   toSession, type ProjectDoc, type ReqDoc,
 } from './model';
 import { PendingAnswers } from './pendingAnswers';
@@ -291,7 +292,8 @@ export function useLiveRepositoriesImpl(): Repositories {
             if (as) {
               const ai = as.exists() ? (as.data() as DocumentData) : null;
               if (!ai || ai.state !== 'ready' || !ai.generated || !ai.edited) throw new Error('確認済みの AI 下書きがありません');
-              if (ai.job?.state === 'running') throw new Error('AI 下書きの生成が終わってから依頼してください');
+              // lease 切れの running は止まったもの（承認依頼のボタンの判定 approvalBlock と同じ isJobRunning）
+              if (isJobRunning(deepIso(ai) as AiDraftDoc, Date.now())) throw new Error('AI 下書きの生成が終わってから依頼してください');
               // Rules（proposalV2Ok）はマップの等式で比べる: 値を変えずに写す（flags は写さない）
               proposal = proposalV2FromDraft(ai.generated as DocumentData, ai.edited as DocumentData);
             } else {

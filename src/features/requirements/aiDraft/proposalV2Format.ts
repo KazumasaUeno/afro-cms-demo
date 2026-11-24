@@ -80,7 +80,7 @@ ${p.competitors.length ? `<p>競合サイト：${esc(p.competitors.join('・'))}
 /** v2 の「1. 改善提案」の中身（サイトスコアは出さない。根拠・基本チェック・要件定義書の下書きを足す） */
 export function proposalV2Html(p: ProposalV2): string {
   const points = p.points.map((x) => {
-    const ev = x.evidence.length ? `<br><span class="muted">根拠：${esc(x.evidence.map(evidenceLabel).join('・'))}</span>` : '';
+    const ev = Array.isArray(x.evidence) && x.evidence.length ? `<br><span class="muted">根拠：${esc(x.evidence.map(evidenceLabel).join('・'))}</span>` : '';
     return `<li><b>[${PRIORITY_TEXT[x.priority] ?? ''}] ${esc(x.area)}: ${esc(x.title)}</b><br>${nl(x.detail)}<br><span class="muted">${esc(x.impact)}</span>${ev}</li>`;
   }).join('');
   let site = '';
