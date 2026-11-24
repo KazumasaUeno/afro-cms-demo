@@ -5,6 +5,7 @@ import { seedDev } from '@/data/dev';
 import { seedContentFor } from '@/data/projectContent';
 import { DEV_SEED_REV, seedClientAccounts, seedDevAccess, seedDevProjects } from '@/data/users';
 import { approvalLogsFromWork, blankRequirements, seedWorkFor } from './projectWork';
+import { jstYmd } from '@/features/home/homeDues';
 
 /** dev（0.5.0）・requirements.mode / answerMeta（0.9.0）・signage（0.11.0）・clientAccounts / devAccess（0.13.0）・devProjects（0.14.0）は任意項目のため版を上げていない。古い保存データは既定値で補う */
 export const STATE_VERSION = 1;
@@ -32,6 +33,8 @@ export const createSeedState = (): DemoState => {
     version: STATE_VERSION,
     // 新しい初期データは日程・承認の依頼・承認履歴を最初から持つので、補わない（0.41.0）
     scheduleMigrated: true,
+    // 初期データを作った日（日本時間）。読み込みのたびに今日との差だけ日付をずらす（seedAnchor.ts。2026-11-24）
+    seedAnchor: jstYmd(new Date()),
     userName: '上野',
     currentProjectId: 'p1',
     projects: seedProjects(),

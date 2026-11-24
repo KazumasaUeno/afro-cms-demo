@@ -35,12 +35,15 @@ import { validateSchedule, validateWbs, WBS_ITEMS, type ScheduleDraft } from '@/
 import { canRequestApproval, stageApprovals } from '@/features/portal/portalSteps';
 import { designReady } from '@/features/design/designReq';
 import { LOG_ACTIONS } from './projectWork';
+import { reanchor } from './seedAnchor';
 
 /** 操作した側。省略時はアフロ（管理者画面）。お客様の画面（CMS・ポータル）からは client を渡す */
 export type Side = AnswerSide;
 
 export type Action =
   | { type: 'reset' }
+  /** 開いたまま日本時間の 0 時をまたいだとき、保存データの日付を今日へ合わせ直す（seedAnchor.ts。2026-11-24） */
+  | { type: 'reanchor'; today: string }
   | { type: 'setCurrentProject'; id: string }
   /** 案件の情報の編集（管理者画面・demo だけ。2026-11-12）。id・段階・進捗・次の作業・承認待ちの数は変えない */
   | { type: 'updateProject'; id: string; project: ProjectDraft }
@@ -265,6 +268,8 @@ function baseReducer(state: DemoState, action: Action): DemoState {
   switch (action.type) {
     case 'reset':
       return createSeedState();
+    case 'reanchor':
+      return reanchor(state, action.today);
 
     case 'setCurrentProject':
       // 制作データ（ヒアリング〜品質チェック）も、選んだ案件の分へ入れ替える（0.29.0）

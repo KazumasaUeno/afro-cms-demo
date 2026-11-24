@@ -761,6 +761,8 @@ export interface DemoState {
   devSeed?: number;
   /** 日程・承認の依頼・承認履歴を古い保存データへ補った印（0.41.0。2026-11-17 会議）。1 回だけ補う（毎回補うと日程の入力・承認の依頼を飛ばせてしまう） */
   scheduleMigrated?: boolean;
+  /** 初期データを作った日（日本時間 yyyy-mm-dd。2026-11-24）。読み込みのたびに今日との差だけ日付をずらし、今日に置き直す（store/seedAnchor.ts） */
+  seedAnchor?: string;
   /** 管理者が登録した開発者。0.15.0 で追加（devUsersState() で補う） */
   devUsers?: DevUser[];
 }
