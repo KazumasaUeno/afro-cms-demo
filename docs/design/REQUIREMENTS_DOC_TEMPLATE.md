@@ -270,9 +270,7 @@ v3 の仮定: 入力 25,000（今の見込み 19,000 ＋カタログ 41 項目 �
 ## 7. 実装計画（単位・書く範囲・規模・テスト）
 
 | 単位 | 書く範囲 | 規模 | テスト |
-|---|---|---|**[DECISION] ユーザー 2026-11-25「推奨で」: Q-1〜Q-11 はすべて上の表の推奨案で確定。** Q-1 の標準仕様の中身はユーザー（または指名者）が後で決める（それまで固定 32 項目は「確認中」）。Q-7 の評価の回し直し（Haiku・Sonnet、約 $11）は課金なので、実行の直前にユーザーが自分の端末でキーを入れて回す。
-
----|
+|---|---|---|---|
 | **U1 カタログと型** | `src/shared/ai/reqDocCatalog.ts`（新規）・`src/types/aiDraft.ts`（v3 型・上限）・`gen-ai-shared` の写し | M | 単体: 抜き出した本文との一致（章 19・項目 129・区分 32/74/23・確認対象）、id 重複なし、fill の数（ai 41・server 8・human 48・standard 32）。`gen-ai-shared --check` |
 | **U2 生成と保存（Functions）** | `functions/src/ai/prompts/PRM-REQ-001.ts`（2.0.0）・`schema.ts`・`postprocess.ts`・`generateDraft.ts`（組み立て・configHash）・`edits.ts`（v3 の検査）・`limits.ts`（max_tokens） | L（外部 AI の出力・保存データの形） | 単体（Stub）: 固定 id を返す・未知 id・重複・evidence 空・個別の na・数字の印（項目 id つき）・AI追加の上限と同名・全 129 項目の組み立て・server の転記に自由記述が入らない・送信 payload のスナップショットが今と同じ（送る質問が増えていない）・編集の検査（固定の状態変更・`by` 変更・上限超え → 拒否）。既存 functions のテストを全件 |
 | **U3 Rules** | `firestore.rules`（`validStoredProposal` に v3、`proposalV3Ok`）・`tests/rules/` | L（認可。security-engineer 同席） | v1・v2 の既存文書の更新が通る／v3 の偽造（doc を generated・edited と変える）が拒否／お客様が aiDrafts を読めない／**最大の payload で式の数・評価の上限を計測**（上限に当たれば計画を出し直す） |
