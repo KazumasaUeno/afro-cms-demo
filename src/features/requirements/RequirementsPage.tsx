@@ -1,23 +1,19 @@
 import { Box, Button, Stack, useMediaQuery, useTheme } from '@mui/material';
 import { ArrowLeft, ListChecks, Sparkles } from 'lucide-react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { useContext, useState } from 'react';
+import { useState } from 'react';
 import { AiBadge, PageHeader, Reveal } from '@/components/ui';
 import { RouteLoader } from '@/components/layout/RouteLoader';
 import { DATA_MODE, useCurrentRequirements, useRepositories } from '@/repositories';
-import { LiveSessionContext, useLiveRoleOptional } from '@/live/session';
+import { useLiveRoleOptional } from '@/live/session';
 import { useWrite } from '@/hooks/useWrite';
 import { AnalysisSequence } from './AnalysisSequence';
 import { ProposalView } from './ProposalView';
 import { HearingEditor } from './HearingEditor';
 import { hostnameOf } from './buildProposal';
 import { useHearingRoutes } from './hearingRoutes';
-import { analysisBlockers } from './validation';
 import { AI_FLAG_MODE, getAiDraftPort } from './aiDraft/aiDraftPort';
-import { AI_DRAFT_COPY, APPROVAL_BLOCK_COPY, aiCanGenerate, aiPanelVisible } from './aiDraft/aiDraftState';
-import { useToast } from '@/hooks/useToast';
-import { useAiDraft } from './aiDraft/useAiDraft';
-import { AiDraftPanel } from './aiDraft/AiDraftPanel';
+import { AI_DRAFT_COPY, aiCanGenerate, aiPanelVisible } from './aiDraft/aiDraftState';
 
 /** フラグ on の画面の印の説明（事実どおり。DEC lead F4） */
 const AI_LIVE_TOOLTIP = 'AI 下書きは外部の AI サービスで作成し、担当者が確認してからお客様に出します。';
@@ -33,7 +29,6 @@ export default function RequirementsPage() {
   const { requirements } = useRepositories();
   const { data: req, loading } = useCurrentRequirements();
   const write = useWrite();
-  const toast = useToast();
   const navigate = useNavigate();
   const routes = useHearingRoutes();
   const status = req.status;
@@ -48,25 +43,14 @@ export default function RequirementsPage() {
 
   // AI 下書き（VITE_FEATURE_AI_REQUIREMENTS。off なら今と同じ。docs/design/AI_REQUIREMENTS_UI.md §1・DEC lead F5）
   // live の開発者が読める案件は memberUids に入っている案件だけ（repositories.tsx の購読条件）＝アサインされた開発者
-  const uid = useContext(LiveSessionContext)?.uid;
   const aiRole = liveRole ?? 'client';
   const isAssigned = liveRole === 'developer';
   const aiOn = DATA_MODE === 'live' && !!getAiDraftPort() && aiPanelVisible(AI_FLAG_MODE, aiRole, isAssigned);
   const aiGen = aiOn && aiCanGenerate(AI_FLAG_MODE, aiRole, isAssigned);
-  const ai = useAiDraft({
-    projectId: req.projectId, answers: req.answers, reqStatus: status, role: aiRole, isAssignedDeveloper: isAssigned, uid, flagMode: AI_FLAG_MODE,
-    enabled: aiOn && status === 'draft',
-  });
-  // ヒアリング → 下書き（要件定義）の 2 段。2026-11-25 ユーザー「AI 下書きは不要」で「ヒアリング / AI 下書き」のタブは出さない
-  // （タブは live のフラグ on のときだけ出ていたもので、demo は元から出ない）。ヒアリングの「要件定義へ進む」で下書きの面に切り替え、
-  // 「ヒアリングに戻る」で戻る。下書きの機能（aiDraft/・Functions・Rules）はそのまま
-  const [tab, setTab] = useState<'hearing' | 'ai'>('hearing');
-  const [autoStart, setAutoStart] = useState(false);
-  const switchTab = (v: 'hearing' | 'ai') => {
-    // タブを切り替えるとき、未保存の編集は待たずに送る（§3.3）
-    if (tab === 'ai' && ai.save === 'pending') void ai.flush();
-    setTab(v);
-  };
+  // ヒアリング → 要件定義の 2 画面（0.49.1。2026-11-25 ユーザー「要件定義へ進むを押してもヒアリングの見出しのまま」）。
+  // 「要件定義へ進む」で要件定義の画面（routes.doc。live は src/live/pages/LiveRequirementsPage.tsx）へ移る。
+  // 生成できる人だけ、着いた画面で下書きが無ければ生成を始める（autoStart。既にあれば作り直さない）。
+  // 生成できない人（internal の開発者）も、管理者が作った下書きを見られるように画面は開く
 
   // 読み込み中は描画せず、書き込みも呼ばない（repositories/types.ts の決まり）
   if (loading) return <RouteLoader label="ヒアリング" />;
@@ -119,41 +103,11 @@ export default function RequirementsPage() {
         </Reveal>
       ) : aiOn ? (
         <Reveal>
-          {tab === 'hearing' ? (
-            <HearingEditor
-              editable
-              analyzeLabel={AI_DRAFT_COPY.generate}
-              // 生成できない人（internal の開発者）も、管理者が作った下書きを見られるように面だけ開く
-              onAnalyze={() => {
-                setTab('ai');
-                if (aiGen) setAutoStart(true);
-                window.scrollTo({ top: 0 });
-              }}
-            />
-          ) : (
-            <Box>
-              <Button size="small" startIcon={<ArrowLeft size={16} />} onClick={() => switchTab('hearing')} sx={{ mb: 1.5, ml: -1, minHeight: 44 }}>
-                ヒアリングに戻る
-              </Button>
-              <AiDraftPanel
-                ai={ai} role={aiRole} isAssignedDeveloper={isAssigned} reqStatus={status}
-                missing={analysisBlockers(req.answers).map((q) => q.text)}
-                onMissing={() => switchTab('hearing')}
-                autoStart={autoStart}
-                onAutoStarted={() => setAutoStart(false)}
-                onRequestApproval={async () => {
-                  // 保存できなかったら依頼しない（保存の失敗の文言は編集画面の保存の状態に出る。§3.3）
-                  if (!(await ai.flush())) {
-                    toast(APPROVAL_BLOCK_COPY['save-failed'], 'error');
-                    return false;
-                  }
-                  const ok = await write(requirements.completeAnalysis(req.projectId, { proposal: 'aiDraft' }), AI_DRAFT_COPY.approval.done, 'ai');
-                  if (ok) window.scrollTo({ top: 0 });
-                  return ok;
-                }}
-              />
-            </Box>
-          )}
+          <HearingEditor
+            editable
+            analyzeLabel={AI_DRAFT_COPY.goToRequirements}
+            onAnalyze={() => navigate(routes.doc, { state: { autoStart: aiGen } })}
+          />
         </Reveal>
       ) : (
         <Reveal>

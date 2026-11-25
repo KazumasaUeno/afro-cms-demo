@@ -36,20 +36,23 @@ test('U4（2026-11-25）: admin と開発者は ダッシュボード / プロ�
   for (const items of Object.values(LIVE_NAV)) {
     for (const i of items) {
       assert.equal(i.badge, undefined);
-      assert.ok(!['/dev/hearing', '/ai-studio', '/users'].includes(i.to));
+      assert.ok(!['/dev/hearing', '/ai-studio', '/dev/requirements', '/ai-studio/requirements', '/users'].includes(i.to));
     }
   }
 });
 
-test('選択中: ダッシュボードは完全一致・ヒアリングを開いている間は「プロジェクト」', () => {
+test('選択中: ダッシュボードは完全一致・ヒアリング・要件定義を開いている間は「プロジェクト」', () => {
   const active = (role, path) => LIVE_NAV[role].filter((i) => isActive(i, path)).map((i) => i.to);
   assert.deepEqual(active('developer', '/dev'), ['/dev']);
   assert.deepEqual(active('developer', '/dev/tasks'), ['/dev/tasks']);
   assert.deepEqual(active('developer', '/dev/hearing'), ['/dev/projects']);
   assert.deepEqual(active('developer', '/dev/hearing/answers'), ['/dev/projects']);
+  assert.deepEqual(active('developer', '/dev/requirements'), ['/dev/projects']);
   assert.deepEqual(active('developer', '/dev/projects/p1'), ['/dev/projects']);
   assert.deepEqual(active('admin', '/dashboard'), ['/dashboard']);
   assert.deepEqual(active('admin', '/ai-studio/hearing'), ['/projects']);
+  assert.deepEqual(active('admin', '/ai-studio'), ['/projects']);
+  assert.deepEqual(active('admin', '/ai-studio/requirements'), ['/projects']);
   assert.deepEqual(active('admin', '/users'), []);
 });
 

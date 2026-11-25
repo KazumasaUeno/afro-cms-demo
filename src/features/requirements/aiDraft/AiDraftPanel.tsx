@@ -50,10 +50,10 @@ export interface AiDraftPanelProps {
   reqStatus: 'draft' | 'analyzed' | 'approved';
   /** 必須回答の欠け（質問名）。空なら押せる */
   missing: readonly string[];
-  /** 必須回答が欠けているときに押した（ヒアリングのタブへ移って赤く示す） */
+  /** 必須回答が欠けているときに押した（ヒアリングの画面へ戻す） */
   onMissing: () => void;
   onRequestApproval: () => Promise<boolean>;
-  /** ヒアリングの「要件定義へ進む」（AI_DRAFT_COPY.generate）から来た（読み込み後に 1 回だけ生成を始め、onAutoStarted で戻す） */
+  /** ヒアリングの「要件定義へ進む」（AI_DRAFT_COPY.goToRequirements）から来た（読み込み後に 1 回だけ生成を始め、onAutoStarted で戻す） */
   autoStart?: boolean;
   onAutoStarted?: () => void;
 }

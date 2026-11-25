@@ -8,7 +8,8 @@ export interface HearingRoutes {
   input: string;
   /** ヒアリングの回答（AI 分析の後の見直し） */
   answers: string;
-  /** 要件定義書の画面（0.28.0。AI 分析の前は「まだ作成されていません」、分析後は要件定義書）。demo だけ（live の router には無い） */
+  /** 要件定義の画面。demo は要件定義書の画面（0.28.0。AI 分析の前は「まだ作成されていません」、分析後は要件定義書）、
+   *  live は AI 下書きの要件定義の画面（0.49.1。LiveRequirementsPage。ヒアリングの「要件定義へ進む」の行き先） */
   doc: string;
   /** その案件のプロジェクト詳細（改善提案の「プロジェクトに戻る」。0.38.0。live の router にもある） */
   project: (projectId: string) => string;

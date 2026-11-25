@@ -40,7 +40,8 @@ function liveItem(area: AreaId, demoTo: string, to: string, match: string[], hin
 /**
  * 役割ごとのナビ（2026-11-25 ユーザー決定 U4: admin と開発者はどちらも「ダッシュボード / プロジェクト / 構築タスク / 相談」の 4 つだけ。
  * admin は見るだけ。名前・アイコンは demo の開発者画面のレールと同じ）。
- * - ヒアリング: メニューから外した（demo と同じ。プロジェクト詳細の「ヒアリング」から開く。開いている間は「プロジェクト」を選択中にする）
+ * - ヒアリング・要件定義: メニューから外した（demo と同じ。プロジェクト詳細の「ヒアリング」から開く。開いている間は「プロジェクト」を選択中にする。
+ *   admin の /ai-studio/requirements は '/ai-studio' の前方一致で入る）
  * - ユーザー管理（admin）: メニューから外した。上部バーのアカウントのメニューから開く（LiveShell）
  * - お客様: 確認・承認の隣に相談（担当者から返信があれば「返信あり」の印）
  * 画面（URL）は消していない（以前の最初の画面 /projects・/dev/projects もそのまま開ける）
@@ -54,7 +55,7 @@ export const LIVE_NAV: Record<LiveRole, NavItem[]> = {
   ],
   developer: [
     liveItem('dev', '/dev', '/dev', ['/dev']),
-    liveItem('dev', '/dev/projects', '/dev/projects', ['/dev/projects', '/dev/hearing']),
+    liveItem('dev', '/dev/projects', '/dev/projects', ['/dev/projects', '/dev/hearing', '/dev/requirements']),
     liveItem('dev', '/dev/tasks', '/dev/tasks', ['/dev/tasks']),
     liveItem('dev', '/dev/chat', '/dev/chat', ['/dev/chat']),
   ],

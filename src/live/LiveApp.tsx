@@ -17,6 +17,7 @@ const LiveConsultPage = lazy(() => import('./pages/LiveConsultPage'));
 const HearingGate = lazy(() => import('./pages/HearingGate'));
 const RequirementsPage = lazy(() => import('@/features/requirements/RequirementsPage'));
 const HearingAnswersPage = lazy(() => import('@/features/requirements/HearingAnswersPage'));
+const LiveRequirementsPage = lazy(() => import('./pages/LiveRequirementsPage'));
 
 /** その役割の画面だけを開く（表示の出し分け。権限の実体は Firestore Rules） */
 function RoleRoute({ roles, children }: { roles: LiveRole[]; children: ReactNode }) {
@@ -35,7 +36,7 @@ const client: LiveRole[] = ['client'];
 
 /**
  * live のルーティング（BACKEND_FIREBASE §14: 範囲内の画面だけ。サイトマップ・デザイン・品質・CMS・分析・設定・営業プレゼン等は出さない）。
- * ヒアリングは管理者（/ai-studio。回答の入力だけ。§25-1）と開発者（/dev/hearing）
+ * ヒアリングは管理者（/ai-studio。回答の入力だけ。§25-1）と開発者（/dev/hearing）。要件定義（AI 下書き）は /ai-studio/requirements・/dev/requirements（0.49.1）
  */
 const router = createBrowserRouter([
   { path: '/login', element: <LiveLoginPage /> },
@@ -58,6 +59,8 @@ const router = createBrowserRouter([
       { path: 'projects/:projectId', element: <RoleRoute roles={admin}><ProjectDetailPage /></RoleRoute> },
       { path: 'ai-studio', element: <RoleRoute roles={admin}><HearingGate><RequirementsPage /></HearingGate></RoleRoute> },
       { path: 'ai-studio/hearing', element: <RoleRoute roles={admin}><HearingGate><HearingAnswersPage /></HearingGate></RoleRoute> },
+      // 要件定義（0.49.1。ヒアリングの「要件定義へ進む」の行き先。AI 下書き）
+      { path: 'ai-studio/requirements', element: <RoleRoute roles={admin}><HearingGate><LiveRequirementsPage /></HearingGate></RoleRoute> },
       { path: 'users', element: <RoleRoute roles={admin}><LiveUsersPage /></RoleRoute> },
       { path: 'dev', element: <RoleRoute roles={dev}><LiveDashboardPage /></RoleRoute> },
       { path: 'dev/tasks', element: <RoleRoute roles={dev}><LiveTasksPage /></RoleRoute> },
@@ -67,6 +70,7 @@ const router = createBrowserRouter([
       { path: 'dev/projects/:projectId', element: <RoleRoute roles={dev}><ProjectDetailPage /></RoleRoute> },
       { path: 'dev/hearing', element: <RoleRoute roles={dev}><HearingGate><RequirementsPage /></HearingGate></RoleRoute> },
       { path: 'dev/hearing/answers', element: <RoleRoute roles={dev}><HearingGate><HearingAnswersPage /></HearingGate></RoleRoute> },
+      { path: 'dev/requirements', element: <RoleRoute roles={dev}><HearingGate><LiveRequirementsPage /></HearingGate></RoleRoute> },
       { path: 'portal/approvals', element: <RoleRoute roles={client}><PortalApprovalPage /></RoleRoute> },
       { path: 'portal/chat', element: <RoleRoute roles={client}><LiveConsultPage /></RoleRoute> },
       { path: '*', element: <RoleHome /> },
