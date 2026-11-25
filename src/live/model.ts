@@ -46,6 +46,28 @@ export interface ProjectDoc {
   requirements: { status: ReqStatus; revision: number; analyzedAt?: string; approvedAt?: string; approvedBy?: string; approvalId?: string };
   archived: boolean;
   updatedAt: string;
+  /** 相談の要約（最後の 1 件の写し。無い案件は相談なし＝null。Migration 不要。LIVE_DASHBOARD_TASKS_CONSULT §2.2） */
+  consult: ConsultSummary | null;
+}
+
+/** projects/{pid}.consult（messages の最後の 1 件の写し。firestore.rules consultOk がメッセージと同じ書き込みでだけ許す） */
+export interface ConsultSummary {
+  count: number;
+  lastAt: string;
+  lastSide: 'client' | 'afro';
+  lastName: string;
+}
+
+export function consultOf(v: unknown): ConsultSummary | null {
+  if (!v || typeof v !== 'object') return null;
+  const c = v as DocumentData;
+  if (typeof c.count !== 'number' || c.count < 1) return null;
+  return {
+    count: c.count,
+    lastAt: toIso(c.lastAt) ?? new Date(0).toISOString(),
+    lastSide: c.lastSide === 'client' ? 'client' : 'afro',
+    lastName: String(c.lastName ?? ''),
+  };
 }
 
 export function projectDoc(s: Snap): ProjectDoc {
@@ -71,6 +93,7 @@ export function projectDoc(s: Snap): ProjectDoc {
     },
     archived: d.archived === true,
     updatedAt: toIso(d.updatedAt) ?? new Date(0).toISOString(),
+    consult: consultOf(d.consult),
   };
 }
 
@@ -272,5 +295,29 @@ export function taskDoc(s: Snap): TaskDoc {
     createdBy: String(d.createdBy ?? ''),
     updatedAt: toIso(d.updatedAt) ?? toIso(d.createdAt) ?? epoch,
     updatedBy: String(d.updatedBy ?? ''),
+  };
+}
+
+/** 相談のメッセージ（projects/{pid}/messages/{seq 6 桁}。docs/design/LIVE_DASHBOARD_TASKS_CONSULT.md §2.2）。編集・削除なし */
+export interface MessageDoc {
+  id: string;
+  seq: number;
+  text: string;
+  side: 'client' | 'afro';
+  authorUid: string;
+  authorName: string;
+  at: string;
+}
+
+export function messageDoc(s: Snap): MessageDoc {
+  const d = read(s);
+  return {
+    id: s.id,
+    seq: typeof d.seq === 'number' ? d.seq : 0,
+    text: String(d.text ?? ''),
+    side: d.side === 'client' ? 'client' : 'afro',
+    authorUid: String(d.authorUid ?? ''),
+    authorName: String(d.authorName ?? ''),
+    at: toIso(d.at) ?? new Date().toISOString(),
   };
 }

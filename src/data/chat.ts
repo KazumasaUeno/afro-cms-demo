@@ -1,6 +1,7 @@
 import type { ChatMessage, DemoState } from '@/types';
 import { hoursAgo } from '@/services/time';
 import { memberById } from './members';
+import { CHAT_LIMITS } from './chatLimits';
 
 /**
  * 担当者への相談チャット（0.38.0。案件ごとに 1 本の会話。2026-11-16 ユーザー指示）。
@@ -9,7 +10,7 @@ import { memberById } from './members';
  * デモのため、このブラウザの中だけに保存する（実際の送信・通知はしない。live の repositories には無い）。
  * 保存データに無い案件は、担当者のあいさつ 1 件の見本から始まる（最初に送ったときに保存する）
  */
-export const CHAT_LIMITS = { text: 1000, messages: 200 } as const;
+export { CHAT_LIMITS };
 
 /** 送る文の検査（エラーの文。問題なければ null）。画面と reducer の両方で使う */
 export function validateChat(text: string): string | null {

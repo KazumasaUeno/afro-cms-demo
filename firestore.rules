@@ -67,7 +67,7 @@ service cloud.firestore {
     }
 
     // <GENERATED:requirements> scripts/gen-rules-questions.mjs が生成。手で編集しない
-    // 出典: src/features/requirements/validation.ts / src/data/requirements.ts / src/features/projects/projectForm.ts / src/data/devTaskLimits.ts
+    // 出典: src/features/requirements/validation.ts / src/data/requirements.ts / src/features/projects/projectForm.ts / src/data/devTaskLimits.ts / src/data/chatLimits.ts
     function purposeOptions() { return ['問い合わせを増やしたい', '採用を強化したい', 'ブランドを刷新したい', 'EC売上を伸ばしたい', '更新を楽にしたい', 'スマホ対応したい']; }
     function improveOptions() { return ['ファーストビュー', 'ナビゲーション', 'スマホ表示', '表示速度', '問い合わせ導線', '写真・ビジュアル', 'SEO', '更新のしやすさ']; }
     function accentOptions() { return ['#B45309', '#C2410C', '#BE185D', '#7C3AED', '#1D4ED8', '#0D9488', '#15803D', '#475569']; }
@@ -83,6 +83,8 @@ service cloud.firestore {
     // 構築タスク（DEV_TASK_TITLE_MAX=60 / DEV_TASK_PAGE_MAX=40）
     function reTaskTitle() { return '(?s)[\\s\\p{Z}\\x{FEFF}\\x{0B}]*([^\\s\\p{Z}\\x{FEFF}\\x{0B}]|[^\\s\\p{Z}\\x{FEFF}\\x{0B}].{0,58}[^\\s\\p{Z}\\x{FEFF}\\x{0B}])[\\s\\p{Z}\\x{FEFF}\\x{0B}]*'; }
     function reTaskPage() { return '(?s)[\\s\\p{Z}\\x{FEFF}\\x{0B}]*([^\\s\\p{Z}\\x{FEFF}\\x{0B}]|[^\\s\\p{Z}\\x{FEFF}\\x{0B}].{0,38}[^\\s\\p{Z}\\x{FEFF}\\x{0B}])[\\s\\p{Z}\\x{FEFF}\\x{0B}]*'; }
+    // 相談のメッセージ（CHAT_LIMITS.text=1000）
+    function reMaxChat() { return '(?s)[\\s\\p{Z}\\x{FEFF}\\x{0B}]*([^\\s\\p{Z}\\x{FEFF}\\x{0B}]|[^\\s\\p{Z}\\x{FEFF}\\x{0B}].{0,998}[^\\s\\p{Z}\\x{FEFF}\\x{0B}])[\\s\\p{Z}\\x{FEFF}\\x{0B}]*'; }
     function validAnswers(a) {
       return a is map
         && a.keys().hasOnly(['q-url', 'q-purpose', 'q-issue', 'q-competitor', 'q-improve', 'q-keep', 'q-target', 'q-strength', 'q-market', 'q-content', 'q-feature', 'q-cv', 'q-seo', 'q-ops', 'q-infra', 'q-schedule', 'q-other', 'q-dns-owner', 'q-dns-switch', 'q-dns-note'])
@@ -206,8 +208,10 @@ service cloud.firestore {
       return d.schemaVersion == 1
         && d.keys().hasAll(['schemaVersion','clientName','siteName','siteUrl','siteUrlKey','industry','accent',
                             'ownerUid','memberUids','requirements','archived','createdAt','createdBy','updatedAt','updatedBy'])
+        // consult（相談の要約。LIVE_DASHBOARD_TASKS_CONSULT §2.2・§2.3）は任意。書けるのは consultOk の分岐だけ（下の projUpdateOk の
+        // どの分岐の changed().hasOnly にも含めない）。ここで許さないと、consult を持つ案件の基本情報の編集が validProject で落ちる
         && d.keys().hasOnly(['schemaVersion','clientName','siteName','siteUrl','siteUrlKey','industry','accent','launchDate',
-                             'ownerUid','memberUids','requirements','archived','createdAt','createdBy','updatedAt','updatedBy'])
+                             'ownerUid','memberUids','requirements','archived','consult','createdAt','createdBy','updatedAt','updatedBy'])
         && ansText(d.clientName, reClientName()) && ansText(d.siteName, reSiteName())
         && ansUrl(d.siteUrl, reMaxUrl()) && str(d.siteUrlKey, 1, 253)
         && ansText(d.industry, reIndustry()) && d.accent in accentOptions()
@@ -316,6 +320,7 @@ service cloud.firestore {
       let d = request.resource.data;
       return (r == 'developer' || r == 'admin')
         && validProject(d)
+        && !d.keys().hasAny(['consult'])                                              // 作成時に偽の相談の要約を持たせない
         && d.ownerUid == request.auth.uid
         && ((r == 'developer' && d.memberUids == [request.auth.uid])
             || (r == 'admin' && adminMembersOk(d.memberUids)))
@@ -358,12 +363,58 @@ service cloud.firestore {
         && stamped();
     }
 
+    // ================= projects/{pid}/messages と projects/{pid}.consult（相談。LIVE_DASHBOARD_TASKS_CONSULT.md §2.2・§3） =================
+    // 2026-11-25 ユーザー決定（NC-1・NC-3・NC-5・NC-7 推奨案）: 送れるのは その案件のお客様（side 'client'）と担当の開発者全員（side 'afro'）。
+    // admin は見るだけ。添付なし・編集/削除なし。保持期間は NC-11 とまとめて後で決める（それまでは消さない）
+    // 会話の正は messages。consult は最後の 1 件の写しで、メッセージの作成と同じ書き込み（トランザクション）でだけ変えられる:
+    //   consultOk（案件側）が count+1・時刻・送った側・名前と、同じ番号のメッセージの existsAfter を要求し、
+    //   メッセージ側が getAfter の consult と seq・side・名前・時刻の一致を要求する（片方だけの書き込みはどちらかが拒否）
+    // 文書 ID は seq の 6 桁ゼロ埋め（000001〜005000）。同じ ID の 2 回目は update 扱いで拒否（二重送信・番号の重複を防ぐ）
+    function msgPath(pid, mid) { return /databases/$(db)/documents/projects/$(pid)/messages/$(mid); }
+    // Rules に文字列の切り出しが無いので、上限 5000（4 桁）までの分岐でゼロ埋めする
+    function seqId(n) {
+      return n < 10 ? '00000' + string(n) : n < 100 ? '0000' + string(n) : n < 1000 ? '000' + string(n) : '00' + string(n);
+    }
+    // 送った側は役割から決まる（クライアントが選べない）。admin・担当外・他案件のお客様・無効化された人は 'none'
+    function sideOf(a, r, pid, members) {
+      return r == 'client' && a.projectId == pid ? 'client'
+           : r == 'developer' && request.auth.uid in members ? 'afro'
+           : 'none';
+    }
+    function consultKeys() { return ['count','lastAt','lastSide','lastName']; }
+    // projects/{pid} の update の追加分岐（updatedAt を変えない＝一覧の並びを相談で動かさない）
+    function consultOk(pid, a) {
+      let b = resource.data.get('consult', {'count': 0});
+      let c = request.resource.data.consult;
+      let s = sideOf(a, roleOf(a), pid, resource.data.memberUids);
+      return s != 'none' && resource.data.archived == false
+        && changed().hasOnly(['consult'])
+        && c is map && c.keys().hasAll(consultKeys()) && c.keys().hasOnly(consultKeys())
+        && c.count == b.count + 1 && c.count <= 5000
+        && c.lastAt == request.time && c.lastSide == s && c.lastName == a.name
+        && (b.count == 0 || request.time > b.lastAt + duration.value(2, 's'))
+        && existsAfter(msgPath(pid, seqId(c.count)));
+    }
+    function msgKeys() { return ['schemaVersion','seq','text','side','authorUid','authorName','at']; }
+    function msgCreateOk(pid, mid, a) {
+      let d = request.resource.data;
+      let c = getAfter(projPath(pid)).data.consult;
+      return d.keys().hasAll(msgKeys()) && d.keys().hasOnly(msgKeys())
+        && d.schemaVersion == 1
+        && d.side == sideOf(a, roleOf(a), pid, proj(pid).memberUids) && d.side != 'none'
+        && d.authorUid == request.auth.uid && d.authorName == a.name && d.at == request.time
+        && d.text.matches(reMaxChat())
+        && d.seq is int && d.seq >= 1 && mid == seqId(d.seq)
+        && c.count == d.seq && c.lastSide == d.side && c.lastName == d.authorName && c.lastAt == d.at;
+    }
+
     match /projects/{pid} {
       allow get:  if isAdmin() || assignedHere() || clientOf(pid);
       // Rules はフィルタではない: 開発者は where('memberUids','array-contains', uid) を必ず付ける
       allow list: if isAdmin() || assignedHere();
       allow create: if projCreateOk(pid, roleOf(acctOrNull()));
-      allow update: if stamped() && projUpdateOk(pid, acctOrNull(), changed());
+      allow update: if (stamped() && projUpdateOk(pid, acctOrNull(), changed()))
+                    || consultOk(pid, acctOrNull());                                   // 相談の要約（メッセージと同じ書き込みだけ）
       allow delete: if false;
 
       // ---------- requirements/current（§28.5） ----------
@@ -402,6 +453,14 @@ service cloud.firestore {
         allow create: if taskCreateOk(pid, acctOrNull());
         allow update: if taskUpdateOk(pid, acctOrNull());
         allow delete: if false;
+      }
+
+      // ---------- messages（相談。上の msgCreateOk / consultOk。追記のみ） ----------
+      // 会話は orderBy('seq') limitToLast(50)（単一フィールド。複合 Index 不要）。admin は見るだけ
+      match /messages/{mid} {
+        allow get, list: if canRead(pid);
+        allow create: if msgCreateOk(pid, mid, acctOrNull());
+        allow update, delete: if false;                                               // admin を含む全員
       }
     }
 

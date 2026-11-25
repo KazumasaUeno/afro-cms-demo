@@ -1,5 +1,5 @@
 import { Alert, Box, Button, Stack, Typography } from '@mui/material';
-import { FolderKanban, Hammer, LayoutDashboard } from 'lucide-react';
+import { FolderKanban, Hammer, LayoutDashboard, MessageSquare } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { PageHeader, SectionTitle, StatusPill, Surface } from '@/components/ui';
@@ -12,6 +12,7 @@ import type { ProjectDoc } from '../model';
 import { useLiveCurrentProject, useLiveProjects, useLiveTasks } from '../repositories';
 import { myOpenTasks, nextBuildAction, TASK_STATUS_ORDER, taskCounts, taskLimitNote } from '../tasks';
 import { useLiveSession } from '../session';
+import { unansweredCount } from '../consult';
 import { EmptyState, LoadError, ReqStatusPill } from './shared';
 
 /**
@@ -20,11 +21,12 @@ import { EmptyState, LoadError, ReqStatusPill } from './shared';
  * - 出すもの: 要件の状態ごとの件数と案件のカード（demo の開発者ダッシュボードと同じ見た目 ProjectCardView）
  * - 構築状況（U2）: 表示中の 1 案件のタスクの状態別件数・構築で次にやること・（開発者は）あなたのタスク上位 3 件。
  *   購読は構築タスク画面と同じ useLiveTasks（キー t:{pid}）
- * - 出さないもの: 相談の未対応（U3）・最近のデプロイ（live に記録が無い。NC-6）
+ * - 相談の未対応（U3）: 最後がお客様の案件の数（案件一覧の consult。追加 Read 0）
+ * - 出さないもの: 最近のデプロイ（live に記録が無い。NC-6）
  * メニューへの追加は U4（それまでは URL から開く）
  */
 export default function LiveDashboardPage() {
-  const { account } = useLiveSession();
+  const { account, uid } = useLiveSession();
   const role: DashboardRole = account.role === 'developer' ? 'developer' : 'admin';
   const { data: docs, loading, error } = useLiveProjects();
   const navigate = useNavigate();
@@ -33,6 +35,9 @@ export default function LiveDashboardPage() {
   const copy = dashboardCopy(role, docs.length);
   const base = projectBase(role);
   const limitNote = listLimitNote(docs.length);
+  // 相談の未対応（最後がお客様の案件の数。案件一覧の consult から数える＝追加 Read 0。U3）
+  const unanswered = useMemo(() => unansweredCount(docs, account.role, uid), [docs, account.role, uid]);
+  const chatPath = role === 'developer' ? '/dev/chat' : '/chat';
 
   if (loading) return <RouteLoader label="ダッシュボード" />;
   if (error) return <LoadError what="プロジェクトの一覧" />;
@@ -60,6 +65,17 @@ export default function LiveDashboardPage() {
                   <Typography variant="body2" sx={{ fontWeight: 650, fontVariantNumeric: 'tabular-nums', pr: 1 }}>{counts[s]}</Typography>
                 </Stack>
               ))}
+            </Stack>
+          </Surface>
+
+          {/* 相談の未対応（U3）。admin は見るだけ、開発者は担当案件（全員が返信者） */}
+          <Surface padding={{ xs: 2, md: 2.5 }} data-testid="dashboard-consult">
+            <Stack direction="row" spacing={1.5} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
+              <MessageSquare size={18} color={tokens.color.muted} aria-hidden />
+              <Typography variant="body2" sx={{ fontWeight: 650, flex: 1, minWidth: 0 }} data-testid="dashboard-consult-count">
+                {unanswered > 0 ? `相談の未対応が ${unanswered} 件あります` : '相談の未対応はありません'}
+              </Typography>
+              <Button size="small" variant={unanswered > 0 ? 'outlined' : 'text'} component={RouterLink} to={chatPath} sx={{ minHeight: 44 }}>相談を開く</Button>
             </Stack>
           </Surface>
 

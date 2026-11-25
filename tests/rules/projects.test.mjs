@@ -3,7 +3,9 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import { assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
 import { Timestamp, collection, deleteDoc, getDoc, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
 import { createRulesEnv } from './guard.mjs';
-import { ANSWERS, PAST, answerMetaFor, createProjectBatch, dbAs, deleteField, doc, seed, serverTimestamp, setDoc, stamp, updateDoc } from './fixtures.mjs';
+import {
+  ANSWERS, PAST, T0, answerMetaFor, approveBatch, createProjectBatch, dbAs, deleteField, doc, seed, serverTimestamp, setDoc, stamp, submitBatch, updateDoc, withdrawBatch,
+} from './fixtures.mjs';
 
 let env;
 before(async () => { env = await createRulesEnv(); });
@@ -229,6 +231,44 @@ describe('projects: update（基本情報・アサイン・アーカイブ。Low
   test('案件の削除は誰もできない', async () => {
     await assertFails(deleteDoc(doc(dbAs(env, 'admin1'), 'projects/p1')));
     await assertFails(deleteDoc(doc(dbAs(env, 'devA'), 'projects/p1')));
+  });
+});
+
+// 相談（U3）で案件に consult が載っても、従来の更新がすべて通る（validProject の hasOnly に consult を足した回帰。LIVE_DASHBOARD_TASKS_CONSULT §2.3・§6）
+describe('projects: consult を持つ案件の従来の更新（回帰）', () => {
+  const CONSULT = { count: 3, lastAt: T0, lastSide: 'client', lastName: '顧客 一子' };
+  const withConsult = async (reqState = 'draft') => {
+    await seed(env, { reqState });
+    await env.withSecurityRulesDisabled(async (ctx) => { await updateDoc(doc(ctx.firestore(), 'projects/p1'), { consult: CONSULT }); });
+  };
+  const upd = (uid, data) => updateDoc(doc(dbAs(env, uid), 'projects/p1'), data);
+  test('開発者の基本情報の編集・アーカイブと解除', async () => {
+    await withConsult();
+    await assertSucceeds(upd('devA', { siteName: '新しいサイト名', ...stamp('devA') }));
+    await assertSucceeds(upd('devB', { launchDate: deleteField(), ...stamp('devB') }));
+    await assertSucceeds(upd('devA', { archived: true, ...stamp('devA') }));
+    await assertSucceeds(upd('devA', { archived: false, ...stamp('devA') }));
+  });
+  test('admin のアサインの変更', async () => {
+    await withConsult();
+    await assertSucceeds(upd('admin1', { memberUids: ['devA', 'devC'], ...stamp('admin1') }));
+  });
+  test('確認依頼（submit）・差し戻し（withdraw）', async () => {
+    await withConsult();
+    await assertSucceeds(submitBatch(dbAs(env, 'devA')));
+    await assertSucceeds(withdrawBatch(dbAs(env, 'devA')));
+  });
+  test('お客様の承認（approve）', async () => {
+    await withConsult('analyzed');
+    await assertSucceeds(approveBatch(dbAs(env, 'client1')));
+  });
+  test('従来の分岐で consult を書き換える → 拒否（基本情報・アサイン・アーカイブに混ぜる）', async () => {
+    await withConsult();
+    const fake = { ...CONSULT, lastSide: 'afro' };
+    await assertFails(upd('devA', { siteName: '新しいサイト名', consult: fake, ...stamp('devA') }));
+    await assertFails(upd('admin1', { memberUids: ['devA'], consult: fake, ...stamp('admin1') }));
+    await assertFails(upd('devA', { archived: true, consult: fake, ...stamp('devA') }));
+    await assertFails(upd('devA', { consult: deleteField(), ...stamp('devA') }));
   });
 });
 

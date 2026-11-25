@@ -1,6 +1,6 @@
-import { Box, Button, ButtonBase, IconButton, Stack, TextField, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
-import { ArrowLeft, MessageSquare, Send } from 'lucide-react';
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { Box, Button, Stack, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { ArrowLeft, MessageSquare } from 'lucide-react';
+import { useState } from 'react';
 import { Link as RouterLink, useLocation, useSearchParams } from 'react-router-dom';
 import type { Project } from '@/types';
 import { MemberAvatar, PageHeader, Surface } from '@/components/ui';
@@ -9,11 +9,12 @@ import { currentProject, useDemo } from '@/store/DemoStore';
 import { useDevProjects, useDevUser, useDirectorProjects } from '@/features/dev/useDevUser';
 import { useProjectRoutes } from '@/features/projects/projectRoutes';
 import { memberById } from '@/data/members';
-import { CHAT_LIMITS, chatOf, validateChat } from '@/data/chat';
-import { formatDateTime, relativeTime } from '@/services/time';
+import { chatOf, validateChat } from '@/data/chat';
+import { relativeTime } from '@/services/time';
 import { TOUCH } from '@/theme/media';
 import { tokens } from '@/theme/tokens';
 import { unansweredCount, unansweredOf } from './unanswered';
+import { ChatComposer, ChatInboxRow, ChatLog, ChatReadOnlyNote, ChatStatusBadge as StatusBadge } from './ChatParts';
 
 type Mode = 'portal' | 'admin' | 'dev';
 
@@ -139,35 +140,19 @@ function ChatInbox({ mode }: { mode: 'dev' | 'admin' }) {
           const unanswered = !readOnly && waiting;
           const director = admin ? memberById(p.ownerId).name : undefined;
           return (
-            <Box component="li" key={p.id} sx={{ borderBottom: `1px solid ${tokens.color.border}` }}>
-              <ButtonBase
-                onClick={() => open(p.id)}
-                aria-current={active ? 'true' : undefined}
-                aria-label={`${p.clientName}（${p.siteName}）${readOnly ? '・閲覧のみ' : unanswered ? `・未対応${director ? `・担当 ${director}` : ''}` : '・対応済み'}${last ? `・最後のメッセージ ${relativeTime(last.at)}` : ''}`}
-                sx={{
-                  width: '100%', textAlign: 'left', display: 'flex', alignItems: 'flex-start', gap: 1.5, px: 2, py: 1.5, minHeight: 64,
-                  bgcolor: active ? tokens.color.primarySoft : 'transparent',
-                  '&:hover': { bgcolor: active ? tokens.color.primarySoft : tokens.color.surfaceMuted },
-                  '&.Mui-focusVisible': { outline: `2px solid ${tokens.color.primary}`, outlineOffset: -2 },
-                  [TOUCH]: { minHeight: 72 },
-                }}
-              >
-                <Box sx={{ width: 12, height: 12, mt: 0.75, borderRadius: '4px', bgcolor: p.accent, flexShrink: 0 }} aria-hidden />
-                <Box sx={{ minWidth: 0, flex: 1 }}>
-                  <Stack direction="row" spacing={1} alignItems="baseline">
-                    <Typography variant="body2" sx={{ fontWeight: unanswered ? 750 : 650, flex: 1, minWidth: 0 }} noWrap>{p.clientName}</Typography>
-                    <Typography variant="caption" sx={{ flexShrink: 0 }}>{last ? relativeTime(last.at) : ''}</Typography>
-                  </Stack>
-                  <Typography variant="caption" sx={{ display: 'block', color: tokens.color.muted }} noWrap>{p.siteName}</Typography>
-                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.25 }}>
-                    <Typography variant="body2" sx={{ flex: 1, minWidth: 0, color: unanswered ? tokens.color.onSurface : tokens.color.muted }} noWrap>
-                      {last ? `${last.side === 'afro' ? `${last.author}: ` : ''}${last.text.replace(/\s+/g, ' ')}` : 'まだメッセージはありません'}
-                    </Typography>
-                    <StatusBadge unanswered={unanswered} readOnly={readOnly} director={director} />
-                  </Stack>
-                </Box>
-              </ButtonBase>
-            </Box>
+            <ChatInboxRow
+              key={p.id}
+              accent={p.accent}
+              clientName={p.clientName}
+              siteName={p.siteName}
+              time={last ? relativeTime(last.at) : ''}
+              preview={last ? `${last.side === 'afro' ? `${last.author}: ` : ''}${last.text.replace(/\s+/g, ' ')}` : 'まだメッセージはありません'}
+              unanswered={unanswered}
+              badge={<StatusBadge unanswered={unanswered} readOnly={readOnly} director={director} />}
+              active={active}
+              ariaLabel={`${p.clientName}（${p.siteName}）${readOnly ? '・閲覧のみ' : unanswered ? `・未対応${director ? `・担当 ${director}` : ''}` : '・対応済み'}${last ? `・最後のメッセージ ${relativeTime(last.at)}` : ''}`}
+              onOpen={() => open(p.id)}
+            />
           );
         })}
       </Box>
@@ -205,20 +190,7 @@ function ChatInbox({ mode }: { mode: 'dev' | 'admin' }) {
   );
 }
 
-/**
- * 未対応（赤）／対応済み（控えめ）／閲覧のみ（担当ディレクターでない案件。2026-11-17）。
- * director: 管理者画面で未対応に添える担当ディレクターの名前（「未対応・担当 佐倉 美緒」）
- */
-function StatusBadge({ unanswered, readOnly = false, director }: { unanswered: boolean; readOnly?: boolean; director?: string }) {
-  if (readOnly) return <Typography component="span" variant="caption" sx={{ flexShrink: 0, color: tokens.color.muted }}>閲覧のみ</Typography>;
-  return unanswered ? (
-    <Box component="span" sx={{ flexShrink: 0, px: 1, py: 0.25, borderRadius: 999, bgcolor: tokens.color.danger, color: tokens.color.onDanger, fontSize: 12, fontWeight: 700, lineHeight: 1.5, whiteSpace: 'nowrap' }}>
-      未対応{director ? `・担当 ${director}` : ''}
-    </Box>
-  ) : (
-    <Typography component="span" variant="caption" sx={{ flexShrink: 0, color: tokens.color.muted }}>対応済み</Typography>
-  );
-}
+// 未対応・対応済み・閲覧のみの印は ChatParts の ChatStatusBadge（live の相談と共有）
 
 /**
  * 1 案件の会話（相手の表示・メッセージ・入力）。
@@ -240,13 +212,6 @@ function ChatThread({ project, mode, logHeight }: { project: Project; mode: Mode
   const canOpenDetail = mode !== 'dev' || devMine.some((p) => p.id === project.id);
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-
-  // 新しいメッセージが届いたら（送ったら）いちばん下まで送る
-  useEffect(() => {
-    const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length, project.id]);
 
   const send = () => {
     const err = validateChat(text);
@@ -255,17 +220,6 @@ function ChatThread({ project, mode, logHeight }: { project: Project; mode: Mode
     dispatch({ type: 'sendChat', text, by: mySide, ...(mode === 'dev' ? { devBy: me.id, projectId: project.id } : {}) });
     setText('');
   };
-
-  // Enter で送信、Shift+Enter で改行。日本語の変換中の Enter では送らない
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      send();
-    }
-  };
-
-  const length = text.trim().length;
-  const over = length > CHAT_LIMITS.text;
 
   return (
     <>
@@ -291,78 +245,33 @@ function ChatThread({ project, mode, logHeight }: { project: Project; mode: Mode
         )}
       </Stack>
 
-      {/* メッセージ */}
-      <Box
-        ref={listRef}
-        role="log"
-        aria-live="polite"
-        aria-label={`${project.clientName}との相談のメッセージ`}
-        sx={{ px: { xs: 1.5, sm: 2 }, py: 2, height: logHeight, minHeight: 240, overflowY: 'auto', bgcolor: tokens.color.bg, flex: mode !== 'portal' ? 1 : undefined }}
-      >
-        {messages.length === 0 ? (
-          <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 6 }}>まだメッセージはありません。</Typography>
-        ) : (
-          <Stack component="ul" spacing={1.5} sx={{ listStyle: 'none', m: 0, p: 0 }}>
-            {messages.map((m) => {
-              const mine = m.side === mySide;
-              return (
-                <Box component="li" key={m.id} sx={{ display: 'flex', flexDirection: 'column', alignItems: mine ? 'flex-end' : 'flex-start' }}>
-                  <Typography variant="caption" sx={{ mb: 0.25, px: 0.5 }}>
-                    {m.author}{m.side === 'afro' && mode === 'portal' ? '（アフロ）' : ''}・{formatDateTime(m.at)}
-                  </Typography>
-                  <Box
-                    sx={{
-                      maxWidth: { xs: '88%', sm: '72%' }, px: 1.75, py: 1.25, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
-                      borderRadius: mine ? '16px 4px 16px 16px' : '4px 16px 16px 16px',
-                      bgcolor: mine ? tokens.color.primaryContainer : tokens.color.surface,
-                      color: mine ? tokens.color.onPrimaryContainer : tokens.color.onSurface,
-                      border: mine ? 'none' : `1px solid ${tokens.color.border}`,
-                    }}
-                  >
-                    <Typography variant="body2" sx={{ color: 'inherit', lineHeight: 1.7 }}>{m.text}</Typography>
-                  </Box>
-                </Box>
-              );
-            })}
-          </Stack>
-        )}
-      </Box>
+      {/* メッセージ（新しいメッセージが届いたら・送ったらいちばん下まで送る） */}
+      <ChatLog
+        messages={messages}
+        mySide={mySide}
+        afroSuffix={mode === 'portal'}
+        label={`${project.clientName}との相談のメッセージ`}
+        height={logHeight}
+        grow={mode !== 'portal'}
+        scrollKey={project.id}
+      />
 
-      {/* 入力（担当ディレクターでない開発者は閲覧のみ。返信欄の代わりに対応する人を出す） */}
+      {/* 入力（担当ディレクターでない開発者は閲覧のみ。返信欄の代わりに対応する人を出す。Enter で送信・Shift+Enter で改行） */}
       {readOnly ? (
-        <Box role="note" sx={{ px: { xs: 1.5, sm: 2 }, py: 2, borderTop: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surfaceMuted }}>
-          <Typography variant="body2" sx={{ color: tokens.color.muted }}>
-            {mode === 'admin'
-              ? `返信は担当ディレクター（${owner.name}）が開発者画面から行います（閲覧のみ）`
-              : `この案件の相談は担当ディレクター（${owner.name}）が対応します（閲覧のみ）`}
-          </Typography>
-        </Box>
+        <ChatReadOnlyNote>
+          {mode === 'admin'
+            ? `返信は担当ディレクター（${owner.name}）が開発者画面から行います（閲覧のみ）`
+            : `この案件の相談は担当ディレクター（${owner.name}）が対応します（閲覧のみ）`}
+        </ChatReadOnlyNote>
       ) : (
-      <Box sx={{ px: { xs: 1.5, sm: 2 }, py: 1.5, borderTop: `1px solid ${tokens.color.border}` }}>
-        <Stack direction="row" spacing={1} alignItems="flex-start">
-          <TextField
-            value={text}
-            onChange={(e) => { setText(e.target.value); if (error) setError(null); }}
-            onKeyDown={onKeyDown}
-            placeholder={mode === 'portal' ? '担当者へのメッセージを入力' : `${project.clientName}への返信を入力`}
-            multiline
-            maxRows={5}
-            fullWidth
-            size="small"
-            error={!!error || over}
-            helperText={error ?? (over ? `${CHAT_LIMITS.text}文字以内にしてください（いま ${length} 文字）` : 'Enter で送信・Shift+Enter で改行')}
-            inputProps={{ 'aria-label': 'メッセージ' }}
-          />
-          <Tooltip title="送信">
-            <span>
-              <IconButton onClick={send} disabled={!length || over} aria-label="送信" sx={{ width: 44, height: 44, bgcolor: tokens.color.primary, color: tokens.color.onPrimary, '&:hover': { bgcolor: tokens.color.primaryHover }, '&.Mui-disabled': { bgcolor: tokens.color.bgSubtle } }}>
-                <Send size={18} />
-              </IconButton>
-            </span>
-          </Tooltip>
-        </Stack>
-        <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>デモのため、メッセージはこのブラウザの中だけに保存されます（実際には送信されません）。</Typography>
-      </Box>
+        <ChatComposer
+          text={text}
+          onTextChange={(v) => { setText(v); if (error) setError(null); }}
+          onSend={send}
+          error={error}
+          placeholder={mode === 'portal' ? '担当者へのメッセージを入力' : `${project.clientName}への返信を入力`}
+          caption="デモのため、メッセージはこのブラウザの中だけに保存されます（実際には送信されません）。"
+        />
       )}
     </>
   );

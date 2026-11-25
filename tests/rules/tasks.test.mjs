@@ -3,7 +3,7 @@
 // 既定の世界（fixtures.mjs seed）: p1 は devA・devB・devOff（無効）が担当、お客様 client1 ／ p2 は devC、お客様 client2
 import { after, before, beforeEach, describe, test } from 'node:test';
 import { assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { collection, deleteDoc, getDoc, getDocs, limit, orderBy, query } from 'firebase/firestore';
+import { arrayRemove, collection, deleteDoc, getDoc, getDocs, limit, orderBy, query } from 'firebase/firestore';
 import { createRulesEnv } from './guard.mjs';
 import { PAST, T0, dbAs, doc, seed, serverTimestamp, setDoc, stamp, updateDoc } from './fixtures.mjs';
 
@@ -40,12 +40,15 @@ const create = (uid, over, pid = 'p1', tid = 'new1') => setDoc(doc(dbAs(env, uid
 const setStatus = (uid, status, extra = {}, path = 'projects/p1/tasks/t1') =>
   updateDoc(doc(dbAs(env, uid), path), { status, ...stamp(uid), ...extra });
 const listQ = (db, pid = 'p1') => query(collection(db, `projects/${pid}/tasks`), orderBy('createdAt'), limit(300));
+// 画面（repositories.tsx useLiveTasks）の形: 新しい順に 300 件（新しいタスクが上限で消えない。U2 セキュリティレビュー）
+const newestQ = (db, pid = 'p1') => query(collection(db, `projects/${pid}/tasks`), orderBy('createdAt', 'desc'), limit(300));
 
 describe('tasks: get / list', () => {
   test('担当の開発者（社内・協力会社）と admin は get・一覧（orderBy createdAt limit 300）ができる', async () => {
     for (const uid of ['devA', 'devB', 'admin1']) {
       await assertSucceeds(getDoc(doc(dbAs(env, uid), 'projects/p1/tasks/t1')));
       await assertSucceeds(getDocs(listQ(dbAs(env, uid))));
+      await assertSucceeds(getDocs(newestQ(dbAs(env, uid))));
     }
   });
   test('お客様は自分の案件でも読めない（社内の作業）', async () => {
@@ -153,6 +156,16 @@ describe('tasks: update（状態の変更だけ）', () => {
     await assertFails(updateDoc(doc(dbAs(env, 'devA'), 'projects/p1/tasks/t1'), { status: 'doing', updatedAt: PAST, updatedBy: 'devA' }));
     await assertFails(updateDoc(doc(dbAs(env, 'devA'), 'projects/p1/tasks/t1'), { status: 'doing', updatedAt: serverTimestamp(), updatedBy: 'devB' }));
     await assertFails(updateDoc(doc(dbAs(env, 'devA'), 'projects/p1/tasks/t1'), { status: 'doing' }));
+  });
+  test('状態の変更に未知のキー（priority）を足す → 拒否（U2 セキュリティレビュー (a)）', async () => {
+    await assertFails(setStatus('devA', 'doing', { priority: 'high' }));
+    await assertFails(setStatus('devA', 'doing', { assigneeId: 'devA' }));
+  });
+  test('admin が担当から外した開発者（Rules を通した arrayRemove）は状態を変えられない（U2 セキュリティレビュー (b)）', async () => {
+    await assertSucceeds(updateDoc(doc(dbAs(env, 'admin1'), 'projects/p1'), { memberUids: arrayRemove('devA'), ...stamp('admin1') }));
+    await assertFails(setStatus('devA', 'doing'));
+    await assertFails(create('devA'));
+    await assertSucceeds(setStatus('devB', 'doing'));
   });
   test('担当を外れた後は変えられない', async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import {
-  arrayRemove, arrayUnion, collection, deleteField, doc, getDoc, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc,
+  arrayRemove, arrayUnion, collection, deleteField, doc, getDoc, limit, limitToLast, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc,
   Timestamp, updateDoc, where, writeBatch, type DocumentData,
 } from 'firebase/firestore';
 import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
@@ -15,10 +15,11 @@ import type { AiDraftDoc, StoredProposal } from '@/types/aiDraft';
 import { isJobRunning } from '@/features/requirements/aiDraft/aiDraftState';
 import { db } from './firebase';
 import {
-  clientFromAccount, clientFromInvite, deepIso, devFromAccount, devFromInvite, INVITE_PREFIX, LIST_LIMIT, MAX_MEMBERS, projectDoc, proposalForSave, proposalV2FromDraft, reqDoc, toApprovalLog, toProject,
-  taskDoc, toSession, type ProjectDoc, type ReqDoc, type TaskDoc, type TaskStatus,
+  clientFromAccount, clientFromInvite, deepIso, devFromAccount, devFromInvite, INVITE_PREFIX, LIST_LIMIT, MAX_MEMBERS, messageDoc, projectDoc, proposalForSave, proposalV2FromDraft, reqDoc, toApprovalLog, toProject,
+  taskDoc, toSession, type MessageDoc, type ProjectDoc, type ReqDoc, type TaskDoc, type TaskStatus,
 } from './model';
-import { TASK_LIMIT, type NewTaskInput } from './tasks';
+import { TASK_LIMIT, newestTasksInOrder, type NewTaskInput } from './tasks';
+import { consultBlock, consultSide, seqId, validateConsultText } from './consult';
 import { PendingAnswers } from './pendingAnswers';
 import { cancelScheduledWrites, type ScheduledWrite } from './pendingWrites';
 import type { LiveSession } from './session';
@@ -131,14 +132,15 @@ const tasksCol = (pid: string) => collection(db, 'projects', pid, 'tasks');
 
 /**
  * 1 案件のタスク（リアルタイム。構築タスク画面とダッシュボードの構築状況が同じ形で購読する。キー t:{pid}）。
- * 古い順に TASK_LIMIT 件まで（単一フィールドの並び＝複合 Index 不要）。「自分の担当のみ」・状態別は画面で絞る。
- * お客様は Rules で読めないので購読しない（null）
+ * **新しい順に** TASK_LIMIT 件を取り、画面には古い順で渡す（単一フィールドの並び＝複合 Index 不要。desc も単一フィールドの自動 Index）。
+ * 上限を超えたら出なくなるのは最も古いタスク（新しく追加したタスクは必ず出る。2026-11-25 U2 セキュリティレビューの指摘。tasks.ts taskLimitNote）。
+ * 「自分の担当のみ」・状態別は画面で絞る。お客様は Rules で読めないので購読しない（null）
  */
 export function useLiveTasks(projectId: string | null): Query<TaskDoc[]> {
   const role = useLiveData().session.account.role;
   const key = projectId && role !== 'client' ? `t:${projectId}` : null;
   return useSnapshot<TaskDoc[]>(key, (next, fail) =>
-    onSnapshot(query(tasksCol(projectId!), orderBy('createdAt'), limit(TASK_LIMIT)), (s) => next(s.docs.map(taskDoc)), fail), NO_TASKS);
+    onSnapshot(query(tasksCol(projectId!), orderBy('createdAt', 'desc'), limit(TASK_LIMIT)), (s) => next(newestTasksInOrder(s.docs.map(taskDoc))), fail), NO_TASKS);
 }
 
 /** タスクの追加・状態の変更（担当の開発者だけ。Rules の taskCreateOk / taskUpdateOk と同じ形。削除は無い） */
@@ -169,6 +171,65 @@ export function useLiveTaskActions(): {
     };
   }, [role, uid]);
 }
+
+/* ---------- 相談（projects/{pid}/messages と projects/{pid}.consult。docs/design/LIVE_DASHBOARD_TASKS_CONSULT.md §2.2・U3） ---------- */
+
+const NO_MESSAGES: MessageDoc[] = [];
+const msgsCol = (pid: string) => collection(db, 'projects', pid, 'messages');
+
+/**
+ * 1 案件の会話（リアルタイム。開いている会話 1 本だけ）。seq の古い順で、新しい方から max 件（orderBy('seq') limitToLast。単一フィールド＝複合 Index 不要）。
+ * 「さらに読む」は max を増やして購読し直す。一覧・未対応・バッジは案件一覧の consult（追加 Read 0）
+ */
+export function useLiveMessages(projectId: string | null, max: number): Query<MessageDoc[]> {
+  const key = projectId ? `m:${projectId}:${max}` : null;
+  return useSnapshot<MessageDoc[]>(key, (next, fail) =>
+    onSnapshot(query(msgsCol(projectId!), orderBy('seq'), limitToLast(max)), (s) => next(s.docs.map(messageDoc)), fail), NO_MESSAGES);
+}
+
+/**
+ * 相談を 1 件送る（お客様＝自分の案件、担当の開発者＝返信。admin は送れない）。
+ * runTransaction: 案件を読む → seq = count + 1 → メッセージの作成と consult の更新を同じ書き込みにする（Rules の consultOk / msgCreateOk が両方の一致を強制）。
+ * 同時に送られたら片方が競合でやり直し、次の番号になる。通信が切れて結果が分からないまま再送すると二重になりうる（設計 §2.2。送信中はボタンを無効にする）
+ */
+export function useLiveConsultActions(): { send: (projectId: string, text: string) => Promise<void> } {
+  const { session } = useLiveData();
+  return useMemo(() => ({
+    send: async (projectId, text) => {
+      const err = validateConsultText(text);
+      if (err) throw new ConsultError(err);
+      const { uid, account } = session;
+      try {
+        await runTransaction(db, async (tx) => {
+          const ps = await tx.get(projRef(projectId));
+          if (!ps.exists()) throw new ConsultError('プロジェクトが見つかりません');
+          const p = projectDoc(ps);
+          const side = consultSide(account.role, uid, account.projectId, p);
+          if (!side) throw new ConsultError('このプロジェクトの相談には送信できません（閲覧のみ）');
+          const block = consultBlock(p, Date.now());
+          if (block) throw new ConsultError(block);
+          const seq = (p.consult?.count ?? 0) + 1;
+          tx.set(doc(msgsCol(projectId), seqId(seq)), {
+            schemaVersion: 1, seq, text: text.trim(), side, authorUid: uid, authorName: account.name, at: serverTimestamp(),
+          });
+          // updatedAt は変えない（一覧の並びを相談で動かさない。consultOk は changed().hasOnly(['consult'])）
+          tx.update(projRef(projectId), { consult: { count: seq, lastAt: serverTimestamp(), lastSide: side, lastName: account.name } });
+        });
+      } catch (e) {
+        if (e instanceof ConsultError) throw e;
+        // Rules の拒否（連投・名前の変更直後・担当を外れた等）。理由はサーバーから分からないので、よくある原因を案内する（ログには残す）
+        console.warn('consult send failed', { projectId }, e);
+        if (String((e as { code?: string }).code ?? '').endsWith('permission-denied')) {
+          throw new ConsultError('送信できませんでした。少し時間をおいてから、もう一度お試しください（続けて送信した・担当が変わった可能性があります）');
+        }
+        throw e;
+      }
+    },
+  }), [session]);
+}
+
+/** 画面にそのまま出せる理由つきの送信エラー */
+export class ConsultError extends Error {}
 
 /**
  * 担当の名前（accounts を uid ごとに 1 回 get。最大 20 件）。admin は全員、社内の開発者は社内・協力会社とも、

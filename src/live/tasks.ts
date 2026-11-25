@@ -7,8 +7,18 @@ import type { ReqStatus, TaskDoc, TaskStatus } from './model';
  * ここは表示の絞り込みと、Rules に送る前の入力の検査（Rules と同じ条件）だけ
  */
 
-/** 1 案件の購読の上限（orderBy('createdAt') limit(300)。§2.1 [TARGET]。超えたら新しい分が出ないことを画面で注記する） */
+/**
+ * 1 案件の購読の上限（orderBy('createdAt', 'desc') limit(300)。§2.1 [TARGET]）。
+ * 新しい順に取るので、超えたら出なくなるのは**最も古い**タスク（新しく追加したタスクは必ず出る）。画面で注記する（taskLimitNote）。
+ * Rules で件数を数える上限は置かない（2026-11-25 U2 セキュリティレビュー: 件数の上限を Rules で持つには案件文書へカウンタを足す必要があり、
+ * 新しい分が消える問題は新しい順の取得だけで解ける＝より簡単で安全な方を選んだ）
+ */
 export const TASK_LIMIT = 300;
+
+/** 新しい順に取ったタスクを画面の並び（古い順）へ戻す（同じ時刻は ID で安定させる） */
+export function newestTasksInOrder<T extends Pick<TaskDoc, 'createdAt' | 'id'>>(newestFirst: readonly T[]): T[] {
+  return [...newestFirst].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+}
 
 export const TASK_STATUS_ORDER: readonly TaskStatus[] = ['todo', 'doing', 'review', 'done'];
 
@@ -80,7 +90,7 @@ export function prepareNewTask(input: NewTaskInput, memberUids: readonly string[
   return { ok: true, value: { title, page, assigneeUids } };
 }
 
-/** 上限に達したときの注記（それより新しいタスクは出ない。§2.1） */
+/** 上限に達したときの注記（新しい順に取るので、出ないのは古いタスク。§2.1） */
 export function taskLimitNote(count: number): string | null {
-  return count >= TASK_LIMIT ? `タスクが上限の ${TASK_LIMIT} 件に達しているため、それより後に追加したタスクは表示されません。` : null;
+  return count >= TASK_LIMIT ? `タスクが上限の ${TASK_LIMIT} 件に達しているため、新しい順に ${TASK_LIMIT} 件だけを表示しています（それより古いタスクは表示されません）。` : null;
 }
