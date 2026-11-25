@@ -239,3 +239,10 @@
 - 確認: `--only functions` だと変更なしの関数は Skipped（ビルドが走らない）→ `firebase deploy --only functions:provisionInvitee` で 1 本をビルドし直した。[FACT] `gcloud builds list --region asia-northeast1` 最新 2026-11-25T01:55:57Z SUCCESS（SA は compute 既定）。`ANTHROPIC_API_KEY` の `secretAccessor` は worker だけのまま
 - 戻し: `gcloud projects add-iam-policy-binding afro-cms-4a6ff --member serviceAccount:640072999586-compute@developer.gserviceaccount.com --role roles/editor --condition=None`
 - 気づき: デプロイ前の test:functions がエミュレータの関数読み込み 60 秒の時間切れで 16 件落ちることがある（11-25 に 2 回。単独再実行で 201/201）。docs/TODO.md に記載
+
+## internal 切替・管理者の案件作成 2026-11-25 午後（JST。ユーザー GO「main に入れて出して」）
+
+- main 3e3387d（0.48.1 管理者の案件作成＋ `AI_REQUIREMENTS_MODE=internal`・allowlist = 試験用案件 `f2HCWbvzbuZHLB0K5fW8`（架空データだけ））
+- functions: test:functions 201/201 → 5 本 update。Rules: rules:check OK・test:rules 417/417 → released。Hosting: dist-live（`VITE_FEATURE_AI_REQUIREMENTS=internal`）release complete
+- アイグランの案件 `r3DKL56HfOq8HmvNBTTX` は allowlist に入れていない（実在の顧客の情報を Anthropic へ送ってよいかのユーザー確認待ち）
+- 途中で止まった 3 回: emulator の時間切れ 1 回、並行作業との port 衝突 2 回、本番の値を off に固定していたテスト（ai-flow フラグ2）1 回 → off か internal を許し on を止める形に直した（e7be19c）
