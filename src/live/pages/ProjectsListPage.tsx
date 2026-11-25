@@ -15,6 +15,8 @@ export default function ProjectsListPage() {
   const dev = account.role === 'developer';
   const { data: list, loading, error } = useLiveProjects();
   const base = dev ? '/dev/projects' : '/projects';
+  // 作成は開発者と管理者（2026-11-25 ユーザー決定「管理者もプロジェクトを作れるように」）
+  const newPath = `${base}/new`;
 
   if (loading) return <RouteLoader label="プロジェクト" />;
   if (error) return <LoadError what="プロジェクトの一覧" />;
@@ -25,14 +27,14 @@ export default function ProjectsListPage() {
         eyebrow={dev ? '開発者画面' : '管理者画面'}
         icon={<FolderKanban size={14} />}
         title="プロジェクト"
-        description={dev ? '担当しているプロジェクトです。ヒアリングの入力・AI 分析・お客様への承認依頼をここから進めます。' : 'すべてのプロジェクトです。開発者の担当は「ユーザー」で割り当てます。'}
-        actions={dev ? <Button variant="contained" startIcon={<Plus size={16} />} component={RouterLink} to="/dev/projects/new">新しいプロジェクト</Button> : undefined}
+        description={dev ? '担当しているプロジェクトです。ヒアリングの入力・AI 分析・お客様への承認依頼をここから進めます。' : 'すべてのプロジェクトです。作成するときに担当の開発者を選べます。後からの割り当ては「ユーザー」で行います。'}
+        actions={<Button variant="contained" startIcon={<Plus size={16} />} component={RouterLink} to={newPath}>新しいプロジェクト</Button>}
       />
       {list.length === 0 ? (
         <EmptyState
           title={dev ? '担当のプロジェクトはまだありません' : 'プロジェクトはまだありません'}
-          body={dev ? '新しいプロジェクトを作成するか、管理者に担当を割り当ててもらってください。' : 'プロジェクトは開発者が作成します。'}
-          action={dev ? { to: '/dev/projects/new', label: '新しいプロジェクト' } : undefined}
+          body={dev ? '新しいプロジェクトを作成するか、管理者に担当を割り当ててもらってください。' : '新しいプロジェクトを作成すると、ここに表示されます。'}
+          action={{ to: newPath, label: '新しいプロジェクト' }}
         />
       ) : (
         <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0, display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', xl: 'repeat(3, 1fr)' } }}>

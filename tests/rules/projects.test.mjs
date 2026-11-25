@@ -3,7 +3,7 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import { assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
 import { Timestamp, collection, deleteDoc, getDoc, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
 import { createRulesEnv } from './guard.mjs';
-import { PAST, createProjectBatch, dbAs, deleteField, doc, seed, serverTimestamp, setDoc, stamp, updateDoc } from './fixtures.mjs';
+import { ANSWERS, PAST, answerMetaFor, createProjectBatch, dbAs, deleteField, doc, seed, serverTimestamp, setDoc, stamp, updateDoc } from './fixtures.mjs';
 
 let env;
 before(async () => { env = await createRulesEnv(); });
@@ -56,8 +56,9 @@ describe('projects: create（案件作成のバッチ）', () => {
     await assertSucceeds(createProjectBatch(dbAs(env, 'devA'), { mutate: { project: { launchDate: Timestamp.fromDate(new Date('2027-04-01T03:00:00Z')) } } }));
   });
   const deny = (name, uid, mutate) => test(name, async () => { await assertFails(createProjectBatch(dbAs(env, uid), { mutate })); });
-  deny('admin は案件を作れない（§25-1）', 'admin1', {});
+  deny('admin が memberUids に自分を入れて作る → 拒否（2026-11-25 以降も admin 自身はアサインしない）', 'admin1', {});
   deny('お客様は案件を作れない', 'client1', {});
+  deny('お客様が admin の形（memberUids に開発者）で作る → 拒否', 'client1', { project: { memberUids: ['devA'] } });
   deny('無効化された開発者は作れない', 'devOff', {});
   deny('memberUids に他人を足して作る → 拒否', 'devA', { project: { memberUids: ['devA', 'devC'] } });
   deny('ownerUid を他人にする → 拒否', 'devA', { project: { ownerUid: 'devC' } });
@@ -78,6 +79,69 @@ describe('projects: create（案件作成のバッチ）', () => {
   deny('requirements/current に proposal を入れて作る（R-1）→ 拒否', 'devA', { req: { schemaVersion: 1, answers: {}, answerMeta: {}, proposalRevision: 1, ...stamp('devA') } });
   test('作成値の検査: 40 文字の clientName・20 文字の industry は許可', async () => {
     await assertSucceeds(createProjectBatch(dbAs(env, 'devA'), { mutate: { project: { clientName: 'あ'.repeat(40), industry: 'い'.repeat(20) } } }));
+  });
+});
+
+describe('projects: create（admin。2026-11-25 ユーザー決定「管理者もプロジェクトを作れるように」）', () => {
+  const asAdmin = (project = {}, rest = {}) => createProjectBatch(dbAs(env, 'admin1'), { uid: 'admin1', mutate: { project, ...rest } });
+  const members = (n) => Array.from({ length: n }, (_, i) => `u${i}`);
+  test('admin は担当なし（memberUids: []）で 1 バッチで作れる', async () => {
+    await assertSucceeds(asAdmin({ memberUids: [] }));
+  });
+  test('admin は担当の開発者を選んで作れる（[devA]・20 人まで）', async () => {
+    await assertSucceeds(asAdmin({ memberUids: ['devA'] }));
+    await assertSucceeds(createProjectBatch(dbAs(env, 'admin1'), { uid: 'admin1', pid: 'p10', key: 'twenty.example.jp', mutate: { project: {
+      // 式の数が最も多い形（20 人・任意項目の launchDate・上限の長さ）でも 1000 式の上限に当たらない
+      memberUids: members(20), launchDate: Timestamp.fromDate(new Date('2027-04-01T03:00:00Z')),
+      clientName: 'あ'.repeat(40), siteName: 'い'.repeat(40), industry: 'う'.repeat(20),
+    } } }));
+  });
+  test('admin が作った案件（[devA]）: devA は get・一覧・回答の入力ができ、アサイン外の devC はできない', async () => {
+    await assertSucceeds(asAdmin({ memberUids: ['devA'] }));
+    const a = dbAs(env, 'devA');
+    await assertSucceeds(getDoc(doc(a, 'projects/p9')));
+    const listed = await assertSucceeds(getDocs(query(collection(a, 'projects'), where('memberUids', 'array-contains', 'devA'), orderBy('updatedAt', 'desc'), limit(50))));
+    if (!listed.docs.some((d) => d.id === 'p9')) throw new Error('p9 not listed for devA');
+    await assertSucceeds(getDoc(doc(a, 'projects/p9/requirements/current')));
+    await assertSucceeds(updateDoc(doc(a, 'projects/p9/requirements/current'), { answers: ANSWERS, answerMeta: answerMetaFor(ANSWERS), ...stamp('devA') }));
+    await assertFails(getDoc(doc(dbAs(env, 'devC'), 'projects/p9')));
+  });
+  test('admin が作った案件へお客様を招待できる・admin は後から担当を変えられる', async () => {
+    await assertSucceeds(asAdmin({ memberUids: [] }));
+    const db = dbAs(env, 'admin1');
+    await assertSucceeds(setDoc(doc(db, 'invites/new9@customer.example'), { schemaVersion: 1, role: 'client', status: 'invited', name: '新規 顧客9', company: '新規株式会社', projectId: 'p9', createdAt: serverTimestamp(), createdBy: 'admin1' }));
+    await assertSucceeds(updateDoc(doc(db, 'projects/p9'), { memberUids: ['devC'], ...stamp('admin1') }));
+  });
+  const deny = (name, project, rest = {}) => test(name, async () => { await assertFails(asAdmin(project, rest)); });
+  deny('ownerUid を他人にする → 拒否', { memberUids: [], ownerUid: 'devA' });
+  deny('createdBy を他人にする → 拒否', { memberUids: [], createdBy: 'devA' });
+  deny('updatedBy を他人にする → 拒否', { memberUids: [], updatedBy: 'devA' });
+  deny('requirements を analyzed で作る → 拒否', { memberUids: [], requirements: { status: 'analyzed', revision: 1 } });
+  deny('archived: true で作る → 拒否', { memberUids: [], archived: true });
+  deny('clientName 41 文字（validProject）→ 拒否', { memberUids: [], clientName: 'あ'.repeat(41) });
+  deny('memberUids 21 人 → 拒否', { memberUids: members(21) });
+  deny('memberUids に重複 → 拒否', { memberUids: ['devA', 'devA'] });
+  deny('memberUids に文字列以外 → 拒否', { memberUids: ['devA', 1] });
+  deny('memberUids に空文字 → 拒否', { memberUids: [''] });
+  deny('memberUids が list でない → 拒否', { memberUids: 'devA' });
+  deny('memberUids が無い → 拒否', { memberUids: undefined });
+  deny('既に使われている siteUrlKey（URL の重複）→ 拒否', { memberUids: [], siteUrlKey: 'example.co.jp' }, { keyId: 'example.co.jp' });
+  deny('siteKeys なしで作る → 拒否', { memberUids: [] }, { skipKey: true });
+  deny('requirements/current に proposal を入れて作る（R-1）→ 拒否', { memberUids: [] }, { req: { schemaVersion: 1, answers: {}, answerMeta: {}, proposalRevision: 1, ...stamp('admin1') } });
+  test('無効化された admin（ここでは admin2 を disabled にする）は作れない', async () => {
+    await env.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), 'accounts/admin2'), { status: 'disabled' }));
+    await assertFails(createProjectBatch(dbAs(env, 'admin2'), { uid: 'admin2', mutate: { project: { memberUids: [] } } }));
+  });
+  test('admin は既存の案件に requirements/current だけを作れない（案件作成のバッチだけ）', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'projects/p7'), { ...(await getDoc(doc(db, 'projects/p2'))).data(), siteUrlKey: 'p7.example.jp', siteUrl: 'https://p7.example.jp', memberUids: ['devC'], createdBy: 'admin1', ownerUid: 'admin1' });
+    });
+    const req = { schemaVersion: 1, answers: {}, answerMeta: {}, ...stamp('admin1') };
+    await assertFails(setDoc(doc(dbAs(env, 'admin1'), 'projects/p7/requirements/current'), req));
+    await assertFails(setDoc(doc(dbAs(env, 'admin1'), 'projects/p8/requirements/current'), req));
+    // 開発者の従来の経路（アサインされた開発者は事後の案件で判定）は変わらない
+    await assertSucceeds(setDoc(doc(dbAs(env, 'devC'), 'projects/p7/requirements/current'), { schemaVersion: 1, answers: {}, answerMeta: {}, ...stamp('devC') }));
   });
 });
 

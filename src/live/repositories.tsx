@@ -15,7 +15,7 @@ import type { AiDraftDoc, StoredProposal } from '@/types/aiDraft';
 import { isJobRunning } from '@/features/requirements/aiDraft/aiDraftState';
 import { db } from './firebase';
 import {
-  clientFromAccount, clientFromInvite, deepIso, devFromAccount, devFromInvite, INVITE_PREFIX, projectDoc, proposalForSave, proposalV2FromDraft, reqDoc, toApprovalLog, toProject,
+  clientFromAccount, clientFromInvite, deepIso, devFromAccount, devFromInvite, INVITE_PREFIX, MAX_MEMBERS, projectDoc, proposalForSave, proposalV2FromDraft, reqDoc, toApprovalLog, toProject,
   toSession, type ProjectDoc, type ReqDoc,
 } from './model';
 import { PendingAnswers } from './pendingAnswers';
@@ -230,7 +230,15 @@ export function useLiveRepositoriesImpl(): Repositories {
         useCurrentId: () => useLiveData().currentId,
         select,
         create: async (draft) => {
-          if (session.account.role !== 'developer') throw new Error('プロジェクトは開発者が作成します');
+          // 作れるのは開発者と admin（2026-11-25 ユーザー決定「管理者もプロジェクトを作れるように」）。Rules の projCreateOk と同じ形
+          const role = session.account.role;
+          if (role !== 'developer' && role !== 'admin') throw new Error('プロジェクトは開発者が作成します');
+          // 開発者は自分だけが担当（draft.devIds は使わない）。admin は画面で選んだ開発者の uid（draft.devIds。招待中の人・自分は入れない。
+          // 空でもよく、後から「担当を変更」で割り当てる）
+          const memberUids = role === 'developer'
+            ? [uid]
+            : [...new Set(draft.devIds ?? [])].filter((m) => m && m !== uid && !m.startsWith(INVITE_PREFIX));
+          if (memberUids.length > MAX_MEMBERS) throw new Error(`担当の開発者は${MAX_MEMBERS}人までです`);
           const key = siteHost(draft.siteUrl);
           if (!key) throw new Error('URLの形式を確認してください');
           const keyRef = doc(db, 'siteKeys', key);
@@ -241,7 +249,7 @@ export function useLiveRepositoriesImpl(): Repositories {
           batch.set(ref, {
             schemaVersion: 1, clientName: p.clientName, siteName: p.siteName, siteUrl: p.siteUrl, siteUrlKey: key, industry: p.industry, accent: p.accent,
             ...(p.launchDate ? { launchDate: Timestamp.fromDate(localDate(p.launchDate)) } : {}),
-            ownerUid: uid, memberUids: [uid], requirements: { status: 'draft', revision: 0 }, archived: false,
+            ownerUid: uid, memberUids, requirements: { status: 'draft', revision: 0 }, archived: false,
             createdAt: serverTimestamp(), createdBy: uid, ...stamp(uid),
           });
           // URL の重複防止の鍵（同じバッチ。既にあれば Rules が拒否する。§5.4）

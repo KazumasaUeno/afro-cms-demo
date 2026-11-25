@@ -199,6 +199,9 @@ export function toApprovalLog(projectId: string, s: Snap): ApprovalLog {
 /** 招待中だけの人の id（accounts の uid とぶつからない形） */
 export const INVITE_PREFIX = 'invite:';
 
+/** 1 案件の担当の開発者の上限（firestore.rules の projUpdateOk・adminMembersOk と同じ 20） */
+export const MAX_MEMBERS = 20;
+
 export function clientFromAccount(s: Snap): ClientAccount {
   const d = read(s);
   return {
