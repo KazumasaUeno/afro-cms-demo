@@ -1,12 +1,12 @@
 import { Box, Button, Dialog, DialogActions, DialogContent, IconButton, Stack, Tooltip, Typography } from '@mui/material';
-import { LogOut, Menu as MenuIcon, TriangleAlert, WifiOff } from 'lucide-react';
+import { LogOut, Menu as MenuIcon, WifiOff } from 'lucide-react';
 import { Suspense, useEffect, useState } from 'react';
-import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Logo } from '@/components/layout/Logo';
 import { RouteLoader } from '@/components/layout/RouteLoader';
 import { AREAS, isActive, type AreaDef } from '@/components/layout/nav';
 import {
-  AccountButtonView, AreaBadge, BottomNavItem, DrawerColumn, DrawerNav, NavRow, ProjectSwitcherView, RailItem,
+  AccountButtonView, AreaBadge, BottomNavItem, DrawerColumn, DrawerNav, NavRow, RailItem,
   ShellBottomNav, ShellColumn, ShellDrawer, ShellRail, ShellRoot, ShellTopBar, ThemeToggle,
 } from '@/components/layout/ShellParts';
 import { useToast } from '@/hooks/useToast';
@@ -112,49 +112,9 @@ function AccountCard({ account }: { account: LiveAccount }) {
   );
 }
 
-const DEV_DETAIL = /^\/dev\/projects\/[^/]+/;
-
-/**
- * 開発者: 担当のプロジェクトを切り替える（demo の開発者画面と同じ。ヒアリングは選んでいる案件を開く）。
- * 選んでいる案件は LiveDataProvider の currentId / select（以前からある状態）。プロジェクト詳細を開いているときは切り替えた案件の詳細へ移る
- */
-function DevProjectSwitcher() {
-  const { projects } = useRepositories();
-  const list = projects.useList();
-  const currentId = projects.useCurrentId();
-  const { pathname } = useLocation();
-  const navigate = useNavigate();
-  const onDetail = DEV_DETAIL.test(pathname) && pathname !== '/dev/projects/new';
-  // 読み込み中は同じ大きさの枠だけ出して、上部バーの並びをずらさない
-  if (list.loading && !list.data.length) {
-    return <Box aria-hidden sx={{ width: { xs: 120, sm: 180 }, height: { xs: 44, md: 36 }, flexShrink: 0, borderRadius: '10px', bgcolor: tokens.color.surfaceContainer }} />;
-  }
-  // 読めなかったときに「担当プロジェクトがありません」と出さない（無いのではなく読めていない）
-  if (list.error && !list.data.length) {
-    return (
-      <Stack direction="row" spacing={0.75} alignItems="center" role="status" sx={{ minWidth: 0, color: tokens.color.warningInk }}>
-        <TriangleAlert size={16} style={{ flexShrink: 0 }} aria-hidden />
-        <Typography variant="caption" noWrap sx={{ color: 'inherit', fontWeight: 600 }}>プロジェクトを読み込めませんでした</Typography>
-      </Stack>
-    );
-  }
-  return (
-    <ProjectSwitcherView
-      current={list.data.find((p) => p.id === currentId)}
-      list={list.data}
-      emptyText="担当プロジェクトがありません"
-      onSelect={(id) => {
-        projects.select(id);
-        if (onDetail) navigate(`/dev/projects/${id}`);
-      }}
-    />
-  );
-}
-
 function LiveTopBar({ onMenu, account, signOut }: { onMenu: () => void; account: LiveAccount; signOut: () => Promise<void> }) {
   return (
     <ShellTopBar onMenu={onMenu}>
-      {account.role === 'developer' && <DevProjectSwitcher />}
       <Box sx={{ flex: 1 }} />
       <Box sx={{ textAlign: 'right', minWidth: 0, display: { xs: 'none', md: 'block' } }}>
         <Typography variant="body2" sx={{ fontWeight: 650, overflowWrap: 'anywhere' }}>{account.name}</Typography>

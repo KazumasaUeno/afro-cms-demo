@@ -939,3 +939,7 @@
 - 共通化: 枠の見た目の部品を `src/components/layout/ShellParts.tsx` にまとめ、デモ（AppShell・Sidebar）と live（LiveShell）の両方で使う。部品は DemoStore を読まない（`tests/unit/liveNoDemoStore.test.mjs`）。デモの見た目・動きは変えていない
 - レビュー対応: live のメニュー項目は `src/live/liveNav.ts` に置き、demo のメニューから項目が消えても例外にせず既定の値で出す（`tests/unit/liveNav.test.mjs`）。開発者のプロジェクト切替は、読み込み中は同じ大きさの枠を出し、読めなかったときは「読み込めませんでした」と出す（「担当プロジェクトがありません」と出さない）。メニューを開くボタン・配色の切替はタッチ端末とスマホ幅で 44px 以上
 - データ・Rules・Functions の変更なし
+
+## 0.48.3 — 2026-11-25
+
+- live: 上部バーの案件の切り替え（開発者）を外した（ユーザー指示 2026-11-25）。案件はプロジェクトの一覧・詳細から選ぶ。データは変わらない
