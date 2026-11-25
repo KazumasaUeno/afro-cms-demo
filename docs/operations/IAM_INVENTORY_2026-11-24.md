@@ -222,3 +222,12 @@
 | on | **WITH CONDITIONS** | R1（上限）を満たすこと。R2 は強く推奨。R2 を先送りする場合は「ビルド時の依存汚染で API キーが漏れうる」を受容リスクとしてユーザーが判断し記録する |
 
 - 受容するリスク（現時点）: 既定 SA 3 つの Editor を残す（R2 実施まで）。理由: 稼働中の実行時経路は無く、外すとデプロイが壊れうるため、ビルド確認とセットで行う
+
+## G-7 実行記録 2026-11-25（JST。ユーザー GO「はい、一気に進めて」）
+
+- main 351bfb9 → e86a3a2（0.47.4 / 0.47.5 / 0.48.0）。functions を `AI_REQUIREMENTS_MODE=off` でデプロイ（関数 2 → 5 本・キュー `generateRequirementsDraftTask` RUNNING）。1 回目は worker の SA が省略形 `afro-cms-ai-worker@` のため firebase-tools の Secret 権限確認で 400 → 完全なメールに直して再デプロイ（CHANGELOG 0.48.0）。2 回目は emulator の読み込みタイムアウトで test:functions 16 件失敗 → 単独再実行 201/201 → 3 回目で成功
+- [FACT] `gcloud secrets get-iam-policy ANTHROPIC_API_KEY`: `secretAccessor` は `afro-cms-ai-worker@` の 1 件だけ（増えていない）
+- [FACT] worker `generaterequirementsdrafttask` の実行 SA は `afro-cms-ai-worker@`。デプロイ直後の invoker は空 → `gcloud run services add-iam-policy-binding generaterequirementsdrafttask --member serviceAccount:afro-cms-functions@afro-cms-4a6ff.iam.gserviceaccount.com --role roles/run.invoker`（`allUsers` なし）。戻し: 同じ引数で `remove-iam-policy-binding`
+- [INFERENCE] OIDC の SA は enqueue した関数の実行 SA（firebase-admin `functions-api-client-internal.js` updateTaskPayload が `getServiceAccount()` を `oidcToken.serviceAccountEmail` にする）＝ `afro-cms-functions@`。internal で最初のタスクが動いた時点で確定する
+- [FACT] callable 2 本（requestRequirementsDraft・saveAiDraftEdits）は `allUsers` の invoker（callable の通常。認証・権限はコード側）。実行 SA は `afro-cms-functions@`
+- Hosting: dist-live（`VITE_FEATURE_AI_REQUIREMENTS=internal`）をデプロイ。サーバが off の間は AI パネルが「この案件では使えません」になる
