@@ -246,3 +246,4 @@
 - functions: test:functions 201/201 → 5 本 update。Rules: rules:check OK・test:rules 417/417 → released。Hosting: dist-live（`VITE_FEATURE_AI_REQUIREMENTS=internal`）release complete
 - アイグランの案件 `r3DKL56HfOq8HmvNBTTX` は allowlist に入れていない（実在の顧客の情報を Anthropic へ送ってよいかのユーザー確認待ち）
 - 途中で止まった 3 回: emulator の時間切れ 1 回、並行作業との port 衝突 2 回、本番の値を off に固定していたテスト（ai-flow フラグ2）1 回 → off か internal を許し on を止める形に直した（e7be19c）
+- [DECISION] ユーザー 2026-11-25「送って」: アイグラン（実在の顧客）の案件 `r3DKL56HfOq8HmvNBTTX` を allowlist に追加。ヒアリングの回答と公開サイトの本文を Anthropic へ送ることをユーザーが了承（契約上の可否はユーザー判断）。ヒアリングに個人名・電話・メールを入れない運用
