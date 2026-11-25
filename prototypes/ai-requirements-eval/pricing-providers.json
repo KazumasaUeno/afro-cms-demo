@@ -1,0 +1,13 @@
+{
+  "unit": "USD per 1M tokens (= micro-USD per token). Same shape as functions/src/ai/pricing.json",
+  "verifiedAt": "2026-11-25",
+  "sources": {
+    "gpt-6-luna": "https://developers.openai.com/api/docs/models/gpt-6-luna (WebFetch 2026-11-25: input 0.1 / cached input 0.01 / output 0.5). Same as docs/design/AI_PROVIDER_COMPARISON_2026-11-24.md section 1",
+    "gemini-3.5-flash-lite": "https://aistudio.google.com/docs/models/gemini-3.5-flash-lite (WebFetch 2026-11-25: paid tier input 0.30 / output 2.50 incl. thinking / context caching 0.03). Same as comparison doc section 1"
+  },
+  "note": "Standard tier, short context. cacheWrite5m is not billed per token by these providers (Gemini explicit cache storage is per hour and unused here) -> 0. Estimate only; the bill is the source of truth. Re-verify before --go",
+  "models": {
+    "gpt-6-luna": { "input": 0.10, "cacheWrite5m": 0, "cacheRead": 0.01, "output": 0.50 },
+    "gemini-3.5-flash-lite": { "input": 0.30, "cacheWrite5m": 0, "cacheRead": 0.03, "output": 2.50 }
+  }
+}
