@@ -56,7 +56,7 @@ describe('projects: create（案件作成のバッチ）', () => {
     await assertSucceeds(createProjectBatch(dbAs(env, 'devA'), { mutate: { project: { launchDate: Timestamp.fromDate(new Date('2027-04-01T03:00:00Z')) } } }));
   });
   const deny = (name, uid, mutate) => test(name, async () => { await assertFails(createProjectBatch(dbAs(env, uid), { mutate })); });
-  deny('admin が memberUids に自分を入れて作る → 拒否（2026-11-25 以降も admin 自身はアサインしない）', 'admin1', {});
+  deny('admin が ownerUid・createdBy を他人（devA）にして作る → 拒否', 'admin1', {});
   deny('お客様は案件を作れない', 'client1', {});
   deny('お客様が admin の形（memberUids に開発者）で作る → 拒否', 'client1', { project: { memberUids: ['devA'] } });
   deny('無効化された開発者は作れない', 'devOff', {});
@@ -113,6 +113,14 @@ describe('projects: create（admin。2026-11-25 ユーザー決定「管理者�
     await assertSucceeds(updateDoc(doc(db, 'projects/p9'), { memberUids: ['devC'], ...stamp('admin1') }));
   });
   const deny = (name, project, rest = {}) => test(name, async () => { await assertFails(asAdmin(project, rest)); });
+  deny('admin が memberUids に自分を入れて作る → 拒否（admin 自身はアサインしない）', { memberUids: ['admin1'] });
+  deny('admin が memberUids に開発者と自分を入れて作る → 拒否', { memberUids: ['devA', 'admin1'] });
+  test('admin がお客様の uid を memberUids に入れて作っても、お客様は開発者の権限を得ない', async () => {
+    await assertSucceeds(asAdmin({ memberUids: ['client1'] }));
+    const c = dbAs(env, 'client1');
+    await assertFails(updateDoc(doc(c, 'projects/p9'), { siteName: '書き換え', ...stamp('client1') }));
+    await assertFails(updateDoc(doc(c, 'projects/p9/requirements/current'), { answers: ANSWERS, answerMeta: answerMetaFor(ANSWERS), ...stamp('client1') }));
+  });
   deny('ownerUid を他人にする → 拒否', { memberUids: [], ownerUid: 'devA' });
   deny('createdBy を他人にする → 拒否', { memberUids: [], createdBy: 'devA' });
   deny('updatedBy を他人にする → 拒否', { memberUids: [], updatedBy: 'devA' });
