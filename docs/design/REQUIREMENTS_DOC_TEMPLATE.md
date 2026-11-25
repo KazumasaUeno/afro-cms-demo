@@ -2,7 +2,7 @@
 
 | 版 / 状態 | リスク | 関連 | 最終更新 |
 |---|---|---|---|
-| 0.1 / DRAFT（Requirement Review 前） | HIGH（保存データの形・Firestore Rules・外部 AI の出力が変わる。全体の規模は XL 相当 [INFERENCE]。判定は lead-architect） | ユーザー決定 2026-11-25 / `docs/design/AI_REQUIREMENTS.md` / `AI_REQUIREMENTS_UI.md` / `AI_REQUIREMENTS_EVAL.md` | 2026-11-25 |
+| 0.2 / DRAFT（Q-1〜Q-11 確定・Requirement Review 前） | HIGH（保存データの形・Firestore Rules・外部 AI の出力が変わる。全体の規模は XL 相当 [INFERENCE]。判定は lead-architect） | ユーザー決定 2026-11-25 / `docs/design/AI_REQUIREMENTS.md` / `AI_REQUIREMENTS_UI.md` / `AI_REQUIREMENTS_EVAL.md` | 2026-11-25 |
 
 > **2026-11-25 のユーザー決定（再検討しない）**: ヒアリングの質問は今のまま入力に使う。**出力する要件定義書は会社標準ひな型**（`docs/reference/WEBサイト構築_要件定義書ひな型_v0.1.docx`。本文の抜き出しは `docs/reference/requirements-template-v0.1.extracted.txt`）**の章立てと項目に従う**。AI はヒアリング回答とサイト診断から、各項目の「確定内容／採否・仕様」の文を下書きする。ひな型に無い項目は「AI追加」として提案する。**固定の項目にはアフロの標準仕様が入るが、まだ決まっていないので「確認中」と表示し、AI は書かない**。
 > この文書は設計と計画だけ。コードは変えていない。数値は根拠が無いものに `[TARGET]` / `[ASSUMPTION]` / `[INFERENCE]` を付ける。
