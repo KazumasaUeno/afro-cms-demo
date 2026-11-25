@@ -910,6 +910,7 @@
 ## 0.48.0 — 2026-11-25
 
 - AI 要件提案（下記 U1〜U5）を main へ統合。サーバの機能スイッチ `AI_REQUIREMENTS_MODE` と画面のフラグ `VITE_FEATURE_AI_REQUIREMENTS` で段階的に有効化する（全公開 on は法務確認の書類が無いとデプロイ用スクリプトが拒否）
+- functions: AI の worker の実行 SA を完全なメール（`afro-cms-ai-worker@<projectId>.iam.gserviceaccount.com`）で指定する。末尾 `@` の省略形だと firebase-tools が Secret の権限確認で補わず、デプロイが 400「Invalid service account」で止まった（2026-11-25。`functions/src/ai/index.ts` `aiWorkerServiceAccount`・テスト `tests/functions/workerServiceAccount.test.mjs`）
 - U4 修正（未デプロイ）: callable のエラー理由を SDK の実際の形（末尾 ` [NNN]`）から読む `errorReasonOf`（理由ごとの案内が出ず、作り直し後に古い文面が新しい下書きを上書きしうる不具合の根本原因。ブラウザ QA で再現）／生成中も保存の失敗と「変更をコピー」を表示／提案ポイントの見出しラベルの折り返し。作り直し完了で編集欄を取り込み直す `aiDraftServerKey`・`decideResync`（コードレビューの Blocker）
 - 評価（2026-11-24）: 3 モデル × 20 件 × 3 回・$3.98・3 モデルとも機械の基準に合格（`docs/design/AI_REQUIREMENTS_EVAL.md`）。盲検は採点待ち
 - U5（運用の文書だけ・クラウドは未変更）: `docs/operations/RUNBOOK_FIREBASE.md` §9「AI 下書き」（Secret と実行 SA の一覧・ローテーション・漏えい時・フラグ・上限・止める手順・Hosting の戻し先の下限・月 1 回の請求の突き合わせ・IAM の Release Gate・ユーザーの GO が要る作業 G-0〜G-7）。`docs/TODO.md` に削除バッチ（Q-7）・App Check・PSI 見送り・U5 のクラウド作業

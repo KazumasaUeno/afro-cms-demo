@@ -19,7 +19,20 @@ import { runSiteCheck } from './site/checks';
 import { systemResolver } from './site/lookup';
 import { handleTask } from './task';
 
-export const AI_WORKER_SERVICE_ACCOUNT = 'afro-cms-ai-worker@';
+/**
+ * worker の実行 SA。Secret を結ぶ関数は、firebase-tools が Secret の IAM を確かめる処理（deploy/functions/ensure.js
+ * secretsToServiceAccounts → secretManager.checkServiceAgentRole）で endpoint.serviceAccount を**補わずに**使うため、
+ * 末尾 '@' の省略形だと setIamPolicy が 400「Invalid service account」になる（2026-11-25 G-7 で発生。firebase-tools 15.35）。
+ * なので完全なメールにする。プロジェクト ID は discovery に渡る GCLOUD_PROJECT（予備 FIREBASE_CONFIG）から読む。
+ * 分からないときは省略形のまま（デプロイが同じ 400 で止まる＝別の SA へ権限を付けない。fail-closed）
+ */
+export function aiWorkerServiceAccount(env: NodeJS.ProcessEnv): string {
+  let fromConfig = '';
+  try { fromConfig = String((JSON.parse(env.FIREBASE_CONFIG ?? '{}') as { projectId?: unknown }).projectId ?? ''); } catch { fromConfig = ''; }
+  const project = (env.GCLOUD_PROJECT || fromConfig).trim();
+  return /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(project) ? `afro-cms-ai-worker@${project}.iam.gserviceaccount.com` : 'afro-cms-ai-worker@';
+}
+export const AI_WORKER_SERVICE_ACCOUNT = aiWorkerServiceAccount(process.env);
 export const AI_TASK_FUNCTION = 'generateRequirementsDraftTask';
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 
