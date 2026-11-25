@@ -1,89 +1,15 @@
-import { Box, ButtonBase, Popover, Stack, Tooltip, Typography } from '@mui/material';
-import { ExternalLink, Presentation, type LucideIcon } from 'lucide-react';
-import { useState } from 'react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { Box, ButtonBase, Stack, Tooltip, Typography } from '@mui/material';
+import { ExternalLink, Presentation } from 'lucide-react';
+import { NavLink, useLocation } from 'react-router-dom';
 import { tokens } from '@/theme/tokens';
-import { AREAS, areaOf, isActive, visibleItems, type AreaDef, type NavItem } from './nav';
-import { Logo, LogoMark } from './Logo';
-import { navIndicatorSx, navToneSx, toneIndicator } from './navIndicator';
-import { badgeLabel, NavCountBadge, useNavBadge } from './navBadge';
+import { AREAS, areaOf, isActive, visibleItems, type AreaDef } from './nav';
+import { Logo } from './Logo';
+import { useNavBadge } from './navBadge';
+import { AccountButtonView, AreaBadge, DrawerColumn, DrawerNav, NavRow, RailItem, ShellRail } from './ShellParts';
 import { MemberAvatar } from '@/components/ui';
 import { memberById } from '@/data/members';
 import { useDevProjects, useDevUser } from '@/features/dev/useDevUser';
 import { useDemo, currentProject } from '@/store/DemoStore';
-
-/** ドロワー（lg 未満）の行。M3 Navigation drawer item: 高さ 56・角丸 Full。選択中の印は中心から広がる */
-function NavRow({ item, color, onNavigate, count = 0 }: { item: NavItem; color: string; onNavigate?: () => void; count?: number }) {
-  const { pathname } = useLocation();
-  const active = isActive(item, pathname);
-  const Icon = item.icon;
-  return (
-    // 選択中の判定は item.match で行う（NavLink は aria-current を自分の判定で上書きするので Link を使う）
-    <ButtonBase
-      component={Link}
-      to={item.to}
-      onClick={onNavigate}
-      aria-current={active ? 'page' : undefined}
-      aria-label={count > 0 ? `${item.label}${badgeLabel(count)}` : undefined}
-      sx={{
-        width: '100%', justifyContent: 'flex-start', gap: 1.5, px: 2, height: 56, borderRadius: `${tokens.radius.full}px`,
-        color: active ? tokens.color.onSecondaryContainer : tokens.color.onSurfaceVariant, fontWeight: active ? 700 : 500, fontSize: 14,
-        transition: 'color .2s',
-        ...navIndicatorSx(active, { fill: true, indicator: toneIndicator(item.tone) ?? tokens.color.navIndicator }),
-        ...(item.tone && navToneSx(item.tone)),
-      }}
-    >
-      <Box component="span" className="nav-ind" aria-hidden />
-      <Icon size={20} strokeWidth={active ? 2.2 : 1.9} color={item.tone ? 'currentColor' : active ? color : 'currentColor'} />
-      <span>{item.label}</span>
-      <NavCountBadge count={count} inline />
-    </ButtonBase>
-  );
-}
-
-/** PC のナビゲーションレールの項目（M3 Expressive: 56×32 の印＋12px のラベル） */
-function RailItem({ to, label, icon: Icon, active, color, hint, tone, count = 0 }: { to: string; label: string; icon: LucideIcon; active: boolean; color?: string; hint: string; tone?: NavItem['tone']; count?: number }) {
-  return (
-    <Tooltip title={hint} placement="right" enterDelay={600}>
-      <ButtonBase
-        component={Link}
-        to={to}
-        aria-current={active ? 'page' : undefined}
-        aria-label={count > 0 ? `${label}${badgeLabel(count)}` : undefined}
-        sx={{
-          width: '100%', flexDirection: 'column', gap: 0.5, py: 0.5, minHeight: 56, borderRadius: `${tokens.radius.md}px`,
-          color: active ? tokens.color.onSurface : tokens.color.onSurfaceVariant,
-          // 96px のレールで語の途中で折れないよう、M3 Label small（11px）で 1 行に収める
-          fontSize: 11, lineHeight: '16px', fontWeight: active ? 700 : 500, letterSpacing: 0, textAlign: 'center', whiteSpace: 'nowrap',
-          transition: 'color .2s',
-          ...navIndicatorSx(active, { indicator: toneIndicator(tone) ?? tokens.color.navIndicator }),
-          // キーボードのフォーカスは印の外側に輪郭線を出す（ButtonBase は outline を消すので明示する）
-          '&.Mui-focusVisible, &:focus-visible': { outline: 'none' },
-          '&.Mui-focusVisible .nav-ind, &:focus-visible .nav-ind': { outline: `3px solid ${tokens.color.secondary}`, outlineOffset: 2 },
-          ...(tone && navToneSx(tone)),
-        }}
-      >
-        <Box component="span" className="nav-ind" sx={{ position: 'relative', width: 56, height: 32, display: 'grid', placeItems: 'center', flexShrink: 0, color: active ? tokens.color.onSecondaryContainer : 'inherit' }}>
-          <Icon size={22} strokeWidth={active ? 2.2 : 1.8} color={!tone && active && color ? color : 'currentColor'} />
-          <NavCountBadge count={count} />
-        </Box>
-        <Box component="span" sx={{ maxWidth: '100%', overflowWrap: 'anywhere' }}>{label}</Box>
-      </ButtonBase>
-    </Tooltip>
-  );
-}
-
-/** ロゴの下に出す「いまどの立場の画面か」 */
-function AreaBadge({ area }: { area: AreaDef }) {
-  const Icon = area.icon;
-  return (
-    <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 1.5, py: 0.75, borderRadius: `${tokens.radius.sm}px`, bgcolor: area.soft, color: area.color }}>
-      <Icon size={15} />
-      <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: 'inherit' }} noWrap>{area.label}</Typography>
-      <Typography sx={{ fontSize: 12, color: tokens.color.muted, ml: 'auto !important' }} noWrap>{area.audience}</Typography>
-    </Stack>
-  );
-}
 
 /** 管理者画面のメニューの下はプレゼンと設定だけ（2026-11-19 ユーザー指示。作業中のプロジェクトは上のバーの案件切り替えに出ている） */
 function AdminFooter({ onNavigate }: { onNavigate?: () => void }) {
@@ -152,64 +78,28 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { state } = useDemo();
   const badge = useNavBadge();
   return (
-    // 画面が低いときは子を縮めずに中でスクロールさせる（flex の既定の縮みで下のボタンが潰れていた）
-    <Stack sx={{ height: '100%', p: 2, gap: 2, overflowY: 'auto', '& > *': { flexShrink: 0 } }}>
+    <DrawerColumn>
       <Stack spacing={1.5} sx={{ px: 1, py: 0.5 }}>
         <Logo />
         <AreaBadge area={area} />
       </Stack>
 
-      <Box component="nav" aria-label={`${area.label}のメニュー`}>
-        <Stack spacing={0.5}>
-          {visibleItems(area.items, state).map((item) => <NavRow key={item.to} item={item} color={area.color} onNavigate={onNavigate} count={badge(item)} />)}
-        </Stack>
-      </Box>
+      <DrawerNav label={`${area.label}のメニュー`}>
+        {visibleItems(area.items, state).map((item) => <NavRow key={item.to} item={item} color={area.color} onNavigate={onNavigate} count={badge(item)} />)}
+      </DrawerNav>
 
       <Box sx={{ flex: 1 }} />
 
       {area.id === 'admin' ? <AdminFooter onNavigate={onNavigate} /> : <AreaFooter area={area} />}
 
       {area.settings && <NavRow item={area.settings} color={area.color} onNavigate={onNavigate} />}
-    </Stack>
+    </DrawerColumn>
   );
 }
 
 /** レールの下: ログイン中の情報（ドロワーではメニューの下に出しているもの）を Popover で出す */
 function AccountButton({ area }: { area: AreaDef }) {
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const Icon = area.icon;
-  const label = `${area.label}（${area.audience}）の情報`;
-  return (
-    <>
-      <Tooltip title={label} placement="right">
-        <ButtonBase
-          onClick={(e) => setAnchor(e.currentTarget)}
-          aria-haspopup="dialog"
-          aria-expanded={!!anchor}
-          aria-label={label}
-          sx={{
-            width: 48, height: 48, flexShrink: 0, borderRadius: '24px', bgcolor: area.soft, color: area.color,
-            transition: `border-radius .35s ${tokens.motion.easeSpringCss}`,
-            '&:hover, &[aria-expanded="true"]': { borderRadius: '16px' },
-            '&.Mui-focusVisible': { outline: `3px solid ${tokens.color.secondary}`, outlineOffset: 2 },
-          }}
-        >
-          <Icon size={20} />
-        </ButtonBase>
-      </Tooltip>
-      <Popover
-        open={!!anchor}
-        anchorEl={anchor}
-        onClose={() => setAnchor(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-        slotProps={{ paper: { role: 'dialog', 'aria-label': 'ログイン中の情報', sx: { ml: 1.5, width: 300, p: 2, bgcolor: tokens.color.surfaceContainer, display: 'flex', flexDirection: 'column', gap: 1.5 } } }}
-      >
-        <AreaBadge area={area} />
-        <AreaFooter area={area} />
-      </Popover>
-    </>
-  );
+  return <AccountButtonView area={area}><AreaFooter area={area} /></AccountButtonView>;
 }
 
 /** PC（lg 以上）: M3 Expressive のナビゲーションレール（幅 96）。項目が多く画面が低いときはレールの中でスクロールする */
@@ -219,41 +109,23 @@ export function Sidebar() {
   const { state } = useDemo();
   const badge = useNavBadge();
   return (
-    <Box
-      component="aside"
-      sx={{
-        display: { xs: 'none', lg: 'flex' }, flexDirection: 'column', alignItems: 'center', gap: 1.5,
-        position: 'fixed', inset: '0 auto 0 0', width: tokens.layout.sidebar, py: 2, px: 1,
-        bgcolor: tokens.color.navBg, borderRight: `1px solid ${tokens.color.outlineVariant}`, zIndex: 20, overflowY: 'auto', overflowX: 'hidden', // 本文の地と区別するため面の色を変え、境目に罫線
-      }}
-    >
-      <ButtonBase
-        component={Link}
-        to={area.home}
-        aria-label={`アフロCMS ${area.label}のホーム`}
-        sx={{
-          borderRadius: '14px', mb: 1, flexShrink: 0, transition: `transform .35s ${tokens.motion.easeSpringCss}`, '&:active': { transform: 'scale(0.92)' },
-          '&.Mui-focusVisible': { outline: `3px solid ${tokens.color.secondary}`, outlineOffset: 2 },
-        }}
-      >
-        <LogoMark size={44} />
-      </ButtonBase>
-
-      <Box component="nav" aria-label={`${area.label}のメニュー`} sx={{ width: '100%' }}>
-        <Stack spacing={1.5}>
-          {visibleItems(area.items, state).map((item) => (
-            <RailItem key={item.to} to={item.to} label={item.label} icon={item.icon} hint={item.hint} active={isActive(item, pathname)} color={area.color} tone={item.tone} count={badge(item)} />
-          ))}
-        </Stack>
-      </Box>
-
-      <Box sx={{ flex: 1, minHeight: 8 }} />
-
-      {area.id === 'admin' && <RailItem to="/present" label="プレゼン" icon={Presentation} hint="顧客に見せる全画面のプレゼン表示" active={false} />}
-      {area.settings && (
-        <RailItem to={area.settings.to} label={area.settings.label} icon={area.settings.icon} hint={area.settings.hint} active={isActive(area.settings, pathname)} color={area.color} />
+    <ShellRail
+      home={area.home}
+      homeLabel={`アフロCMS ${area.label}のホーム`}
+      navLabel={`${area.label}のメニュー`}
+      footer={(
+        <>
+          {area.id === 'admin' && <RailItem to="/present" label="プレゼン" icon={Presentation} hint="顧客に見せる全画面のプレゼン表示" active={false} />}
+          {area.settings && (
+            <RailItem to={area.settings.to} label={area.settings.label} icon={area.settings.icon} hint={area.settings.hint} active={isActive(area.settings, pathname)} color={area.color} />
+          )}
+          {area.id !== 'admin' && <AccountButton area={area} />}
+        </>
       )}
-      {area.id !== 'admin' && <AccountButton area={area} />}
-    </Box>
+    >
+      {visibleItems(area.items, state).map((item) => (
+        <RailItem key={item.to} to={item.to} label={item.label} icon={item.icon} hint={item.hint} active={isActive(item, pathname)} color={area.color} tone={item.tone} count={badge(item)} />
+      ))}
+    </ShellRail>
   );
 }

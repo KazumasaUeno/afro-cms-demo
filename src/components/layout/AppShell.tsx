@@ -1,20 +1,17 @@
-import { Box, ButtonBase, Drawer, IconButton, Menu, MenuItem, Tooltip, Typography, ListItemIcon } from '@mui/material';
+import { Box, ButtonBase, IconButton, Menu, MenuItem, Tooltip, Typography, ListItemIcon } from '@mui/material';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeftRight, Check, ChevronDown, LogOut, Menu as MenuIcon, Moon, Presentation, RotateCcw, Bell, Sun } from 'lucide-react';
+import { ArrowLeftRight, Check, ChevronDown, LogOut, Menu as MenuIcon, Presentation, RotateCcw, Bell } from 'lucide-react';
 import { Suspense, lazy, useEffect, useState } from 'react';
-import { Link, useLocation, useNavigate, useOutlet } from 'react-router-dom';
+import { useLocation, useNavigate, useOutlet } from 'react-router-dom';
 import { tokens } from '@/theme/tokens';
-import { LANDSCAPE_PHONE } from '@/theme/media';
 import { DATA_MODE, useRepositories } from '@/repositories';
 import { useDemo, currentProject, devAccessState } from '@/store/DemoStore';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { useThemeMode } from '@/theme/ThemeMode';
-import { navIndicatorSx } from './navIndicator';
 import { Sidebar, SidebarContent } from './Sidebar';
-import { LogoMark } from './Logo';
 import { AREA_ORDER, AREAS, areaOf, isActive, SETTINGS_ITEM, visibleItems, type AreaDef } from './nav';
 import { ResetDemoDialog } from './ResetDemoDialog';
-import { badgeLabel, NavCountBadge, useNavBadge } from './navBadge';
+import { badgeLabel, useNavBadge } from './navBadge';
+import { BottomNavItem, ProjectSwitcherView, ShellBottomNav, ShellColumn, ShellDrawer, ShellRoot, ShellTopBar, ThemeToggle } from './ShellParts';
 import { RouteLoader } from './RouteLoader';
 import { LOGIN_PATH, loginArea, logoutArea, useSessions } from '@/services/session';
 import { MemberAvatar } from '@/components/ui';
@@ -28,46 +25,16 @@ function ProjectSwitcher({ projects, emptyText, onSelect }: { projects?: Project
   const { state } = useDemo();
   // 選んでいる案件の変更は projects.select に一本化（B の着手条件 3）
   const { projects: projectsRepo } = useRepositories();
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const project = currentProject(state);
-  const list = projects ?? state.projects;
   return (
-    <>
-      <ButtonBase
-        onClick={(e) => setAnchor(e.currentTarget)}
-        aria-haspopup="menu"
-        aria-label={`プロジェクトを切り替える（現在: ${project.siteName}）`}
-        sx={{
-          gap: 1, px: 1.25, height: { xs: 44, md: 36 }, minWidth: 0, borderRadius: '10px', border: `1px solid ${tokens.color.border}`, bgcolor: tokens.color.surface,
-          maxWidth: { xs: 200, sm: 260 }, '&:hover': { borderColor: tokens.color.borderStrong },
-        }}
-      >
-        <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: project.accent, flexShrink: 0 }} />
-        <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>{project.siteName}</Typography>
-        <ChevronDown size={15} color={tokens.color.muted} style={{ flexShrink: 0 }} />
-      </ButtonBase>
-      <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)} slotProps={{ paper: { sx: { minWidth: 260 } } }}>
-        {!list.length && emptyText && <MenuItem disabled sx={{ whiteSpace: 'normal' }}>{emptyText}</MenuItem>}
-        {list.map((p) => (
-          <MenuItem
-            key={p.id}
-            selected={p.id === project.id}
-            onClick={() => {
-              projectsRepo.select(p.id);
-              onSelect?.(p.id);
-              setAnchor(null);
-            }}
-          >
-            <ListItemIcon><Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: p.accent }} /></ListItemIcon>
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{p.siteName}</Typography>
-              <Typography variant="caption" noWrap sx={{ display: 'block' }}>{p.clientName}</Typography>
-            </Box>
-            {p.id === project.id && <Check size={16} color={tokens.color.primary} />}
-          </MenuItem>
-        ))}
-      </Menu>
-    </>
+    <ProjectSwitcherView
+      current={currentProject(state)}
+      list={projects ?? state.projects}
+      emptyText={emptyText}
+      onSelect={(id) => {
+        projectsRepo.select(id);
+        onSelect?.(id);
+      }}
+    />
   );
 }
 
@@ -202,57 +169,13 @@ function DevProjectSwitcher() {
   return <ProjectSwitcher projects={projects} emptyText="担当プロジェクトがありません" onSelect={onDetail ? (id) => navigate(`/dev/projects/${id}`) : undefined} />;
 }
 
-/** 配色の切替（ライト ⇄ ダーク）。押した位置から新しい配色が広がる。細かい設定（システムに従う）は設定画面 */
-function ThemeToggle() {
-  const { mode, setPref } = useThemeMode();
-  const reduced = useReducedMotion();
-  const next = mode === 'dark' ? 'light' : 'dark';
-  const label = next === 'dark' ? 'ダークモードに切り替える' : 'ライトモードに切り替える';
-  return (
-    <Tooltip title={label}>
-      <IconButton
-        aria-label={label}
-        onClick={(e) => {
-          const r = e.currentTarget.getBoundingClientRect();
-          setPref(next, { x: r.left + r.width / 2, y: r.top + r.height / 2 });
-        }}
-      >
-        <AnimatePresence mode="popLayout" initial={false}>
-          <motion.span
-            key={mode}
-            style={{ display: 'grid', placeItems: 'center' }}
-            initial={reduced ? false : { rotate: -90, scale: 0.4, opacity: 0 }}
-            animate={{ rotate: 0, scale: 1, opacity: 1 }}
-            exit={reduced ? { opacity: 0 } : { rotate: 90, scale: 0.4, opacity: 0 }}
-            transition={reduced ? { duration: 0 } : tokens.motion.spring.default}
-          >
-            {mode === 'dark' ? <Moon size={19} /> : <Sun size={19} />}
-          </motion.span>
-        </AnimatePresence>
-      </IconButton>
-    </Tooltip>
-  );
-}
-
 function TopBar({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
   const [resetOpen, setResetOpen] = useState(false);
   const navigate = useNavigate();
   const { state } = useDemo();
   const pending = state.projects.reduce((s, p) => s + p.pendingApprovals, 0);
   return (
-    <Box
-      component="header"
-      sx={{
-        position: 'sticky', top: 0, zIndex: 15, height: tokens.layout.topbar, display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 1.5 },
-        // M3 Top app bar: 画面の地と同じ面。本文との境目は surfaceContainerHighest の細い線だけで示す
-        px: { xs: 2, md: 4 }, bgcolor: tokens.color.bg,
-        boxShadow: `inset 0 -1px 0 ${tokens.color.surfaceContainerHighest}`,
-      }}
-    >
-      <IconButton onClick={onMenu} aria-label="メニューを開く" sx={{ display: { lg: 'none' }, ml: -1 }}>
-        <MenuIcon size={20} />
-      </IconButton>
-      <Box sx={{ display: { xs: 'none', sm: 'block', lg: 'none' } }}><LogoMark size={28} /></Box>
+    <ShellTopBar onMenu={onMenu}>
       {/* 管理者画面は案件をプロジェクト一覧・詳細で選ぶので、上部バーに案件名を置かない。開発者画面は担当案件を切り替える。
           お客様ポータルは本来その会社の案件だけだが、デモでは全案件のポータルを見せるため切り替えられる（0.39.0。2026-11-16 ユーザー指示） */}
       {area.id === 'dev' && DATA_MODE === 'demo' && <DevUserSwitcher />}
@@ -296,7 +219,7 @@ function TopBar({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
         </IconButton>
       </Tooltip>
       <ResetDemoDialog open={resetOpen} onClose={() => setResetOpen(false)} />
-    </Box>
+    </ShellTopBar>
   );
 }
 
@@ -312,41 +235,15 @@ function BottomTabs({ onMenu, area }: { onMenu: () => void; area: AreaDef }) {
   // 下部タブに無い画面（ポータルのスケジュールなど）を開いている間は「メニュー」を選択中にする（0.46.1。以前はどのタブも選択中にならなかった）
   const menuActive = !items.some((i) => isActive(i, pathname)) && [...menuOnly, ...(area.settings ? [area.settings] : [])].some((i) => isActive(i, pathname));
   return (
-    <Box
-      component="nav"
-      aria-label="クイックメニュー"
-      sx={{
-        display: { xs: 'flex', md: 'none' }, position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 25,
-        // M3 Navigation bar: surfaceContainer の面・罫線なし。選択中はアイコンの下に secondaryContainer の pill
-        bgcolor: tokens.color.surfaceContainer,
-        pb: 'env(safe-area-inset-bottom)',
-        // 横向きのスマホは高さが足りないので下部タブを隠す（メニューは上部バーから開ける）
-        [LANDSCAPE_PHONE]: { display: 'none' },
-      }}
-    >
-      {items.map((item) => {
-        const active = isActive(item, pathname);
-        const Icon = item.icon;
-        return (
-          <ButtonBase
-            // 選択中の判定は item.match で行う（NavLink だと aria-current が上書きされる）
-            key={item.to} component={Link} to={item.to} aria-current={active ? 'page' : undefined}
-            aria-label={badge(item) > 0 ? `${item.label}${badgeLabel(badge(item))}` : undefined}
-            sx={{ flex: 1, flexDirection: 'column', gap: 0.5, height: 64, fontSize: 12, lineHeight: 1.2, whiteSpace: 'nowrap', fontWeight: active ? 700 : 500, color: active ? tokens.color.onSurface : tokens.color.onSurfaceVariant, ...navIndicatorSx(active) }}
-          >
-            <Box component="span" className="nav-ind" sx={{ position: 'relative', display: 'grid', placeItems: 'center', width: 56, height: 28, color: active ? tokens.color.onSecondaryContainer : 'inherit' }}>
-              <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
-              <NavCountBadge count={badge(item)} />
-            </Box>
-            {item.label}
-          </ButtonBase>
-        );
-      })}
-      <ButtonBase onClick={onMenu} aria-current={menuActive ? 'page' : undefined} aria-label={`すべてのメニュー${badgeLabel(inMenu)}`} sx={{ flex: 1, flexDirection: 'column', gap: 0.5, height: 64, fontSize: 12, lineHeight: 1.2, whiteSpace: 'nowrap', fontWeight: menuActive ? 700 : 500, color: menuActive ? tokens.color.onSurface : tokens.color.onSurfaceVariant, ...navIndicatorSx(menuActive) }}>
-        <Box component="span" className="nav-ind" sx={{ position: 'relative', display: 'grid', placeItems: 'center', width: 56, height: 28, color: menuActive ? tokens.color.onSecondaryContainer : 'inherit' }}><MenuIcon size={20} strokeWidth={menuActive ? 2.2 : 1.8} /><NavCountBadge count={inMenu} /></Box>
-        メニュー
-      </ButtonBase>
-    </Box>
+    <ShellBottomNav>
+      {items.map((item) => (
+        <BottomNavItem
+          key={item.to} to={item.to} active={isActive(item, pathname)} label={item.label} icon={item.icon} count={badge(item)}
+          ariaLabel={badge(item) > 0 ? `${item.label}${badgeLabel(badge(item))}` : undefined}
+        />
+      ))}
+      <BottomNavItem onClick={onMenu} active={menuActive} label="メニュー" icon={MenuIcon} count={inMenu} ariaLabel={`すべてのメニュー${badgeLabel(inMenu)}`} />
+    </ShellBottomNav>
   );
 }
 
@@ -446,36 +343,17 @@ export function AppShell() {
   // お客様ポータルは選んでいる案件をそのまま表示する（0.30.0。2026-11-13 ユーザー指示。以前は MINAMO COFFEE に固定）。
   // 開発者画面は担当のプロジェクトから選ぶ（担当外・開発データの無い案件は DevProjectGate が理由を出す）
   return (
-    <Box sx={{ minHeight: '100dvh', bgcolor: tokens.color.bg }}>
-      <a href="#main" className="skip-link">本文へスキップ</a>
+    <ShellRoot>
       <Sidebar />
-      <Drawer
-        open={open}
-        onClose={() => setOpen(false)}
-        sx={{ display: { lg: 'none' } }}
-        PaperProps={{ sx: { width: 280, bgcolor: tokens.color.navBg, borderRadius: '0 16px 16px 0' } }}
-      >
+      <ShellDrawer open={open} onClose={() => setOpen(false)}>
         <SidebarContent onNavigate={() => setOpen(false)} />
-      </Drawer>
-      <Box sx={{ pl: { lg: `${tokens.layout.sidebar}px` }, minWidth: 0 }}>
-        <TopBar onMenu={() => setOpen(true)} area={area} />
-        <Box
-          component="main"
-          id="main"
-          tabIndex={-1}
-          sx={{
-            // ポータルは右下の AI アシスタントのボタン（56px）に最後の行が隠れないよう、PC でも下を広く空ける
-            px: { xs: 2, sm: 3, md: 4, xl: 5 }, pt: { xs: 3, md: 4 }, pb: { xs: 'calc(96px + env(safe-area-inset-bottom))', md: area.id === 'portal' ? 12 : 6 },
-            // 横向きのスマホ（高さが低い）は下部タブを出さないので余白も戻す
-            [LANDSCAPE_PHONE]: { pb: 4 },
-            maxWidth: tokens.layout.contentMax + 80, mx: 'auto', outline: 'none', minWidth: 0,
-          }}
-        >
-          <AnimatedOutlet dev={area.id === 'dev'} />
-        </Box>
-      </Box>
+      </ShellDrawer>
+      {/* ポータルは右下の AI アシスタントのボタン（56px）に最後の行が隠れないよう、PC でも下を広く空ける */}
+      <ShellColumn top={<TopBar onMenu={() => setOpen(true)} area={area} />} pbMd={area.id === 'portal' ? 12 : 6}>
+        <AnimatedOutlet dev={area.id === 'dev'} />
+      </ShellColumn>
       <BottomTabs onMenu={() => setOpen(true)} area={area} />
       {area.id === 'portal' && <Suspense fallback={null}><PortalAssistant /></Suspense>}
-    </Box>
+    </ShellRoot>
   );
 }
