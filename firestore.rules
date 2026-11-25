@@ -396,6 +396,8 @@ service cloud.firestore {
         && existsAfter(msgPath(pid, seqId(c.count)));
     }
     function msgKeys() { return ['schemaVersion','seq','text','side','authorUid','authorName','at']; }
+    // 本文に入れてはいけない文字（文字の向きの制御 U+202A〜202E・U+2066〜2069、改行以外の C0 制御文字・DEL。src/live/consult.ts cleanConsultText が送る前に除く。2026-11-25 セキュリティ L-1）
+    function reChatControl() { return '(?s).*[\\x{202A}-\\x{202E}\\x{2066}-\\x{2069}\\x{00}-\\x{09}\\x{0B}-\\x{1F}\\x{7F}].*'; }
     function msgCreateOk(pid, mid, a) {
       let d = request.resource.data;
       let c = getAfter(projPath(pid)).data.consult;
@@ -403,7 +405,7 @@ service cloud.firestore {
         && d.schemaVersion == 1
         && d.side == sideOf(a, roleOf(a), pid, proj(pid).memberUids) && d.side != 'none'
         && d.authorUid == request.auth.uid && d.authorName == a.name && d.at == request.time
-        && d.text.matches(reMaxChat())
+        && d.text.matches(reMaxChat()) && !d.text.matches(reChatControl())
         && d.seq is int && d.seq >= 1 && mid == seqId(d.seq)
         && c.count == d.seq && c.lastSide == d.side && c.lastName == d.authorName && c.lastAt == d.at;
     }

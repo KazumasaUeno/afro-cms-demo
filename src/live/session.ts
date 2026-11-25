@@ -6,8 +6,8 @@ import { createContext, useContext } from 'react';
  */
 export type LiveRole = 'admin' | 'developer' | 'client';
 
-/** 役割ごとの最初の画面 */
-export const ROLE_HOME: Record<LiveRole, string> = { admin: '/projects', developer: '/dev/projects', client: '/portal/approvals' };
+/** 役割ごとの最初の画面（2026-11-25 U4: admin・開発者はダッシュボード。以前の /projects・/dev/projects もそのまま開ける） */
+export const ROLE_HOME: Record<LiveRole, string> = { admin: '/dashboard', developer: '/dev', client: '/portal/approvals' };
 
 export interface LiveAccount {
   uid: string;

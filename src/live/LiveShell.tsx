@@ -1,7 +1,7 @@
-import { Box, Button, Dialog, DialogActions, DialogContent, IconButton, Stack, Tooltip, Typography } from '@mui/material';
-import { LogOut, Menu as MenuIcon, WifiOff } from 'lucide-react';
-import { Suspense, useEffect, useState } from 'react';
-import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Box, Button, Dialog, DialogActions, DialogContent, IconButton, ListItemIcon, Menu, MenuItem, Stack, Tooltip, Typography } from '@mui/material';
+import { CircleUserRound, LogOut, Menu as MenuIcon, UsersRound, WifiOff } from 'lucide-react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Link as RouterLink, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Logo } from '@/components/layout/Logo';
 import { RouteLoader } from '@/components/layout/RouteLoader';
 import { AREAS, isActive, type AreaDef } from '@/components/layout/nav';
@@ -13,10 +13,10 @@ import { useToast } from '@/hooks/useToast';
 import { useRepositories } from '@/repositories';
 import { tokens } from '@/theme/tokens';
 import { useLiveAuth } from './auth';
-import { LIVE_NAV, ROLE_AREA } from './liveNav';
+import { LIVE_BOTTOM_LABEL, LIVE_NAV, ROLE_AREA, liveNavMarks } from './liveNav';
 import { flushBeforeSignOut, type FlushResult } from './pendingWrites';
-import { LiveDataProvider } from './repositories';
-import { LiveSessionContext, ROLE_HOME, type LiveAccount, type LiveRole } from './session';
+import { LiveDataProvider, useLiveProjects } from './repositories';
+import { LiveSessionContext, ROLE_HOME, type LiveAccount, type LiveRole, type LiveSession } from './session';
 
 const ROLE_LABEL: Record<LiveRole, string> = { admin: '管理者', developer: '開発者', client: 'お客様' };
 
@@ -112,6 +112,38 @@ function AccountCard({ account }: { account: LiveAccount }) {
   );
 }
 
+/**
+ * 上部バーのアカウントのメニュー（admin だけ）。ユーザー管理はサイドのメニューから外し、ここから開く（2026-11-25 ユーザー決定 U4）。
+ * スマホでも上部バーに出る（サイドのメニューはドロワー）
+ */
+function LiveAccountMenu({ account }: { account: LiveAccount }) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  if (account.role !== 'admin') return null;
+  const close = () => setAnchor(null);
+  return (
+    <>
+      <Tooltip title="アカウントのメニュー">
+        <IconButton
+          aria-label="アカウントのメニュー" aria-haspopup="menu" aria-expanded={!!anchor} aria-controls={anchor ? 'live-account-menu' : undefined}
+          onClick={(e) => setAnchor(e.currentTarget)} sx={{ minWidth: 44, minHeight: 44 }}
+        >
+          <CircleUserRound size={20} />
+        </IconButton>
+      </Tooltip>
+      <Menu id="live-account-menu" anchorEl={anchor} open={!!anchor} onClose={close} slotProps={{ paper: { sx: { minWidth: 240 } } }}>
+        <Box sx={{ px: 2, py: 1 }}>
+          <Typography variant="body2" sx={{ fontWeight: 650, overflowWrap: 'anywhere' }}>{account.name}</Typography>
+          <Typography variant="caption">{ROLE_LABEL[account.role]}{account.company ? `・${account.company}` : ''}</Typography>
+        </Box>
+        <MenuItem component={RouterLink} to="/users" onClick={close} sx={{ minHeight: 44 }}>
+          <ListItemIcon><UsersRound size={18} /></ListItemIcon>
+          ユーザー管理
+        </MenuItem>
+      </Menu>
+    </>
+  );
+}
+
 function LiveTopBar({ onMenu, account, signOut }: { onMenu: () => void; account: LiveAccount; signOut: () => Promise<void> }) {
   return (
     <ShellTopBar onMenu={onMenu}>
@@ -121,6 +153,7 @@ function LiveTopBar({ onMenu, account, signOut }: { onMenu: () => void; account:
         <Typography variant="caption">{ROLE_LABEL[account.role]}{account.company ? `・${account.company}` : ''}</Typography>
       </Box>
       {/* live には設定画面が無いので、スマホでも上部バーから配色を切り替える（demo のスマホは設定画面から） */}
+      <LiveAccountMenu account={account} />
       <ThemeToggle />
       <LiveLogoutButton signOut={signOut} />
     </ShellTopBar>
@@ -159,14 +192,33 @@ export function LiveShell() {
     return <Navigate to={next === '/' ? '/login' : `/login?next=${encodeURIComponent(next)}`} replace />;
   }
   const { session } = state;
-  const { account } = session;
-  const area: AreaDef = AREAS[ROLE_AREA[account.role]];
-  const items = LIVE_NAV[account.role];
-  const close = () => setOpen(false);
 
   return (
     <LiveSessionContext.Provider value={session}>
       <LiveDataProvider session={session}>
+        <LiveFrame session={session} pathname={pathname} open={open} setOpen={setOpen} signOut={() => signOut()} />
+      </LiveDataProvider>
+    </LiveSessionContext.Provider>
+  );
+}
+
+/**
+ * 枠の中身（LiveDataProvider の内側。メニューの印を案件一覧の consult から数えるため。追加の Read は無い）。
+ * メニューは役割ごとに liveNav.ts の LIVE_NAV（admin・開発者は 4 つ、お客様は 2 つ）
+ */
+function LiveFrame({ session, pathname, open, setOpen, signOut }: {
+  session: LiveSession; pathname: string; open: boolean; setOpen: (v: boolean) => void; signOut: () => Promise<void>;
+}) {
+  const { account, uid } = session;
+  const area: AreaDef = AREAS[ROLE_AREA[account.role]];
+  const items = LIVE_NAV[account.role];
+  const close = () => setOpen(false);
+  const { data: docs } = useLiveProjects();
+  const marks = useMemo(() => liveNavMarks(account.role, docs, uid), [account.role, docs, uid]);
+  const count = (to: string) => marks[to]?.count ?? 0;
+  const mark = (to: string) => marks[to]?.mark;
+
+  return (
         <ShellRoot>
           <ShellRail
             home={ROLE_HOME[account.role]}
@@ -175,7 +227,7 @@ export function LiveShell() {
             footer={<AccountButtonView area={area}><AccountCard account={account} /></AccountButtonView>}
           >
             {items.map((item) => (
-              <RailItem key={item.to} to={item.to} label={item.label} icon={item.icon} hint={item.hint} active={isActive(item, pathname)} color={area.color} />
+              <RailItem key={item.to} to={item.to} label={item.label} icon={item.icon} hint={item.hint} active={isActive(item, pathname)} color={area.color} count={count(item.to)} mark={mark(item.to)} />
             ))}
           </ShellRail>
           <ShellDrawer open={open} onClose={close}>
@@ -185,25 +237,27 @@ export function LiveShell() {
                 <AreaBadge area={area} />
               </Stack>
               <DrawerNav label={`${area.label}のメニュー`}>
-                {items.map((item) => <NavRow key={item.to} item={item} color={area.color} onNavigate={close} />)}
+                {items.map((item) => <NavRow key={item.to} item={item} color={area.color} onNavigate={close} count={count(item.to)} mark={mark(item.to)} />)}
               </DrawerNav>
               <Box sx={{ flex: 1 }} />
               <AccountCard account={account} />
             </DrawerColumn>
           </ShellDrawer>
-          <ShellColumn top={<><LiveTopBar onMenu={() => setOpen(true)} account={account} signOut={() => signOut()} /><OfflineNotice /></>}>
+          <ShellColumn top={<><LiveTopBar onMenu={() => setOpen(true)} account={account} signOut={signOut} /><OfflineNotice /></>}>
             <Suspense fallback={<RouteLoader />}>
               <Outlet />
             </Suspense>
           </ShellColumn>
           <ShellBottomNav>
             {items.map((item) => (
-              <BottomNavItem key={item.to} to={item.to} active={isActive(item, pathname)} label={item.label} icon={item.icon} />
+              <BottomNavItem
+                key={item.to} to={item.to} active={isActive(item, pathname)} label={LIVE_BOTTOM_LABEL[item.to] ?? item.label} icon={item.icon}
+                count={count(item.to)} mark={mark(item.to)}
+                ariaLabel={count(item.to) > 0 ? `${item.label}（${mark(item.to) ?? `未対応 ${count(item.to)}件`}）` : undefined}
+              />
             ))}
             <BottomNavItem onClick={() => setOpen(true)} active={false} label="メニュー" icon={MenuIcon} ariaLabel="すべてのメニュー" />
           </ShellBottomNav>
         </ShellRoot>
-      </LiveDataProvider>
-    </LiveSessionContext.Provider>
   );
 }

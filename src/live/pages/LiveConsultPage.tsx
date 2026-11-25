@@ -1,6 +1,6 @@
 import { Alert, Box, Button, Stack, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { ArrowLeft, MessageSquare } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { PageHeader, StatusPill, Surface } from '@/components/ui';
 import { RouteLoader } from '@/components/layout/RouteLoader';
@@ -27,7 +27,7 @@ const PRIVACY_NOTE = 'パスワード・カード番号などは送らないで�
  * - 開発者（/dev/chat）: 担当の案件の一覧 → 会話。担当の開発者は全員が返信できる（NC-1。demo の「担当ディレクターだけ」とは違う）
  * - 管理者（/chat）: 全案件の一覧 → 会話。見るだけ
  * 未対応＝最後のメッセージがお客様（既読は持たない）。一覧・未対応は案件一覧の consult（追加 Read 0）。メール通知・添付は無い（NC-4・NC-7）。
- * 権限の実体は firestore.rules の consultOk / msgCreateOk（ここは表示の出し分け）。メニューへの追加は U4（それまでは URL から開く）
+ * 権限の実体は firestore.rules の consultOk / msgCreateOk（ここは表示の出し分け）。メニューは U4（liveNav.ts。未対応・返信ありの印も案件一覧の consult）
  */
 export default function LiveConsultPage() {
   const { account } = useLiveSession();
@@ -166,17 +166,22 @@ function ConsultThread({ project, mode, logHeight }: { project: ProjectDoc; mode
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // 二重送信の止め（busy は state なので、同じ描画のうちに 2 回押すと両方が通る。ref は即座に変わる）
+  const sendingRef = useRef(false);
   const messages = useMemo(() => q.data.map(toChatMessage), [q.data]);
   const side = consultSide(account.role, uid, account.projectId, project);
   const mySide = mode === 'portal' ? 'client' : 'afro';
   // アーカイブ・件数の上限は送る前から分かるので返信欄の代わりに出す（連投の間隔は送ったときに案内する）
   const blocked = side ? consultBlock(project, Number.POSITIVE_INFINITY) : null;
   const total = project.consult?.count ?? 0;
-  const more = total > messages.length && messages.length >= max;
+  // 読み足している間（前の会話を出したまま購読し直す。useSnapshot の keep）もボタンを残す（消えると位置がずれる）
+  const loadingOlder = q.loading && messages.length > 0;
+  const more = total > messages.length && (loadingOlder || messages.length >= max);
   const detailPath = mode === 'dev' ? `/dev/projects/${project.id}` : mode === 'admin' ? `/projects/${project.id}` : null;
 
   const send = async () => {
-    if (busy) return;
+    if (sendingRef.current) return;
+    sendingRef.current = true;
     setBusy(true);
     try {
       await actions.send(project.id, text);
@@ -186,6 +191,7 @@ function ConsultThread({ project, mode, logHeight }: { project: ProjectDoc; mode
       // 入力は残す（もう一度送れるように）
       setError(e instanceof ConsultError ? e.message : '送信できませんでした。接続を確かめて、もう一度お試しください');
     } finally {
+      sendingRef.current = false;
       setBusy(false);
     }
   };
@@ -216,7 +222,8 @@ function ConsultThread({ project, mode, logHeight }: { project: ProjectDoc; mode
         <Box sx={{ p: 2 }}><Alert severity="error">メッセージを読み込めませんでした。接続を確かめて再読み込みしてください。</Alert></Box>
       ) : (
         <ChatLog
-          messages={q.loading ? [] : messages}
+          messages={messages}
+          loading={q.loading}
           mySide={mySide}
           afroSuffix={mode === 'portal'}
           label={`${project.clientName}との相談のメッセージ`}
@@ -225,7 +232,9 @@ function ConsultThread({ project, mode, logHeight }: { project: ProjectDoc; mode
           scrollKey={project.id}
           before={more ? (
             <Box sx={{ textAlign: 'center', mb: 1.5 }}>
-              <Button size="small" onClick={() => setMax((n) => n + MESSAGE_PAGE)} sx={{ [TOUCH]: { minHeight: 44 } }}>前のメッセージを読む</Button>
+              <Button size="small" disabled={loadingOlder} onClick={() => setMax((n) => n + MESSAGE_PAGE)} sx={{ [TOUCH]: { minHeight: 44 } }}>
+                {loadingOlder ? '読み込んでいます…' : '前のメッセージを読む'}
+              </Button>
             </Box>
           ) : undefined}
         />

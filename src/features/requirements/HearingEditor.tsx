@@ -153,7 +153,7 @@ interface Props {
   editable: boolean;
   /** AI 分析を実行する（AI 分析の前だけ渡す） */
   onAnalyze?: () => void;
-  /** AI分析のボタンの文言（AI 下書きのフラグ on は「AI で下書きを作る」。DEC lead F9）。既定は従来どおり */
+  /** AI分析のボタンの文言（AI 下書きのフラグ on は「要件定義へ進む」（2026-11-25 まで「AI で下書きを作る」）。DEC lead F9）。既定は従来どおり */
   analyzeLabel?: string;
 }
 

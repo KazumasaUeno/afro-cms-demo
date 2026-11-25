@@ -46,11 +46,11 @@ const router = createBrowserRouter([
     element: <LiveShell />,
     children: [
       { index: true, element: <RoleHome /> },
-      // ダッシュボード（LIVE_DASHBOARD_TASKS_CONSULT U1。管理者は全案件・見るだけ、開発者は担当案件）。メニューへの追加と最初の画面の変更は U4
+      // ダッシュボード（LIVE_DASHBOARD_TASKS_CONSULT U1。管理者は全案件・見るだけ、開発者は担当案件）。メニューと最初の画面は U4（liveNav.ts・session.ts ROLE_HOME）
       { path: 'dashboard', element: <RoleRoute roles={admin}><LiveDashboardPage /></RoleRoute> },
-      // 構築タスク（LIVE_DASHBOARD_TASKS_CONSULT U2。管理者は見るだけ、開発者は担当案件で追加・状態変更。お客様は開けない）。メニューへの追加は U4
+      // 構築タスク（LIVE_DASHBOARD_TASKS_CONSULT U2。管理者は見るだけ、開発者は担当案件で追加・状態変更。お客様は開けない）。メニューは U4（liveNav.ts）
       { path: 'tasks', element: <RoleRoute roles={admin}><LiveTasksPage /></RoleRoute> },
-      // 相談（LIVE_DASHBOARD_TASKS_CONSULT U3。管理者は全案件・見るだけ、開発者は担当案件で返信、お客様は自分の案件で送る）。メニューへの追加は U4
+      // 相談（LIVE_DASHBOARD_TASKS_CONSULT U3。管理者は全案件・見るだけ、開発者は担当案件で返信、お客様は自分の案件で送る）。メニューは U4（liveNav.ts）
       { path: 'chat', element: <RoleRoute roles={admin}><LiveConsultPage /></RoleRoute> },
       { path: 'projects', element: <RoleRoute roles={admin}><ProjectsListPage /></RoleRoute> },
       // 管理者のプロジェクト作成（2026-11-25 ユーザー決定「管理者もプロジェクトを作れるように」。画面は開発者と同じ）

@@ -258,7 +258,8 @@ export const AI_SEND_NOTICE = {
 export const AI_DRAFT_COPY = {
   tabHearing: 'ヒアリング',
   tabAi: 'AI 下書き',
-  generate: 'AI で下書きを作る',
+  // ヒアリングの画面のボタン（2026-11-25 ユーザー指示で「AI で下書きを作る」から変更。押すと下書きの面へ進み、無ければ生成を始める）
+  generate: '要件定義へ進む',
   none: {
     title: 'AI で下書きを作る',
     body: 'ヒアリングの回答から、改善提案と要件定義書の下書きを作ります。下書きはお客様には見えません。確認・編集してから承認を依頼します。',

@@ -58,13 +58,17 @@ export interface ConsultSummary {
   lastName: string;
 }
 
-export function consultOf(v: unknown): ConsultSummary | null {
+/**
+ * 案件の consult（相談の要約）。lastAt は read() の serverTimestamps: 'estimate' で、送った直後（サーバーの時刻が未確定）も端末の推定時刻になる。
+ * それでも読めない値（壊れた・欠けた）は fallbackAt（案件の updatedAt）にする（1970 年にすると一覧の並び・「○分前」が壊れる。U3 レビュー #2）
+ */
+export function consultOf(v: unknown, fallbackAt?: string): ConsultSummary | null {
   if (!v || typeof v !== 'object') return null;
   const c = v as DocumentData;
   if (typeof c.count !== 'number' || c.count < 1) return null;
   return {
     count: c.count,
-    lastAt: toIso(c.lastAt) ?? new Date(0).toISOString(),
+    lastAt: toIso(c.lastAt) ?? fallbackAt ?? new Date(0).toISOString(),
     lastSide: c.lastSide === 'client' ? 'client' : 'afro',
     lastName: String(c.lastName ?? ''),
   };
@@ -73,6 +77,7 @@ export function consultOf(v: unknown): ConsultSummary | null {
 export function projectDoc(s: Snap): ProjectDoc {
   const d = read(s);
   const r = (d.requirements ?? {}) as DocumentData;
+  const updatedAt = toIso(d.updatedAt) ?? new Date(0).toISOString();
   return {
     id: s.id,
     clientName: String(d.clientName ?? ''),
@@ -92,8 +97,8 @@ export function projectDoc(s: Snap): ProjectDoc {
       approvalId: typeof r.approvalId === 'string' ? r.approvalId : undefined,
     },
     archived: d.archived === true,
-    updatedAt: toIso(d.updatedAt) ?? new Date(0).toISOString(),
-    consult: consultOf(d.consult),
+    updatedAt,
+    consult: consultOf(d.consult, updatedAt),
   };
 }
 

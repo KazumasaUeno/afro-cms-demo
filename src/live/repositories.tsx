@@ -19,7 +19,7 @@ import {
   taskDoc, toSession, type MessageDoc, type ProjectDoc, type ReqDoc, type TaskDoc, type TaskStatus,
 } from './model';
 import { TASK_LIMIT, newestTasksInOrder, type NewTaskInput } from './tasks';
-import { consultBlock, consultSide, seqId, validateConsultText } from './consult';
+import { cleanConsultText, consultBlock, consultSide, seqId, validateConsultText } from './consult';
 import { PendingAnswers } from './pendingAnswers';
 import { cancelScheduledWrites, type ScheduledWrite } from './pendingWrites';
 import type { LiveSession } from './session';
@@ -179,12 +179,14 @@ const msgsCol = (pid: string) => collection(db, 'projects', pid, 'messages');
 
 /**
  * 1 案件の会話（リアルタイム。開いている会話 1 本だけ）。seq の古い順で、新しい方から max 件（orderBy('seq') limitToLast。単一フィールド＝複合 Index 不要）。
- * 「さらに読む」は max を増やして購読し直す。一覧・未対応・バッジは案件一覧の consult（追加 Read 0）
+ * 「さらに読む」は max を増やして購読し直す（届くまで前の会話を出す。useSnapshot の keep）。一覧・未対応・バッジは案件一覧の consult（追加 Read 0）
  */
 export function useLiveMessages(projectId: string | null, max: number): Query<MessageDoc[]> {
   const key = projectId ? `m:${projectId}:${max}` : null;
   return useSnapshot<MessageDoc[]>(key, (next, fail) =>
-    onSnapshot(query(msgsCol(projectId!), orderBy('seq'), limitToLast(max)), (s) => next(s.docs.map(messageDoc)), fail), NO_MESSAGES);
+    onSnapshot(query(msgsCol(projectId!), orderBy('seq'), limitToLast(max)), (s) => next(s.docs.map(messageDoc)), fail), NO_MESSAGES,
+    // 件数を増やして購読し直す間は、同じ案件の今の会話を出し続ける（読み込み中に空の表示へ戻さない）
+    projectId ? `m:${projectId}` : undefined);
 }
 
 /**
@@ -195,7 +197,9 @@ export function useLiveMessages(projectId: string | null, max: number): Query<Me
 export function useLiveConsultActions(): { send: (projectId: string, text: string) => Promise<void> } {
   const { session } = useLiveData();
   return useMemo(() => ({
-    send: async (projectId, text) => {
+    send: async (projectId, raw) => {
+      // 向きの制御・制御文字を除いてから検査して送る（Rules も同じ文字を拒否する。consult.ts cleanConsultText）
+      const text = cleanConsultText(raw);
       const err = validateConsultText(text);
       if (err) throw new ConsultError(err);
       const { uid, account } = session;

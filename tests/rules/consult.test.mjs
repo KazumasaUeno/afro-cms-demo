@@ -103,6 +103,10 @@ describe('messages: 送信（メッセージ作成＋consult 更新を 1 回の�
   deny('本文 1001 字 → 拒否', 'client1', { msg: { text: 'あ'.repeat(1001) } });
   deny('本文が空白だけ → 拒否', 'client1', { msg: { text: ' \n　' } });
   deny('本文が数値 → 拒否', 'client1', { msg: { text: 1 } });
+  // 文字の向きの制御・制御文字（セキュリティ L-1。画面は cleanConsultText で送る前に除く）
+  for (const code of [0x202a, 0x202e, 0x2066, 0x2069, 0x00, 0x09, 0x0d, 0x1f, 0x7f]) {
+    deny(`本文に U+${code.toString(16).toUpperCase().padStart(4, '0')} → 拒否`, 'client1', { msg: { text: `請求書${String.fromCharCode(code)}を送ります` } });
+  }
   deny('未知のキー（attachment）→ 拒否（添付なし）', 'client1', { msg: { attachment: 'https://example.com/a.pdf' } });
   deny('schemaVersion が無い → 拒否', 'client1', { msg: { schemaVersion: undefined } });
   deny('consult に未知のキー（preview）→ 拒否', 'client1', { consult: { preview: 'トップページの写真' } });

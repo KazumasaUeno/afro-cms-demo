@@ -1,4 +1,4 @@
-import { Box, Button, Stack, Tab, Tabs, useMediaQuery, useTheme } from '@mui/material';
+import { Box, Button, Stack, useMediaQuery, useTheme } from '@mui/material';
 import { ArrowLeft, ListChecks, Sparkles } from 'lucide-react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useContext, useState } from 'react';
@@ -57,6 +57,9 @@ export default function RequirementsPage() {
     projectId: req.projectId, answers: req.answers, reqStatus: status, role: aiRole, isAssignedDeveloper: isAssigned, uid, flagMode: AI_FLAG_MODE,
     enabled: aiOn && status === 'draft',
   });
+  // ヒアリング → 下書き（要件定義）の 2 段。2026-11-25 ユーザー「AI 下書きは不要」で「ヒアリング / AI 下書き」のタブは出さない
+  // （タブは live のフラグ on のときだけ出ていたもので、demo は元から出ない）。ヒアリングの「要件定義へ進む」で下書きの面に切り替え、
+  // 「ヒアリングに戻る」で戻る。下書きの機能（aiDraft/・Functions・Rules）はそのまま
   const [tab, setTab] = useState<'hearing' | 'ai'>('hearing');
   const [autoStart, setAutoStart] = useState(false);
   const switchTab = (v: 'hearing' | 'ai') => {
@@ -95,7 +98,7 @@ export default function RequirementsPage() {
                 {status !== 'approved' ? '回答を見直す' : 'ヒアリングの回答'}
               </Button>
             )}
-            {aiOn ? <AiBadge label={AI_DRAFT_COPY.tabAi} tooltip={AI_LIVE_TOOLTIP} /> : <AiBadge />}
+            {aiOn ? <AiBadge label="AI" tooltip={AI_LIVE_TOOLTIP} /> : <AiBadge />}
           </Stack>
         )}
       />
@@ -116,26 +119,22 @@ export default function RequirementsPage() {
         </Reveal>
       ) : aiOn ? (
         <Reveal>
-          <Tabs value={tab} onChange={(_, v: 'hearing' | 'ai') => switchTab(v)} variant="fullWidth" aria-label="ヒアリングと AI 下書き"
-            sx={{ mb: 2, maxWidth: { md: 420 }, borderBottom: 1, borderColor: 'divider' }}>
-            <Tab value="hearing" label={AI_DRAFT_COPY.tabHearing} id="req-tab-hearing" aria-controls="req-panel-hearing" />
-            <Tab value="ai" label={AI_DRAFT_COPY.tabAi} id="req-tab-ai" aria-controls="req-panel-ai" />
-          </Tabs>
-          <Box role="tabpanel" id="req-panel-hearing" aria-labelledby="req-tab-hearing" hidden={tab !== 'hearing'}>
-            {tab === 'hearing' && (
-              <HearingEditor
-                editable
-                analyzeLabel={AI_DRAFT_COPY.generate}
-                onAnalyze={aiGen ? () => {
-                  setTab('ai');
-                  setAutoStart(true);
-                  window.scrollTo({ top: 0 });
-                } : undefined}
-              />
-            )}
-          </Box>
-          <Box role="tabpanel" id="req-panel-ai" aria-labelledby="req-tab-ai" hidden={tab !== 'ai'}>
-            {tab === 'ai' && (
+          {tab === 'hearing' ? (
+            <HearingEditor
+              editable
+              analyzeLabel={AI_DRAFT_COPY.generate}
+              // 生成できない人（internal の開発者）も、管理者が作った下書きを見られるように面だけ開く
+              onAnalyze={() => {
+                setTab('ai');
+                if (aiGen) setAutoStart(true);
+                window.scrollTo({ top: 0 });
+              }}
+            />
+          ) : (
+            <Box>
+              <Button size="small" startIcon={<ArrowLeft size={16} />} onClick={() => switchTab('hearing')} sx={{ mb: 1.5, ml: -1, minHeight: 44 }}>
+                ヒアリングに戻る
+              </Button>
               <AiDraftPanel
                 ai={ai} role={aiRole} isAssignedDeveloper={isAssigned} reqStatus={status}
                 missing={analysisBlockers(req.answers).map((q) => q.text)}
@@ -153,8 +152,8 @@ export default function RequirementsPage() {
                   return ok;
                 }}
               />
-            )}
-          </Box>
+            </Box>
+          )}
         </Reveal>
       ) : (
         <Reveal>

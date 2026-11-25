@@ -34,11 +34,12 @@ export const hasReply = (p: Pick<ProjectDoc, 'consult'>): boolean => p.consult?.
 
 /**
  * 未対応の案件の数（メッセージの数ではない。§4）。
- * 開発者は担当の案件（＝返信する案件。全員が返信者）、admin は全案件（見るだけ）。お客様は 0（対象外）
+ * 開発者は担当の案件（＝返信する案件。全員が返信者）、admin は全案件（見るだけ）。お客様は 0（対象外）。
+ * アーカイブした案件は数えない（返信できない＝対応しようがない。2026-11-25 lead SAFE ASSUMPTION。一覧の行の「未対応」の印はそのまま出す）
  */
-export function unansweredCount(docs: readonly Pick<ProjectDoc, 'consult' | 'memberUids'>[], role: LiveRole, uid: string): number {
+export function unansweredCount(docs: readonly Pick<ProjectDoc, 'consult' | 'memberUids' | 'archived'>[], role: LiveRole, uid: string): number {
   if (role === 'client') return 0;
-  return docs.filter((p) => (role === 'admin' || p.memberUids.includes(uid)) && isUnanswered(p)).length;
+  return docs.filter((p) => !p.archived && (role === 'admin' || p.memberUids.includes(uid)) && isUnanswered(p)).length;
 }
 
 /** 一覧の並び（最後のメッセージの新しい順。相談の無い案件は元の並びのまま下へ） */
@@ -53,6 +54,15 @@ export function consultRows<T extends Pick<ProjectDoc, 'consult'>>(docs: readonl
 export function consultPreview(c: ConsultSummary | null): string {
   if (!c) return 'まだメッセージはありません';
   return c.lastSide === 'client' ? `お客様（${c.lastName}）から` : `${c.lastName}（アフロ）が返信`;
+}
+
+/**
+ * 送る前に取り除く文字（2026-11-25 セキュリティ L-1）: 文字の向きを変える制御（U+202A〜202E・U+2066〜2069。表示を偽装できる）と、
+ * 改行以外の C0 制御文字・DEL。改行は LF にそろえ（CRLF・CR → LF）、タブは空白にする。firestore.rules の reChatControl が同じ文字を拒否する
+ */
+const CONSULT_STRIP = /[\u202A-\u202E\u2066-\u2069\u0000-\u0008\u000B-\u001F\u007F]/g;
+export function cleanConsultText(text: string): string {
+  return text.replace(/\r\n?/g, '\n').replace(/\t/g, ' ').replace(CONSULT_STRIP, '');
 }
 
 /** 送る文の検査（trim 後 1〜1000 字。Rules の reMaxChat と同じ数え方の上限側。エラーの文。問題なければ null） */

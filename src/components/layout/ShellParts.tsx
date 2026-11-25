@@ -20,9 +20,25 @@ import { navIndicatorSx, navToneSx, toneIndicator } from './navIndicator';
 /** 読み上げ用の補足（ラベルの後ろに付ける。見た目は数字だけ） */
 export const badgeLabel = (count: number) => (count > 0 ? `（未対応 ${count}件）` : '');
 
-/** 赤い件数の印。アイコンの右上に重ねる（親は position: relative） */
-export function NavCountBadge({ count, inline = false }: { count: number; inline?: boolean }) {
+/** 読み上げの補足。mark（live のお客様の「返信あり」）があれば数ではなくその文 */
+const markLabel = (count: number, mark?: string) => (count > 0 && mark ? `（${mark}）` : badgeLabel(count));
+
+/** 赤い件数の印。アイコンの右上に重ねる（親は position: relative）。dot: 数字を出さない点（live のお客様の「返信あり」） */
+export function NavCountBadge({ count, inline = false, dot = false }: { count: number; inline?: boolean; dot?: boolean }) {
   if (count <= 0) return null;
+  if (dot) {
+    return (
+      <Box
+        component="span"
+        aria-hidden
+        sx={{
+          ...(inline ? { ml: 'auto' } : { position: 'absolute', top: 0, right: 10 }),
+          width: 10, height: 10, borderRadius: '50%', display: 'inline-block', flexShrink: 0,
+          bgcolor: tokens.color.danger, boxShadow: `0 0 0 2px ${tokens.color.navBg}`,
+        }}
+      />
+    );
+  }
   return (
     <Box
       component="span"
@@ -40,7 +56,7 @@ export function NavCountBadge({ count, inline = false }: { count: number; inline
 }
 
 /** ドロワー（lg 未満）の行。M3 Navigation drawer item: 高さ 56・角丸 Full。選択中の印は中心から広がる */
-export function NavRow({ item, color, onNavigate, count = 0 }: { item: NavItem; color: string; onNavigate?: () => void; count?: number }) {
+export function NavRow({ item, color, onNavigate, count = 0, mark }: { item: NavItem; color: string; onNavigate?: () => void; count?: number; mark?: string }) {
   const { pathname } = useLocation();
   const active = isActive(item, pathname);
   const Icon = item.icon;
@@ -51,7 +67,7 @@ export function NavRow({ item, color, onNavigate, count = 0 }: { item: NavItem; 
       to={item.to}
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
-      aria-label={count > 0 ? `${item.label}${badgeLabel(count)}` : undefined}
+      aria-label={count > 0 ? `${item.label}${markLabel(count, mark)}` : undefined}
       sx={{
         width: '100%', justifyContent: 'flex-start', gap: 1.5, px: 2, height: 56, borderRadius: `${tokens.radius.full}px`,
         color: active ? tokens.color.onSecondaryContainer : tokens.color.onSurfaceVariant, fontWeight: active ? 700 : 500, fontSize: 14,
@@ -63,20 +79,20 @@ export function NavRow({ item, color, onNavigate, count = 0 }: { item: NavItem; 
       <Box component="span" className="nav-ind" aria-hidden />
       <Icon size={20} strokeWidth={active ? 2.2 : 1.9} color={item.tone ? 'currentColor' : active ? color : 'currentColor'} />
       <span>{item.label}</span>
-      <NavCountBadge count={count} inline />
+      <NavCountBadge count={count} inline dot={!!mark} />
     </ButtonBase>
   );
 }
 
 /** PC のナビゲーションレールの項目（M3 Expressive: 56×32 の印＋12px のラベル） */
-export function RailItem({ to, label, icon: Icon, active, color, hint, tone, count = 0 }: { to: string; label: string; icon: LucideIcon; active: boolean; color?: string; hint: string; tone?: NavItem['tone']; count?: number }) {
+export function RailItem({ to, label, icon: Icon, active, color, hint, tone, count = 0, mark }: { to: string; label: string; icon: LucideIcon; active: boolean; color?: string; hint: string; tone?: NavItem['tone']; count?: number; mark?: string }) {
   return (
     <Tooltip title={hint} placement="right" enterDelay={600}>
       <ButtonBase
         component={Link}
         to={to}
         aria-current={active ? 'page' : undefined}
-        aria-label={count > 0 ? `${label}${badgeLabel(count)}` : undefined}
+        aria-label={count > 0 ? `${label}${markLabel(count, mark)}` : undefined}
         sx={{
           width: '100%', flexDirection: 'column', gap: 0.5, py: 0.5, minHeight: 56, borderRadius: `${tokens.radius.md}px`,
           color: active ? tokens.color.onSurface : tokens.color.onSurfaceVariant,
@@ -92,7 +108,7 @@ export function RailItem({ to, label, icon: Icon, active, color, hint, tone, cou
       >
         <Box component="span" className="nav-ind" sx={{ position: 'relative', width: 56, height: 32, display: 'grid', placeItems: 'center', flexShrink: 0, color: active ? tokens.color.onSecondaryContainer : 'inherit' }}>
           <Icon size={22} strokeWidth={active ? 2.2 : 1.8} color={!tone && active && color ? color : 'currentColor'} />
-          <NavCountBadge count={count} />
+          <NavCountBadge count={count} dot={!!mark} />
         </Box>
         <Box component="span" sx={{ maxWidth: '100%', overflowWrap: 'anywhere' }}>{label}</Box>
       </ButtonBase>
@@ -338,7 +354,7 @@ export function ShellBottomNav({ children }: { children: ReactNode }) {
 }
 
 /** 下部タブの 1 つ。to があればリンク、無ければ onClick のボタン（「メニュー」） */
-export function BottomNavItem({ to, onClick, active, label, icon: Icon, count = 0, ariaLabel }: { to?: string; onClick?: () => void; active: boolean; label: string; icon: LucideIcon; count?: number; ariaLabel?: string }) {
+export function BottomNavItem({ to, onClick, active, label, icon: Icon, count = 0, ariaLabel, mark }: { to?: string; onClick?: () => void; active: boolean; label: string; icon: LucideIcon; count?: number; ariaLabel?: string; mark?: string }) {
   const link = to ? { component: Link, to } : { onClick };
   return (
     <ButtonBase
@@ -350,7 +366,7 @@ export function BottomNavItem({ to, onClick, active, label, icon: Icon, count = 
     >
       <Box component="span" className="nav-ind" sx={{ position: 'relative', display: 'grid', placeItems: 'center', width: 56, height: 28, color: active ? tokens.color.onSecondaryContainer : 'inherit' }}>
         <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
-        <NavCountBadge count={count} />
+        <NavCountBadge count={count} dot={!!mark} />
       </Box>
       {label}
     </ButtonBase>

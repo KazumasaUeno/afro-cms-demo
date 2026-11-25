@@ -1,11 +1,12 @@
 import { Box, ButtonBase, IconButton, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import { Send } from 'lucide-react';
-import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import type { ChatMessage } from '@/types';
 import { CHAT_LIMITS } from '@/data/chatLimits';
 import { formatDateTime } from '@/services/time';
 import { TOUCH } from '@/theme/media';
 import { tokens } from '@/theme/tokens';
+import { chatScrollMode, type ChatLogShape } from './chatScroll';
 
 /**
  * 相談チャットの表示部品（demo の ChatPage と live の LiveConsultPage で共有。2026-11-25 LIVE_DASHBOARD_TASKS_CONSULT U3 で ChatPage から切り出し）。
@@ -77,7 +78,7 @@ export function ChatInboxRow({ accent, clientName, siteName, time, preview, unan
  * メッセージの一覧（自分の側は右、相手は左）。新しいメッセージが届いたら（送ったら）いちばん下まで送る。
  * afroSuffix: 名前に「（アフロ）」を添える（お客様ポータル）。before: 一覧の先頭に置く要素（live の「さらに読む」）
  */
-export function ChatLog({ messages, mySide, afroSuffix, label, height, grow, scrollKey, before }: {
+export function ChatLog({ messages, mySide, afroSuffix, label, height, grow, scrollKey, before, loading = false }: {
   messages: readonly ChatMessage[];
   mySide: ChatMessage['side'];
   afroSuffix: boolean;
@@ -86,25 +87,43 @@ export function ChatLog({ messages, mySide, afroSuffix, label, height, grow, scr
   grow: boolean;
   scrollKey: string;
   before?: ReactNode;
+  /** 最初の読み込み中（0 件のとき「まだメッセージはありません」の代わりに読み込み中と出す。live だけが渡す） */
+  loading?: boolean;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
-  const lastId = messages[messages.length - 1]?.id;
-  useEffect(() => {
+  const shapeRef = useRef<ChatLogShape | null>(null);
+  // 一番下からの距離（スクロールのたびに覚える。古いメッセージを先頭に足したとき、見ていた位置に戻すため）
+  const fromBottomRef = useRef(0);
+  const shape: ChatLogShape = { key: scrollKey, firstId: messages[0]?.id, lastId: messages[messages.length - 1]?.id, count: messages.length };
+  // 描いた直後・表示する前に位置を決める（keep のときに一瞬上へ飛んで見えないように。chatScroll.ts）
+  useLayoutEffect(() => {
     const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length, lastId, scrollKey]);
+    const mode = chatScrollMode(shapeRef.current, shape);
+    shapeRef.current = shape;
+    if (!el) return;
+    if (mode === 'bottom') el.scrollTop = el.scrollHeight;
+    else if (mode === 'keep') el.scrollTop = el.scrollHeight - el.clientHeight - fromBottomRef.current;
+    fromBottomRef.current = el.scrollHeight - el.clientHeight - el.scrollTop;
+  });
 
   return (
     <Box
       ref={listRef}
       role="log"
       aria-live="polite"
+      aria-busy={loading || undefined}
       aria-label={label}
-      sx={{ px: { xs: 1.5, sm: 2 }, py: 2, height, minHeight: 240, overflowY: 'auto', bgcolor: tokens.color.bg, flex: grow ? 1 : undefined }}
+      onScroll={(e) => {
+        const el = e.currentTarget;
+        fromBottomRef.current = el.scrollHeight - el.clientHeight - el.scrollTop;
+      }}
+      sx={{ px: { xs: 1.5, sm: 2 }, py: 2, height, minHeight: 240, overflowY: 'auto', bgcolor: tokens.color.bg, flex: grow ? 1 : undefined, overflowAnchor: 'none' }}
     >
       {before}
       {messages.length === 0 ? (
-        <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 6 }}>まだメッセージはありません。</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 6 }}>
+          {loading ? 'メッセージを読み込んでいます…' : 'まだメッセージはありません。'}
+        </Typography>
       ) : (
         <Stack component="ul" spacing={1.5} sx={{ listStyle: 'none', m: 0, p: 0 }}>
           {messages.map((m) => {
