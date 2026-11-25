@@ -50,3 +50,13 @@ export const SITE_CHECK_THRESHOLDS = {
   pageMaxBytes: 1_000_000,
   responseMaxMs: 1_500,
 } as const;
+
+/**
+ * 出力トークンの上限（max_tokens）を提案の版ごとに（REQUIREMENTS_DOC_TEMPLATE.md §4.2）。
+ * v2 は DEFAULT_AI_CONFIG.maxTokens と同じ 12,000（変えない）。v3 はひな型の項目の文が増えるので 24,000（設計の最悪の見込み）。
+ * 上げ下げは費用の上限に効く（1 回の最悪 = 出力 24,000 × 出力単価。pricing.json）。変更はユーザー確認
+ */
+export const AI_MAX_TOKENS = {
+  v2: 12_000,
+  v3: 24_000,
+} as const;

@@ -5,8 +5,10 @@
  * - generateDraft は種別・HTTP 状態・request-id・使用量・所要時間だけを返す（本文・メッセージ全文は返さない）
  */
 import { createAnthropicDraftClient, type DraftClient } from './anthropicClient';
-import { DEFAULT_AI_CONFIG, generateDraft, type AiConfig, type GenerateDraftInput, type GenerateDraftResult } from './generateDraft';
+import { aiConfigFor, DEFAULT_AI_CONFIG, generateDraft, type AiConfig, type GenerateDraftInput, type GenerateDraftResult } from './generateDraft';
 import { PROMPT_VERSION } from './prompts/PRM-REQ-001';
+import { PROMPT_VERSION as PROMPT_VERSION_V3, TEMPLATE_KEY } from './prompts/PRM-REQ-001-2.0.0';
+import type { ProposalVersion } from './flags';
 import type { AiConfigKey } from './shared/answersHash';
 
 export type { AiConfig, AiConfigKey, GenerateDraftResult };
@@ -15,17 +17,21 @@ export type { AiConfig, AiConfigKey, GenerateDraftResult };
 export type GeneratorInput = Omit<GenerateDraftInput, 'config'>;
 
 export interface Generator {
-  /** configHash の元（モデル・promptVersion・effort） */
+  /** configHash の元（モデル・promptVersion・effort。v3 はひな型と版も） */
   config: AiConfigKey;
   generateDraft: (input: GeneratorInput) => Promise<GenerateDraftResult>;
 }
 
-export function configKeyOf(config: AiConfig, promptVersion: string = PROMPT_VERSION): AiConfigKey {
-  return { model: config.model, promptVersion, effort: config.effort };
+export function configKeyOf(config: AiConfig): AiConfigKey {
+  if (config.proposalVersion === 3) return { model: config.model, promptVersion: PROMPT_VERSION_V3, effort: config.effort, template: TEMPLATE_KEY };
+  return { model: config.model, promptVersion: PROMPT_VERSION, effort: config.effort };
 }
 
-/** 今の AI 設定（[PENDING U-3] モデルは評価の後にユーザーが確定する。generateDraft.ts の DEFAULT_AI_CONFIG） */
+/** 今の AI 設定（v2。[PENDING U-3] モデルは評価の後にユーザーが確定する。generateDraft.ts の DEFAULT_AI_CONFIG） */
 export const CURRENT_CONFIG_KEY: AiConfigKey = configKeyOf(DEFAULT_AI_CONFIG);
+
+/** 版（flags.ts の readProposalVersion の値）ごとの設定のキー。callable の configHash はこれを使う */
+export const configKeyForVersion = (v: ProposalVersion): AiConfigKey => configKeyOf(aiConfigFor(v));
 
 /** クライアント（本物または Stub）から生成器を作る */
 export function generatorFromClient(client: DraftClient, config: AiConfig = DEFAULT_AI_CONFIG, now: () => number = Date.now): Generator {

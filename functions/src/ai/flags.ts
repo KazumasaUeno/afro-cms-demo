@@ -14,6 +14,26 @@ export const AI_MODE_DEFAULT: AiMode = 'off';
 const modeParam = defineString('AI_REQUIREMENTS_MODE', { default: AI_MODE_DEFAULT });
 const allowlistParam = defineString('AI_REQUIREMENTS_PROJECT_ALLOWLIST', { default: '' });
 
+/**
+ * 生成する提案の版（REQUIREMENTS_DOC_TEMPLATE.md §7 Rollback「プロンプト版を設定で選ぶ」）。
+ * - AI_REQUIREMENTS_PROPOSAL_VERSION: '2'（PRM-REQ-001@1.0.0・今の 4 節の形）| '3'（PRM-REQ-001@2.0.0・会社標準ひな型の章立て）
+ * - 未設定・それ以外は 2（fail-closed。v3 の表示（U4）と Rules（U3）が揃うまで 3 にしない）。値の置き場は functions/.env.<projectId>
+ * - callable（configHash）と worker（生成器）の両方がこの値を読む。版が変わると configHash が変わるので、同じ回答でも作り直せる
+ */
+export const PROPOSAL_VERSION_DEFAULT = 2 as const;
+const proposalVersionParam = defineString('AI_REQUIREMENTS_PROPOSAL_VERSION', { default: String(PROPOSAL_VERSION_DEFAULT) });
+export type ProposalVersion = 2 | 3;
+
+export function parseProposalVersion(raw: unknown): ProposalVersion {
+  const v = typeof raw === 'string' ? raw.trim() : typeof raw === 'number' ? String(raw) : '';
+  return v === '3' ? 3 : 2;
+}
+
+/** 実行時の値（関数の中でだけ呼ぶ） */
+export function readProposalVersion(): ProposalVersion {
+  return parseProposalVersion(proposalVersionParam.value());
+}
+
 export interface AiFlags {
   mode: AiMode;
   allowlist: string[];

@@ -9,8 +9,9 @@ import { onCall } from 'firebase-functions/https';
 import { defineSecret } from 'firebase-functions/params';
 import { onTaskDispatched } from 'firebase-functions/tasks';
 import { handleSaveEdits } from './edits';
-import { readFlags } from './flags';
-import { createGenerator, CURRENT_CONFIG_KEY } from './generatePort';
+import { readFlags, readProposalVersion } from './flags';
+import { aiConfigFor } from './generateDraft';
+import { configKeyForVersion, createGenerator } from './generatePort';
 import { AI_WORKER } from './limits';
 import { functionsLogger } from './log';
 import { handleRequestDraft } from './request';
@@ -43,8 +44,8 @@ export function makeAiFunctions(opts: { region: string; enforceAppCheck: boolean
       db: getFirestore(),
       now: Date.now,
       flags: readFlags,
-      // 今の設定のハッシュだけ（callable は AI のクライアントを作らない・Secret を持たない）
-      configHash: () => configHash(CURRENT_CONFIG_KEY),
+      // 今の設定のハッシュだけ（callable は AI のクライアントを作らない・Secret を持たない）。版は AI_REQUIREMENTS_PROPOSAL_VERSION（既定 2）
+      configHash: () => configHash(configKeyForVersion(readProposalVersion())),
       enqueue: async ({ projectId, requestId }) =>
         getFunctions().taskQueue(`locations/${opts.region}/functions/${AI_TASK_FUNCTION}`).enqueue(
           { projectId, requestId },
@@ -73,7 +74,8 @@ export function makeAiFunctions(opts: { region: string; enforceAppCheck: boolean
       flags: readFlags,
       apiKey: () => ANTHROPIC_API_KEY.value() ?? '',
       // 本物のクライアントはここ（worker）でだけ Secret の値から作る
-      createGenerator: (key) => createGenerator(key),
+      // 版（AI_REQUIREMENTS_PROPOSAL_VERSION。既定 2）は callable の configHash と同じ値から選ぶ
+      createGenerator: (key) => createGenerator(key, { config: aiConfigFor(readProposalVersion()) }),
       siteCheck: (url) => runSiteCheck(url, { resolve: systemResolver, nowIso: () => new Date().toISOString() }),
       log: functionsLogger,
     });

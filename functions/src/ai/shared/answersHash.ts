@@ -30,8 +30,13 @@ export interface AiConfigKey {
   model: string;
   promptVersion: string;
   effort: string;
+  /**
+   * 要件定義書のひな型と版（提案 v3 だけ。'TPL-WEB-REQ@0.1'。REQUIREMENTS_DOC_TEMPLATE.md §4.1）。
+   * ひな型の版が上がれば同じ回答でも作り直せる。v2 は持たない（undefined は canonicalJson が落とすので v2 のハッシュは今と同じ）
+   */
+  template?: string;
 }
 
 export function configHash(c: AiConfigKey): Promise<string> {
-  return sha256Hex(canonicalJson({ v: 1, model: c.model, promptVersion: c.promptVersion, effort: c.effort }));
+  return sha256Hex(canonicalJson({ v: 1, model: c.model, promptVersion: c.promptVersion, effort: c.effort, template: c.template }));
 }

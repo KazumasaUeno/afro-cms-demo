@@ -8,6 +8,8 @@
  */
 import { FieldValue, Timestamp, type DocumentReference, type DocumentSnapshot, type Firestore, type Transaction } from 'firebase-admin/firestore';
 import { validateEditable, EditableError } from './editable';
+import { validateEditableV3 } from './reqDocEditable';
+import type { ReqDocServerFacts } from './reqDocPostprocess';
 import { generationAllowed, type AiFlags, type FlagRole } from './flags';
 import type { GenerateDraftResult, Generator } from './generatePort';
 import { AI_LEASE } from './limits';
@@ -35,6 +37,34 @@ export type TaskOutcome = 'stale' | 'refunded' | 'ready' | 'failed' | 'fenced' |
 
 const asList = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : typeof v === 'string' && v ? [v] : []);
 const safeId = (v: unknown) => (typeof v === 'string' && /^[\w-]{1,128}$/.test(v) ? v : undefined);
+
+/** 日付（ISO 文字列か Timestamp）→ 'yyyy-mm-dd'（読めなければ undefined） */
+function dayOf(v: unknown): string | undefined {
+  if (typeof v === 'string') return /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : undefined;
+  if (v instanceof Timestamp) return v.toDate().toISOString().slice(0, 10);
+  return undefined;
+}
+
+/**
+ * v3 でサーバーが転記する材料（REQUIREMENTS_DOC_TEMPLATE.md §2 の fill:'server'）。**AI へは送らない**（generateDraft の buildPayload は読まない）。
+ * 案件の欄（siteName・clientName）・DNS の選択式の回答（q-dns-owner・q-dns-switch。自由記述の q-infra・q-dns-note は読まない）・
+ * 日程（案件の文書に schedule があるときだけ。[INFERENCE] 今の live の projects には schedule が無い＝firestore.rules validProject）
+ */
+export function serverFactsOf(project: Record<string, unknown> | undefined, answers: Record<string, AnswerValue>): ReqDocServerFacts {
+  const p = project ?? {};
+  const text = (v: unknown) => (typeof v === 'string' ? v : undefined);
+  const sch = (p.schedule && typeof p.schedule === 'object' ? p.schedule : {}) as Record<string, unknown>;
+  const facts: ReqDocServerFacts = {
+    siteName: text(p.siteName),
+    clientName: text(p.clientName),
+    dnsOwner: text(answers['q-dns-owner']),
+    dnsSwitch: text(answers['q-dns-switch']),
+    releaseDate: dayOf(sch.releaseDate),
+    deliveryDate: dayOf(sch.deliveryDate),
+    buildDue: dayOf(sch.buildDue),
+  };
+  return Object.fromEntries(Object.entries(facts).filter(([, v]) => v !== undefined)) as ReqDocServerFacts;
+}
 
 export async function handleTask(data: unknown, deps: TaskDeps): Promise<TaskOutcome> {
   const started = deps.now();
@@ -91,7 +121,7 @@ export async function handleTask(data: unknown, deps: TaskDeps): Promise<TaskOut
       const answers = (rSnap.data()?.answers ?? {}) as Record<string, AnswerValue>;
       if (!p || p.archived === true || p.requirements?.status !== 'draft' || missingRequired(answers).length > 0) return { kind: 'precondition' as const };
       tx.update(aiRef, { 'job.leaseUntil': Timestamp.fromMillis(deps.now() + AI_LEASE.workerSeconds * 1000) });
-      return { kind: 'go' as const, answers };
+      return { kind: 'go' as const, answers, facts: serverFactsOf(p, answers) };
     });
     if (start.kind === 'stale') {
       log('info', 'stale');
@@ -114,6 +144,8 @@ export async function handleTask(data: unknown, deps: TaskDeps): Promise<TaskOut
         siteFacts: site.siteCheck.items.length > 0 ? site.siteCheck : null,
         siteText: site.siteText,
         competitorHosts: sent.competitorHosts,
+        // v3 の転記だけに使う（AI へは送らない）。v2 の生成器は読まない
+        serverFacts: start.facts,
       });
     } catch (e) {
       // generateDraft は失敗を値で返す。ここに来るのは想定外。本文は持たないので種別だけ（握り潰さずログに残す）
@@ -130,7 +162,10 @@ export async function handleTask(data: unknown, deps: TaskDeps): Promise<TaskOut
     if (result.ok) {
       try {
         const p = result.proposal;
-        editable = validateEditable({ summary: p.summary, points: p.points, draft: p.draft });
+        // v3 は自分自身と照らして検査する（キーの過不足・固定は確認中だけ・上限）
+        editable = p.version === 3
+          ? validateEditableV3({ summary: p.summary, points: p.points, doc: p.doc }, p)
+          : validateEditable({ summary: p.summary, points: p.points, draft: p.draft });
       } catch (e) {
         if (!(e instanceof EditableError)) throw e;
         result = { ok: false, code: 'schema', anthropicRequestId: result.anthropicRequestId, usage: result.usage, durationMs: result.durationMs };
@@ -154,7 +189,7 @@ export async function handleTask(data: unknown, deps: TaskDeps): Promise<TaskOut
         // サーバー欄の正は U3 の result.proposal（除去済みの文・siteCheck は項目が無ければ null。Lead DECISION 2026-11-24 CR-M2）
         const p = result.proposal;
         const generated = {
-          version: 2,
+          version: p.version,
           hostname: p.hostname,
           issue: p.issue,
           purposes: p.purposes,
@@ -162,6 +197,7 @@ export async function handleTask(data: unknown, deps: TaskDeps): Promise<TaskOut
           competitors: p.competitors,
           siteCheck: p.siteCheck,
           origin: p.origin,
+          ...(p.version === 3 ? { template: { id: p.template.id, version: p.template.version } } : {}),
           ...editable,
           flags: { unsupportedNumbers: (result.flags?.unsupportedNumbers ?? []).filter((x) => typeof x === 'string').slice(0, 50).map((x) => x.slice(0, 50)) },
         };

@@ -218,7 +218,15 @@ export const REQ_DOC_LIMITS = {
   openQuestion: 200,
   /** 表紙の各欄（会社名と役職まで。氏名は入れない＝Q-11） */
   coverField: 100,
+  /**
+   * 22 章「未決事項」（t22-01）の文だけの上限: 未確定の項目の一覧（itemText まで）＋確認事項（openQuestions 件 ×（openQuestion＋行頭「・」と改行））。
+   * [DECISION ai-engineer U2 2026-11-25] 設計 §3.1 が確認事項 20 件×200 字をこの項目に入れるとしており、itemText 400 では入らないため
+   */
+  openItemsText: 400 + 20 * (200 + 2),
 } as const;
+
+/** v3 の項目の根拠キー（AI_EVIDENCE_KEYS ＋ 'site_text'＝現行トップページの本文。AI の文に付けてよいキー。サーバーの転記は 'project:*' などカタログの feeds を付ける） */
+export const REQ_DOC_AI_EVIDENCE_KEYS = [...AI_EVIDENCE_KEYS, 'site_text'] as const;
 
 /**
  * 項目の状態。proposed＝確定案（選択は「採用案」）／open＝未確定／na＝対象外（選択は「不採用」。理由の文が必須）／

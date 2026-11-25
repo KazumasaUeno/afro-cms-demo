@@ -484,3 +484,68 @@ test('配線: requestRequirementsDraft・saveAiDraftEdits が export され、�
     assert.equal(body.error?.message, 'feature-disabled');
   }
 });
+
+// ---------- 提案 v3（要件定義書ひな型 U2。AI_REQUIREMENTS_PROPOSAL_VERSION=3 の生成器。クライアントだけ Stub） ----------
+const { aiConfigFor } = lib('generateDraft');
+const { configKeyForVersion } = lib('generatePort');
+const V3_OUT = {
+  summary: 'スマホで見やすくします。',
+  points: VALID_OUT.points,
+  doc: { items: [{ id: 't01-03', status: 'proposed', text: 'スマホで見づらいことが課題です。', evidence: ['q-issue'] }, { id: 't11-01', status: 'proposed', text: 'x', evidence: ['q-issue'] }], added: [], questions: ['公開時期は？'] },
+};
+function wiredV3() {
+  const seen = { params: [] };
+  const deps = tdeps(okResult, {
+    createGenerator: (key) => createGenerator(key, {
+      config: aiConfigFor(3),
+      makeClient: () => ({ create: async (params) => { seen.params.push(params); return { message: stubMsg({ content: [{ type: 'text', text: JSON.stringify(V3_OUT) }] }), requestId: 'req_v3' }; } }),
+    }),
+  });
+  return { deps, seen };
+}
+const seedV3Facts = () => Promise.all([
+  db.doc('projects/p1').update({ siteName: 'ショップ公式', clientName: '株式会社ショップ' }),
+  db.doc('projects/p1/requirements/current').update({ 'answers.q-dns-owner': 'アフロ', 'answers.q-dns-note': '注意 DNSNOTE-MARK-5d' }),
+]);
+test('v3: worker が v3 を書く（全 129 項目・固定は確認中・転記・ひな型の版・configHash は v3）。送る内容に案件名・DNS が無い', async () => {
+  await seedV3Facts();
+  await call('devA', {}, { configHash: () => configHash(configKeyForVersion(3)) });
+  const { deps, seen } = wiredV3();
+  assert.equal(await handleTask(enqueued[0], deps), 'ready');
+  const d = await ai();
+  assert.deepEqual([d.generated.version, d.generated.template, d.generated.origin.promptVersion], [3, { id: 'TPL-WEB-REQ', version: '0.1' }, 'PRM-REQ-001@2.0.0']);
+  assert.equal(Object.keys(d.generated.doc.items).length, 129);
+  assert.deepEqual(d.generated.doc.items['t11-01'], { status: 'std_pending', text: '', evidence: [], by: 'server' });
+  assert.equal(d.generated.doc.items['t01-01'].text, 'ショップ公式');
+  assert.equal(d.generated.doc.items['t12-01'].text, 'ドメインの管理: アフロ');
+  assert.equal(d.configHash, await configHash(configKeyForVersion(3)));
+  assert.equal(seen.params[0].max_tokens, 24_000);
+  const body = JSON.stringify(seen.params[0]);
+  for (const leak of ['ショップ公式', '株式会社ショップ', 'q-dns-owner', 'DNSNOTE-MARK-5d', '管理会社']) assert.equal(body.includes(leak), false, leak);
+  assert.equal(JSON.stringify(d.generated).includes('DNSNOTE-MARK-5d'), false);
+  // 版の設定が 2 に戻ると configHash が変わり、再利用しない（作り直せる）
+  assert.equal((await call('devA', { requestId: uuid(2) }, { configHash: () => configHash(configKeyForVersion(2)) })).state, 'running');
+});
+test('v3: 編集の保存（写しは通る・固定の変更と v2 の形は拒否）。canary がログ・エラーに出ない', async () => {
+  await seedV3Facts();
+  await call('devA', {});
+  assert.equal(await handleTask(enqueued[0], wiredV3().deps), 'ready');
+  const g = (await ai()).generated;
+  const ed = structuredClone({ summary: g.summary, points: g.points, doc: g.doc });
+  ed.doc.items['t02-02'] = { ...ed.doc.items['t02-02'], status: 'proposed', text: '設計・制作・公開' };
+  assert.deepEqual(await save('devA', ed), { ok: true });
+  assert.equal((await ai()).edited.doc.items['t02-02'].text, '設計・制作・公開');
+  const errors = [];
+  const bad = structuredClone(ed); bad.doc.items['t11-01'] = { status: 'proposed', text: CANARY_ANS, evidence: [], by: 'server' };
+  await assert.rejects(save('devA', bad), (e) => (errors.push(e.message), e.code === 'invalid-argument'));
+  const extra = structuredClone(ed); extra.doc.items[CANARY_SITE] = {};
+  await assert.rejects(save('devA', extra), (e) => (errors.push(e.message), e.code === 'invalid-argument'));
+  await assert.rejects(save('devA', EDITED), (e) => (errors.push(e.message), e.message === 'edited is invalid: version'));
+  assert.equal((await ai()).edited.doc.items['t11-01'].status, 'std_pending');
+  const hay = JSON.stringify({ logs, errors });
+  for (const c of [CANARY_ANS, CANARY_SITE, CANARY_KEY]) assert.equal(hay.includes(c), false, c);
+});
+test('v2 の下書きに v3 の形の編集は拒否', async () => {
+  await withGenerated();
+  await assert.rejects(save('devA', { summary: '', points: [], doc: {} }), (e) => e.message === 'edited is invalid: version');
+});
