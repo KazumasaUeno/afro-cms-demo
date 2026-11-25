@@ -231,3 +231,11 @@
 - [INFERENCE] OIDC の SA は enqueue した関数の実行 SA（firebase-admin `functions-api-client-internal.js` updateTaskPayload が `getServiceAccount()` を `oidcToken.serviceAccountEmail` にする）＝ `afro-cms-functions@`。internal で最初のタスクが動いた時点で確定する
 - [FACT] callable 2 本（requestRequirementsDraft・saveAiDraftEdits）は `allUsers` の invoker（callable の通常。認証・権限はコード側）。実行 SA は `afro-cms-functions@`
 - Hosting: dist-live（`VITE_FEATURE_AI_REQUIREMENTS=internal`）をデプロイ。サーバが off の間は AI パネルが「この案件では使えません」になる
+
+## Rules・R2 実行記録 2026-11-25（JST。ユーザー GO「Rules と R2 やって」）
+
+- Firestore Rules をデプロイ（aiDrafts・aiUsage・提案 v2。rules:check OK・test:rules 392/392）。G-7 のときに出し忘れていた（AI 機能は Rules が無いと下書きを読めない）。戻し: a3a8bc8 の `firestore.rules` を `--only firestore:rules` で出し直す
+- R2: compute 既定 SA（`640072999586-compute@`）に `roles/cloudbuild.builds.builder` を付け、`roles/editor` を外した。[FACT] 残る role は builds.builder・eventarc.eventReceiver・run.invoker
+- 確認: `--only functions` だと変更なしの関数は Skipped（ビルドが走らない）→ `firebase deploy --only functions:provisionInvitee` で 1 本をビルドし直した。[FACT] `gcloud builds list --region asia-northeast1` 最新 2026-11-25T01:55:57Z SUCCESS（SA は compute 既定）。`ANTHROPIC_API_KEY` の `secretAccessor` は worker だけのまま
+- 戻し: `gcloud projects add-iam-policy-binding afro-cms-4a6ff --member serviceAccount:640072999586-compute@developer.gserviceaccount.com --role roles/editor --condition=None`
+- 気づき: デプロイ前の test:functions がエミュレータの関数読み込み 60 秒の時間切れで 16 件落ちることがある（11-25 に 2 回。単独再実行で 201/201）。docs/TODO.md に記載
