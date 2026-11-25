@@ -87,10 +87,13 @@ test('フラグ1: 未設定・空・未知の値は off', () => {
   for (const v of [undefined, '', 'ON!', 'true', 1]) assert.equal(parseMode(v), 'off');
   assert.equal(parseMode(' Internal '), 'internal');
 });
-test('フラグ2: コードの既定が off（ファイルが無くても off）・本番の値も off', () => {
+// 本番の値は off か internal（2026-11-25 ユーザー GO で社内試験の internal へ。on は法務の記録が要る＝deploy の検査が止める）
+test('フラグ2: コードの既定が off（ファイルが無くても off）・本番の値は off か internal（on ではない）', () => {
   assert.equal(AI_MODE_DEFAULT, 'off');
   assert.match(readFileSync(new URL('../../functions/src/ai/flags.ts', import.meta.url), 'utf8'), /defineString\('AI_REQUIREMENTS_MODE', \{ default: AI_MODE_DEFAULT \}\)/);
-  assert.match(readFileSync(new URL('../../functions/.env.afro-cms-4a6ff', import.meta.url), 'utf8'), /^AI_REQUIREMENTS_MODE=off$/m);
+  const env = readFileSync(new URL('../../functions/.env.afro-cms-4a6ff', import.meta.url), 'utf8');
+  assert.match(env, /^AI_REQUIREMENTS_MODE=(off|internal)$/m);
+  assert.doesNotMatch(env, /^AI_REQUIREMENTS_MODE=\s*on\s*$/im);
 });
 const internal = (allowlist) => () => ({ mode: 'internal', allowlist });
 test('フラグ3: internal で admin 以外は拒否', () => assert.rejects(call('devA', {}, { flags: internal(['p1']) }), code('feature-disabled')));
