@@ -4,7 +4,7 @@ import { Check, ChevronDown, Menu as MenuIcon, Moon, Sun, type LucideIcon } from
 import { useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { tokens } from '@/theme/tokens';
-import { LANDSCAPE_PHONE } from '@/theme/media';
+import { LANDSCAPE_PHONE, TOUCH } from '@/theme/media';
 import { useThemeMode } from '@/theme/ThemeMode';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { isActive, type AreaDef, type NavItem } from './nav';
@@ -226,7 +226,7 @@ export function ShellTopBar({ onMenu, children }: { onMenu: () => void; children
         boxShadow: `inset 0 -1px 0 ${tokens.color.surfaceContainerHighest}`,
       }}
     >
-      <IconButton onClick={onMenu} aria-label="メニューを開く" sx={{ display: { lg: 'none' }, ml: -1 }}>
+      <IconButton onClick={onMenu} aria-label="メニューを開く" sx={{ display: { lg: 'none' }, ml: -1, [TOUCH]: { minWidth: 44, minHeight: 44 } }}>
         <MenuIcon size={20} />
       </IconButton>
       <Box sx={{ display: { xs: 'none', sm: 'block', lg: 'none' } }}><LogoMark size={28} /></Box>
@@ -245,6 +245,7 @@ export function ThemeToggle() {
     <Tooltip title={label}>
       <IconButton
         aria-label={label}
+        sx={{ [TOUCH]: { minWidth: 44, minHeight: 44 } }}
         onClick={(e) => {
           const r = e.currentTarget.getBoundingClientRect();
           setPref(next, { x: r.left + r.width / 2, y: r.top + r.height / 2 });

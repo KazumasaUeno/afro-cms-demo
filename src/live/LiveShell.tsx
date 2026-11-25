@@ -1,10 +1,10 @@
 import { Box, Button, Dialog, DialogActions, DialogContent, IconButton, Stack, Tooltip, Typography } from '@mui/material';
-import { LogOut, Menu as MenuIcon, MessageSquareText, WifiOff } from 'lucide-react';
+import { LogOut, Menu as MenuIcon, TriangleAlert, WifiOff } from 'lucide-react';
 import { Suspense, useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Logo } from '@/components/layout/Logo';
 import { RouteLoader } from '@/components/layout/RouteLoader';
-import { AREAS, isActive, type AreaDef, type AreaId, type NavItem } from '@/components/layout/nav';
+import { AREAS, isActive, type AreaDef } from '@/components/layout/nav';
 import {
   AccountButtonView, AreaBadge, BottomNavItem, DrawerColumn, DrawerNav, NavRow, ProjectSwitcherView, RailItem,
   ShellBottomNav, ShellColumn, ShellDrawer, ShellRail, ShellRoot, ShellTopBar, ThemeToggle,
@@ -13,36 +13,12 @@ import { useToast } from '@/hooks/useToast';
 import { useRepositories } from '@/repositories';
 import { tokens } from '@/theme/tokens';
 import { useLiveAuth } from './auth';
+import { LIVE_NAV, ROLE_AREA } from './liveNav';
 import { flushBeforeSignOut, type FlushResult } from './pendingWrites';
 import { LiveDataProvider } from './repositories';
 import { LiveSessionContext, ROLE_HOME, type LiveAccount, type LiveRole } from './session';
 
 const ROLE_LABEL: Record<LiveRole, string> = { admin: '管理者', developer: '開発者', client: 'お客様' };
-
-/** 役割ごとの画面の見た目（色・アイコン・名前）は demo の立場（AREAS）と同じものを使う */
-const ROLE_AREA: Record<LiveRole, AreaId> = { admin: 'admin', developer: 'dev', client: 'portal' };
-
-/** demo のメニュー項目（同じ画面は同じアイコン・名前）。live にある画面だけを出す */
-function demoItem(area: AreaId, to: string): NavItem {
-  const item = AREAS[area].items.find((i) => i.to === to);
-  if (!item) throw new Error(`demo のメニューに ${to} が無い`);
-  // 件数バッジは demo のデータで数えるので live では使わない
-  return { ...item, badge: undefined };
-}
-
-/**
- * 役割ごとのナビ（§14 の範囲内の画面だけ。2026-11-25 ユーザー選択 A: demo と同じ枠で、live にある画面だけ）。
- * 開発者のヒアリングは demo ではメニューに無い（プロジェクトの中から開く）が、live は以前からメニューに出していたので残す。
- * そのため demo の「プロジェクト」の match（/dev/hearing を含む）を live の画面だけに絞る
- */
-const NAV: Record<LiveRole, NavItem[]> = {
-  admin: [demoItem('admin', '/projects'), demoItem('admin', '/users')],
-  developer: [
-    { ...demoItem('dev', '/dev/projects'), match: ['/dev/projects'] },
-    { to: '/dev/hearing', label: 'ヒアリング', icon: MessageSquareText, match: ['/dev/hearing'], hint: '選んでいるプロジェクトのヒアリング' },
-  ],
-  client: [demoItem('portal', '/portal/approvals')],
-};
 
 function useOnline(): boolean {
   const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
@@ -149,7 +125,19 @@ function DevProjectSwitcher() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const onDetail = DEV_DETAIL.test(pathname) && pathname !== '/dev/projects/new';
-  if (list.loading && !list.data.length) return null;
+  // 読み込み中は同じ大きさの枠だけ出して、上部バーの並びをずらさない
+  if (list.loading && !list.data.length) {
+    return <Box aria-hidden sx={{ width: { xs: 120, sm: 180 }, height: { xs: 44, md: 36 }, flexShrink: 0, borderRadius: '10px', bgcolor: tokens.color.surfaceContainer }} />;
+  }
+  // 読めなかったときに「担当プロジェクトがありません」と出さない（無いのではなく読めていない）
+  if (list.error && !list.data.length) {
+    return (
+      <Stack direction="row" spacing={0.75} alignItems="center" role="status" sx={{ minWidth: 0, color: tokens.color.warningInk }}>
+        <TriangleAlert size={16} style={{ flexShrink: 0 }} aria-hidden />
+        <Typography variant="caption" noWrap sx={{ color: 'inherit', fontWeight: 600 }}>プロジェクトを読み込めませんでした</Typography>
+      </Stack>
+    );
+  }
   return (
     <ProjectSwitcherView
       current={list.data.find((p) => p.id === currentId)}
@@ -213,7 +201,7 @@ export function LiveShell() {
   const { session } = state;
   const { account } = session;
   const area: AreaDef = AREAS[ROLE_AREA[account.role]];
-  const items = NAV[account.role];
+  const items = LIVE_NAV[account.role];
   const close = () => setOpen(false);
 
   return (
