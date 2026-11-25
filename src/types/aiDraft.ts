@@ -191,3 +191,120 @@ export interface AiUsageDoc {
   /** 利用者の日次の件数（quota.ts の上限に使う）。鍵は `${JST の yyyy-mm-dd}:${uid}`（月の文書の中に日付つきで持つ） */
   byUid: Record<string, number>;
 }
+
+// ---------------------------------------------------------------------------------------------
+// 提案 v3（会社標準ひな型の章立ての要件定義書。docs/design/REQUIREMENTS_DOC_TEMPLATE.md §3）
+// - 追加だけ。v1（Proposal）・v2（ProposalV2）と AI_DRAFT_LIMITS は変えない
+// - 章・項目の一覧（カタログ）は src/shared/ai/reqDocCatalog.ts（版ごと）。doc.items のキーはカタログの項目 id と過不足なく一致させる（検査は U2 の saveAiDraftEdits）
+// - [U4 で行う] StoredProposal へ ProposalV3 を足すのは、版で分ける表示・保存（src/live/model.ts・requirementsDoc.ts・ProposalView）と同時に行う。
+//   今足すと v1 として扱う分岐の型が崩れるため、U1 では型と判定関数だけを置く
+// ---------------------------------------------------------------------------------------------
+
+/** v3 の上限（設計 §3.1 [TARGET]。文字数は String の長さ） */
+export const REQ_DOC_LIMITS = {
+  /** 項目の文（確定内容／採否・仕様） */
+  itemText: 400,
+  /** 項目 1 件の根拠キー数 */
+  itemEvidence: 5,
+  /** AI追加の件数・各欄 */
+  added: 10,
+  addedLabel: 40,
+  addedReason: 200,
+  /** 章末の「特記事項・対象外・追加費用・承認状況」 */
+  notes: 400,
+  /** 22 章「未決事項」に入れる確認事項の件数と 1 件の長さ */
+  openQuestions: 20,
+  openQuestion: 200,
+  /** 表紙の各欄（会社名と役職まで。氏名は入れない＝Q-11） */
+  coverField: 100,
+} as const;
+
+/**
+ * 項目の状態。proposed＝確定案（選択は「採用案」）／open＝未確定／na＝対象外（選択は「不採用」。理由の文が必須）／
+ * std_pending＝確認中（標準仕様の確定後に記載。**固定の項目だけ・固定はこれ以外にできない**＝Q-1）
+ */
+export const REQ_DOC_ITEM_STATUSES = ['proposed', 'open', 'na', 'std_pending'] as const;
+export type ReqDocItemStatus = (typeof REQ_DOC_ITEM_STATUSES)[number];
+
+/** 項目の文を書いた者（ai＝AI の下書き／server＝サーバーの転記／human＝担当開発者） */
+export const REQ_DOC_ITEM_AUTHORS = ['ai', 'server', 'human'] as const;
+export type ReqDocItemAuthor = (typeof REQ_DOC_ITEM_AUTHORS)[number];
+
+/** ひな型の区分（固定 / 個別 / 選択） */
+export const REQ_DOC_KUBUN = ['fixed', 'individual', 'optional'] as const;
+export type ReqDocKubun = (typeof REQ_DOC_KUBUN)[number];
+
+/** 誰が下書きするか（設計 §2）。standard＝固定。アフロの標準仕様が決まるまで「確認中」で、AI は書かない */
+export const REQ_DOC_FILLS = ['ai', 'server', 'human', 'standard'] as const;
+export type ReqDocFill = (typeof REQ_DOC_FILLS)[number];
+
+export interface ReqDocTemplateRef {
+  id: 'TPL-WEB-REQ';
+  /** 作った時のひな型の版（表示はこの版のカタログで描く） */
+  version: string;
+}
+
+/** ひな型の 1 項目の中身（doc.items[itemId]） */
+export interface ReqDocItem {
+  status: ReqDocItemStatus;
+  /** ≤ REQ_DOC_LIMITS.itemText。std_pending は空 */
+  text: string;
+  /** 根拠のキー（質問 ID・基本チェックのキー等）≤ REQ_DOC_LIMITS.itemEvidence。proposed・na は 1 つ以上 */
+  evidence: string[];
+  /** 開発者が書き換えられない（U2 の検査） */
+  by: ReqDocItemAuthor;
+}
+
+/** AI追加（ひな型に無い項目の提案。≤ REQ_DOC_LIMITS.added 件） */
+export interface ReqDocAddedItem {
+  /** 'a01' 形式 */
+  id: string;
+  /** カタログの章 id（'c07' 形式） */
+  chapterId: string;
+  label: string;
+  status: 'proposed' | 'na';
+  text: string;
+  reason: string;
+  /** 1〜REQ_DOC_LIMITS.itemEvidence 件 */
+  evidence: string[];
+  source: 'ai_added';
+}
+
+/** 表紙（会社名と役職まで。Q-11） */
+export interface ReqDocCover {
+  client: string;
+  vendor: string;
+  author: string;
+  approver: string;
+}
+
+export interface ProposalV3Doc {
+  /** カタログの全項目（キーはカタログの項目 id と一致・過不足なし） */
+  items: Record<string, ReqDocItem>;
+  added: ReqDocAddedItem[];
+  /** 章 id → 章末の特記欄（特記欄の無い 16 章を除く） */
+  notes: Record<string, string>;
+  cover: ReqDocCover;
+}
+
+/** v3 で開発者が直せる欄（aiDrafts.edited）。summary・points は v2 と同じ（改善提案は付録で残す＝Q-4） */
+export interface AiEditableV3 {
+  summary: string;
+  points: ProposalV2Point[];
+  doc: ProposalV3Doc;
+}
+
+/** お客様へ出す提案 v3（requirements/current.proposal と approvals の写し）。flags は含めない */
+export interface ProposalV3 extends ProposalV2ServerFields, AiEditableV3 {
+  version: 3;
+  template: ReqDocTemplateRef;
+}
+
+/** AI の出力 v3（aiDrafts.generated）。flags はサーバー欄で、提案には写らない */
+export interface AiGeneratedV3 extends ProposalV3 {
+  flags?: { unsupportedNumbers?: string[] };
+}
+
+export function isProposalV3(p: unknown): p is ProposalV3 {
+  return !!p && typeof p === 'object' && 'version' in p && (p as { version: unknown }).version === 3;
+}

@@ -929,3 +929,7 @@
   - 選んだ開発者は作成したプロジェクトを開発者画面で開き、ヒアリングの入力・AI 分析・承認依頼を従来どおり進められる。担当を選ばずに作った案件は、割り当てるまで開発者画面に出ない
   - 開発者の作成（自分が担当になる）は変わらない。作成後に管理者ができることも従来どおり担当の割り当てだけ（基本情報の編集・アーカイブ・確認依頼は開発者）。デモ（demo）は変わらない
 - Firestore Rules（未デプロイ）: 案件作成の判定を `projCreateOk` にまとめ、admin の分岐を追加（ownerUid・createdBy は本人、memberUids は文字列の重複なしの 0〜20 件で admin 自身は入れない。validProject・requirements の初期値・archived・作成日時・URL の鍵の一意性は開発者と同じ）。siteKeys の作成と、案件作成と同じバッチの requirements/current の作成を admin にも許す（既存の案件への requirements/current の単独作成は admin には不可）
+
+## Unreleased (要件定義書ひな型)
+
+- U1 カタログと型（画面・生成・Rules は未変更・未デプロイ）: 会社標準ひな型 TPL-WEB-REQ 0.1 の項目カタログ `src/shared/ai/reqDocCatalog.ts`（章 19・項目 129＝固定 32／個別 74／選択 23。09・13・20 章は欠番のまま。項目ごとに区分・確認対象・下書きの担当 ai 41／server 8／human 48／standard 32・材料の質問 ID）。`scripts/gen-ai-shared.mjs` が functions へ写す。`src/types/aiDraft.ts` に提案 v3 の型（`ProposalV3`・`AiEditableV3`・`AiGeneratedV3`・`isProposalV3`・`REQ_DOC_LIMITS`）を追加（v1・v2 と `StoredProposal` は不変。v3 を `StoredProposal` へ入れるのは U4）。単体テスト 56 → 71 件（抜き出した本文との照合）
