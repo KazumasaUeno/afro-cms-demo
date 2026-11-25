@@ -899,3 +899,10 @@
 - live（本番・エミュレータ）でプロジェクトの詳細（`/projects/:id`・`/dev/projects/:id`）とお客様の確認・承認（`/portal/approvals`）を開くと「useDemo must be used inside DemoStoreProvider」で画面が落ちる不具合を直した（0.42.0 から）。原因は承認の履歴（`ApprovalHistory`）が demo だけの承認の依頼の記録（`approvalRequests`）を DemoStore から直接読んでいたこと。依頼の行を補う処理を repository の demo 実装（`approvals.useHistory` → `approvalHistoryOf`。`src/repositories/demo.ts`）へ移し、画面は repository だけを読む。live は依頼そのものを `projects/{id}/approvals` に記録しているので補わない（demo の表示は変わらない）
 - live の入口から届くモジュールが `useDemo()` を呼ばないことの静的テストを追加（`tests/unit/liveNoDemoStore.test.mjs`）。解決できないローカル import（`@/`・`./`）が 1 件でもあれば失敗にする（黙って飛ばすと偽の緑になるため）
 - 承認の履歴: live の読み込み中に「まだ承認の記録はありません。」が一瞬出ていたのを直した。読み込み中は「読み込み中…」、読めなかったときはエラーと再読み込みボタンを出す（件数・CSV ボタンは読めてから出す。demo の表示は変わらない）
+
+## 0.47.5 — 2026-11-24
+
+- live: ログアウト直前の入力が保存されずに消えることがある不具合を直した（回答は入力が落ち着いてから 1.2 秒後に保存するため、その前にログアウトすると、ログアウト後の書き込みとして Rules に拒否されていた）
+  - ログアウトのボタンは、書き込み待ちの回答を先に保存してからログアウトする。保存に失敗した・8 秒以内に終わらない（オフライン等）ときはログアウトせず「保存できていない入力があります」を出し、「ログアウトしない」「保存せずにログアウト」を選べる
+  - 無効化などで強制的にログアウトされたときは、残った書き込みの予約を止め、「ログアウトしたため、保存していない入力は保存されませんでした」と知らせる（無音で捨てない）
+  - 待ち合わせの純粋な部分を `src/live/pendingWrites.ts` へ切り出し、単体テストを追加（`npm run test:unit`）

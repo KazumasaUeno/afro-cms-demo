@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import {
   arrayRemove, arrayUnion, collection, deleteField, doc, getDoc, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp,
   Timestamp, updateDoc, where, writeBatch, type DocumentData,
@@ -17,6 +17,7 @@ import {
   toSession, type ProjectDoc, type ReqDoc,
 } from './model';
 import { PendingAnswers } from './pendingAnswers';
+import { cancelScheduledWrites, type ScheduledWrite } from './pendingWrites';
 import type { LiveSession } from './session';
 import { useSnapshot } from './useSnapshot';
 
@@ -45,7 +46,7 @@ interface LiveData {
  * - inflight: 送信中の書き込み（「保存済み」はこれが終わってから出す）
  */
 interface AnswerWrites {
-  timers: Map<string, { timer: number; resolve: () => void; reject: (e: unknown) => void }>;
+  timers: Map<string, ScheduledWrite>;
   inflight: Set<Promise<void>>;
 }
 
@@ -89,6 +90,15 @@ export function LiveDataProvider({ session, children }: { session: LiveSession; 
   pendingRef.current ??= new PendingAnswers();
   const writesRef = useRef<AnswerWrites | null>(null);
   writesRef.current ??= { timers: new Map(), inflight: new Set() };
+  // ログアウト（無効化による強制ログアウトを含む）で外れたら、残った予約を止める。signOut の後に送っても Rules が拒否するだけなので、
+  // 待っている呼び出し元へ「保存していない」と返す（無音で捨てない）。通常のログアウトは LiveLogoutButton が先に送り切る
+  useEffect(() => {
+    const writes = writesRef.current!;
+    return () => {
+      const n = cancelScheduledWrites(writes.timers, (t) => window.clearTimeout(t));
+      if (n) console.warn('pending answer writes cancelled on unmount', n);
+    };
+  }, []);
   const select = useCallback((id: string) => {
     setChosen(id);
     try { window.sessionStorage.setItem(PROJECT_KEY, id); } catch { /* 保存できなくても画面の状態としては選べる */ }

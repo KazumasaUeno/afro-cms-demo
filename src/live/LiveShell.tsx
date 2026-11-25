@@ -1,13 +1,16 @@
-import { Box, Button, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Button, Dialog, DialogActions, DialogContent, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { LogOut, Moon, Sun, WifiOff } from 'lucide-react';
 import { Suspense, useEffect, useState } from 'react';
 import { Navigate, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { LogoMark } from '@/components/layout/Logo';
 import { RouteLoader } from '@/components/layout/RouteLoader';
+import { useToast } from '@/hooks/useToast';
+import { useRepositories } from '@/repositories';
 import { useThemeMode } from '@/theme/ThemeMode';
 import { tokens } from '@/theme/tokens';
 import { TOUCH } from '@/theme/media';
 import { useLiveAuth } from './auth';
+import { flushBeforeSignOut, type FlushResult } from './pendingWrites';
 import { LiveDataProvider } from './repositories';
 import { LiveSessionContext, type LiveRole } from './session';
 
@@ -45,6 +48,70 @@ function ThemeButton() {
         {mode === 'dark' ? <Moon size={19} /> : <Sun size={19} />}
       </IconButton>
     </Tooltip>
+  );
+}
+
+/**
+ * ログアウト（LiveDataProvider の内側に置く）。書き込み待ちの回答を先に送り切ってから signOut する
+ * （signOut の後に送ると Rules が拒否し、ログアウト直前の入力が失われる）。送れなければログアウトを止めて理由を出す
+ */
+function LiveLogoutButton({ signOut }: { signOut: () => Promise<void> }) {
+  const { requirements } = useRepositories();
+  const [busy, setBusy] = useState(false);
+  const [blocked, setBlocked] = useState<Exclude<FlushResult, 'saved'> | null>(null);
+  const toast = useToast();
+  /** signOut が失敗したらボタンを戻して理由を出す（押せないまま・未処理の reject にしない） */
+  const doSignOut = async () => {
+    setBusy(true);
+    try {
+      await signOut();
+    } catch {
+      toast('ログアウトできませんでした。接続を確かめて、もう一度お試しください', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const logout = async () => {
+    setBusy(true);
+    let r: FlushResult;
+    try {
+      r = await flushBeforeSignOut(() => requirements.saveNow());
+    } catch {
+      r = 'failed';
+    } finally {
+      setBusy(false);
+    }
+    if (r === 'saved') {
+      await doSignOut();
+      return;
+    }
+    setBlocked(r);
+  };
+  return (
+    <>
+      <Tooltip title="ログアウト">
+        <span>
+          <IconButton aria-label="ログアウト" disabled={busy} onClick={() => { void logout(); }}>
+            <LogOut size={19} />
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Dialog open={!!blocked} onClose={() => setBlocked(null)} maxWidth="xs" fullWidth aria-labelledby="live-logout-unsaved-title">
+        <DialogContent sx={{ pt: 3 }}>
+          <Typography id="live-logout-unsaved-title" variant="h3" sx={{ mb: 1 }}>保存できていない入力があります</Typography>
+          <Typography variant="body2" color="text.secondary">
+            {blocked === 'timeout'
+              ? '保存が終わっていません。接続を確かめて、しばらく待ってからログアウトしてください。'
+              : '入力の保存に失敗しました。接続を確かめ、入力した内容が残っているかを確かめてからログアウトしてください。'}
+            このままログアウトすると、保存していない入力は失われます。
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button variant="outlined" color="error" onClick={() => { setBlocked(null); void doSignOut(); }}>保存せずにログアウト</Button>
+          <Button variant="contained" onClick={() => setBlocked(null)}>ログアウトしない</Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 }
 
@@ -96,11 +163,7 @@ export function LiveShell() {
                 <Typography variant="caption">{ROLE_LABEL[account.role]}{account.company ? `・${account.company}` : ''}</Typography>
               </Box>
               <ThemeButton />
-              <Tooltip title="ログアウト">
-                <IconButton aria-label="ログアウト" onClick={() => { void signOut(); }}>
-                  <LogOut size={19} />
-                </IconButton>
-              </Tooltip>
+              <LiveLogoutButton signOut={() => signOut()} />
             </Stack>
             {!online && (
               <Stack
