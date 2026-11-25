@@ -2,7 +2,8 @@
 // 実行: npm run test:unit
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { dashboardCards, dashboardCopy, projectBase, REQ_STATUS_ORDER, statusCounts } from '../../src/live/dashboard.ts';
+import { dashboardCards, dashboardCopy, listLimitNote, projectBase, REQ_STATUS_ORDER, statusCounts } from '../../src/live/dashboard.ts';
+import { LIST_LIMIT } from '../../src/live/model.ts';
 
 const doc = (id, status, extra = {}) => ({
   id, clientName: `客${id}`, siteName: `サイト${id}`, siteUrl: `https://${id}.example.jp`, industry: '', accent: '#123456',
@@ -66,4 +67,12 @@ test('dashboardCopy: 管理者は全案件（空はユーザー管理での割�
 test('ダッシュボードの導出は構築状況・相談・デプロイの値を持たない（U2/U3 前・NC-6）', () => {
   const copy = JSON.stringify([dashboardCopy('developer', 1), dashboardCopy('admin', 1)]);
   assert.doesNotMatch(copy, /デプロイ|構築|相談|タスク/);
+});
+
+test('listLimitNote: 案件一覧が購読の上限（500 件）に達したときだけ「上限」の注記を出す', () => {
+  assert.equal(LIST_LIMIT, 500);
+  assert.equal(listLimitNote(0), null);
+  assert.equal(listLimitNote(499), null);
+  assert.match(listLimitNote(500), /上限の 500 件/);
+  assert.match(listLimitNote(3, 3), /上限の 3 件/);
 });

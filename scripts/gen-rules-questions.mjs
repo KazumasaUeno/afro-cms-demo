@@ -3,7 +3,7 @@
 //   npm run rules:gen    … 区間を書き換える
 //   npm run rules:check  … 差分があれば exit 1（質問を足したのに Rules を直し忘れる事故を止める）
 // 出典（正）: src/features/requirements/validation.ts（MAX_*）/ src/data/requirements.ts（質問・選択肢・提案ライブラリ）
-//            / src/features/projects/projectForm.ts（PROJECT_LIMITS・ACCENT_PRESETS）
+//            / src/features/projects/projectForm.ts（PROJECT_LIMITS・ACCENT_PRESETS）/ src/data/devTaskLimits.ts（構築タスク）
 // src/ の .ts は Node 22 の型除去（--experimental-strip-types）でそのまま読む。`@/` の別名だけ下の resolve hook で src/ へ向ける。
 // 引数: --check / --rules <path>（テスト用。既定は firestore.rules）
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -45,7 +45,8 @@ async function loadSources() {
   const validation = await imp('src/features/requirements/validation.ts');
   const reqData = await imp('src/data/requirements.ts');
   const projectForm = await imp('src/features/projects/projectForm.ts');
-  return { validation, reqData, projectForm };
+  const taskLimits = await imp('src/data/devTaskLimits.ts');
+  return { validation, reqData, projectForm, taskLimits };
 }
 
 const q = (s) => {
@@ -72,10 +73,11 @@ export function trimLenRe(max) {
 const HOSTNAME_PREFIX_MAX = 253 + ' の現状を踏まえ、'.length; // buildProposal.ts: 先頭の提案だけ detail にホスト名が付く
 
 /** 生成する区間（BEGIN〜END を含む）を返す。src の定数が Rules で表せない形なら throw */
-export function buildRegion({ validation, reqData, projectForm }) {
+export function buildRegion({ validation, reqData, projectForm, taskLimits }) {
   const { MAX_URL, MAX_TEXT, MAX_LONGTEXT, MAX_COMPETITORS } = validation;
   const { REQUIREMENT_QUESTIONS, PURPOSE_OPTIONS, IMPROVE_OPTIONS, PROPOSAL_LIBRARY } = reqData;
   const { PROJECT_LIMITS, ACCENT_PRESETS } = projectForm;
+  const { DEV_TASK_TITLE_MAX, DEV_TASK_PAGE_MAX } = taskLimits;
 
   const ids = REQUIREMENT_QUESTIONS.map((x) => x.id);
   if (new Set(ids).size !== ids.length) throw new Error('質問 ID が重複しています');
@@ -111,7 +113,7 @@ export function buildRegion({ validation, reqData, projectForm }) {
 
   const lines = [
     BEGIN + ' scripts/gen-rules-questions.mjs が生成。手で編集しない',
-    '    // 出典: src/features/requirements/validation.ts / src/data/requirements.ts / src/features/projects/projectForm.ts',
+    '    // 出典: src/features/requirements/validation.ts / src/data/requirements.ts / src/features/projects/projectForm.ts / src/data/devTaskLimits.ts',
     `    function purposeOptions() { return ${list(PURPOSE_OPTIONS)}; }`,
     `    function improveOptions() { return ${list(IMPROVE_OPTIONS)}; }`,
     `    function accentOptions() { return ${list(ACCENT_PRESETS.map((a) => a.value))}; }`,
@@ -124,6 +126,9 @@ export function buildRegion({ validation, reqData, projectForm }) {
     `    function reClientName() { return ${q(trimLenRe(PROJECT_LIMITS.clientName))}; }`,
     `    function reSiteName() { return ${q(trimLenRe(PROJECT_LIMITS.siteName))}; }`,
     `    function reIndustry() { return ${q(trimLenRe(PROJECT_LIMITS.industry))}; }`,
+    `    // 構築タスク（DEV_TASK_TITLE_MAX=${DEV_TASK_TITLE_MAX} / DEV_TASK_PAGE_MAX=${DEV_TASK_PAGE_MAX}）`,
+    `    function reTaskTitle() { return ${q(trimLenRe(DEV_TASK_TITLE_MAX))}; }`,
+    `    function reTaskPage() { return ${q(trimLenRe(DEV_TASK_PAGE_MAX))}; }`,
     '    function validAnswers(a) {',
     '      return a is map',
     `        && a.keys().hasOnly(${list(ids)})`,

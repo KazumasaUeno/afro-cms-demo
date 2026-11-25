@@ -1,11 +1,11 @@
 import type { Project } from '@/types';
-import { toProject, type ProjectDoc, type ReqStatus } from './model';
+import { LIST_LIMIT, toProject, type ProjectDoc, type ReqStatus } from './model';
 import type { LiveRole } from './session';
 
 /**
  * live のダッシュボードの導出（docs/design/LIVE_DASHBOARD_TASKS_CONSULT.md §1.1・§7 U1）。
  * 材料は LiveDataProvider が既に購読している案件一覧だけ（追加の Read 0。新しいコレクション・Rules 変更なし）。
- * 構築状況（タスク。U2）・相談の未対応（U3）・最近のデプロイ（NC-6: live では出さない）はここでは扱わない。
+ * 構築状況（タスク。U2）は tasks.ts（taskCounts・myOpenTasks・nextBuildAction）。相談の未対応（U3）・最近のデプロイ（NC-6: live では出さない）はここでは扱わない。
  * 権限の実体は Firestore Rules（一覧の購読が admin は全件・開発者は memberUids の案件だけ）。ここは表示の出し分けだけ
  */
 
@@ -73,4 +73,12 @@ export function dashboardCopy(role: DashboardRole, count: number): DashboardCopy
       action: { to: `${base}/new`, label: '新しいプロジェクト' },
     },
   };
+}
+
+/**
+ * 案件一覧が購読の上限（LIST_LIMIT 件。更新の新しい順）に達したときの注記。達していなければ null。
+ * 上限ちょうどの件数は「それ以上あるかもしれない」（limit は超過を知らせない）ので、件数の表示と合わせて出す
+ */
+export function listLimitNote(count: number, max: number = LIST_LIMIT): string | null {
+  return count >= max ? `表示は更新の新しい順に上限の ${max} 件までです。それより古いプロジェクトはここに出ません。` : null;
 }

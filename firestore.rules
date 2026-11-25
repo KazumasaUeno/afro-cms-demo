@@ -67,7 +67,7 @@ service cloud.firestore {
     }
 
     // <GENERATED:requirements> scripts/gen-rules-questions.mjs が生成。手で編集しない
-    // 出典: src/features/requirements/validation.ts / src/data/requirements.ts / src/features/projects/projectForm.ts
+    // 出典: src/features/requirements/validation.ts / src/data/requirements.ts / src/features/projects/projectForm.ts / src/data/devTaskLimits.ts
     function purposeOptions() { return ['問い合わせを増やしたい', '採用を強化したい', 'ブランドを刷新したい', 'EC売上を伸ばしたい', '更新を楽にしたい', 'スマホ対応したい']; }
     function improveOptions() { return ['ファーストビュー', 'ナビゲーション', 'スマホ表示', '表示速度', '問い合わせ導線', '写真・ビジュアル', 'SEO', '更新のしやすさ']; }
     function accentOptions() { return ['#B45309', '#C2410C', '#BE185D', '#7C3AED', '#1D4ED8', '#0D9488', '#15803D', '#475569']; }
@@ -80,6 +80,9 @@ service cloud.firestore {
     function reClientName() { return '(?s)[\\s\\p{Z}\\x{FEFF}\\x{0B}]*([^\\s\\p{Z}\\x{FEFF}\\x{0B}]|[^\\s\\p{Z}\\x{FEFF}\\x{0B}].{0,38}[^\\s\\p{Z}\\x{FEFF}\\x{0B}])[\\s\\p{Z}\\x{FEFF}\\x{0B}]*'; }
     function reSiteName() { return '(?s)[\\s\\p{Z}\\x{FEFF}\\x{0B}]*([^\\s\\p{Z}\\x{FEFF}\\x{0B}]|[^\\s\\p{Z}\\x{FEFF}\\x{0B}].{0,38}[^\\s\\p{Z}\\x{FEFF}\\x{0B}])[\\s\\p{Z}\\x{FEFF}\\x{0B}]*'; }
     function reIndustry() { return '(?s)[\\s\\p{Z}\\x{FEFF}\\x{0B}]*([^\\s\\p{Z}\\x{FEFF}\\x{0B}]|[^\\s\\p{Z}\\x{FEFF}\\x{0B}].{0,18}[^\\s\\p{Z}\\x{FEFF}\\x{0B}])[\\s\\p{Z}\\x{FEFF}\\x{0B}]*'; }
+    // 構築タスク（DEV_TASK_TITLE_MAX=60 / DEV_TASK_PAGE_MAX=40）
+    function reTaskTitle() { return '(?s)[\\s\\p{Z}\\x{FEFF}\\x{0B}]*([^\\s\\p{Z}\\x{FEFF}\\x{0B}]|[^\\s\\p{Z}\\x{FEFF}\\x{0B}].{0,58}[^\\s\\p{Z}\\x{FEFF}\\x{0B}])[\\s\\p{Z}\\x{FEFF}\\x{0B}]*'; }
+    function reTaskPage() { return '(?s)[\\s\\p{Z}\\x{FEFF}\\x{0B}]*([^\\s\\p{Z}\\x{FEFF}\\x{0B}]|[^\\s\\p{Z}\\x{FEFF}\\x{0B}].{0,38}[^\\s\\p{Z}\\x{FEFF}\\x{0B}])[\\s\\p{Z}\\x{FEFF}\\x{0B}]*'; }
     function validAnswers(a) {
       return a is map
         && a.keys().hasOnly(['q-url', 'q-purpose', 'q-issue', 'q-competitor', 'q-improve', 'q-keep', 'q-target', 'q-strength', 'q-market', 'q-content', 'q-feature', 'q-cv', 'q-seo', 'q-ops', 'q-infra', 'q-schedule', 'q-other', 'q-dns-owner', 'q-dns-switch', 'q-dns-note'])
@@ -324,6 +327,37 @@ service cloud.firestore {
         && getAfter(sitePath(d.siteUrlKey)).data.projectId == pid;
     }
 
+    // ================= projects/{pid}/tasks（構築タスク。docs/design/LIVE_DASHBOARD_TASKS_CONSULT.md §2.1・§3） =================
+    // 2026-11-25 ユーザー決定（NC-2 推奨案）: 作成・状態変更はその案件の担当の開発者だけ。admin は見るだけ。削除なし（誤登録は完了で閉じる）。
+    // お客様は読めない（社内の作業）。題名・ページ・担当の変更は後回し（update は status だけ）
+    // 役割の判定は acctOrNull() の 1 回だけ（isDev() 等を並べると active() が展開され 1 リクエスト 1000 式の上限に近づく）
+    function taskKeys() { return ['schemaVersion','title','page','assigneeUids','status','createdAt','createdBy','updatedAt','updatedBy']; }
+    function taskStatuses() { return ['todo','doing','review','done']; }
+    function validTask(d) {
+      return d.keys().hasAll(taskKeys()) && d.keys().hasOnly(taskKeys())
+        && d.schemaVersion == 1
+        && d.title.matches(reTaskTitle()) && d.page.matches(reTaskPage())
+        && d.assigneeUids is list && d.assigneeUids.size() >= 1 && d.assigneeUids.size() <= 20
+        && d.assigneeUids.toSet().size() == d.assigneeUids.size()
+        && d.status in taskStatuses();
+    }
+    // 担当はその案件の memberUids の中だけ（作成時。担当を外れた人の uid は残る＝画面で「担当外」）
+    function taskCreateOk(pid, a) {
+      let d = request.resource.data;
+      let p = proj(pid);
+      return roleOf(a) == 'developer' && request.auth.uid in p.memberUids
+        && validTask(d) && d.status == 'todo'
+        && p.memberUids.hasAll(d.assigneeUids)
+        && d.createdAt == request.time && d.createdBy == request.auth.uid
+        && stamped();
+    }
+    function taskUpdateOk(pid, a) {
+      return roleOf(a) == 'developer' && request.auth.uid in proj(pid).memberUids
+        && changed().hasOnly(['status','updatedAt','updatedBy'])
+        && request.resource.data.status in taskStatuses()
+        && stamped();
+    }
+
     match /projects/{pid} {
       allow get:  if isAdmin() || assignedHere() || clientOf(pid);
       // Rules はフィルタではない: 開発者は where('memberUids','array-contains', uid) を必ず付ける
@@ -359,6 +393,15 @@ service cloud.firestore {
         allow get, list: if canRead(pid);
         allow create: if apprCreateOk(pid, aid, acctOrNull());
         allow update, delete: if false;                                               // admin を含む全員
+      }
+
+      // ---------- tasks（構築タスク。上の taskCreateOk / taskUpdateOk） ----------
+      // 一覧は orderBy('createdAt') limit(300)（単一フィールド。複合 Index 不要）
+      match /tasks/{tid} {
+        allow get, list: if isAdmin() || assigned(pid);
+        allow create: if taskCreateOk(pid, acctOrNull());
+        allow update: if taskUpdateOk(pid, acctOrNull());
+        allow delete: if false;
       }
     }
 

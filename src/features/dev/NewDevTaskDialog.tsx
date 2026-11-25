@@ -1,13 +1,14 @@
-import { Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, ListItemText, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Autocomplete, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, ListItemText, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { ListPlus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { tokens } from '@/theme/tokens';
 import { useFullScreenDialog } from '@/hooks/useMediaQueries';
 import { memberById } from '@/data/members';
 import { DEV_TASK_TITLE_MAX as TITLE_MAX } from '@/data/dev';
+import { DEV_TASK_PAGE_MAX as PAGE_MAX, WHOLE_SITE } from '@/data/devTaskLimits';
 
-/** ページに紐づかないタスク（共通部品・環境の準備など）の「対象ページ」 */
-export const WHOLE_SITE = 'サイト全体';
+/** ページに紐づかないタスク（共通部品・環境の準備など）の「対象ページ」（値の正は data/devTaskLimits.ts） */
+export { WHOLE_SITE };
 
 interface Props {
   open: boolean;
@@ -17,10 +18,19 @@ interface Props {
   assigneeIds: string[];
   onClose: () => void;
   onCreate: (task: { title: string; page: string; assigneeIds: string[] }) => void;
+  /** 担当の名前（既定は demo の固定メンバー memberById。live は accounts から引いた名前を渡す） */
+  nameOf?: (id: string) => string;
+  /**
+   * 対象ページを自由入力にする（live はサイトマップが無い。1〜40 文字。pages は候補として出す。
+   * docs/design/LIVE_DASHBOARD_TASKS_CONSULT.md §1.2）。既定（demo）は候補からの選択だけ
+   */
+  freePage?: boolean;
+  /** 保存中（ボタンを無効にして二重送信を防ぐ） */
+  busy?: boolean;
 }
 
 /** 構築タスクの追加（2026-11-19 ユーザー指示「タスクの新規作成がない」）。追加したタスクは未着手から始まる */
-export function NewDevTaskDialog({ open, pages, assigneeIds, onClose, onCreate }: Props) {
+export function NewDevTaskDialog({ open, pages, assigneeIds, onClose, onCreate, nameOf = (id) => memberById(id).name, freePage = false, busy = false }: Props) {
   const fullScreen = useFullScreenDialog();
   const [title, setTitle] = useState('');
   const [page, setPage] = useState(WHOLE_SITE);
@@ -40,11 +50,13 @@ export function NewDevTaskDialog({ open, pages, assigneeIds, onClose, onCreate }
 
   const trimmed = title.trim();
   const titleErr = !trimmed ? 'タスク名を入力してください' : trimmed.length > TITLE_MAX ? `${TITLE_MAX} 文字以内で入力してください` : '';
+  const pageTrimmed = page.trim();
+  const pageErr = !freePage ? '' : !pageTrimmed ? '対象ページを入力してください' : pageTrimmed.length > PAGE_MAX ? `${PAGE_MAX} 文字以内で入力してください` : '';
   const submit = () => {
     setSubmitted(true);
-    if (titleErr || !selected.length) return;
+    if (busy || titleErr || pageErr || !selected.length) return;
     // 並びは候補の順（先頭が主担当）
-    onCreate({ title: trimmed, page, assigneeIds: assigneeIds.filter((id) => selected.includes(id)) });
+    onCreate({ title: trimmed, page: freePage ? pageTrimmed : page, assigneeIds: assigneeIds.filter((id) => selected.includes(id)) });
   };
 
   return (
@@ -75,23 +87,42 @@ export function NewDevTaskDialog({ open, pages, assigneeIds, onClose, onCreate }
             helperText={submitted && titleErr ? titleErr : `${trimmed.length}/${TITLE_MAX}`}
             inputProps={{ maxLength: TITLE_MAX + 20 }}
           />
-          <TextField select label="対象ページ" value={page} onChange={(e) => setPage(e.target.value)}>
-            <MenuItem value={WHOLE_SITE}>{WHOLE_SITE}（ページに紐づかない作業）</MenuItem>
-            {pages.map((p) => <MenuItem key={p} value={p}>{p}</MenuItem>)}
-          </TextField>
+          {freePage ? (
+            <Autocomplete
+              freeSolo
+              options={[WHOLE_SITE, ...pages.filter((p) => p !== WHOLE_SITE)]}
+              inputValue={page}
+              onInputChange={(_, v) => setPage(v)}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="対象ページ"
+                  required
+                  error={submitted && !!pageErr}
+                  helperText={submitted && pageErr ? pageErr : `ページ名を入力するか候補から選びます（${pageTrimmed.length}/${PAGE_MAX}）`}
+                  inputProps={{ ...params.inputProps, maxLength: PAGE_MAX + 20 }}
+                />
+              )}
+            />
+          ) : (
+            <TextField select label="対象ページ" value={page} onChange={(e) => setPage(e.target.value)}>
+              <MenuItem value={WHOLE_SITE}>{WHOLE_SITE}（ページに紐づかない作業）</MenuItem>
+              {pages.map((p) => <MenuItem key={p} value={p}>{p}</MenuItem>)}
+            </TextField>
+          )}
           <TextField
             select
             label="担当（複数選べます）"
             value={selected}
             onChange={(e) => { const v = e.target.value as unknown; setSelected(typeof v === 'string' ? v.split(',') : (v as string[])); }}
-            SelectProps={{ multiple: true, renderValue: (v) => (v as string[]).map((id) => memberById(id).name).join('・') }}
+            SelectProps={{ multiple: true, renderValue: (v) => (v as string[]).map(nameOf).join('・') }}
             error={submitted && !selected.length}
             helperText={submitted && !selected.length ? '担当を 1 人以上選んでください' : undefined}
           >
             {assigneeIds.map((id) => (
               <MenuItem key={id} value={id} sx={{ minHeight: 44 }}>
                 <Checkbox size="small" checked={selected.includes(id)} sx={{ p: 0.5, mr: 1 }} />
-                <ListItemText primary={memberById(id).name} />
+                <ListItemText primary={nameOf(id)} />
               </MenuItem>
             ))}
           </TextField>
@@ -99,7 +130,7 @@ export function NewDevTaskDialog({ open, pages, assigneeIds, onClose, onCreate }
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={onClose} sx={{ minHeight: 44 }}>キャンセル</Button>
-        <Button type="submit" form="new-dev-task-form" variant="contained" sx={{ minHeight: 44 }}>追加する</Button>
+        <Button type="submit" form="new-dev-task-form" variant="contained" disabled={busy} sx={{ minHeight: 44 }}>追加する</Button>
       </DialogActions>
     </Dialog>
   );

@@ -199,6 +199,9 @@ export function toApprovalLog(projectId: string, s: Snap): ApprovalLog {
 /** 招待中だけの人の id（accounts の uid とぶつからない形） */
 export const INVITE_PREFIX = 'invite:';
 
+/** 一覧の購読の上限（案件・承認履歴・ユーザー。repositories.tsx。案件一覧が上限に達したら画面で注記する＝dashboard.ts listLimitNote） */
+export const LIST_LIMIT = 500;
+
 /** 1 案件の担当の開発者の上限（firestore.rules の projUpdateOk・adminMembersOk と同じ 20） */
 export const MAX_MEMBERS = 20;
 
@@ -236,5 +239,38 @@ export function devFromInvite(s: Snap): DevUser {
     affiliation: d.affiliation === 'internal' ? 'internal' : 'partner',
     ...(typeof d.partnerCompany === 'string' ? { partnerCompany: d.partnerCompany } : {}),
     status: 'active', createdAt: toIso(d.createdAt) ?? '',
+  };
+}
+
+export type TaskStatus = 'todo' | 'doing' | 'review' | 'done';
+const TASK_STATUS_SET: readonly TaskStatus[] = ['todo', 'doing', 'review', 'done'];
+
+/** 構築タスク（projects/{pid}/tasks/{tid}。docs/design/LIVE_DASHBOARD_TASKS_CONSULT.md §2.1）。主担当は持たない（assigneeUids[0]） */
+export interface TaskDoc {
+  id: string;
+  title: string;
+  page: string;
+  assigneeUids: string[];
+  status: TaskStatus;
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+  updatedBy: string;
+}
+
+export function taskDoc(s: Snap): TaskDoc {
+  const d = read(s);
+  const status = TASK_STATUS_SET.includes(d.status) ? (d.status as TaskStatus) : 'todo';
+  const epoch = new Date(0).toISOString();
+  return {
+    id: s.id,
+    title: String(d.title ?? ''),
+    page: String(d.page ?? ''),
+    assigneeUids: Array.isArray(d.assigneeUids) ? d.assigneeUids.map(String) : [],
+    status,
+    createdAt: toIso(d.createdAt) ?? epoch,
+    createdBy: String(d.createdBy ?? ''),
+    updatedAt: toIso(d.updatedAt) ?? toIso(d.createdAt) ?? epoch,
+    updatedBy: String(d.updatedBy ?? ''),
   };
 }
