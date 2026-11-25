@@ -44,6 +44,8 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <RoleHome /> },
       { path: 'projects', element: <RoleRoute roles={admin}><ProjectsListPage /></RoleRoute> },
+      // 管理者のプロジェクト作成（2026-11-25 ユーザー決定「管理者もプロジェクトを作れるように」。画面は開発者と同じ）
+      { path: 'projects/new', element: <RoleRoute roles={admin}><NewProjectPage /></RoleRoute> },
       { path: 'projects/:projectId', element: <RoleRoute roles={admin}><ProjectDetailPage /></RoleRoute> },
       { path: 'ai-studio', element: <RoleRoute roles={admin}><HearingGate><RequirementsPage /></HearingGate></RoleRoute> },
       { path: 'ai-studio/hearing', element: <RoleRoute roles={admin}><HearingGate><HearingAnswersPage /></HearingGate></RoleRoute> },

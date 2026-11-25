@@ -923,3 +923,9 @@
 - Firestore Rules: `requirements/current.proposal` を版で受け付ける（`version` なし＝従来の v1、`version: 2`＝AI 下書きの提案）。v2 の確認依頼は `aiDrafts` の generated のサーバー欄＋edited の 3 欄との一致だけを確かめる。v1 の判定は不変
 - 型: `src/types/aiDraft.ts`（`ProposalV2`・`AiDraftDoc`・`StoredProposal`・上限と列挙の定数）。既存の `Proposal` は不変
 - Rules テスト: 301 → 375 件（aiDrafts・aiUsage・提案 v2・定数の食い違い・変異）。edited の検査ケースは `tests/rules/aiEditedCases.mjs`（U2 の callable テストへ写す）
+## 0.48.1 — 2026-11-25
+
+- 本番（live）の管理者画面でもプロジェクトを作れるようにした（2026-11-25 ユーザー決定「管理者もプロジェクトを作れるように」。2026-11-10 の「管理者は見るだけ・作成は開発者」をこの操作だけ変更）。プロジェクトの一覧の「新しいプロジェクト」から開き、入力欄は開発者画面と同じ。管理者は「担当の開発者」を複数選べる（任意・20 人まで。招待中の人は受け取り後に「ユーザー」の「担当を変更」で割り当てる）。作成すると一覧へ戻る
+  - 選んだ開発者は作成したプロジェクトを開発者画面で開き、ヒアリングの入力・AI 分析・承認依頼を従来どおり進められる。担当を選ばずに作った案件は、割り当てるまで開発者画面に出ない
+  - 開発者の作成（自分が担当になる）は変わらない。作成後に管理者ができることも従来どおり担当の割り当てだけ（基本情報の編集・アーカイブ・確認依頼は開発者）。デモ（demo）は変わらない
+- Firestore Rules（未デプロイ）: 案件作成の判定を `projCreateOk` にまとめ、admin の分岐を追加（ownerUid・createdBy は本人、memberUids は文字列の重複なしの 0〜20 件で admin 自身は入れない。validProject・requirements の初期値・archived・作成日時・URL の鍵の一意性は開発者と同じ）。siteKeys の作成と、案件作成と同じバッチの requirements/current の作成を admin にも許す（既存の案件への requirements/current の単独作成は admin には不可）

@@ -296,19 +296,39 @@ service cloud.firestore {
         && d.answerMeta is map && d.answerMeta.keys().hasOnly(d.answers.keys());
     }
 
+    // §28.4 の allow create（案件作成のバッチ。projects・siteKeys・requirements/current）
+    // - 開発者: 作成者が自分だけをアサインした案件（従来どおり）
+    // - admin（2026-11-25 ユーザー決定「管理者もプロジェクトを作れるように」）: ownerUid・createdBy は自分、memberUids は
+    //   画面で選んだ開発者の uid（0〜20 人。空でもよく、後から「担当を変更」で割り当てる）。admin 自身は入れない
+    //   （admin はアサインで権限が増えないため意味が無い）。作成後に admin が変えられるのは従来どおり memberUids だけ（projUpdateOk）
+    function memberAt(m, i)   { return m.size() <= i || (m[i] is string && m[i] != ''); }
+    function adminMembersOk(m) {
+      return m is list && m.size() <= 20 && m.toSet().size() == m.size() && !(request.auth.uid in m)
+        && memberAt(m, 0) && memberAt(m, 1) && memberAt(m, 2) && memberAt(m, 3) && memberAt(m, 4)
+        && memberAt(m, 5) && memberAt(m, 6) && memberAt(m, 7) && memberAt(m, 8) && memberAt(m, 9)
+        && memberAt(m, 10) && memberAt(m, 11) && memberAt(m, 12) && memberAt(m, 13) && memberAt(m, 14)
+        && memberAt(m, 15) && memberAt(m, 16) && memberAt(m, 17) && memberAt(m, 18) && memberAt(m, 19);
+    }
+    function projCreateOk(pid, r) {
+      let d = request.resource.data;
+      return (r == 'developer' || r == 'admin')
+        && validProject(d)
+        && d.ownerUid == request.auth.uid
+        && ((r == 'developer' && d.memberUids == [request.auth.uid])
+            || (r == 'admin' && adminMembersOk(d.memberUids)))
+        && d.requirements == {'status': 'draft', 'revision': 0}
+        && d.archived == false
+        && d.createdAt == request.time
+        && d.createdBy == request.auth.uid
+        && stamped()
+        && getAfter(sitePath(d.siteUrlKey)).data.projectId == pid;
+    }
+
     match /projects/{pid} {
       allow get:  if isAdmin() || assignedHere() || clientOf(pid);
       // Rules はフィルタではない: 開発者は where('memberUids','array-contains', uid) を必ず付ける
       allow list: if isAdmin() || assignedHere();
-      allow create: if isDev() && validProject(request.resource.data)
-                    && request.resource.data.ownerUid == request.auth.uid
-                    && request.resource.data.memberUids == [request.auth.uid]
-                    && request.resource.data.requirements == {'status': 'draft', 'revision': 0}
-                    && request.resource.data.archived == false
-                    && request.resource.data.createdAt == request.time
-                    && request.resource.data.createdBy == request.auth.uid
-                    && stamped()
-                    && getAfter(sitePath(request.resource.data.siteUrlKey)).data.projectId == pid;
+      allow create: if projCreateOk(pid, roleOf(acctOrNull()));
       allow update: if stamped() && projUpdateOk(pid, acctOrNull(), changed());
       allow delete: if false;
 
@@ -316,7 +336,9 @@ service cloud.firestore {
       match /requirements/current {
         allow get: if canRead(pid);
         // 案件作成と同じバッチでも作れるよう、事前状態ではなく getAfter で見る
-        allow create: if isDev() && request.auth.uid in getAfter(projPath(pid)).data.memberUids
+        // admin は案件作成と同じバッチだけ（事前に案件が無く、事後の案件の作成者が自分）。既存の案件には作れない
+        allow create: if (isDev() && request.auth.uid in getAfter(projPath(pid)).data.memberUids
+                          || (isAdmin() && !exists(projPath(pid)) && getAfter(projPath(pid)).data.createdBy == request.auth.uid))
                       && getAfter(projPath(pid)).data.requirements.status == 'draft'
                       && validReq(request.resource.data) && stamped();
         allow update: if stamped() && reqUpdateOk(pid, acctOrNull(), changed(), proj(pid), getAfter(projPath(pid)).data);
@@ -448,7 +470,7 @@ service cloud.firestore {
     match /siteKeys/{key} {
       allow get: if isDev() || isAdmin();
       // 同じバッチで作る新しい案件だけを指せる（既存の案件を指す鍵で URL を先取りさせない）
-      allow create: if isDev()
+      allow create: if (isDev() || isAdmin())                                       // admin の案件作成（2026-11-25）も同じ検査
                     && request.resource.data.keys().hasAll(['projectId','createdAt'])
                     && request.resource.data.keys().hasOnly(['projectId','createdAt'])
                     && request.resource.data.createdAt == request.time
