@@ -11,9 +11,11 @@ import { isAnswered, validateAnswer } from '@/features/requirements/validation';
 import { projectFromDraft, siteHost } from '@/features/projects/projectForm';
 import type { Query, Repositories } from '@/repositories/types';
 import type { AnswerValue, ApprovalLog, ClientAccount, DevUser } from '@/types';
+import type { AiDraftDoc, StoredProposal } from '@/types/aiDraft';
+import { isJobRunning } from '@/features/requirements/aiDraft/aiDraftState';
 import { db } from './firebase';
 import {
-  clientFromAccount, clientFromInvite, devFromAccount, devFromInvite, INVITE_PREFIX, projectDoc, proposalForSave, reqDoc, toApprovalLog, toProject,
+  clientFromAccount, clientFromInvite, deepIso, devFromAccount, devFromInvite, INVITE_PREFIX, projectDoc, proposalForSave, proposalV2FromDraft, reqDoc, toApprovalLog, toProject,
   toSession, type ProjectDoc, type ReqDoc,
 } from './model';
 import { PendingAnswers } from './pendingAnswers';
@@ -120,6 +122,7 @@ const EMPTY_REQ: ReqDoc | null = null;
 
 const reqRef = (pid: string) => doc(db, 'projects', pid, 'requirements', 'current');
 const projRef = (pid: string) => doc(db, 'projects', pid);
+const aiDraftRef = (pid: string) => doc(db, 'projects', pid, 'aiDrafts', 'requirements');
 const apprRef = (pid: string, rev: number, action: 'submit' | 'approve' | 'withdraw') => doc(db, 'projects', pid, 'approvals', `requirements-r${rev}-${action}`);
 const stamp = (uid: string) => ({ updatedAt: serverTimestamp(), updatedBy: uid });
 
@@ -281,18 +284,31 @@ export function useLiveRepositoriesImpl(): Repositories {
         },
         // mode は afro 固定なので代理回答の確認は起きない（§6）
         confirmAnswer: () => Promise.resolve(),
-        completeAnalysis: async (projectId) => {
+        completeAnalysis: async (projectId, opts) => {
           await flushNow(projectId);
+          const fromAi = opts?.proposal === 'aiDraft';
           await runTransaction(db, async (tx) => {
             const ps = await tx.get(projRef(projectId));
             const rs = await tx.get(reqRef(projectId));
+            // v2: 下書きも同じ transaction で読む（読んだ後に作り直し・保存が入れば transaction がやり直す）
+            const as = fromAi ? await tx.get(aiDraftRef(projectId)) : null;
             if (!ps.exists() || !rs.exists()) throw new Error('案件が見つかりません');
             const p = projectDoc(ps);
             if (p.requirements.status !== 'draft') throw new Error('すでに確認を依頼しています');
             const raw = rs.data() as DocumentData;
             const answers = (raw.answers ?? {}) as Record<string, AnswerValue>;
             const comp = answers['q-competitor'];
-            const proposal = proposalForSave(buildProposal(answers, Array.isArray(comp) ? comp : []));
+            let proposal: StoredProposal;
+            if (as) {
+              const ai = as.exists() ? (as.data() as DocumentData) : null;
+              if (!ai || ai.state !== 'ready' || !ai.generated || !ai.edited) throw new Error('確認済みの AI 下書きがありません');
+              // lease 切れの running は止まったもの（承認依頼のボタンの判定 approvalBlock と同じ isJobRunning）
+              if (isJobRunning(deepIso(ai) as AiDraftDoc, Date.now())) throw new Error('AI 下書きの生成が終わってから依頼してください');
+              // Rules（proposalV2Ok）はマップの等式で比べる: 値を変えずに写す（flags は写さない）
+              proposal = proposalV2FromDraft(ai.generated as DocumentData, ai.edited as DocumentData);
+            } else {
+              proposal = proposalForSave(buildProposal(answers, Array.isArray(comp) ? comp : []));
+            }
             const rev = p.requirements.revision + 1;
             tx.update(reqRef(projectId), { proposal, proposalRevision: rev, ...stamp(uid) });
             tx.set(apprRef(projectId, rev, 'submit'), {

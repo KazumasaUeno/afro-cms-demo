@@ -153,9 +153,11 @@ interface Props {
   editable: boolean;
   /** AI 分析を実行する（AI 分析の前だけ渡す） */
   onAnalyze?: () => void;
+  /** AI分析のボタンの文言（AI 下書きのフラグ on は「AI で下書きを作る」。DEC lead F9）。既定は従来どおり */
+  analyzeLabel?: string;
 }
 
-export function HearingEditor({ editable, onAnalyze }: Props) {
+export function HearingEditor({ editable, onAnalyze, analyzeLabel }: Props) {
   const { data: req } = useCurrentRequirements();
   const answers = req.answers;
   const reduced = useReducedMotion();
@@ -352,7 +354,7 @@ export function HearingEditor({ editable, onAnalyze }: Props) {
         endIcon={<Sparkles size={16} />}
         sx={{ background: tokens.aiGradient, color: '#fff', '&:hover': { background: tokens.aiGradient, filter: 'brightness(1.06)' } }}
       >
-        AI分析を実行
+        {analyzeLabel ?? 'AI分析を実行'}
       </Button>
       {!canAnalyze && (
         <Box sx={{ mt: 1.25 }}>
@@ -409,10 +411,10 @@ export function HearingEditor({ editable, onAnalyze }: Props) {
           size={wide ? 'medium' : 'small'}
           onClick={analyze}
           endIcon={<Sparkles size={16} />}
-          aria-label={canAnalyze ? 'AI分析を実行' : `AI分析を実行（必要な質問があと ${blockers.length} 問。押すと足りない質問を赤く示します）`}
+          aria-label={canAnalyze ? (analyzeLabel ?? 'AI分析を実行') : `${analyzeLabel ?? 'AI分析を実行'}（必要な質問があと ${blockers.length} 問。押すと足りない質問を赤く示します）`}
           sx={{ ml: 1, flexShrink: 0, background: tokens.aiGradient, color: '#fff', '&:hover': { background: tokens.aiGradient, filter: 'brightness(1.06)' } }}
         >
-          {wide ? 'AI分析を実行' : 'AI分析'}
+          {analyzeLabel ?? (wide ? 'AI分析を実行' : 'AI分析')}
         </Button>
       )}
     </>

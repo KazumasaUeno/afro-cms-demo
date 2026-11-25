@@ -6,6 +6,9 @@ dist
 # Firebase の設定値（ローカル）。公開情報だがリポジトリに直書きしない（BACKEND_FIREBASE.md §15・§26 M-7）
 .env*
 !.env.example
+# functions の機能フラグ（秘密ではない値だけ。AI_REQUIREMENTS_PLAN.md §4 U5 M1）。Secret のローカル上書きは置かない（テストが止める）
+!functions/.env.afro-cms-4a6ff
+functions/.secret.local
 
 # Firebase: live ビルドの出力・CLI のキャッシュ（BACKEND_PLAN.md C2）
 dist-live
@@ -19,3 +22,6 @@ dist-emulator
 
 # Cloud Functions のビルド出力（npm --prefix functions run build）
 functions/lib
+
+# AI 評価の出力（生の出力・採点表。実装計画 §6 L1）
+prototypes/ai-requirements-eval/out/

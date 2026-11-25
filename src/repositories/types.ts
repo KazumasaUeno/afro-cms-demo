@@ -39,6 +39,12 @@ export interface AnswerEntry {
   value: AnswerValue;
 }
 
+/** completeAnalysis の追加の指定（AI 下書き。AI_REQUIREMENTS_PLAN.md §U4・DEC lead F3） */
+export interface CompleteAnalysisOptions {
+  /** 'aiDraft' = v2（aiDrafts の edited が必要。無ければ失敗）。既定 'answers' = v1 */
+  proposal?: 'answers' | 'aiDraft';
+}
+
 export interface RequirementsRepo {
   /** その案件の要件（ヒアリング回答・状態）。demo は 1 案件分なので projectId を使わない */
   useCurrent(projectId: string): Query<RequirementSession>;
@@ -46,8 +52,12 @@ export interface RequirementsRepo {
   /** まとめて反映する（CSV の取り込み）。live は 1 回の書き込みにする */
   setAnswers(projectId: string, entries: readonly AnswerEntry[], by?: AnswerSide): Promise<void>;
   confirmAnswer(projectId: string, questionId: string, by: AnswerSide): Promise<void>;
-  /** AI 分析の完了＝お客様への確認依頼（live: draft → analyzed、要件定義書の写しと submit の記録を 1 回で書く） */
-  completeAnalysis(projectId: string): Promise<void>;
+  /**
+   * AI 分析の完了＝お客様への確認依頼（live: draft → analyzed、要件定義書の写しと submit の記録を 1 回で書く）。
+   * opts.proposal='aiDraft'（live だけ。AI 下書きの「承認を依頼する」）: 写しを aiDrafts/requirements の generated（flags を除く）＋ edited から
+   * transaction の中で作る（firestore.rules proposalV2Ok の等式）。省略時は従来どおり回答から作る v1。demo は opts を無視する
+   */
+  completeAnalysis(projectId: string, opts?: CompleteAnalysisOptions): Promise<void>;
   /** demo: 回答をやり直す（全消去）。live: 確認依頼を差し戻す（analyzed → draft。回答は残す。§6） */
   reset(projectId: string): Promise<void>;
   /** demo だけ: 差し戻す（analyzed → draft。回答は残す。0.29.3）。live は reset が差し戻し */

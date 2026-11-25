@@ -276,7 +276,7 @@ service cloud.firestore {
               && before.requirements.status == 'draft' && after.requirements.status == 'analyzed'
               && ch.hasOnly(['proposal','proposalRevision','updatedAt','updatedBy'])
               && d.proposalRevision == after.requirements.revision
-              && validProposal(d.proposal));
+              && validStoredProposal(d.proposal, pid));
     }
 
     // §28.6 の allow create（お客様の承認 ／ 開発者の submit・withdraw）
@@ -321,6 +321,15 @@ service cloud.firestore {
                       && validReq(request.resource.data) && stamped();
         allow update: if stamped() && reqUpdateOk(pid, acctOrNull(), changed(), proj(pid), getAfter(projPath(pid)).data);
         allow delete: if false;
+      }
+
+      // ---------- aiDrafts/requirements（AI 下書き。docs/design/AI_REQUIREMENTS.md §7・実装計画 §4 U1） ----------
+      // 作成・サーバー欄（generated・job・quota・usage・lastError・discardLog 等）の更新は Functions（Admin SDK）だけ。
+      // お客様は読めない（生出力・使用量が届かない）。edited の保存も callable saveAiDraftEdits が検証して Admin SDK で書く
+      // （代替 F-a。Rules の式の上限を超えるため。admin を含む全員がクライアントからは書けない）
+      match /aiDrafts/{did} {
+        allow get, list: if isAdmin() || assigned(pid);
+        allow create, update, delete: if false;
       }
 
       // ---------- approvals（§28.6。追記のみ） ----------
@@ -402,9 +411,37 @@ service cloud.firestore {
         && (p.points.size() < 6 || validPoint(p.points[5]));
     }
 
+    // ================= 提案 v2 と AI 下書き（docs/design/AI_REQUIREMENTS.md §5.3・§7、実装計画 §4 U1） =================
+    // aiDrafts の edited は Rules で検査しない（実装計画 §4 U1 の代替 F-a。クライアントの書き込みは全面拒否）。
+    // 計測（2026-11-20 エミュレータ）: 最大の payload（ポイント 6×上限・未確定 10）の edited 更新は、式を節約した書き方でも
+    // 1 リクエスト 1000 式の上限で拒否された → 検査と保存は callable saveAiDraftEdits（Admin SDK。U2）が行う。数値は AI_REQUIREMENTS_PLAN.md §7
+    function aiDraftPath(pid) { return /databases/$(db)/documents/projects/$(pid)/aiDrafts/requirements; }
+    // v2 の submit（B-H5・MEDIUM-2）: 中身を再検証せず、aiDrafts の generated のサーバー欄（flags を除く）＋ edited の 3 欄と
+    // マップリテラル 1 本の等式で一致することだけを見る。aiDraft・generated・edited のどれかが無ければ評価エラー＝拒否
+    function proposalV2Ok(p, pid) {
+      let ai = getAfter(aiDraftPath(pid)).data;
+      let g = ai.generated;
+      let e = ai.edited;
+      return ai.state == 'ready'
+        && p == {'version': 2, 'hostname': g.hostname, 'issue': g.issue, 'purposes': g.purposes, 'improves': g.improves,
+                 'competitors': g.competitors, 'siteCheck': g.siteCheck, 'origin': g.origin,
+                 'summary': e.summary, 'points': e.points, 'draft': e.draft};
+    }
+    // 版ごとの受け付け（B-M4）: version を持たない = v1（従来の validProposal）、version == 2 = v2。それ以外は拒否
+    function validStoredProposal(p, pid) {
+      return p is map && (('version' in p) ? proposalV2Ok(p, pid) : validProposal(p));
+    }
+
     // 管理者の横断一覧（collectionGroup('approvals')）
     match /{path=**}/approvals/{aid} {
       allow list: if isAdmin();
+    }
+
+    // ================= aiUsage/{yyyymm}（AI の月次使用量。JST。設計 §7） =================
+    // 読めるのは admin だけ。書くのは Functions（Admin SDK）だけ
+    match /aiUsage/{ym} {
+      allow get, list: if isAdmin();
+      allow write: if false;
     }
 
     // ================= siteKeys（§5.4） =================

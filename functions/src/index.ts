@@ -22,6 +22,7 @@ import { logger } from 'firebase-functions';
 import { onDocumentUpdated } from 'firebase-functions/firestore';
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/https';
 import { setGlobalOptions } from 'firebase-functions/options';
+import { makeAiFunctions } from './ai';
 import { callableCors } from './cors';
 
 // エミュレータで動くときは、Auth・Firestore もエミュレータでなければ起動しない（本番へ書き込まない。BACKEND_FIREBASE §16.1）
@@ -234,3 +235,7 @@ export const onInviteRevoked = onDocumentUpdated({ document: 'invites/{email}', 
     throw e;
   }
 });
+
+// AI 下書き（docs/design/AI_REQUIREMENTS_PLAN.md §4 U2。既定は機能フラグ off）
+const ai = makeAiFunctions({ region: REGION, enforceAppCheck: ENFORCE_APP_CHECK, cors: callableCors(process.env) });
+export const { requestRequirementsDraft, saveAiDraftEdits, generateRequirementsDraftTask } = ai;

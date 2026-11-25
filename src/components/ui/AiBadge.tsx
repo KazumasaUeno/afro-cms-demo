@@ -6,9 +6,12 @@ import { tokens } from '@/theme/tokens';
  * AI シミュレーションであることの明示。
  * 本デモの AI 結果はすべて事前に用意したデータであり、外部 API には送信していない。
  */
-export function AiBadge({ label = 'AIシミュレーション' }: { label?: string }) {
+const DEMO_TOOLTIP = 'デモ用に事前に用意した結果を表示しています。実際のAI生成・外部送信は行っていません。';
+
+/** tooltip: 既定はデモの説明。AI 下書き（v2・フラグ on）は事実どおりの文を渡す（DEC lead F4） */
+export function AiBadge({ label = 'AIシミュレーション', tooltip = DEMO_TOOLTIP }: { label?: string; tooltip?: string }) {
   return (
-    <Tooltip title="デモ用に事前に用意した結果を表示しています。実際のAI生成・外部送信は行っていません。">
+    <Tooltip title={tooltip}>
       <Box
         component="span"
         tabIndex={0}

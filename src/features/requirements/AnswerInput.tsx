@@ -2,6 +2,10 @@ import { Box, ButtonBase, InputAdornment, TextField, Typography } from '@mui/mat
 import { Check, Globe } from 'lucide-react';
 import type { AnswerValue, RequirementQuestion } from '@/types';
 import { tokens } from '@/theme/tokens';
+import { AI_SENT_QUESTION_IDS } from '@/types/aiDraft';
+import { AI_FLAG_MODE } from './aiDraft/aiDraftPort';
+import { AI_SEND_NOTICE } from './aiDraft/aiDraftState';
+import { useLiveRoleOptional } from '@/live/session';
 import { MAX_LONGTEXT, MAX_TEXT, MAX_URL } from './validation';
 
 interface ChipSelectProps {
@@ -64,6 +68,8 @@ export function AnswerInput({ question: q, value, onChange, error, autoFocus, on
   const str = typeof value === 'string' ? value : '';
   const arr = Array.isArray(value) ? value : [];
   const inputId = `answer-${q.id}`;
+  const role = useLiveRoleOptional();
+  const sendNotice = AI_FLAG_MODE !== 'off' && (role === 'admin' || role === 'developer');
 
   if (q.kind === 'multi' || q.kind === 'single') {
     return (
@@ -76,6 +82,9 @@ export function AnswerInput({ question: q, value, onChange, error, autoFocus, on
   }
 
   const max = q.kind === 'url' ? MAX_URL : q.kind === 'longtext' ? MAX_LONGTEXT : MAX_TEXT;
+  // §5 ②: フラグ internal/on・社内（管理者・開発者）・AI へ送る自由記述だけ。DRAFT: LEGAL Q-4 の結論で差し替える
+  const aiNotice = sendNotice && (q.kind === 'text' || q.kind === 'longtext') && (AI_SENT_QUESTION_IDS as readonly string[]).includes(q.id);
+  const helper = error ?? (q.kind === 'longtext' ? `${str.length} / ${max}文字` : ' ');
   return (
     <TextField
       id={inputId}
@@ -89,7 +98,7 @@ export function AnswerInput({ question: q, value, onChange, error, autoFocus, on
       type={q.kind === 'url' ? 'url' : 'text'}
       inputMode={q.kind === 'url' ? 'url' : undefined}
       error={!!error}
-      helperText={error ?? (q.kind === 'longtext' ? `${str.length} / ${max}文字` : ' ')}
+      helperText={aiNotice ? <>{AI_SEND_NOTICE.input}<br />{helper}</> : helper}
       inputProps={{ 'aria-label': q.text, autoComplete: q.kind === 'url' ? 'url' : 'off', spellCheck: q.kind !== 'url' }}
       InputProps={q.kind === 'url' ? { startAdornment: <InputAdornment position="start"><Globe size={18} color={tokens.color.muted} /></InputAdornment> } : undefined}
       onKeyDown={(e) => {

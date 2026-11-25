@@ -1,0 +1,193 @@
+/**
+ * AI による提案・要件定義書の下書き（docs/design/AI_REQUIREMENTS.md §5.3・§7、実装計画 §4 U1）。
+ *
+ * - 既存の `Proposal`（v1。`version` を持たない 8 キー）は変えない。保存される提案は `StoredProposal = Proposal | ProposalV2`
+ * - edited の上限・列挙はクライアントの Rules では検査しない（計画の代替 F-a。最大の payload が Rules の 1000 式を超えた）。
+ *   検査は callable saveAiDraftEdits（U2）がこの定数で行う。tests/rules/mutation.test.mjs「定数の食い違い」が
+ *   Rules の v2 の等式のキー・列挙（分野 ⊇ improveOptions・送る質問 ID ⊂ Rules の質問 ID）・テストの最大値とこのファイルを照合する
+ * - Firestore の Timestamp はここでは型に持ち込まない（repository 層で変換する。src/types/index.ts と同じ方針）
+ */
+import type { ISODate, Proposal } from './index';
+
+/** Rules と共有する上限（文字数は String の長さ。Rules の `.{0,n}` はコードポイントで数える） */
+export const AI_DRAFT_LIMITS = {
+  /** 提案の要約 */
+  summary: 400,
+  /** 提案ポイントの件数 */
+  points: 6,
+  /** ポイントの各欄 */
+  pointId: 40,
+  pointTitle: 80,
+  pointDetail: 600,
+  pointImpact: 200,
+  /** ポイント 1 件の根拠キー数 */
+  evidence: 5,
+  /** 要件定義書の下書きの各欄 */
+  draftField: 800,
+  /** 未確定事項の件数と 1 件の長さ */
+  openQuestions: 10,
+  openQuestion: 200,
+  /** 基本チェックの項目数（generated.siteCheck.items。サーバーが書く） */
+  siteCheckItems: 12,
+  /** 管理者が編集を捨てた記録（discardLog。サーバーが書く） */
+  discardLog: 10,
+} as const;
+
+/** ポイントの優先度（v1 と同じ 3 値） */
+export const AI_POINT_PRIORITIES = ['high', 'medium', 'low'] as const;
+export type AiPointPriority = (typeof AI_POINT_PRIORITIES)[number];
+
+/**
+ * ポイントの分野（列挙）。ヒアリングの「改善したいこと」（IMPROVE_OPTIONS）＋「その他」。
+ * [DECISION database-engineer U1] 設計 §5.3 は「列挙」とだけ定めているため、既存の選択肢と同じ集合にした。変えるときは Rules と同時に
+ */
+export const AI_POINT_AREAS = [
+  'ファーストビュー', 'ナビゲーション', 'スマホ表示', '表示速度', '問い合わせ導線', '写真・ビジュアル', 'SEO', '更新のしやすさ', 'その他',
+] as const;
+export type AiPointArea = (typeof AI_POINT_AREAS)[number];
+
+/** AI へ送る質問 ID（設計 §4「送る」。q-infra・q-dns-* は送らない） */
+export const AI_SENT_QUESTION_IDS = [
+  'q-url', 'q-purpose', 'q-issue', 'q-competitor', 'q-improve', 'q-keep', 'q-target', 'q-strength',
+  'q-market', 'q-content', 'q-feature', 'q-cv', 'q-seo', 'q-ops', 'q-schedule', 'q-other',
+] as const;
+
+/**
+ * 基本チェックの項目キー（設計 §3「基本チェック」。siteCheck.items[].key と AI へ渡す site_facts のキー）。
+ * [DECISION database-engineer U1] キー名はここで固定する（U2/U3 はこの定数を使う）
+ */
+export const AI_SITE_CHECK_KEYS = [
+  'https', 'viewport', 'title-length', 'description', 'h1-count', 'alt-missing',
+  'page-size', 'response-time', 'sitemap', 'structured-data',
+] as const;
+export type AiSiteCheckKey = (typeof AI_SITE_CHECK_KEYS)[number];
+
+/** `points[].evidence` の許可リスト（Rules の hasOnly と同じ集合） */
+export const AI_EVIDENCE_KEYS = [...AI_SENT_QUESTION_IDS, ...AI_SITE_CHECK_KEYS] as const;
+export type AiEvidenceKey = (typeof AI_EVIDENCE_KEYS)[number];
+
+export interface ProposalV2Point {
+  id: string;
+  area: AiPointArea;
+  priority: AiPointPriority;
+  title: string;
+  detail: string;
+  /** 定性表現（根拠のない数値を書かない。設計 §5.4） */
+  impact: string;
+  evidence: AiEvidenceKey[];
+}
+
+/** 要件定義書の下書き（各欄 ≤ draftField 文字。空文字可） */
+export interface ProposalV2Draft {
+  goal: string;
+  target: string;
+  contents: string;
+  features: string;
+  nonFunctional: string;
+  operation: string;
+  schedule: string;
+  openQuestions: string[];
+}
+
+export interface SiteCheckItem {
+  key: AiSiteCheckKey;
+  ok: boolean;
+  value: string | number | boolean | null;
+}
+
+export interface SiteCheck {
+  status: 'ok' | 'blocked' | 'failed';
+  fetchedAt?: ISODate;
+  passed: number;
+  total: number;
+  items: SiteCheckItem[];
+}
+
+export interface ProposalOrigin {
+  kind: 'ai';
+  promptVersion: string;
+  model: string;
+}
+
+/** 開発者が直せる 3 欄（aiDrafts.edited。Rules は edited.keys().hasOnly(この 3 つ)） */
+export interface AiEditable {
+  summary: string;
+  points: ProposalV2Point[];
+  draft: ProposalV2Draft;
+}
+
+/** サーバーが決める欄（generated にだけ置く。L-2） */
+export interface ProposalV2ServerFields {
+  hostname: string;
+  issue: string;
+  /** 生成時の回答（submit 時の回答から作り直さない） */
+  purposes: string[];
+  improves: string[];
+  competitors: string[];
+  siteCheck: SiteCheck | null;
+  origin: ProposalOrigin;
+}
+
+/** お客様へ出す提案（requirements/current.proposal と approvals の写し）。flags は含めない */
+export interface ProposalV2 extends ProposalV2ServerFields, AiEditable {
+  version: 2;
+}
+
+/** AI の出力（aiDrafts.generated）。flags はサーバー欄で、提案には写らない */
+export interface AiGenerated extends ProposalV2 {
+  flags?: { unsupportedNumbers?: string[] };
+}
+
+/** 保存される提案（v1 は version を持たない） */
+export type StoredProposal = Proposal | ProposalV2;
+
+export function isProposalV2(p: StoredProposal | null | undefined): p is ProposalV2 {
+  return !!p && 'version' in p && p.version === 2;
+}
+
+export type AiDraftState = 'ready' | 'failed';
+export type AiJobState = 'idle' | 'running';
+
+/** projects/{pid}/aiDrafts/requirements（設計 §7）。作成と edited 以外の更新は Functions（Admin SDK）だけ */
+export interface AiDraftDoc {
+  schemaVersion: 1;
+  state: AiDraftState;
+  /**
+   * 生成ジョブ（lease）。新しい下書きの作成は requestRequirementsDraft だけが行い、そのとき job は必ず running（state は failed で作り、結果で ready へ）。
+   * running は leaseUntil を過ぎるまで実行中とみなす（過ぎれば次の押下が奪える）。結果を書けるのは job.requestId が自分のまま running の worker だけ（fencing）。
+   * 終わると idle（requestId は最後の押下のまま。同じ requestId の再送は結果を返す）。role・discardEdits・quotaDay は running の間だけ意味を持つ
+   */
+  job: {
+    state: AiJobState;
+    requestId?: string;
+    by?: string;
+    startedAt?: ISODate;
+    leaseUntil?: ISODate;
+    role?: string;
+    discardEdits?: boolean;
+    /** 上限を加算した JST の日（返金はこの日の鍵で戻す） */
+    quotaDay?: string;
+  };
+  /** 最後の失敗（種別だけ。本文・メッセージは入れない）。httpStatus・anthropicRequestId は Anthropic の失敗のときだけ */
+  lastError?: { code: string; at: ISODate; requestId: string; httpStatus?: number; anthropicRequestId?: string };
+  answersHash?: string;
+  configHash?: string;
+  generated?: AiGenerated;
+  edited?: AiEditable;
+  editedAt?: ISODate;
+  editedBy?: string;
+  discardLog?: { by: string; at: ISODate; role: 'admin' }[];
+  usage?: { input: number; output: number; cacheRead: number; costMicroUsd: number };
+  quota?: { day: string; dayCount: number; month: string; monthCount: number };
+  updatedAt: ISODate;
+  updatedBy: string;
+}
+
+/** aiUsage/{yyyymm}（JST。admin だけが読める。書くのは Functions だけ） */
+export interface AiUsageDoc {
+  count: number;
+  costMicroUsd: number;
+  byDay: Record<string, number>;
+  /** 利用者の日次の件数（quota.ts の上限に使う）。鍵は `${JST の yyyy-mm-dd}:${uid}`（月の文書の中に日付つきで持つ） */
+  byUid: Record<string, number>;
+}

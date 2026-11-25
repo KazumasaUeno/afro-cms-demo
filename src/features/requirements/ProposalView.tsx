@@ -9,6 +9,9 @@ import { AiBadge, CountUp, ProgressRing, Reveal, StatusPill, Surface, type PillT
 import { formatDateTime } from '@/services/time';
 import { palette, tokens } from '@/theme/tokens';
 import type { ProposalPoint } from '@/types';
+import { isProposalV2, type StoredProposal } from '@/types/aiDraft';
+import { AI_DRAFT_COPY } from './aiDraft/aiDraftState';
+import { ProposalV2Body, ProposalV2Summary } from './aiDraft/ProposalV2Body';
 import { buildProposal } from './buildProposal';
 import { isAnswered } from './validation';
 import { pendingConfirmations } from './assignment';
@@ -29,6 +32,9 @@ const PRIORITY: Record<ProposalPoint['priority'], { label: string; tone: PillTon
  * live の開発者: 承認待ちの間だけ「差し戻す」（requirements.reset＝analyzed → draft。回答は残す。§6）。
  * live では保存した提案（req.proposal＝承認の対象と同じ写し）を見せる。無ければ回答から作る（demo は常に回答から作る）
  */
+/** v2 の印の説明（事実どおり。DEC lead F4。お客様向けの確定文言は LEGAL Q-4） */
+const V2_BADGE_TOOLTIP = 'AI が作成した下書きを、担当者が確認・編集した内容です。';
+
 export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'client' }) {
   const { requirements, approvals, projects } = useRepositories();
   const { data: req } = useCurrentRequirements();
@@ -49,7 +55,10 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
   const client = variant === 'client';
   const [confirmApprove, setConfirmApprove] = useState(false);
   const [approving, setApproving] = useState(false);
-  const proposal = useMemo(() => req.proposal ?? buildProposal(req.answers, req.competitors), [req.proposal, req.answers, req.competitors]);
+  const proposal: StoredProposal = useMemo(() => req.proposal ?? buildProposal(req.answers, req.competitors), [req.proposal, req.answers, req.competitors]);
+  // v2（AI 下書きを開発者が確認したもの。AI_REQUIREMENTS_UI.md §6）はサイトスコアを出さない（live・demo とも）
+  const v2 = isProposalV2(proposal) ? proposal : null;
+  const v1 = isProposalV2(proposal) ? null : proposal;
   // 差し戻し: demo は管理者画面の「差し戻す」（承認待ちの間）と「回答をやり直す」、live はアサインされた開発者の「差し戻す」（承認待ちの間だけ）
   const canReset = live ? role === 'developer' && req.status === 'analyzed' && !client : !approved && !dev;
   const answered = REQUIREMENT_QUESTIONS.filter((q) => isAnswered(req.answers[q.id])).length;
@@ -62,10 +71,11 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
       <Reveal>
         <Surface padding={0} sx={{ overflow: 'hidden' }}>
           {/* live ではサイトスコアを出さない（実測の根拠が無い値を見せない。2026-11-20 ユーザー判断・AI_REQUIREMENTS Q-6）。demo は「デモ用の値」と明記して残す */}
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: live ? '1fr' : '1.4fr 1fr' } }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: live || v2 ? '1fr' : '1.4fr 1fr' } }}>
             <Box sx={{ p: { xs: 2.5, md: 4 } }}>
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
-                <AiBadge />
+                {/* v2 の印の文言は PENDING Q-4（お客様への表示文言。法務） */}
+                {v2 ? <AiBadge label={AI_DRAFT_COPY.v2Badge} tooltip={V2_BADGE_TOOLTIP} /> : <AiBadge />}
                 <Typography variant="caption">作成 {formatDateTime(req.analyzedAt)}</Typography>
               </Stack>
               <Typography variant="overline" sx={{ display: 'block' }}>Renewal Proposal</Typography>
@@ -84,25 +94,26 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
                   </Box>
                 </Box>
               )}
+              {v2 && <ProposalV2Summary proposal={v2} />}
               <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
                 {[...proposal.purposes, ...proposal.improves].slice(0, 8).map((t) => (
                   <StatusPill key={t} tone="primary" dot={false} icon={<Target size={12} />}>{t}</StatusPill>
                 ))}
               </Stack>
             </Box>
-            {!live && <Box sx={{ p: { xs: 2.5, md: 4 }, bgcolor: tokens.color.scoreboardBg, color: '#fff', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2.5 }}>
+            {!live && v1 && <Box sx={{ p: { xs: 2.5, md: 4 }, bgcolor: tokens.color.scoreboardBg, color: '#fff', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2.5 }}>
               <Typography variant="overline" sx={{ color: 'rgba(255,255,255,.6)' }}>サイトスコア（デモ用の値）</Typography>
               <Stack direction="row" spacing={3} alignItems="center">
-                <ProgressRing value={proposal.currentScore} size={84} stroke={7} color="#94A3B8" track="rgba(255,255,255,.12)" label="現状スコア">
+                <ProgressRing value={v1.currentScore} size={84} stroke={7} color="#94A3B8" track="rgba(255,255,255,.12)" label="現状スコア">
                   <Box sx={{ textAlign: 'center' }}>
-                    <Box sx={{ fontSize: 22, fontWeight: 700 }}><CountUp value={proposal.currentScore} /></Box>
+                    <Box sx={{ fontSize: 22, fontWeight: 700 }}><CountUp value={v1.currentScore} /></Box>
                     <Box sx={{ fontSize: 12, opacity: 0.6, fontWeight: 600 }}>現状</Box>
                   </Box>
                 </ProgressRing>
                 <ArrowRight size={20} color="rgba(255,255,255,.4)" />
-                <ProgressRing value={proposal.projectedScore} size={84} stroke={7} color={palette.light.inversePrimary} track="rgba(255,255,255,.12)" label="改善後の見込みスコア">
+                <ProgressRing value={v1.projectedScore} size={84} stroke={7} color={palette.light.inversePrimary} track="rgba(255,255,255,.12)" label="改善後の見込みスコア">
                   <Box sx={{ textAlign: 'center' }}>
-                    <Box sx={{ fontSize: 22, fontWeight: 700 }}><CountUp value={proposal.projectedScore} duration={1400} /></Box>
+                    <Box sx={{ fontSize: 22, fontWeight: 700 }}><CountUp value={v1.projectedScore} duration={1400} /></Box>
                     <Box sx={{ fontSize: 12, opacity: 0.6, fontWeight: 600 }}>改善後</Box>
                   </Box>
                 </ProgressRing>
@@ -110,7 +121,7 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
               <Stack direction="row" spacing={1} alignItems="center">
                 <TrendingUp size={16} color="#6EE7B7" />
                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.85)' }}>
-                  提案を実施すると <b>+{proposal.projectedScore - proposal.currentScore}pt</b> の改善見込み
+                  提案を実施すると <b>+{v1.projectedScore - v1.currentScore}pt</b> の改善見込み
                 </Typography>
               </Stack>
               <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.55)' }}>
@@ -121,11 +132,12 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
         </Surface>
       </Reveal>
 
-      {/* 改善ポイント */}
-      <Box>
+      {/* 改善ポイント（v2 は根拠・基本チェック・要件定義書の下書きを含む ProposalV2Body。flags の印は渡さない） */}
+      {v2 && <ProposalV2Body proposal={v2} />}
+      {v1 && <Box>
         <Typography variant="h4" component="h2" sx={{ mb: 1.5 }}>改善ポイントと提案内容</Typography>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', xl: 'repeat(3, 1fr)' }, gap: 2 }}>
-          {proposal.points.map((p, i) => {
+          {v1.points.map((p, i) => {
             const pr = PRIORITY[p.priority];
             return (
               <Reveal key={p.id} delay={0.05 + i * 0.06}>
@@ -145,7 +157,7 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
             );
           })}
         </Box>
-      </Box>
+      </Box>}
 
       {/* 承認 */}
       <Reveal delay={0.3}>

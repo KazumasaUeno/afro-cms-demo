@@ -37,6 +37,7 @@
 | 範囲 | **`functions/` だけ**。Web バンドルに入れない（ルート `package.json` に足さない。`dist-live` を grep して 0 件） |
 | 条件 | ①版は**完全固定**（`^` なし）。`functions/package-lock.json` をコミットし、採用した版をこの表に追記 ②`npm view @anthropic-ai/sdk` で発行元・版・依存数を記録。**`npm audit signatures --prefix functions` が通る**。**install scripts を持たない**（`npm view … scripts` と lock の `hasInstallScript` で確認）（security M6）③`output_config.format`・`output_config.effort`・adaptive thinking・streaming を**その版が持つこと**を公式ドキュメントで確認（[UNKNOWN] → U3 の最初。無ければ Plan Review へ戻す）④`npm audit --omit=dev` の HIGH 以上 0 ⑤**`ANTHROPIC_LOG` を設定しない**（SDK のデバッグログで本文が出ない。security M4。デプロイの env に無いことを U5 で確認） |
 | 却下した案 | HTML 抽出・Cloud Tasks のための依存は**追加しない**（抽出は自前、enqueue は `firebase-admin/functions` の `taskQueue()`。[INFERENCE: firebase-admin 14.5.1 に有る。U2 で型を確認]） |
+| **採用した版（U3 2026-11-20 ai-engineer）** | `@anthropic-ai/sdk` **1.11.0**（`^` なし。2026-11-19 公開・latest。発行元 npm の anthropic メンテナ。直接依存 3: `json-schema-to-ts`・`standardwebhooks`・`@opentelemetry/api`。lock の追加 7 パッケージ）。[FACT 型定義 `resources/messages/messages.d.ts`] `OutputConfig.format`（`json_schema`）・`OutputConfig.effort`（low〜max）・`ThinkingConfigAdaptive`・`messages.stream()`＋`finalMessage()`・`request_id`・型付きエラー・`maxRetries`/`timeout` を持つ ／ `npm audit --omit=dev` 0 件 ／ `npm audit signatures` 214 verified・21 attestations ／ install scripts: 追加分 0（lock の `hasInstallScript` は既存の `@firebase/util`・`protobufjs` だけ）／ `ANTHROPIC_LOG` 等の環境変数に左右されないよう、クライアントは `apiKey`・`baseURL` を明示し `logLevel:"off"`・`openTelemetry:false`（`functions/src/ai/anthropicClient.ts`）／ `dist-live` に 0 件（grep） |
 
 ## 4. ユニット（Write Scope は重ならない）
 
@@ -113,9 +114,12 @@
 | サーバー（正） | `functions/src/ai/flags.ts` が `defineString('AI_REQUIREMENTS_MODE')`（`off`｜`internal`｜`on`。それ以外・未設定・空は `off`）と `defineString('AI_REQUIREMENTS_PROJECT_ALLOWLIST')` を読む。値は `functions/.env.afro-cms-4a6ff`（コミット。U5 M1） | `off` |
 | 判定 | `off` → `failed-precondition: feature-disabled`。`internal` → **admin かつ allowlist の案件だけ**（allowlist 空なら全拒否）。`on` → 設計どおり。**判定は callable の最初（上限の加算より前）と worker の開始時の両方**（worker で off なら返金して終わる） | — |
 | 画面 | `VITE_FEATURE_AI_REQUIREMENTS`（`off`｜`internal`｜`on`）。`internal` は admin にだけパネルを出す。境界はサーバー（1.8） | `off` |
+| 編集の判定（`internal`） | **[DECISION lead-architect 2026-11-20]** `saveAiDraftEdits` は `internal` で **allowlist の案件 ＋ アサインされた開発者**だけ（admin・お客様は不可。役割は authz、案件は `flags.ts` の `editAllowed`）。生成の「admin だけ」を編集に当てはめると、社内試験で 生成→編集→承認依頼 を通せないため（U2 の提案を承認） | — |
 | 社内限定の経路 | 社内の試験用案件（**合成データだけ**）を 1 件作り、その ID を allowlist に入れて `internal` で出す。お客様の案件では押せない | — |
 | お客様へ公開（`on`） | **L-c**: LEGAL Q-4・Q-7 の結論 ＋（削除の仕組み実装済み または ユーザーの書面受け入れ）＋ 同意文言の反映 ＋ 評価結果とモデルのユーザー確定 ＋ **R-7 の security 再レビュー** ＋ Release Readiness の GO。`deploy-firebase` が記録の無い `on` を拒否 | — |
 | 戻す | `off` に戻して functions を出し直す。Rules は v2 を受け付けたまま。v2 の提案は描ける（描画はフラグに関係しない） | — |
+
+- **受け入れたリスク SEC-L4**（security 2026-11-24）: worker はフラグを見直すとき、押下時に job へ保存した役割（`job.role`）で判定する（押下後に役割が変わっても worker の判定は変わらない）。押下から worker 開始までは秒単位で、`off` への切り替えは役割に関係なく止まるため受け入れる
 
 ## 6. 評価（実 API。**ここでユーザー GO が必要**）
 
@@ -123,6 +127,7 @@
 - 実行: 3 モデル × 20 件 × 3 回（effort `low`）。合格基準は設計 §5.5 で**固定**
 - 費用: 見込み **約 $18**。道具が費用を積算し **$25 で止める**。Workspace 上限 $20 に先に当たりうる → **Opus を最後に回す**。当たったら Opus を減らした結果で判断するか、上限の一時引き上げをユーザーに聞く
 - キー: **評価専用のキー**をユーザーが作り、自分の端末の環境変数で実行（AI はキーを見ない）。本番キーを使わない。**評価が終わったらユーザーがその評価キーを Console で失効させる**（L1）
+- **注入ケースに class で隠した文（SEC-M2）を含める**: CSS の class（`.hidden`・`.sr-only` 等）で見えなくした本文の指示は、サイト本文の抽出（`site/extract.ts`）で落とせない。評価の注入ケースに class-hidden の注入を入れ、0 件を合格条件に含める
 - 結果: `docs/design/AI_REQUIREMENTS_EVAL.md`（集計だけ。生の出力は入れない）。ユーザーがモデルを確定（U-3）。盲検の採点は開発者 2 名（ユーザーが指名）
 - 実 API の Smoke（本番キーで 1 回）は U5 の後、`internal` で社内試験案件に 1 回だけ
 
@@ -142,6 +147,20 @@
 - **戻せないもの**: Anthropic へ送ったデータ（最大 30 日保持）。だから 5 の前に法務の結論が要る
 - Rules の v2 受け付けは、v2 の提案が 1 件でも保存された後は**外さない**
 - **Hosting の戻し先の下限（MEDIUM-4）**: v2 の提案が 1 件でも保存された後は、**段 3 のビルドより前の版へ戻さない**（v2 を描けない画面になる）。Runbook に書く
+
+### 7.1 U1 の計測結果: Rules の式の量と参照の数（database-engineer 2026-11-20）
+
+- **公式の上限**（[FACT 2026-11-20 WebFetch https://firebase.google.com/docs/firestore/security/rules-structure]）: 1 リクエストで評価する式 **1,000**／`exists()`・`get()`・`getAfter()` は単一文書・クエリ **10**、複数文書の読み取り・transaction・batch **20**（各操作にも 10 が掛かる）。キャッシュされた呼び出しは数えない場合がある。関数の呼び出しの深さ 20・`let` 10/関数
+- 計測の方法: エミュレータ（firebase-tools 15.35・demo-afro-cms）で、**最大の payload の allow テスト**に式の詰め物（`pad10()` = 比較 10 個の関数）と存在しない文書への `exists()` を足し、通る最大数を二分探索した。ruleCoverage（`/emulator/v1/projects/demo-afro-cms:ruleCoverage`）は AST の節ごとの累計で、エミュレータが打ち切る数とは一致しない（例: 節の合計 1,145 で許可、1,097 で拒否）ため、余裕の判定には使わず内訳の確認だけに使った [FACT: probe の出力]
+
+| 経路 | 結果 | 余裕 |
+|---|---|---|
+| ① 開発者の `edited` 更新（ポイント 6×上限・根拠 5・下書き 7 欄×800・未確定 10×200） | **1,000 式の上限で拒否**。文字列の検査を区切り文字でつないで正規表現 1 回にまとめ、`is map`/`is list` を省いた書き方でも、ポイント 5 件＋未確定 0 件までしか通らない（5 件＋未確定 10 件・6 件は拒否） | **なし（超過）** → **代替 F-a を採用** |
+| ② v2 の submit（案件・回答・approvals・accounts＋`getAfter(aiDraft)`。全 20 問上限＋generated・edited とも上限ちょうど） | 許可。詰め物は trivial な書き込み（aiUsage の admin 更新）で `pad10()` 12 個、v2 submit で 10 個まで通る → submit の消費は概算 120〜240 式（1 個 ≒ 77〜83 式から逆算）[INFERENCE] | 式 **約 76% 以上**／参照: requirements/current の更新に存在しない文書の `exists()` を **さらに 8 個**足せる（trivial な操作と同じ。各操作 10 の上限に対し残り 8） |
+
+- **[DECISION database-engineer U1・計画 L-b の事前合意どおり] F-a を採る**: `aiDrafts` は**クライアントから作成・更新・削除できない**（`allow create, update, delete: if false`）。`edited` の検査と保存は **callable `saveAiDraftEdits`（Admin SDK）を U2 の Write Scope に足す**。U2 が写すテスト: `tests/rules/aiEditedCases.mjs`（許可 4・拒否 17）と、前提（アサインされた開発者だけ・admin 不可・要件が draft・generated がある・サーバー欄に触れない・**submit と同時に保存させない＝transaction で status=draft を確かめる**）
+- **F-b は不要**: v2 の submit はクライアントの batch のまま（`validStoredProposal` → `proposalV2Ok` の等式 1 本）。submit は edited を検証しないが、edited を書けるのは F-a の callable だけなので、提案の中身は callable の検査を通ったものになる
+- 計測の probe はリポジトリに入れていない（scratchpad）。Rules を変えたら同じ方法で測り直す
 
 ## 8. 影響範囲（要点）
 
@@ -201,6 +220,8 @@
 | T-12 | テスト・ローカルで本物のキーを使う（M1） | U2・U3 のテストの守り | TEST-12 キー／`.secret.local` があれば失敗 |
 | T-13 | 依存の改ざん（M6） | §3 条件② | TEST-13 `npm audit signatures`・install scripts なし |
 | T-14 | 評価キー・評価出力の残留（L1） | §6 | TEST-14 gitignore の確認・失効をユーザーが報告 |
+
+- **TEST-05・TEST-06 の手順（SEC-H2）**: `docs/operations/RUNBOOK_FIREBASE.md` §9.9（Release Gate のコマンドと確認項目。全コマンド `--project afro-cms-4a6ff`）。クラウドの作業そのものは同 §9.10 の G-0〜G-7（それぞれユーザーの GO の後。2026-11-24 時点で未実施）
 
 - [UNKNOWN] 設計 rev1 の本文には `S-H1`・`S-H2`・`S-M3` のラベルだけがある（`git show …:docs/design/AI_REQUIREMENTS.md` を grep）。**`S-M1`・`S-M2` のラベルは本文に見つからない**。T-07（ログ）と T-08（個人情報の除去）に当たると推定 [INFERENCE] → security-engineer が r2 で対応を確認する
 

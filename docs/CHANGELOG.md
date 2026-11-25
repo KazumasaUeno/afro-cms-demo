@@ -906,3 +906,19 @@
   - ログアウトのボタンは、書き込み待ちの回答を先に保存してからログアウトする。保存に失敗した・8 秒以内に終わらない（オフライン等）ときはログアウトせず「保存できていない入力があります」を出し、「ログアウトしない」「保存せずにログアウト」を選べる
   - 無効化などで強制的にログアウトされたときは、残った書き込みの予約を止め、「ログアウトしたため、保存していない入力は保存されませんでした」と知らせる（無音で捨てない）
   - 待ち合わせの純粋な部分を `src/live/pendingWrites.ts` へ切り出し、単体テストを追加（`npm run test:unit`）
+
+## 0.48.0 — 2026-11-25
+
+- AI 要件提案（下記 U1〜U5）を main へ統合。サーバの機能スイッチ `AI_REQUIREMENTS_MODE` と画面のフラグ `VITE_FEATURE_AI_REQUIREMENTS` で段階的に有効化する（全公開 on は法務確認の書類が無いとデプロイ用スクリプトが拒否）
+- U4 修正（未デプロイ）: callable のエラー理由を SDK の実際の形（末尾 ` [NNN]`）から読む `errorReasonOf`（理由ごとの案内が出ず、作り直し後に古い文面が新しい下書きを上書きしうる不具合の根本原因。ブラウザ QA で再現）／生成中も保存の失敗と「変更をコピー」を表示／提案ポイントの見出しラベルの折り返し。作り直し完了で編集欄を取り込み直す `aiDraftServerKey`・`decideResync`（コードレビューの Blocker）
+- 評価（2026-11-24）: 3 モデル × 20 件 × 3 回・$3.98・3 モデルとも機械の基準に合格（`docs/design/AI_REQUIREMENTS_EVAL.md`）。盲検は採点待ち
+- U5（運用の文書だけ・クラウドは未変更）: `docs/operations/RUNBOOK_FIREBASE.md` §9「AI 下書き」（Secret と実行 SA の一覧・ローテーション・漏えい時・フラグ・上限・止める手順・Hosting の戻し先の下限・月 1 回の請求の突き合わせ・IAM の Release Gate・ユーザーの GO が要る作業 G-0〜G-7）。`docs/TODO.md` に削除バッチ（Q-7）・App Check・PSI 見送り・U5 のクラウド作業
+- U4b（画面。フラグ `VITE_FEATURE_AI_REQUIREMENTS` 既定 off＝今と同じ・未デプロイ）: live の入口が AI 下書きの通信口（`src/live/aiDraftPort.ts`: aiDrafts の購読・`requestRequirementsDraft`／`saveAiDraftEdits`）を登録。internal/on で要件の draft 画面に「ヒアリング｜AI 下書き」のタブ（`AiDraftPanel`・`AiDraftEditor`: 未生成／生成中／失敗／止まった／下書きあり・確認済み、要確認の数字の印、1.5 秒の自動保存、作り直しの確認、承認の依頼＝`completeAnalysis(pid,{proposal:'aiDraft'})`）。internal の開発者には生成のボタンを出さない。社内の入力欄に送信の注意（【下書きの文言】）。`AiBadge` に任意の `tooltip`、`HearingEditor` に任意の `analyzeLabel`（既定は不変）。demo のビルドは Firebase なしのまま
+- U3（AI 層。フラグの内側・未デプロイ）: `functions/src/ai/`（PRM-REQ-001・構造化出力の Schema と再検証・Anthropic クライアント maxRetries 0・generateDraft・後処理・pricing.json）、共有の除去とハッシュ `src/shared/ai/`（`scripts/gen-ai-shared.mjs` が functions へ写す）、評価の道具 `prototypes/ai-requirements-eval/`（未実行）。依存 `@anthropic-ai/sdk` 1.11.0（functions のみ）
+- U2＋U3 統合（フラグ既定 off・未デプロイ）: worker（`generateRequirementsDraftTask`）が Secret の値から本物の Anthropic クライアントを作り U3 の `generateDraft` を呼ぶ（callable はクライアントを作らない）。configHash は U3 の `DEFAULT_AI_CONFIG`（モデルは [PENDING U-3]）。ハッシュは U3 の共有モジュール（非同期 SHA-256・接頭辞なし）に統一。AI が応答した失敗も推定費用を `aiUsage` に足す。ログに `aiDurationMs`（本文なし）
+- U1〜U3 レビューの修正（未デプロイ）: 同じ requestId が lease 切れで届いても再予約しない（failed を返す）・generated のサーバー欄は U3 の proposal（除去済み）を正にする・fencing と想定外の失敗でも AI の費用を `aiUsage` へ足す・未知のモデルは `ai-config` で返金・生成中は編集の保存を拒否・`deploy:firebase` が法務の記録の無い `AI_REQUIREMENTS_MODE=on` を拒否・サイト取得のテスト用 `route` を本番で拒否（`docs/reviews/2026-11-24-ai-u1-u3.md`）
+
+- Firestore Rules（未デプロイ）: `projects/{pid}/aiDrafts/{did}` を追加（読めるのはアサインされた開発者と admin だけ。お客様は不可。クライアントからの作成・更新・削除は全員不可＝計画の代替 F-a）。`aiUsage/{yyyymm}` を追加（admin の読み取りだけ）
+- Firestore Rules: `requirements/current.proposal` を版で受け付ける（`version` なし＝従来の v1、`version: 2`＝AI 下書きの提案）。v2 の確認依頼は `aiDrafts` の generated のサーバー欄＋edited の 3 欄との一致だけを確かめる。v1 の判定は不変
+- 型: `src/types/aiDraft.ts`（`ProposalV2`・`AiDraftDoc`・`StoredProposal`・上限と列挙の定数）。既存の `Proposal` は不変
+- Rules テスト: 301 → 375 件（aiDrafts・aiUsage・提案 v2・定数の食い違い・変異）。edited の検査ケースは `tests/rules/aiEditedCases.mjs`（U2 の callable テストへ写す）
