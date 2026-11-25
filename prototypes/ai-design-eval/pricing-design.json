@@ -1,0 +1,13 @@
+{
+  "unit": "USD per 1M tokens (= micro-USD per token). Same shape as functions/src/ai/pricing.json",
+  "verifiedAt": "2026-11-25",
+  "sources": {
+    "gemini-4-hydrogen": "docs/design/DESIGN_AI_SELECTION_2026-11-25.md section 2.1 (Gemini pricing https://aistudio.google.com/docs/pricing, fetched 2026-11-25 by ai-engineer): input 1.50 / output 7.50 incl. thinking. Paid tier only",
+    "gpt-6.2-sol": "docs/design/DESIGN_AI_SELECTION_2026-11-25.md section 2.1 (OpenAI pricing https://developers.openai.com/api/docs/pricing, fetched 2026-11-25): input 2 / output 10"
+  },
+  "note": "Only models not already in functions/src/ai/pricing.json or ../ai-requirements-eval/pricing-providers.json. cacheRead is not used by this eval (no shared prefix long enough) -> set equal to input as a conservative value. Estimate only; the bill is the source of truth. Re-verify before --go",
+  "models": {
+    "gemini-4-hydrogen": { "input": 1.50, "cacheWrite5m": 0, "cacheRead": 1.50, "output": 7.50 },
+    "gpt-6.2-sol": { "input": 2.00, "cacheWrite5m": 0, "cacheRead": 2.00, "output": 10.00 }
+  }
+}

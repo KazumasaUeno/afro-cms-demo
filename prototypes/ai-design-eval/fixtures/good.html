@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>つきみ堂</title>
+<style>
+:root{--bg:#faf7f2;--ink:#2b2420;--brand:#7A3E48}
+body{margin:0;background-color:var(--bg);color:var(--ink);font-family:"Hiragino Mincho ProN","Yu Mincho",serif}
+header{display:flex;justify-content:space-between;padding:24px 64px;border-bottom:1px solid #e5ddd3}
+nav a{color:var(--ink);margin-left:24px;text-decoration:none}
+.hero{display:grid;grid-template-columns:1.2fr 1fr;gap:48px;padding:96px 64px}
+.ph{aspect-ratio:4/5;background:linear-gradient(160deg,#efe6da,#d9c8b4)}
+.cta{display:inline-block;background:var(--brand);color:#ffffff;padding:14px 28px;border-radius:2px}
+@media (max-width: 600px){header{padding:16px 20px}.hero{grid-template-columns:1fr;padding:40px 20px}}
+</style>
+</head>
+<body>
+<header><div>つきみ堂</div><nav><a href="#seasonal">季節の和菓子</a><a href="#gift">贈答・詰め合わせ</a><a href="#shop">店舗案内</a></nav></header>
+<main>
+<section class="hero"><div><h1>三代続く、手づくりの上生菓子。</h1><p>季節ごとに入れ替える上生菓子を、贈答にも、日々のおやつにも。品があり、気軽に立ち寄れる町の和菓子屋です。</p><a class="cta" href="#order">オンラインで購入する</a></div><div class="ph" aria-label="写真: 季節の上生菓子"></div></section>
+<section id="seasonal"><h2>季節の和菓子</h2><p>（ここに今月の上生菓子の説明が入ります）</p></section>
+</main>
+<footer><p>つきみ堂</p></footer>
+<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0"></svg>
+</body>
+</html>
