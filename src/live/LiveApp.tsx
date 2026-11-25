@@ -11,6 +11,7 @@ const NewProjectPage = lazy(() => import('./pages/LiveNewProjectPage'));
 const ProjectDetailPage = lazy(() => import('./pages/LiveProjectDetailPage'));
 const PortalApprovalPage = lazy(() => import('./pages/PortalApprovalPage'));
 const LiveUsersPage = lazy(() => import('./pages/LiveUsersPage'));
+const LiveDashboardPage = lazy(() => import('./pages/LiveDashboardPage'));
 const HearingGate = lazy(() => import('./pages/HearingGate'));
 const RequirementsPage = lazy(() => import('@/features/requirements/RequirementsPage'));
 const HearingAnswersPage = lazy(() => import('@/features/requirements/HearingAnswersPage'));
@@ -43,6 +44,8 @@ const router = createBrowserRouter([
     element: <LiveShell />,
     children: [
       { index: true, element: <RoleHome /> },
+      // ダッシュボード（LIVE_DASHBOARD_TASKS_CONSULT U1。管理者は全案件・見るだけ、開発者は担当案件）。メニューへの追加と最初の画面の変更は U4
+      { path: 'dashboard', element: <RoleRoute roles={admin}><LiveDashboardPage /></RoleRoute> },
       { path: 'projects', element: <RoleRoute roles={admin}><ProjectsListPage /></RoleRoute> },
       // 管理者のプロジェクト作成（2026-11-25 ユーザー決定「管理者もプロジェクトを作れるように」。画面は開発者と同じ）
       { path: 'projects/new', element: <RoleRoute roles={admin}><NewProjectPage /></RoleRoute> },
@@ -50,6 +53,7 @@ const router = createBrowserRouter([
       { path: 'ai-studio', element: <RoleRoute roles={admin}><HearingGate><RequirementsPage /></HearingGate></RoleRoute> },
       { path: 'ai-studio/hearing', element: <RoleRoute roles={admin}><HearingGate><HearingAnswersPage /></HearingGate></RoleRoute> },
       { path: 'users', element: <RoleRoute roles={admin}><LiveUsersPage /></RoleRoute> },
+      { path: 'dev', element: <RoleRoute roles={dev}><LiveDashboardPage /></RoleRoute> },
       { path: 'dev/projects', element: <RoleRoute roles={dev}><ProjectsListPage /></RoleRoute> },
       { path: 'dev/projects/new', element: <RoleRoute roles={dev}><NewProjectPage /></RoleRoute> },
       { path: 'dev/projects/:projectId', element: <RoleRoute roles={dev}><ProjectDetailPage /></RoleRoute> },
