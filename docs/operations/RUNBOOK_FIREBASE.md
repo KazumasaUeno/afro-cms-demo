@@ -106,7 +106,7 @@
 |---|---|---|
 | `AI_REQUIREMENTS_MODE`（`off`｜`internal`｜`on`。不明な値・空は off） | `functions/.env.afro-cms-4a6ff`（コミットする。秘密ではない値だけ） | **サーバーが正**。callable の最初と worker の開始時に判定 |
 | `AI_REQUIREMENTS_PROJECT_ALLOWLIST`（カンマ区切りの案件 ID） | 同上 | `internal` のとき、admin の生成と開発者の編集を許す案件。空なら全部拒否 |
-| `VITE_FEATURE_AI_REQUIREMENTS`（`off`｜`internal`｜`on`） | `.env.live.local`（コミットしない）→ `npm run build:live` | 画面の表示だけ（セキュリティの境界ではない） |
+| `VITE_FEATURE_AI_REQUIREMENTS`（`off`｜`internal`｜`on`） | `.env.live.local`（コミットしない）→ `npm run build:live` | 画面の表示だけ（セキュリティの境界ではない）。**必ず明示する**（無いと `deploy:firebase --only hosting` が止まる。2026-11-26 に worktree で抜けて本番が off になった） |
 
 - 出す順は **functions が先、hosting が後**（別々の `--only` で出す）。戻すときも、functions の `off` を先に出す
 - `on` は `docs/legal/AI_REQUIREMENTS_LEGAL_CLEARANCE.md` が無いと `deploy:firebase` が止める（計画 §5 L-c）。この記録は、ユーザーが内容を承認してから作る

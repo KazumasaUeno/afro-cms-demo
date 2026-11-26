@@ -6,6 +6,7 @@
 // - gcloud・ADC・.firebaserc の既定には頼らない（firebase CLI へ --project を必ず渡す）
 // - --dry-run は実行するコマンドを表示するだけ（何も送らない。下の事前確認は --dry-run でも行う）
 // - hosting: dist-live が同じ --project 向けにビルドされていること（ビルドに焼き込まれた projectId を見る。security M3）
+// - hosting: .env.live.local に VITE_FEATURE_AI_REQUIREMENTS（off / internal / on）が明示されていること（書き忘れで黙って off にしない）
 // - firestore:rules: 送る前に rules:check（質問の定義と Rules の一致）と test:rules（エミュレータ。1 件以上・失敗 0）を通す
 // - functions: AI_REQUIREMENTS_MODE=on（functions/.env・.env.<project>）なら docs/legal/AI_REQUIREMENTS_LEGAL_CLEARANCE.md が無いと止める（AI 計画 §4 U5・§5 L-c・T-11）
 // - functions: 送る前に functions をビルドし、test:functions（エミュレータ。1 件以上・失敗 0）を通す。Blaze でなければ firebase CLI が失敗する（課金の変更はユーザーが Console で行う）
@@ -67,11 +68,10 @@ export function checkHostingBuild(project, dir = join(root, 'dist-live'), allowl
   if (others.length) throw new Error(`dist-live に別のプロジェクトの ID（${others.join(', ')}）が入っています`);
 }
 
-/** functions/.env と functions/.env.<project>（後が優先。firebase CLI と同じ順）から 1 つのキーの値を読む。無ければ undefined */
-export function readFunctionsEnvValue(key, project, functionsDir = join(root, 'functions')) {
+/** .env 形式のファイルを順に読み（後が優先）、1 つのキーの値を返す。無ければ undefined */
+function readEnvValue(key, files) {
   let value;
-  for (const name of ['.env', `.env.${project}`]) {
-    const file = join(functionsDir, name);
+  for (const file of files) {
     if (!existsSync(file)) continue;
     for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
       const m = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
@@ -82,6 +82,28 @@ export function readFunctionsEnvValue(key, project, functionsDir = join(root, 'f
     }
   }
   return value;
+}
+
+/** functions/.env と functions/.env.<project>（後が優先。firebase CLI と同じ順）から 1 つのキーの値を読む。無ければ undefined */
+export function readFunctionsEnvValue(key, project, functionsDir = join(root, 'functions')) {
+  return readEnvValue(key, ['.env', `.env.${project}`].map((name) => join(functionsDir, name)));
+}
+
+export const LIVE_ENV_FILE = join(root, '.env.live.local');
+
+/**
+ * 画面の AI フラグ（VITE_FEATURE_AI_REQUIREMENTS）が .env.live.local に明示されていなければ hosting を送らない。
+ * 書き忘れると既定の off でビルドされ、黙って AI の画面が消える（2026-11-26 に worktree の .env.live.local から抜けて本番が off になった）。
+ * off を出したいときも off と書く。値は src/features/requirements/aiDraft/aiDraftState.ts の parseAiFlagMode と同じ 3 つだけ
+ */
+export function checkLiveAiFlag(envFile = LIVE_ENV_FILE) {
+  const raw = readEnvValue('VITE_FEATURE_AI_REQUIREMENTS', [envFile]);
+  if (raw === undefined || raw.trim() === '') {
+    throw new Error('.env.live.local に VITE_FEATURE_AI_REQUIREMENTS がありません（off / internal / on のどれかを明示して build:live し直す。今の本番は internal）');
+  }
+  const mode = raw.trim();
+  if (!['off', 'internal', 'on'].includes(mode)) throw new Error(`VITE_FEATURE_AI_REQUIREMENTS=${mode} は不正です（off / internal / on）`);
+  return mode;
 }
 
 export const AI_LEGAL_CLEARANCE_FILE = join(root, 'docs', 'legal', 'AI_REQUIREMENTS_LEGAL_CLEARANCE.md');
@@ -136,7 +158,10 @@ function checkFunctionsBeforeDeploy() {
 function main() {
   const args = parseDeployArgs(process.argv.slice(2));
   const { project, targets } = checkDeploy(args);
-  if (targets.includes('hosting')) checkHostingBuild(project);
+  if (targets.includes('hosting')) {
+    console.log(`[deploy] VITE_FEATURE_AI_REQUIREMENTS=${checkLiveAiFlag()}`);
+    checkHostingBuild(project);
+  }
   if (targets.includes('firestore:rules')) checkRulesBeforeDeploy();
   if (targets.includes('functions')) {
     checkAiLegalClearance(project);

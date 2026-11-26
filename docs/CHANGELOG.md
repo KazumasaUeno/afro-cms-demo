@@ -956,3 +956,9 @@
 ## 0.49.1 — 2026-11-25
 
 - live: 要件定義を別の画面にした（2026-11-25 ユーザー「要件定義へ進むを押してもヒアリングの見出しのまま」）。管理者 `/ai-studio/requirements`・開発者 `/dev/requirements`（`src/live/pages/LiveRequirementsPage.tsx`。HearingGate の中で対象のプロジェクトを上に出す）。見出しは「要件定義」（上の小見出しは 管理者画面／開発者画面）、中身は従来の AI 下書き（AiDraftPanel / AiDraftEditor）。ヒアリングの「要件定義へ進む」はこの画面へ移る（画面の中の切り替えはやめた）。生成は従来どおり、生成できる人がヒアリングから来たときに下書きが無ければ自動で始め（既にあれば作り直さない。再読み込みでは再び始めない）、パネルのボタンでも作れる。パネルの生成ボタンは「AI で要件定義を作る」（`AI_DRAFT_COPY.generate`。ヒアリングのボタンは `AI_DRAFT_COPY.goToRequirements`「要件定義へ進む」）。「ヒアリングに戻る」で戻る（未保存の編集は送ってから移る）。要件が draft でない（承認依頼の後・承認済み）／フラグ off のときはヒアリングの画面（改善提案書の表示）へ転送するので、プロジェクト詳細の「要件定義書を見る」は変わらない。この画面を開いている間もメニューは「プロジェクト」を選択中（`liveNav.ts`・`tests/unit/liveNav.test.mjs`）。demo は変わらない（該当の分岐は live のフラグ on のときだけ）。Rules・Functions の変更なし
+
+## 0.49.2 — 2026-11-26
+
+- deploy: hosting を出す前に `.env.live.local` の `VITE_FEATURE_AI_REQUIREMENTS`（off / internal / on）が明示されているかを確かめ、無い・不正なら止める（`scripts/deploy-firebase.mjs` の `checkLiveAiFlag`。2026-11-26 に worktree の `.env.live.local` から抜け、本番の AI 画面が off で出た）。テスト 3 件追加（`tests/rules/deploy-build.test.mjs`）
+- test: functions エミュレータの読み込み待ちを 60→180 秒（`scripts/test-functions.mjs`。60 秒で時々落ちる。reqdoc U2 レビューの持ち越し）
+- 画面・Rules・Functions の変更なし
