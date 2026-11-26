@@ -1,4 +1,4 @@
-// デプロイスクリプトの事前確認（checkHostingBuild・parseTestCounts）。何も送らない・エミュレータに触らない。
+// デプロイスクリプトの事前確認（checkHostingBuild・checkLiveAiFlag・parseTestCounts）。何も送らない・エミュレータに触らない。
 // 偽の dist は OS の一時ディレクトリに作り、テストごとに消す（実際の dist-live は読まない）。
 // 実行: npm run test:rules（deploy-guard.test.mjs と同じ置き場）。単独なら node --test tests/rules/deploy-build.test.mjs
 import { test } from 'node:test';
@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { checkHostingBuild, parseTestCounts } from '../../scripts/deploy-firebase.mjs';
+import { checkBuiltAiFlag, checkHostingBuild, checkLiveAiFlag, parseTestCounts } from '../../scripts/deploy-firebase.mjs';
 
 const PROJECT = 'afro-cms-prod';
 const OTHER = 'afro-cms-other';
@@ -114,4 +114,52 @@ test('parseTestCounts: 本文中の "tests" "pass" という語（要約記号�
 
 test('parseTestCounts: CRLF の出力（Windows）でも読む', () => {
   assert.deepEqual(parseTestCounts('ℹ tests 4\r\nℹ pass 4\r\nℹ fail 0\r\n'), { tests: 4, pass: 4, fail: 0 });
+});
+
+// ---- checkLiveAiFlag（2026-11-26: .env.live.local からフラグが抜けて本番の AI 画面が黙って off になった） ----
+
+function withEnv(body, fn) {
+  const dir = mkdtempSync(join(tmpdir(), 'afro-cms-env-'));
+  try {
+    const file = join(dir, '.env.live.local');
+    if (body !== null) writeFileSync(file, body);
+    return fn(file);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('checkLiveAiFlag: ファイルが無い・キーが無い・値が空なら拒否', () => {
+  withEnv(null, (f) => assert.throws(() => checkLiveAiFlag(f), /VITE_FEATURE_AI_REQUIREMENTS がありません/));
+  withEnv('VITE_FIREBASE_PROJECT_ID=x\n', (f) => assert.throws(() => checkLiveAiFlag(f), /がありません/));
+  withEnv('VITE_FEATURE_AI_REQUIREMENTS=\n', (f) => assert.throws(() => checkLiveAiFlag(f), /がありません/));
+});
+
+test('checkLiveAiFlag: off / internal / on は明示されていれば通して値を返す（引用符・CRLF・後の行が優先）', () => {
+  withEnv('VITE_FEATURE_AI_REQUIREMENTS=off\n', (f) => assert.equal(checkLiveAiFlag(f), 'off'));
+  withEnv('A=1\r\nVITE_FEATURE_AI_REQUIREMENTS="internal"\r\n', (f) => assert.equal(checkLiveAiFlag(f), 'internal'));
+  withEnv('VITE_FEATURE_AI_REQUIREMENTS=off\nVITE_FEATURE_AI_REQUIREMENTS=on\n', (f) => assert.equal(checkLiveAiFlag(f), 'on'));
+});
+
+test('checkLiveAiFlag: 3 つ以外の値は拒否', () => {
+  withEnv('VITE_FEATURE_AI_REQUIREMENTS=Internal\n', (f) => assert.throws(() => checkLiveAiFlag(f), /不正です/));
+  withEnv('VITE_FEATURE_AI_REQUIREMENTS=true\n', (f) => assert.throws(() => checkLiveAiFlag(f), /不正です/));
+});
+
+test('checkLiveAiFlag: 引用符の中の空白・末尾のコメント・export・単引用符（dotenv と同じ読み）', () => {
+  withEnv('VITE_FEATURE_AI_REQUIREMENTS=" internal "\n', (f) => assert.throws(() => checkLiveAiFlag(f), /不正です/));
+  withEnv('VITE_FEATURE_AI_REQUIREMENTS=on # 公開\n', (f) => assert.equal(checkLiveAiFlag(f), 'on'));
+  withEnv("export VITE_FEATURE_AI_REQUIREMENTS='internal'\n", (f) => assert.equal(checkLiveAiFlag(f), 'internal'));
+});
+
+// ---- checkBuiltAiFlag（ビルドに焼き込まれた値と突き合わせる。code review 2026-11-26 Major） ----
+
+test('checkBuiltAiFlag: build-meta.json が無い・壊れているなら拒否', () => {
+  withDist({ 'assets/a.js': 'x' }, (dir) => assert.throws(() => checkBuiltAiFlag('internal', dir), /build-meta\.json がありません/));
+  withDist({ 'build-meta.json': '{' }, (dir) => assert.throws(() => checkBuiltAiFlag('internal', dir), /読めません/));
+});
+
+test('checkBuiltAiFlag: 焼き込んだ値が違えば拒否、同じなら通す', () => {
+  withDist({ 'build-meta.json': JSON.stringify({ mode: 'live', aiFlag: 'off' }) }, (dir) => assert.throws(() => checkBuiltAiFlag('internal', dir), /=off でビルドされています/));
+  withDist({ 'build-meta.json': JSON.stringify({ mode: 'live', aiFlag: 'internal' }) }, (dir) => assert.doesNotThrow(() => checkBuiltAiFlag('internal', dir)));
 });
