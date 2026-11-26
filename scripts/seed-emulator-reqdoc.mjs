@@ -6,7 +6,10 @@
 // 手順（エミュレータを起動した別の端末で）:
 //   node scripts/seed-emulator.mjs                      … 管理者 admin@example.com の招待と Auth のアカウント（先に必要）
 //   node scripts/seed-emulator.mjs --set-password <PW>  … パスワードを設定
-//   node scripts/seed-emulator-reqdoc.mjs [admin のメール]
+//   node scripts/seed-emulator-reqdoc.mjs [admin のメール] [--with-dev]
+//   --with-dev … 架空の社内開発者 dev@example.com（開発 花子）を作り、2 件の案件の memberUids に入れる（編集モードの確認用）。
+//                パスワードは環境変数 SEED_DEV_PASSWORD（8 文字以上。表示しない）。Auth は確認済み・accounts は active・招待は claimed で直接置く
+//                （初回ログインの受け取りを Console 相当で済ませた状態。何度実行してもよい）
 // 入れるもの（同じ ID に上書き。何度実行してもよい）:
 //   projects/reqdoc-v3-draft     … 要件 draft。aiDrafts/requirements は ready＋generated v3＋edited v3＋submitReady
 //   projects/reqdoc-v3-analyzed  … 要件 analyzed（提案 v3 を提出済み。requirements/current.proposal と approvals の写し）
@@ -173,7 +176,35 @@ function generatedOf(s) {
   };
 }
 
-async function seedProject(s, { uid, state }) {
+/** 架空の社内開発者（--with-dev）。Auth のアカウント・invites（claimed）・accounts（active）を置いて uid を返す */
+async function seedDev(adminUidValue) {
+  const email = 'dev@example.com';
+  const name = '開発 花子';
+  const password = process.env.SEED_DEV_PASSWORD ?? '';
+  if (password.length < 8) throw new Error('--with-dev には環境変数 SEED_DEV_PASSWORD（8 文字以上）が要る');
+  const res = await fetch(`${AUTH}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-api-key`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, returnSecureToken: false }),
+  });
+  const body = await res.json();
+  if (!res.ok && body?.error?.message !== 'EMAIL_EXISTS') throw new Error(`signUp → ${res.status} ${body?.error?.message ?? ''}`);
+  const uid = await adminUid(email);
+  // 既にある場合もパスワード・確認済み・表示名を揃える（エミュレータの管理 API。Bearer owner）
+  await call(`${AUTH}/identitytoolkit.googleapis.com/v1/projects/${PROJECT}/accounts:update`, {
+    method: 'POST', body: JSON.stringify({ localId: uid, password, emailVerified: true, displayName: name }),
+  });
+  await put(`invites/${email}`, {
+    schemaVersion: 1, role: 'developer', status: 'claimed', name, affiliation: 'internal', devRole: 'ディレクター',
+    createdAt: NOW, createdBy: adminUidValue, provisionedUid: uid, claimedBy: uid, claimedAt: NOW,
+  });
+  await put(`accounts/${uid}`, {
+    schemaVersion: 1, role: 'developer', status: 'active', email, name, affiliation: 'internal', devRole: 'ディレクター',
+    activatedAt: NOW, updatedAt: NOW, updatedBy: uid,
+  });
+  console.log(`開発者 ${email}（${name}・社内）: Auth・invites（claimed）・accounts（active）を置きました`);
+  return uid;
+}
+
+async function seedProject(s, { uid, state, devUid }) {
   const answers = answersOf(s);
   const answerMeta = Object.fromEntries(Object.keys(answers).map((k) => [k, { by: 'afro', at: NOW }]));
   const g = generatedOf(s);
@@ -189,7 +220,7 @@ async function seedProject(s, { uid, state }) {
   const analyzed = state === 'analyzed';
   await put(`projects/${s.pid}`, {
     schemaVersion: 1, clientName: CLIENT, siteName: s.siteName, siteUrl: `https://${s.host}`, siteUrlKey: s.host, industry: s.industry, accent: s.accent,
-    ownerUid: uid, memberUids: [], requirements: analyzed ? { status: 'analyzed', revision: 1, analyzedAt: NOW } : { status: 'draft', revision: 0 },
+    ownerUid: uid, memberUids: devUid ? [devUid] : [], requirements: analyzed ? { status: 'analyzed', revision: 1, analyzedAt: NOW } : { status: 'draft', revision: 0 },
     archived: false, createdAt: NOW, createdBy: uid, updatedAt: NOW, updatedBy: uid,
   });
   await put(`siteKeys/${s.host}`, { projectId: s.pid, createdAt: NOW });
@@ -218,11 +249,14 @@ async function verify(pids) {
 }
 
 try {
-  const email = (process.argv[2] ?? 'admin@example.com').trim().toLowerCase();
+  const args = process.argv.slice(2);
+  const withDev = args.includes('--with-dev');
+  const email = (args.find((a) => !a.startsWith('--')) ?? 'admin@example.com').trim().toLowerCase();
   const uid = await adminUid(email);
-  const n = await seedProject(SITES.draft, { uid, state: 'draft' });
+  const devUid = withDev ? await seedDev(uid) : undefined;
+  const n = await seedProject(SITES.draft, { uid, state: 'draft', devUid });
   if (n !== CATALOG.items.length) throw new Error(`項目数 ${n} がカタログ ${CATALOG.items.length} と一致しません`);
-  await seedProject(SITES.analyzed, { uid, state: 'analyzed' });
+  await seedProject(SITES.analyzed, { uid, state: 'analyzed', devUid });
   await verify([SITES.draft.pid, SITES.analyzed.pid]);
 } catch (e) {
   console.error(`seed-emulator-reqdoc を中止しました: ${e.message}（npm run emulators を起動しているか確認）`);
