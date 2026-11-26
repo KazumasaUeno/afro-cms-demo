@@ -177,3 +177,16 @@ test('live のつくり方のいまここ（§3.1）', () => {
   assert.equal(V.liveHowToStep('analyzed', true), 3);
   assert.equal(V.liveHowToStep('approved', false), 4);
 });
+
+test('自動保存を止める件数（対象外・不採用の理由が空。v2 は 0。§3.2）', () => {
+  const e = { summary: '', points: [], doc: fullDoc() };
+  assert.equal(V.saveHoldCount(e), 0);
+  const id = cat.items.find((i) => i.kubun === 'individual').id;
+  const e2 = V.setItem(e, id, { status: 'na', text: '' }, cat);
+  assert.equal(V.saveHoldCount(e2), 1);
+  const e3 = V.setAdded(e2, 'a01', { status: 'na', text: ' ' });
+  assert.equal(V.saveHoldCount(e3), 2);
+  assert.equal(V.saveHoldCount(V.setItem(e3, id, { text: '不要' }, cat)), 1);
+  assert.equal(V.saveHoldCount({ summary: '', points: [], draft: {} }), 0);
+  assert.equal(V.saveHoldCount(null), 0);
+});

@@ -4,6 +4,7 @@ import { isEditableV3, type AiDraftDoc, type AnyAiEditable } from '@/types/aiDra
 import { answersHash } from '@/shared/ai/answersHash';
 import { useToast } from '@/hooks/useToast';
 import { getAiDraftPort } from './aiDraftPort';
+import { saveHoldCount } from './reqDocView';
 import {
   AI_DRAFT_COPY, AUTOSAVE_DEBOUNCE_MS, aiDraftServerKey, decideResync, deriveAiDraftState, isJobRunning, isNoResponseError, nextRequestId, outcomeOfResponse,
   saveErrorMessage, startErrorMessage, type AiFlagMode, type AiViewerRole, type AutosaveState, type LastRequest, type SaveErrorView,
@@ -158,6 +159,8 @@ export function useAiDraft(i: AiDraftHookInput) {
         for (;;) {
           const v = version.current;
           const body = latest.current as AnyAiEditable;
+          // 対象外・不採用の理由が空の間は送らない（送るとサーバーの検査 reqDocEditable.ts で拒否される。REQDOC_U4_UI.md §3.2）。入力されたら次の自動保存で送る
+          if (saveHoldCount(body) > 0) { setSave('pending'); return false; }
           setSave('saving');
           await port.saveEdits(i.projectId, body);
           sentVersion.current = v;

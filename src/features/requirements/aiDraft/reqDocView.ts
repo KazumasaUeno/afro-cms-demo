@@ -10,7 +10,7 @@
  */
 import { reqDocCatalogOf, type ReqDocCatalog, type ReqDocCatalogItem } from '@/shared/ai/reqDocCatalog';
 import {
-  isProposalV2, isProposalV3, REQ_DOC_LIMITS, type AiEditableV3, type ProposalV3, type ProposalV3Doc, type ReqDocAddedItem, type ReqDocItem,
+  isEditableV3, isProposalV2, isProposalV3, REQ_DOC_LIMITS, type AiEditableV3, type AnyAiEditable, type ProposalV3, type ProposalV3Doc, type ReqDocAddedItem, type ReqDocItem,
   type ReqDocItemAuthor, type ReqDocItemStatus, type ReqDocKubun, type StoredProposal,
 } from '@/types/aiDraft';
 import { esc } from './proposalV2Format';
@@ -255,6 +255,11 @@ export function requiredOpenCount(doc: ProposalV3Doc, templateVersion: string): 
 export function missingNaReasons(doc: ProposalV3Doc): number {
   const items = Object.values(doc?.items ?? {}).filter((it) => it.status === 'na' && !it.text.trim()).length;
   return items + (doc?.added ?? []).filter((a) => a.status === 'na' && !a.text.trim()).length;
+}
+
+/** 自動保存を止める件数（v3 で対象外・不採用の理由が空。v2 は常に 0）。useAiDraft の flush が見る（§3.2） */
+export function saveHoldCount(e: AnyAiEditable | null | undefined): number {
+  return e && isEditableV3(e) ? missingNaReasons(e.doc) : 0;
 }
 
 /** 提出を止める理由（押せるなら null）。approvalBlock（aiDraftState.ts）の後に見る */
