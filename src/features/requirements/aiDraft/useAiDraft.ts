@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AnswerValue } from '@/types';
-import type { AiDraftDoc, AiEditable } from '@/types/aiDraft';
+import { isEditableV3, type AiDraftDoc, type AnyAiEditable } from '@/types/aiDraft';
 import { answersHash } from '@/shared/ai/answersHash';
 import { useToast } from '@/hooks/useToast';
 import { getAiDraftPort } from './aiDraftPort';
@@ -40,9 +40,12 @@ export interface GenerateOptions {
 /** 生成中の lease 切れを画面に反映する間隔（ms） */
 const TICK_MS = 5_000;
 
-const editableOf = (d: AiDraftDoc | null): AiEditable | null => {
+/** 編集できる欄だけを取り出す（v3 は doc、v2 は draft。v3 に draft を探さない＝U4 の持ち越し） */
+const pickEditable = (src: AnyAiEditable): AnyAiEditable =>
+  isEditableV3(src) ? { summary: src.summary, points: src.points, doc: src.doc } : { summary: src.summary, points: src.points, draft: src.draft };
+const editableOf = (d: AiDraftDoc | null): AnyAiEditable | null => {
   const src = d?.edited ?? d?.generated;
-  return src ? { summary: src.summary, points: src.points, draft: src.draft } : null;
+  return src ? pickEditable(src) : null;
 };
 
 export function useAiDraft(i: AiDraftHookInput) {
@@ -117,11 +120,11 @@ export function useAiDraft(i: AiDraftHookInput) {
   }, [port, i.projectId, toast]);
 
   // ---------------- 編集と自動保存（§3.3） ----------------
-  const [local, setLocal] = useState<AiEditable | null>(null);
+  const [local, setLocal] = useState<AnyAiEditable | null>(null);
   const [save, setSave] = useState<AutosaveState>('idle');
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [saveError, setSaveError] = useState<SaveErrorView | null>(null);
-  const latest = useRef<AiEditable | null>(null);
+  const latest = useRef<AnyAiEditable | null>(null);
   const version = useRef(0);
   const sentVersion = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -154,7 +157,7 @@ export function useAiDraft(i: AiDraftHookInput) {
       try {
         for (;;) {
           const v = version.current;
-          const body = latest.current as AiEditable;
+          const body = latest.current as AnyAiEditable;
           setSave('saving');
           await port.saveEdits(i.projectId, body);
           sentVersion.current = v;
@@ -181,7 +184,7 @@ export function useAiDraft(i: AiDraftHookInput) {
   const flushRef = useRef(flush);
   flushRef.current = flush;
 
-  const update = useCallback((next: AiEditable) => {
+  const update = useCallback((next: AnyAiEditable) => {
     setLocal(next);
     latest.current = next;
     version.current += 1;
@@ -194,7 +197,7 @@ export function useAiDraft(i: AiDraftHookInput) {
   const confirm = useCallback(async () => {
     const g = doc?.generated;
     if (!g) return false;
-    const e: AiEditable = { summary: g.summary, points: g.points, draft: g.draft };
+    const e = pickEditable(g);
     latest.current = e;
     setLocal(e);
     version.current += 1;
@@ -205,6 +208,7 @@ export function useAiDraft(i: AiDraftHookInput) {
   const pendingText = useCallback((): string => {
     const e = latest.current;
     if (!e) return '';
+    if (isEditableV3(e)) return [e.summary, '', ...e.points.flatMap((p) => [`■ ${p.title}`, p.detail, p.impact, '']), ...Object.values(e.doc.items).map((it) => it.text).filter(Boolean), ...e.doc.added.flatMap((a) => [`■ ${a.label}`, a.text])].join('\n');
     const d = e.draft;
     return [
       e.summary, '',

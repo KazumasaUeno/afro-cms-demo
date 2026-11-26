@@ -188,7 +188,9 @@ test('proposalForSave が v2 を落とさない（11 キーをそのまま・fla
   assert.equal(v1.hostname, 'your-site.example.jp');
   assert.deepEqual([v1.currentScore, v1.projectedScore, v1.purposes], [100, 0, ['a']]);
   assert.equal(M.storedProposalOf(GENERATED).version, 2);
-  assert.equal(M.storedProposalOf({ ...GENERATED, version: 3 }), undefined);
+  // U4: v3 は読む（StoredProposal に v3 を足した）。知らない版は読まない
+  assert.equal(M.storedProposalOf({ ...GENERATED, version: 3 }).version, 3);
+  assert.equal(M.storedProposalOf({ ...GENERATED, version: 4 }), undefined);
   assert.equal(M.storedProposalOf({ hostname: 'a' }).hostname, 'a');
   assert.equal(M.storedProposalOf(null), undefined);
 });

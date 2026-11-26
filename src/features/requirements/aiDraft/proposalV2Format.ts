@@ -5,7 +5,7 @@
  * - HTML の文字列はすべて esc() を通す。保存値は信用しない（数は Number() で直す）
  */
 import type { Proposal } from '@/types';
-import type { ProposalV2, ProposalV2Draft, SiteCheck, SiteCheckItem } from '@/types/aiDraft';
+import type { ProposalV2, ProposalV2Draft, ProposalV3, SiteCheck, SiteCheckItem } from '@/types/aiDraft';
 import { evidenceLabel } from './aiDraftState';
 
 export const esc = (s: string) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -78,7 +78,8 @@ ${p.competitors.length ? `<p>競合サイト：${esc(p.competitors.join('・'))}
 }
 
 /** v2 の「1. 改善提案」の中身（サイトスコアは出さない。根拠・基本チェック・要件定義書の下書きを足す） */
-export function proposalV2Html(p: ProposalV2): string {
+/** v3 も同じ前半（課題・要約・改善ポイント・基本チェック）を使う。v3 は下書き 7 欄を持たないので出さない */
+export function proposalV2Html(p: ProposalV2 | ProposalV3): string {
   const points = p.points.map((x) => {
     const ev = Array.isArray(x.evidence) && x.evidence.length ? `<br><span class="muted">根拠：${esc(x.evidence.map(evidenceLabel).join('・'))}</span>` : '';
     return `<li><b>[${PRIORITY_TEXT[x.priority] ?? ''}] ${esc(x.area)}: ${esc(x.title)}</b><br>${nl(x.detail)}<br><span class="muted">${esc(x.impact)}</span>${ev}</li>`;
@@ -89,6 +90,13 @@ export function proposalV2Html(p: ProposalV2): string {
     const un = siteCheckUnavailable(sc);
     site = `<h3>${esc(SITE_CHECK_TITLE)}</h3>${un ? `<p class="muted">${esc(un)}</p>` : `<p class="muted">${esc(siteCheckCaption(sc))}</p><table>${sc.items.map((i) =>
       `<tr><th>${esc(evidenceLabel(i.key))}</th><td>${i.ok ? SITE_CHECK_OK : SITE_CHECK_NG}・${esc(siteCheckValueText(i))}</td></tr>`).join('')}</table>`}`;
+  }
+  if (!('draft' in p)) {
+    return `${p.issue ? `<p><b>課題</b>：${esc(p.issue)}</p>` : ''}
+${p.summary ? `<p><b>要約</b>：${nl(p.summary)}</p>` : ''}
+${p.competitors.length ? `<p>競合サイト：${esc(p.competitors.join('・'))}</p>` : ''}
+<ol>${points}</ol>
+${site}`;
   }
   const d = p.draft;
   const rows = DRAFT_FIELDS.map((f) => `<tr><th>${esc(f.label)}</th><td>${d[f.key] ? nl(d[f.key]) : `<span class="muted">${DRAFT_EMPTY}</span>`}</td></tr>`).join('');

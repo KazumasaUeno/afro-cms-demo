@@ -2,7 +2,7 @@ import { Box, Stack, Typography } from '@mui/material';
 import { AlertTriangle, CheckCircle2, TrendingUp } from 'lucide-react';
 import { Reveal, StatusPill, Surface, type PillTone } from '@/components/ui';
 import { tokens } from '@/theme/tokens';
-import type { ProposalV2 } from '@/types/aiDraft';
+import type { ProposalV2, ProposalV3 } from '@/types/aiDraft';
 import { AI_DRAFT_COPY, evidenceLabel, splitFlagged } from './aiDraftState';
 import {
   DRAFT_EMPTY, DRAFT_FIELDS, DRAFT_OPEN_QUESTIONS_TITLE, DRAFT_SECTION_TITLE, PRIORITY_TEXT, SITE_CHECK_NG, SITE_CHECK_OK, SITE_CHECK_TITLE,
@@ -43,7 +43,7 @@ export function FlaggedText({ text, flags }: { text: string; flags?: readonly st
 }
 
 /** 表紙の要約（課題の下） */
-export function ProposalV2Summary({ proposal, highlight }: { proposal: ProposalV2; highlight?: readonly string[] }) {
+export function ProposalV2Summary({ proposal, highlight }: { proposal: Pick<ProposalV2, 'summary'>; highlight?: readonly string[] }) {
   if (!proposal.summary) return null;
   return (
     <Typography variant="body2" sx={{ color: tokens.color.ink, mb: 2, ...longText }}>
@@ -52,10 +52,11 @@ export function ProposalV2Summary({ proposal, highlight }: { proposal: ProposalV
   );
 }
 
-export function ProposalV2Body({ proposal, highlight, withSummary = false }: { proposal: ProposalV2; highlight?: readonly string[]; withSummary?: boolean }) {
+export function ProposalV2Body({ proposal, highlight, withSummary = false }: { proposal: ProposalV2 | ProposalV3; highlight?: readonly string[]; withSummary?: boolean }) {
   const sc = proposal.siteCheck;
   const unavailable = sc ? siteCheckUnavailable(sc) : null;
-  const d = proposal.draft;
+  // v3 は「要件定義書（下書き）」7 欄を持たない（ひな型の章は ReqDocChapters。REQDOC_U4_UI.md §2）
+  const d = 'draft' in proposal ? proposal.draft : null;
   return (
     <Stack spacing={2.5}>
       {withSummary && proposal.summary && (
@@ -124,8 +125,8 @@ export function ProposalV2Body({ proposal, highlight, withSummary = false }: { p
         </Surface>
       )}
 
-      {/* 要件定義書の下書き（7 欄＋未確定事項） */}
-      <Surface>
+      {/* 要件定義書の下書き（7 欄＋未確定事項。v2 だけ） */}
+      {d && <Surface>
         <Typography variant="h4" component="h2" sx={{ mb: 1.5 }}>{DRAFT_SECTION_TITLE}</Typography>
         <Stack spacing={1.75}>
           {DRAFT_FIELDS.map((f) => (
@@ -147,7 +148,7 @@ export function ProposalV2Body({ proposal, highlight, withSummary = false }: { p
             </Box>
           )}
         </Stack>
-      </Surface>
+      </Surface>}
     </Stack>
   );
 }

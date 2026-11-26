@@ -4,7 +4,7 @@
  * - 登録されていなければ AI 下書きの画面は出さない（demo・フラグ off）
  * - 日時は ISO 文字列で返す（Timestamp → ISO の変換は実装側。aiDraftState.ts は ISO を前提にする）
  */
-import type { AiDraftDoc, AiEditable } from '@/types/aiDraft';
+import type { AiDraftDoc, AnyAiEditable } from '@/types/aiDraft';
 import { parseAiFlagMode, type AiFlagMode } from './aiDraftState';
 
 export interface AiDraftRequestInput {
@@ -27,7 +27,7 @@ export interface AiDraftPort {
   /** requestRequirementsDraft */
   request(input: AiDraftRequestInput): Promise<AiDraftRequestOutput>;
   /** saveAiDraftEdits（{ok:true} 以外は例外） */
-  saveEdits(projectId: string, edited: AiEditable): Promise<void>;
+  saveEdits(projectId: string, edited: AnyAiEditable): Promise<void>;
 }
 
 let port: AiDraftPort | null = null;

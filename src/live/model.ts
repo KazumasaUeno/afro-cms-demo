@@ -1,6 +1,6 @@
 import type { DocumentData, DocumentSnapshot, QueryDocumentSnapshot } from 'firebase/firestore';
 import type { AnswerMeta, AnswerValue, ApprovalLog, ClientAccount, DevUser, Project, Proposal, ProposalPoint, RequirementSession, Stage } from '@/types';
-import { isProposalV2, type ProposalV2, type StoredProposal } from '@/types/aiDraft';
+import { isProposalV2, isProposalV3, type ProposalV2, type ProposalV3, type StoredProposal } from '@/types/aiDraft';
 
 /**
  * Firestore の文書（BACKEND_FIREBASE §5）⇔ 画面の型（types/index.ts）。日時は Timestamp → ISO 文字列。
@@ -166,7 +166,21 @@ export function toSession(projectId: string, p: ProjectDoc | null, r: ReqDoc | n
 export function storedProposalOf(v: unknown): StoredProposal | undefined {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
   if (!('version' in v)) return v as Proposal;
+  // v3 を先に見る（U4。v3 → v2 → v1）
+  if (isProposalV3(v)) return v as ProposalV3;
   return isProposalV2(v as StoredProposal) ? (v as ProposalV2) : undefined;
+}
+
+/**
+ * v3 の提案（会社標準ひな型）。generated のサーバー欄・template（flags を除く）＋ edited の summary・points・doc を値を変えずに写す。
+ * TODO(U3): firestore.rules の validStoredProposal が v3 を受け付けるのは U3（別担当）。それまで live の提出は Rules で拒否されうる
+ */
+export function proposalV3FromDraft(g: DocumentData, e: DocumentData): ProposalV3 {
+  return {
+    version: 3, template: g.template, hostname: g.hostname, issue: g.issue, purposes: g.purposes, improves: g.improves,
+    competitors: g.competitors, siteCheck: g.siteCheck, origin: g.origin,
+    summary: e.summary, points: e.points, doc: e.doc,
+  } as ProposalV3;
 }
 
 /**
@@ -186,6 +200,7 @@ export function proposalForSave(p: Proposal): Proposal;
 export function proposalForSave(p: ProposalV2): ProposalV2;
 export function proposalForSave(p: StoredProposal): StoredProposal;
 export function proposalForSave(p: StoredProposal): StoredProposal {
+  if (isProposalV3(p)) return proposalV3FromDraft(p, p);
   if (isProposalV2(p)) return proposalV2FromDraft(p, p);
   return proposalV1ForSave(p);
 }

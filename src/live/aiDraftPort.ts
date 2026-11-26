@@ -1,7 +1,7 @@
 import { doc, onSnapshot } from 'firebase/firestore';
 import { connectFunctionsEmulator, getFunctions, httpsCallable, type Functions } from 'firebase/functions';
 import type { AiDraftPort, AiDraftRequestInput, AiDraftRequestOutput } from '@/features/requirements/aiDraft/aiDraftPort';
-import type { AiDraftDoc, AiEditable } from '@/types/aiDraft';
+import type { AiDraftDoc, AnyAiEditable } from '@/types/aiDraft';
 import { app, db, EMULATOR } from './firebase';
 import { FUNCTIONS_REGION } from './functionsRegion';
 import { deepIso } from './model';
@@ -38,8 +38,8 @@ export const liveAiDraftPort: AiDraftPort = {
     const { data } = await call(input);
     return data;
   },
-  async saveEdits(projectId: string, edited: AiEditable): Promise<void> {
-    const call = httpsCallable<{ projectId: string; edited: AiEditable }, { ok: true }>(fns(), 'saveAiDraftEdits', { timeout: CALL_TIMEOUT_MS });
+  async saveEdits(projectId: string, edited: AnyAiEditable): Promise<void> {
+    const call = httpsCallable<{ projectId: string; edited: AnyAiEditable }, { ok: true }>(fns(), 'saveAiDraftEdits', { timeout: CALL_TIMEOUT_MS });
     const { data } = await call({ projectId, edited });
     if (!data || data.ok !== true) throw new Error('saveAiDraftEdits: unexpected result');
   },

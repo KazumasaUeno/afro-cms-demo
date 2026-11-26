@@ -138,11 +138,19 @@ export interface AiGenerated extends ProposalV2 {
   flags?: { unsupportedNumbers?: string[] };
 }
 
-/** 保存される提案（v1 は version を持たない） */
-export type StoredProposal = Proposal | ProposalV2;
+/** 保存される提案（v1 は version を持たない。v3 は会社標準ひな型の章立て＝U4 で追加） */
+export type StoredProposal = Proposal | ProposalV2 | ProposalV3;
 
 export function isProposalV2(p: StoredProposal | null | undefined): p is ProposalV2 {
   return !!p && 'version' in p && p.version === 2;
+}
+
+/** 下書き・編集の欄（v2 か v3。v3 は doc を持つ） */
+export type AnyAiEditable = AiEditable | AiEditableV3;
+export type AnyAiGenerated = AiGenerated | AiGeneratedV3;
+
+export function isEditableV3(e: AnyAiEditable | null | undefined): e is AiEditableV3 {
+  return !!e && typeof e === 'object' && 'doc' in e && !!(e as AiEditableV3).doc;
 }
 
 export type AiDraftState = 'ready' | 'failed';
@@ -172,8 +180,9 @@ export interface AiDraftDoc {
   lastError?: { code: string; at: ISODate; requestId: string; httpStatus?: number; anthropicRequestId?: string };
   answersHash?: string;
   configHash?: string;
-  generated?: AiGenerated;
-  edited?: AiEditable;
+  /** v2 か v3（判定は isProposalV3。v3 を先に見る） */
+  generated?: AnyAiGenerated;
+  edited?: AnyAiEditable;
   editedAt?: ISODate;
   editedBy?: string;
   discardLog?: { by: string; at: ISODate; role: 'admin' }[];
@@ -196,8 +205,7 @@ export interface AiUsageDoc {
 // 提案 v3（会社標準ひな型の章立ての要件定義書。docs/design/REQUIREMENTS_DOC_TEMPLATE.md §3）
 // - 追加だけ。v1（Proposal）・v2（ProposalV2）と AI_DRAFT_LIMITS は変えない
 // - 章・項目の一覧（カタログ）は src/shared/ai/reqDocCatalog.ts（版ごと）。doc.items のキーはカタログの項目 id と過不足なく一致させる（検査は U2 の saveAiDraftEdits）
-// - [U4 で行う] StoredProposal へ ProposalV3 を足すのは、版で分ける表示・保存（src/live/model.ts・requirementsDoc.ts・ProposalView）と同時に行う。
-//   今足すと v1 として扱う分岐の型が崩れるため、U1 では型と判定関数だけを置く
+// - StoredProposal へ ProposalV3 を足した（U4）。版の判定はいつも v3 → v2 → v1 の順（v1 は version を持たないので最後）
 // ---------------------------------------------------------------------------------------------
 
 /** v3 の上限（設計 §3.1 [TARGET]。文字数は String の長さ） */

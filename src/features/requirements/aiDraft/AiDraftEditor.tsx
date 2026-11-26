@@ -6,7 +6,8 @@ import {
 import { AlertTriangle, Check, CheckCircle2, Copy, Eye, EyeOff, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { StatusPill, Surface } from '@/components/ui';
 import { tokens } from '@/theme/tokens';
-import { AI_DRAFT_LIMITS, AI_POINT_AREAS, type AiEditable, type AiGenerated, type AiPointArea, type AiPointPriority, type ProposalV2 } from '@/types/aiDraft';
+import { AI_DRAFT_LIMITS, AI_POINT_AREAS, isProposalV3, type AiEditable, type AiGenerated, type AnyAiGenerated, type AiPointArea, type AiPointPriority, type ProposalV2 } from '@/types/aiDraft';
+import { AiDraftReviewV3 } from './AiDraftReviewV3';
 import {
   AI_DRAFT_COPY, APPROVAL_BLOCK_COPY, approvalBlock, evidenceLabel, findFlaggedNumbers, remainingFlaggedNumbers, type AiDraftView,
   type AiViewerRole,
@@ -63,7 +64,7 @@ function Field({ label, value, max, onChange, flags, readOnly, multiline = true,
 export interface AiDraftEditorProps {
   ai: AiDraftHook;
   view: AiDraftView;
-  generated: AiGenerated;
+  generated: AnyAiGenerated;
   role: AiViewerRole;
   isAssignedDeveloper: boolean;
   reqStatus: 'draft' | 'analyzed' | 'approved';
@@ -75,14 +76,21 @@ export interface AiDraftEditorProps {
   notes?: React.ReactNode;
 }
 
-export function AiDraftEditor({ ai, view, generated, role, isAssignedDeveloper, reqStatus, onRegenerate, onRequestApproval, notes }: AiDraftEditorProps) {
+/** 版で分ける（v3 → v2）。v3 の下書きを v2 の編集画面で開くと draft が無く落ちる（U4 の持ち越し） */
+export function AiDraftEditor(props: AiDraftEditorProps) {
+  const g = props.generated;
+  if (isProposalV3(g)) return <AiDraftReviewV3 {...props} generated={g} />;
+  return <AiDraftEditorV2 {...props} generated={g as AiGenerated} />;
+}
+
+function AiDraftEditorV2({ ai, view, generated, role, isAssignedDeveloper, reqStatus, onRegenerate, onRequestApproval, notes }: AiDraftEditorProps & { generated: AiGenerated }) {
   const wide = useMediaQuery(useTheme().breakpoints.up('lg'));
   const mdUp = useMediaQuery(useTheme().breakpoints.up('md'));
   const reasonId = useId();
   const [showPreview, setShowPreview] = useState(false);
   const [dialog, setDialog] = useState(false);
   const [busy, setBusy] = useState(false);
-  const local: AiEditable = ai.local ?? { summary: generated.summary, points: generated.points, draft: generated.draft };
+  const local: AiEditable = (ai.local && 'draft' in ai.local ? ai.local : null) ?? { summary: generated.summary, points: generated.points, draft: generated.draft };
   const flags = generated.flags?.unsupportedNumbers;
   const readOnly = !view.canEdit || ai.running;
   const remaining = remainingFlaggedNumbers(local, flags);

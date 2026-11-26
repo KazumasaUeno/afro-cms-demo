@@ -9,7 +9,10 @@ import { AiBadge, CountUp, ProgressRing, Reveal, StatusPill, Surface, type PillT
 import { formatDateTime } from '@/services/time';
 import { palette, tokens } from '@/theme/tokens';
 import type { ProposalPoint } from '@/types';
-import { isProposalV2, type StoredProposal } from '@/types/aiDraft';
+import { type StoredProposal } from '@/types/aiDraft';
+import { proposalVersionOf, REQ_DOC_COPY } from './aiDraft/reqDocView';
+import { ReqDocChapters } from './aiDraft/ReqDocChapters';
+import { reqDocCatalogOf } from '@/shared/ai/reqDocCatalog';
 import { AI_DRAFT_COPY } from './aiDraft/aiDraftState';
 import { ProposalV2Body, ProposalV2Summary } from './aiDraft/ProposalV2Body';
 import { buildProposal } from './buildProposal';
@@ -57,8 +60,13 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
   const [approving, setApproving] = useState(false);
   const proposal: StoredProposal = useMemo(() => req.proposal ?? buildProposal(req.answers, req.competitors), [req.proposal, req.answers, req.competitors]);
   // v2（AI 下書きを開発者が確認したもの。AI_REQUIREMENTS_UI.md §6）はサイトスコアを出さない（live・demo とも）
-  const v2 = isProposalV2(proposal) ? proposal : null;
-  const v1 = isProposalV2(proposal) ? null : proposal;
+  // 版の判定は v3 → v2 → v1（U4。v3 を v1 として扱わない）。v3 は v2 と同じ表紙・改善ポイントに、ひな型の章（ReqDocChapters）を足す
+  const ver = proposalVersionOf(proposal);
+  const v3 = ver === 3 && 'doc' in proposal ? proposal : null;
+  const v2 = ver === 2 && 'draft' in proposal ? proposal : null;
+  const v1 = ver === 1 && 'currentScore' in proposal ? proposal : null;
+  const aiCard = v2 ?? v3;
+  const catalogMissing = !!v3 && !reqDocCatalogOf(v3.template?.version ?? '');
   // 差し戻し: demo は管理者画面の「差し戻す」（承認待ちの間）と「回答をやり直す」、live はアサインされた開発者の「差し戻す」（承認待ちの間だけ）
   const canReset = live ? role === 'developer' && req.status === 'analyzed' && !client : !approved && !dev;
   const answered = REQUIREMENT_QUESTIONS.filter((q) => isAnswered(req.answers[q.id])).length;
@@ -71,11 +79,11 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
       <Reveal>
         <Surface padding={0} sx={{ overflow: 'hidden' }}>
           {/* live ではサイトスコアを出さない（実測の根拠が無い値を見せない。2026-11-20 ユーザー判断・AI_REQUIREMENTS Q-6）。demo は「デモ用の値」と明記して残す */}
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: live || v2 ? '1fr' : '1.4fr 1fr' } }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: live || aiCard ? '1fr' : '1.4fr 1fr' } }}>
             <Box sx={{ p: { xs: 2.5, md: 4 } }}>
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
                 {/* v2 の印の文言は PENDING Q-4（お客様への表示文言。法務） */}
-                {v2 ? <AiBadge label={AI_DRAFT_COPY.v2Badge} tooltip={V2_BADGE_TOOLTIP} /> : <AiBadge />}
+                {aiCard ? <AiBadge label={AI_DRAFT_COPY.v2Badge} tooltip={V2_BADGE_TOOLTIP} /> : <AiBadge />}
                 <Typography variant="caption">作成 {formatDateTime(req.analyzedAt)}</Typography>
               </Stack>
               <Typography variant="overline" sx={{ display: 'block' }}>Renewal Proposal</Typography>
@@ -94,7 +102,7 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
                   </Box>
                 </Box>
               )}
-              {v2 && <ProposalV2Summary proposal={v2} />}
+              {aiCard && <ProposalV2Summary proposal={aiCard} />}
               <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
                 {[...proposal.purposes, ...proposal.improves].slice(0, 8).map((t) => (
                   <StatusPill key={t} tone="primary" dot={false} icon={<Target size={12} />}>{t}</StatusPill>
@@ -134,6 +142,8 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
 
       {/* 改善ポイント（v2 は根拠・基本チェック・要件定義書の下書きを含む ProposalV2Body。flags の印は渡さない） */}
       {v2 && <ProposalV2Body proposal={v2} />}
+      {v3 && <ProposalV2Body proposal={v3} />}
+      {v3 && <ReqDocChapters proposal={v3} approval={{ status: req.status, approvedAtText: req.approvedAt ? formatDateTime(req.approvedAt) : undefined }} />}
       {v1 && <Box>
         <Typography variant="h4" component="h2" sx={{ mb: 1.5 }}>改善ポイントと提案内容</Typography>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', xl: 'repeat(3, 1fr)' }, gap: 2 }}>
@@ -175,6 +185,9 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
                   <Typography variant="caption" sx={{ color: 'inherit', fontWeight: 650 }}>お客様ポータルの「確認・承認」で、お客様に承認を依頼しています</Typography>
                 </Stack>
               )}
+              {catalogMissing && v3 && (
+                <Typography variant="caption" role="status" sx={{ display: 'block', mt: 0.5, color: tokens.color.warningInk, fontWeight: 650 }}>{REQ_DOC_COPY.catalogMissing(v3.template?.version ?? '')}</Typography>
+              )}
               {!approved && pending > 0 && (
                 <Typography variant="caption" role="status" sx={{ display: 'block', mt: 0.5, color: tokens.color.warningInk, fontWeight: 650 }}>
                   内容の確認が済んでいない回答が {pending} 問あります。「回答の一覧」で確認すると承認できます。
@@ -194,7 +207,7 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
                   <BadgeCheck size={18} /> 承認済み {formatDateTime(req.approvedAt)}
                 </Box>
               ) : client ? (
-                <Button variant="contained" startIcon={<CheckCircle2 size={16} />} disabled={approving} onClick={() => setConfirmApprove(true)}>
+                <Button variant="contained" startIcon={<CheckCircle2 size={16} />} disabled={approving || catalogMissing} onClick={() => setConfirmApprove(true)}>
                   承認する
                 </Button>
               ) : (

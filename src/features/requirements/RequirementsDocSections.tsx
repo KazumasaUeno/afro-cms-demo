@@ -13,7 +13,7 @@ import { NON_FUNCTIONAL, NON_FUNCTIONAL_NOTE, ymdText } from './requirementsDoc'
  */
 
 /** 見出しと値の 2 列の表（スマホは縦に積む） */
-function KeyValueRows({ rows }: { rows: { k: string; v: React.ReactNode }[] }) {
+export function KeyValueRows({ rows }: { rows: { k: string; v: React.ReactNode }[] }) {
   return (
     <Box component="dl" sx={{ m: 0, display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(0,2fr) minmax(0,3fr)' }, columnGap: 2 }}>
       {rows.map((r, i) => (
@@ -26,7 +26,7 @@ function KeyValueRows({ rows }: { rows: { k: string; v: React.ReactNode }[] }) {
   );
 }
 
-const muted = (s: string) => <Typography component="span" variant="body2" color="text.secondary">{s}</Typography>;
+export const muted = (s: string) => <Typography component="span" variant="body2" color="text.secondary">{s}</Typography>;
 
 export function HearingAnswersSection({ req }: { req: RequirementSession }) {
   return (

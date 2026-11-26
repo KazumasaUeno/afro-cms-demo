@@ -11,11 +11,12 @@ import { isAnswered, validateAnswer } from '@/features/requirements/validation';
 import { projectFromDraft, siteHost } from '@/features/projects/projectForm';
 import type { Query, Repositories } from '@/repositories/types';
 import type { AnswerValue, ApprovalLog, ClientAccount, DevUser } from '@/types';
-import type { AiDraftDoc, StoredProposal } from '@/types/aiDraft';
+import type { AiDraftDoc, AiEditableV3, StoredProposal } from '@/types/aiDraft';
+import { reqDocSubmitBlock, submitBlockText } from '@/features/requirements/aiDraft/reqDocView';
 import { isJobRunning } from '@/features/requirements/aiDraft/aiDraftState';
 import { db } from './firebase';
 import {
-  clientFromAccount, clientFromInvite, deepIso, devFromAccount, devFromInvite, INVITE_PREFIX, LIST_LIMIT, MAX_MEMBERS, messageDoc, projectDoc, proposalForSave, proposalV2FromDraft, reqDoc, toApprovalLog, toProject,
+  clientFromAccount, clientFromInvite, deepIso, devFromAccount, devFromInvite, INVITE_PREFIX, LIST_LIMIT, MAX_MEMBERS, messageDoc, projectDoc, proposalForSave, proposalV2FromDraft, proposalV3FromDraft, reqDoc, toApprovalLog, toProject,
   taskDoc, toSession, type MessageDoc, type ProjectDoc, type ReqDoc, type TaskDoc, type TaskStatus,
 } from './model';
 import { TASK_LIMIT, newestTasksInOrder, type NewTaskInput } from './tasks';
@@ -460,7 +461,16 @@ export function useLiveRepositoriesImpl(): Repositories {
               // lease 切れの running は止まったもの（承認依頼のボタンの判定 approvalBlock と同じ isJobRunning）
               if (isJobRunning(deepIso(ai) as AiDraftDoc, Date.now())) throw new Error('AI 下書きの生成が終わってから依頼してください');
               // Rules（proposalV2Ok）はマップの等式で比べる: 値を変えずに写す（flags は写さない）
-              proposal = proposalV2FromDraft(ai.generated as DocumentData, ai.edited as DocumentData);
+              if ((ai.generated as DocumentData).version === 3) {
+                // 提出前に必須の章（01・02・19・21）の未確定は画面と同じ関数で止める。クライアントの検査は境界ではない:
+                // TODO(U3 後): サーバー側（Rules の提出の検査か Functions）でも拒否する（lead-architect 決定 2026-11-26）
+                const e3 = ai.edited as AiEditableV3;
+                const block = e3?.doc ? reqDocSubmitBlock(e3, String((ai.generated as DocumentData).template?.version ?? '')) : { kind: 'catalog-missing' as const, version: '' };
+                if (block) throw new Error(submitBlockText(block));
+                proposal = proposalV3FromDraft(ai.generated as DocumentData, ai.edited as DocumentData);
+              } else {
+                proposal = proposalV2FromDraft(ai.generated as DocumentData, ai.edited as DocumentData);
+              }
             } else {
               proposal = proposalForSave(buildProposal(answers, Array.isArray(comp) ? comp : []));
             }
