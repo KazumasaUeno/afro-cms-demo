@@ -53,8 +53,11 @@ export function AiDraftReviewV3({ ai, view, generated, role, isAssignedDeveloper
     ai.update({ ...local, points: local.points.map((p, i) => (i === idx ? { ...p, ...patch } : p)) });
 
   // 主操作（PageHeader の右）は高さのそろったボタンだけを 1 行に置く。押せない理由・保存の失敗はボタンの下に出さず、タブの中の状態の行へ（2026-11-26 ユーザー指摘「配置が雑」）
-  const blockText = confirmed && (docBlock || shownBlock === 'no-edited') ? (docBlock ? submitBlockText(docBlock) : APPROVAL_BLOCK_COPY['no-edited']) : null;
-  const failed = ai.save === 'failed' && !!ai.saveError;
+  // 生成中・保存中で押せないときも理由を出す（review 2026-11-26 Minor。以前は APPROVAL_BLOCK_COPY をボタンの下に出していた）
+  const blockText = view.canEdit && confirmed && (docBlock || shownBlock) ? (docBlock ? submitBlockText(docBlock) : APPROVAL_BLOCK_COPY[shownBlock!]) : null;
+  const showSaveStatus = view.canEdit || (ai.running && ai.save !== 'idle');
+  // 保存の失敗は編集できる人（と生成中）にだけ出す（閲覧だけの人に「もう一度保存」を出さない。review 2026-11-26 Minor）
+  const failed = showSaveStatus && ai.save === 'failed' && !!ai.saveError;
   const holding = held > 0 && ai.save === 'pending';
   const primary = !view.canEdit ? null : !confirmed ? (
     <Button size="small" variant="contained" onClick={() => void ai.confirm()} disabled={!canConfirmGenerated({ save: ai.save, hold: held, running: ai.running })} startIcon={<CheckCircle2 size={15} />}>
@@ -75,7 +78,6 @@ export function AiDraftReviewV3({ ai, view, generated, role, isAssignedDeveloper
   );
 
   // 状態の行（表示／編集の下に 1 本）: 保存の失敗 → 送るのを止めている理由 → 依頼できない理由 の順に 1 つだけ。保存中・保存済みは切り替えの右端に小さく
-  const showSaveStatus = view.canEdit || (ai.running && ai.save !== 'idle');
   const statusNote = failed ? (
     <Note tone="danger" role="alert" id={reasonId} action={!ai.running || ai.saveError?.offerCopy ? (
       <>

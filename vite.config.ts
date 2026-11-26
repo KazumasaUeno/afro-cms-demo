@@ -84,7 +84,9 @@ export default defineConfig(({ mode, command }) => {
       'import.meta.env.VITE_DATA_MODE': JSON.stringify(live ? 'live' : 'demo'),
       'import.meta.env.VITE_FIREBASE_EMULATOR': JSON.stringify(emulator ? '1' : '0'),
     },
-    server: { port: 5180 },
+    // fs.deny は既定を置き換えるので、vite 8.3 の既定（node_modules/vite の @default）を全部並べてから足す。
+    // .emulator-login.local（エミュレータのログイン情報。.gitignore 済み）を dev サーバーから配らない（review 2026-11-26 Minor）
+    server: { port: 5180, fs: { deny: ['.env', '.env.*', '*.{crt,pem,key,p12,pfx,cer,der}', '.npmrc', '.yarnrc.yml', '**/.git/**', '.emulator-login.local'] } },
     // 共有用（npm run share）: Cloudflare の一時トンネル経由のアクセスだけを許可する
     preview: { port: 4173, allowedHosts: ['.trycloudflare.com'] },
     build: {
