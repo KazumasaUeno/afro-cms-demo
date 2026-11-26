@@ -203,3 +203,32 @@ test('isProposalV3: version 3 だけ真（v1・v2・null は偽）', () => {
   assert.equal(T.isProposalV3(undefined), false);
   assert.equal(T.isProposalV2({ version: 3 }), false);
 });
+
+// ---------- 必須の章（REQ_DOC_REQUIRED_CHAPTERS・reqDocRequiredOk。U3 のゲート） ----------
+const reqItems = () => CAT.items.filter((i) => C.REQ_DOC_REQUIRED_CHAPTERS['0.1'].includes(i.chapterId));
+const docWith = (fn) => ({ items: Object.fromEntries(CAT.items.map((i) => [i.id, fn(i)])) });
+test('必須の章: 0.1 は c01・c02・c19・c21（ユーザー 2026-11-25）。カタログの章で、固定の項目を含まない', () => {
+  assert.deepEqual(C.REQ_DOC_REQUIRED_CHAPTERS['0.1'], ['c01', 'c02', 'c19', 'c21']);
+  for (const id of C.REQ_DOC_REQUIRED_CHAPTERS['0.1']) assert.ok(CAT.chapters.some((c) => c.id === id), id);
+  assert.ok(reqItems().length > 0 && reqItems().every((i) => i.kubun !== 'fixed'));
+});
+test('reqDocRequiredOk: 必須の全項目が proposed／na で文あり → true。open・空・空白だけ・欠け・未知の版 → false', () => {
+  const ok = docWith((i) => ({ status: i.kubun === 'fixed' ? 'std_pending' : 'proposed', text: i.kubun === 'fixed' ? '' : '内容', evidence: [], by: 'human' }));
+  assert.equal(C.reqDocRequiredOk(ok, '0.1'), true);
+  const first = reqItems()[0].id;
+  const na = structuredClone(ok); na.items[first] = { ...na.items[first], status: 'na', text: '対象外の理由' };
+  assert.equal(C.reqDocRequiredOk(na, '0.1'), true);
+  for (const over of [{ status: 'open' }, { status: 'std_pending' }, { text: '' }, { text: ' 　\n\t' }, { text: null }]) {
+    const d = structuredClone(ok); d.items[first] = { ...d.items[first], ...over };
+    assert.equal(C.reqDocRequiredOk(d, '0.1'), false, JSON.stringify(over));
+  }
+  const missing = structuredClone(ok); delete missing.items[first];
+  assert.equal(C.reqDocRequiredOk(missing, '0.1'), false);
+  // 必須でない章が未確定でも true
+  const other = CAT.items.find((i) => i.kubun !== 'fixed' && !C.REQ_DOC_REQUIRED_CHAPTERS['0.1'].includes(i.chapterId)).id;
+  const o = structuredClone(ok); o.items[other] = { ...o.items[other], status: 'open', text: '' };
+  assert.equal(C.reqDocRequiredOk(o, '0.1'), true);
+  assert.equal(C.reqDocRequiredOk(ok, '9.9'), false);
+  assert.equal(C.reqDocRequiredOk(null, '0.1'), false);
+  assert.equal(C.reqDocRequiredOk({ items: {} }, '0.1'), false);
+});

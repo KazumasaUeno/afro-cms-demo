@@ -2,9 +2,11 @@
  * saveAiDraftEdits（onCall。計画 §4 U1 の代替 F-a）: 開発者の edited を検査して Admin SDK で書く（aiDrafts はクライアントから書けない）。
  * - アサインされた開発者だけ（admin・お客様は不可）。フラグの内側（editAllowed）
  * - transaction で 要件が draft・aiDraft と generated があること・生成中（job running）でないこと を確かめる（submit と同時に保存させない）
- * - 書くのは edited / editedAt / editedBy / updatedAt / updatedBy だけ（サーバー欄に触れない）
+ * - 書くのは edited / editedAt / editedBy / updatedAt / updatedBy と、v3 だけ submitReady（サーバー欄に触れない）
+ * - submitReady（v3）: { requiredOk, templateVersion }。必須の章（REQ_DOC_REQUIRED_CHAPTERS）が埋まっているかを edited と同じ書き込みで記録し、
+ *   Rules の proposalV3Ok が submit の条件にする（提案には写さない）。v2 の保存では消す
  */
-import { Timestamp, type Firestore } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp, type Firestore } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/https';
 import { assertCanEdit, resolveCaller, type AuthLike, type ProjectLike } from './authz';
 import { EditableError, validateEditable } from './editable';
@@ -12,6 +14,8 @@ import { isEditedV3Shape, validateEditableV3, type GeneratedV3Like } from './req
 import { editAllowed, type AiFlags } from './flags';
 import { errorCodeOf, type AiLogger } from './log';
 import { draftRef, jobRunning } from './request';
+import { reqDocRequiredOk } from './shared/reqDocCatalog';
+import type { AiEditableV3 } from './shared/aiDraft';
 
 export interface EditsDeps {
   db: Firestore;
@@ -61,7 +65,11 @@ export async function handleSaveEdits(req: { auth?: AuthLike | null; data: unkno
         }
       }
       const ts = Timestamp.fromMillis(deps.now());
-      tx.update(aSnap.ref, { edited, editedAt: ts, editedBy: caller.uid, updatedAt: ts, updatedBy: caller.uid });
+      const templateVersion = v3 ? String((generated as GeneratedV3Like).template.version) : '';
+      const submitReady = v3
+        ? { requiredOk: reqDocRequiredOk((edited as AiEditableV3).doc, templateVersion), templateVersion }
+        : FieldValue.delete();
+      tx.update(aSnap.ref, { edited, editedAt: ts, editedBy: caller.uid, updatedAt: ts, updatedBy: caller.uid, submitReady });
     });
   } catch (e) {
     const code = e instanceof HttpsError ? e.code : errorCodeOf(e);

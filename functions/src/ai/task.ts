@@ -213,7 +213,7 @@ export async function handleTask(data: unknown, deps: TaskDeps): Promise<TaskOut
           updatedBy: 'server',
         };
         if (job.discardEdits === true) {
-          Object.assign(update, { edited: FieldValue.delete(), editedAt: FieldValue.delete(), editedBy: FieldValue.delete() });
+          Object.assign(update, { edited: FieldValue.delete(), editedAt: FieldValue.delete(), editedBy: FieldValue.delete(), submitReady: FieldValue.delete() });
           if (job.role === 'admin') {
             const prev = Array.isArray(ai.discardLog) ? ai.discardLog : [];
             update.discardLog = [...prev, { by: job.by, at: nowTs, role: 'admin' }].slice(-AI_DRAFT_LIMITS.discardLog);

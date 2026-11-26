@@ -549,3 +549,63 @@ test('v2 の下書きに v3 の形の編集は拒否', async () => {
   await withGenerated();
   await assert.rejects(save('devA', { summary: '', points: [], doc: {} }), (e) => e.message === 'edited is invalid: version');
 });
+
+// ---------- 必須の章のゲート submitReady（security-engineer U3 監査の条件・lead DECISION 2026-11-26） ----------
+const { REQ_DOC_CATALOG, REQ_DOC_REQUIRED_CHAPTERS } = lib('shared/reqDocCatalog');
+const REQUIRED_IDS = REQ_DOC_CATALOG['0.1'].items.filter((i) => REQ_DOC_REQUIRED_CHAPTERS['0.1'].includes(i.chapterId)).map((i) => i.id);
+async function v3Ready() {
+  await seedV3Facts();
+  await call('devA', {});
+  assert.equal(await handleTask(enqueued[0], wiredV3().deps), 'ready');
+  const g = (await ai()).generated;
+  return structuredClone({ summary: g.summary, points: g.points, doc: g.doc });
+}
+const fillRequired = (ed, over = {}) => {
+  for (const id of REQUIRED_IDS) ed.doc.items[id] = { ...ed.doc.items[id], status: 'proposed', text: `${id} の内容`, ...over };
+  return ed;
+};
+test('ゲート: 必須の章が空の項目を含む v3 の保存 → submitReady.requiredOk false（版つき）', async () => {
+  const ed = await v3Ready();
+  assert.ok(REQUIRED_IDS.length > 0);
+  assert.ok(REQUIRED_IDS.some((id) => ed.doc.items[id].text === ''), 'generated に人が書く必須項目がある前提');
+  await save('devA', ed);
+  assert.deepEqual((await ai()).submitReady, { requiredOk: false, templateVersion: '0.1' });
+});
+test('ゲート: 必須の章を全部埋めた v3 の保存 → requiredOk true。1 件を未確定に戻す・文を空白だけにすると false', async () => {
+  const ed = fillRequired(await v3Ready());
+  await save('devA', ed);
+  assert.deepEqual((await ai()).submitReady, { requiredOk: true, templateVersion: '0.1' });
+  const open = structuredClone(ed); open.doc.items[REQUIRED_IDS[0]] = { ...open.doc.items[REQUIRED_IDS[0]], status: 'open' };
+  await save('devA', open);
+  assert.equal((await ai()).submitReady.requiredOk, false);
+  const blank = structuredClone(ed); blank.doc.items[REQUIRED_IDS[1]] = { ...blank.doc.items[REQUIRED_IDS[1]], text: ' 　\n' };
+  await save('devA', blank);
+  assert.equal((await ai()).submitReady.requiredOk, false);
+});
+test('ゲート: 必須の章の項目を「対象外（理由あり）」にしても満たす', async () => {
+  const ed = fillRequired(await v3Ready(), { status: 'na', text: '今回は対象外（お客様と合意）' });
+  await save('devA', ed);
+  assert.equal((await ai()).submitReady.requiredOk, true);
+});
+test('ゲート: 保存の拒否（固定の変更）では submitReady を書き換えない', async () => {
+  const ed = await v3Ready();
+  await save('devA', ed);
+  const bad = fillRequired(structuredClone(ed)); bad.doc.items['t11-01'] = { status: 'proposed', text: 'x', evidence: [], by: 'server' };
+  await assert.rejects(save('devA', bad), (e) => e.code === 'invalid-argument');
+  assert.equal((await ai()).submitReady.requiredOk, false);
+});
+test('ゲート: 作り直し（discardEdits）が成功すると edited と一緒に submitReady も消える', async () => {
+  const ed = fillRequired(await v3Ready());
+  await save('devA', ed);
+  assert.equal((await ai()).submitReady.requiredOk, true);
+  await call('devA', { requestId: uuid(2), regenerate: true, discardEdits: true });
+  assert.equal(await handleTask(enqueued.at(-1), wiredV3().deps), 'ready');
+  const d = await ai();
+  assert.equal(d.edited, undefined);
+  assert.equal(d.submitReady, undefined);
+});
+test('ゲート: v2 の保存では submitReady を書かない', async () => {
+  await withGenerated();
+  await save('devA', EDITED);
+  assert.equal((await ai()).submitReady, undefined);
+});

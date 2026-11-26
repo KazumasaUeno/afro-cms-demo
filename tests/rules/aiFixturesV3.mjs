@@ -15,6 +15,12 @@ export const CHAPTERS = [...CATALOG_TS.matchAll(/\{ id: '(c\d\d)', no: '\d\d', t
   .map((m) => ({ id: m[1], hasNotes: m[2] === 'true' }));
 export const ITEMS = [...CATALOG_TS.matchAll(/\{ id: '(t\d\d-\d\d)', chapterId: '(c\d\d)', label: '[^']*', kubun: '(\w+)'/g)]
   .map((m) => ({ id: m[1], chapterId: m[2], kubun: m[3] }));
+/** お客様へ出す前に必ず埋める章（REQ_DOC_REQUIRED_CHAPTERS の現行版） */
+export const REQUIRED_CHAPTERS = (() => {
+  const m = /export const REQ_DOC_REQUIRED_CHAPTERS[\s\S]*?'0\.1': \[([^\]]*)\]/.exec(CATALOG_TS);
+  if (!m) throw new Error('reqDocCatalog.ts に REQ_DOC_REQUIRED_CHAPTERS がありません');
+  return [...m[1].matchAll(/'(c\d\d)'/g)].map((x) => x[1]);
+})();
 export const TEMPLATE_VERSION = /export const REQ_DOC_TEMPLATE = \{ id: 'TPL-WEB-REQ', version: '([^']+)'/.exec(CATALOG_TS)?.[1];
 
 function limits() {
@@ -92,8 +98,28 @@ export const MAX_GENERATED_V3 = {
 };
 export const MAX_EDITED_V3 = editedV3Of(MAX_GENERATED_V3);
 
-/** aiDrafts/requirements（v3） */
-export const aiDraftDocV3 = (opts = {}) => aiDraftDoc({ generated: GENERATED_V3, edited: EDITED_V3, ...opts });
+/**
+ * submitReady の判定（functions saveAiDraftEdits が使う reqDocRequiredOk と同じ規則をテスト側で書き直したもの。
+ * 必須の章の全項目が proposed か na で、文が空白だけでない）。食い違いは functions のテスト（ai-flow）が本物の判定で検出する
+ */
+export function requiredOkOf(doc) {
+  return ITEMS.filter((i) => REQUIRED_CHAPTERS.includes(i.chapterId)).every((i) => {
+    const it = doc?.items?.[i.id];
+    return !!it && (it.status === 'proposed' || it.status === 'na') && typeof it.text === 'string' && it.text.trim() !== '';
+  });
+}
+export const submitReadyOf = (edited) => ({ requiredOk: requiredOkOf(edited?.doc), templateVersion: TEMPLATE_VERSION });
+
+/**
+ * aiDrafts/requirements（v3）。submitReady は既定で edited から計算（saveAiDraftEdits が書く形）。
+ * submitReady: null で置かない、値を渡せばそのまま置く
+ */
+export function aiDraftDocV3({ submitReady, ...opts } = {}) {
+  const d = aiDraftDoc({ generated: GENERATED_V3, edited: EDITED_V3, ...opts });
+  const sr = submitReady === undefined ? (d.edited ? submitReadyOf(d.edited) : null) : submitReady;
+  if (sr) d.submitReady = sr;
+  return d;
+}
 
 /** Firestore の文書の大きさ（https://firebase.google.com/docs/firestore/storage-size の数え方。名前 32 バイトは省略） */
 export function docBytes(v) {

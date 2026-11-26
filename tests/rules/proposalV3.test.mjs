@@ -16,7 +16,7 @@ import {
 } from './fixtures.mjs';
 import { AI_PATH, GENERATED, MAX_EDITED, MAX_GENERATED, aiDraftDoc, proposalV2, seedAi } from './aiFixtures.mjs';
 import {
-  CHAPTERS, EDITED_V3, GENERATED_V3, ITEMS, L, MAX_EDITED_V3, MAX_GENERATED_V3, aiDraftDocV3, docBytes, editedV3Of, proposalV3,
+  CHAPTERS, EDITED_V3, GENERATED_V3, ITEMS, L, MAX_EDITED_V3, MAX_GENERATED_V3, REQUIRED_CHAPTERS, aiDraftDocV3, docBytes, editedV3Of, proposalV3, submitReadyOf,
 } from './aiFixturesV3.mjs';
 
 let env;
@@ -27,10 +27,12 @@ const V3 = proposalV3();
 const V2 = proposalV2();
 const seedV3 = (opts = {}) => seedAi(env, { aiDraft: aiDraftDocV3(), ...opts });
 const FIXED = ITEMS.find((i) => i.kubun === 'fixed').id;
-const FREE = ITEMS.find((i) => i.kubun !== 'fixed').id;
+// FREE: 必須でない章の自由な項目（直してもゲートに関係しない）／ REQ: 必須の章の項目
+const FREE = ITEMS.find((i) => i.kubun !== 'fixed' && !REQUIRED_CHAPTERS.includes(i.chapterId)).id;
+const REQ = ITEMS.find((i) => REQUIRED_CHAPTERS.includes(i.chapterId)).id;
 /** doc.items の 1 項目だけを差し替えた提案 */
 const withItem = (p, id, over) => ({ ...p, doc: { ...p.doc, items: { ...p.doc.items, [id]: { ...p.doc.items[id], ...over } } } });
-const serverSaveEdited = (e) => env.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), AI_PATH), { edited: e, editedAt: serverTimestamp(), editedBy: 'devA', ...stamp('devA') }));
+const serverSaveEdited = (e) => env.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), AI_PATH), { edited: e, editedAt: serverTimestamp(), editedBy: 'devA', submitReady: submitReadyOf(e), ...stamp('devA') }));
 
 describe('前提: テストデータとカタログ・Rules の形', () => {
   test('カタログは 19 章（特記欄 18）・129 項目（固定 32）。テストの doc はその全項目を持つ', () => {
@@ -124,9 +126,9 @@ describe('submit v3: 拒否（偽造・欠け・版）', () => {
   deny('generated が version 2 のまま template を持つ下書きに v3 を出す → 拒否',
     proposalV3({ ...GENERATED_V3, version: 2 }, EDITED_V3),
     { aiDraft: aiDraftDocV3({ generated: { ...GENERATED_V3, version: 2 } }) });
-  deny('generated は v3 だが edited が v2 の形（doc が無い）→ 拒否', V3, { aiDraft: aiDraftDocV3({ edited: { summary: GENERATED_V3.summary, points: GENERATED_V3.points, draft: GENERATED.draft } }) });
+  deny('generated は v3 だが edited が v2 の形（doc が無い）→ 拒否', V3, { aiDraft: aiDraftDocV3({ edited: { summary: GENERATED_V3.summary, points: GENERATED_V3.points, draft: GENERATED.draft }, submitReady: { requiredOk: true, templateVersion: GENERATED_V3.template.version } }) });
   deny('aiDraft が無い → 拒否', V3, { aiDraft: null });
-  deny('aiDraft に edited が無い（確認していない）→ 拒否', V3, { aiDraft: aiDraftDocV3({ edited: null }) });
+  deny('aiDraft に edited が無い（確認していない）→ 拒否', V3, { aiDraft: aiDraftDocV3({ edited: null, submitReady: { requiredOk: true, templateVersion: GENERATED_V3.template.version } }) });
   deny("aiDraft の state=='failed' → 拒否", V3, { aiDraft: aiDraftDocV3({ state: 'failed' }) });
   deny('お客様は v3 を submit できない', V3, {}, { uid: 'client1' });
   deny('admin は v3 を submit できない', V3, {}, { uid: 'admin1' });
@@ -136,6 +138,55 @@ describe('submit v3: 拒否（偽造・欠け・版）', () => {
     await seedV3();
     const forged = withItem(V3, FREE, { text: '写しだけ改変' });
     await assertFails(submitBatch(dbAs(env, 'devA'), { proposal: V3, mutate: { log: approvalDoc('devA', 'submit', 1, { answers: ANSWERS, proposal: forged }) } }));
+  });
+});
+
+describe('submit v3: 必須の章のゲート（submitReady）', () => {
+  const sub = () => submitBatch(dbAs(env, 'devA'), { proposal: V3 });
+  test('必須の章は 01・02・19・21（固定の項目を含まない）', () => {
+    assert.deepEqual(REQUIRED_CHAPTERS, ['c01', 'c02', 'c19', 'c21']);
+    assert.ok(ITEMS.filter((i) => REQUIRED_CHAPTERS.includes(i.chapterId)).every((i) => i.kubun !== 'fixed'));
+  });
+  test('requiredOk: true・版が一致 → 通る', async () => {
+    await seedV3({ aiDraft: aiDraftDocV3({ submitReady: { requiredOk: true, templateVersion: GENERATED_V3.template.version } }) });
+    await assertSucceeds(sub());
+  });
+  test('requiredOk: false → 拒否', async () => {
+    await seedV3({ aiDraft: aiDraftDocV3({ submitReady: { requiredOk: false, templateVersion: GENERATED_V3.template.version } }) });
+    await assertFails(sub());
+  });
+  test('submitReady が無い（ゲート以前に保存した edited）→ 拒否', async () => {
+    await seedV3({ aiDraft: aiDraftDocV3({ submitReady: null }) });
+    await assertFails(sub());
+  });
+  test("requiredOk が true 以外（'true'・1）→ 拒否", async () => {
+    for (const requiredOk of ['true', 1]) {
+      await seedV3({ aiDraft: aiDraftDocV3({ submitReady: { requiredOk, templateVersion: GENERATED_V3.template.version } }) });
+      await assertFails(sub());
+    }
+  });
+  test('submitReady の版が generated の版と違う → 拒否', async () => {
+    await seedV3({ aiDraft: aiDraftDocV3({ submitReady: { requiredOk: true, templateVersion: '0.0' } }) });
+    await assertFails(sub());
+  });
+  test('submitReady が map でない → 拒否', async () => {
+    await seedV3({ aiDraft: aiDraftDocV3({ submitReady: true }) });
+    await assertFails(sub());
+  });
+  test("generated の template.id が 'TPL-WEB-REQ' でない → 拒否（提案も同じ template でも）", async () => {
+    const g = { ...GENERATED_V3, template: { id: 'TPL-OTHER', version: GENERATED_V3.template.version } };
+    await seedV3({ aiDraft: aiDraftDocV3({ generated: g, edited: editedV3Of(g) }) });
+    await assertFails(submitBatch(dbAs(env, 'devA'), { proposal: proposalV3(g) }));
+  });
+  test('必須の章の項目が未確定の edited（callable は requiredOk:false を書く）→ 拒否、直して保存し直すと通る', async () => {
+    const e = withItem(EDITED_V3, REQ, { status: 'open', text: '' });
+    assert.equal(submitReadyOf(e).requiredOk, false);
+    await seedV3({ aiDraft: aiDraftDocV3({ edited: e }) });
+    const db = dbAs(env, 'devA');
+    await assertFails(submitBatch(db, { proposal: proposalV3(GENERATED_V3, e) }));
+    const fixed = withItem(EDITED_V3, REQ, { status: 'na', text: '今回は対象外' });
+    await serverSaveEdited(fixed);
+    await assertSucceeds(submitBatch(db, { proposal: proposalV3(GENERATED_V3, fixed) }));
   });
 });
 
@@ -255,6 +306,13 @@ describe('変異: proposalV3Ok の条件を 1 つ外すと、その攻撃が通�
     { aiDraft: aiDraftDocV3({ generated: { ...GENERATED_V3, version: 2 } }) }, proposalV3({ ...GENERATED_V3, version: 2 }, EDITED_V3));
   pair("a3.state == 'ready' を外す → failed の下書きで v3 が通る", "a3.state == 'ready' && g3.version == 3", 'g3.version == 3',
     { aiDraft: aiDraftDocV3({ state: 'failed' }) }, V3);
+  pair('requiredOk の検査を外す → 必須の章が未確定でも v3 が通る', "&& a3.get('submitReady', {}).get('requiredOk', false) == true && a3.submitReady.templateVersion == g3.template.version", '',
+    { aiDraft: aiDraftDocV3({ submitReady: { requiredOk: false, templateVersion: GENERATED_V3.template.version } }) }, V3);
+  pair('templateVersion の一致を外す → 別の版で判定した submitReady で v3 が通る', '&& a3.submitReady.templateVersion == g3.template.version', '',
+    { aiDraft: aiDraftDocV3({ submitReady: { requiredOk: true, templateVersion: '0.0' } }) }, V3);
+  pair("template.id の検査を外す → 別のひな型の generated で v3 が通る", "&& g3.template.id == 'TPL-WEB-REQ'", '',
+    { aiDraft: aiDraftDocV3({ generated: { ...GENERATED_V3, template: { id: 'TPL-OTHER', version: '0.1' } }, edited: EDITED_V3 }) },
+    proposalV3({ ...GENERATED_V3, template: { id: 'TPL-OTHER', version: '0.1' } }, EDITED_V3));
   pair("'doc': e3.doc を 'doc': g3.doc にする → 直す前の generated の doc が通る（edited と比べていることの確認）", "'doc': e3.doc}", "'doc': g3.doc}",
     { aiDraft: aiDraftDocV3({ edited: withItem(EDITED_V3, FREE, { status: 'open', text: '直した' }) }) }, proposalV3(GENERATED_V3, EDITED_V3));
 });

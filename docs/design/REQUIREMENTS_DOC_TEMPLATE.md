@@ -138,7 +138,8 @@ AddedItem = { id: 'a01'…, chapterId, label: string≤40, status: 'proposed'|'n
 
 - `aiDrafts` はクライアントから書けないまま（`firestore.rules:330-333`）。`edited` の検査は callable `saveAiDraftEdits`（`functions/src/ai/edits.ts`）が**カタログと上限の定数で**行う（キーの過不足・固定は `std_pending` だけ・`by` の書き換え禁止・AI追加は削除と編集のみで追加不可 [案]・上限）
 - 提出（submit）: `validStoredProposal`（`firestore.rules:431-433`）に `version == 3` の分岐を足し、`proposalV3Ok` を v2（`:421-429`）と同じ**マップの等式 1 本**で書く（`generated` のサーバー欄＋`template`＋`edited` の `summary`・`points`・`doc`）。中身は Rules で再検査しない
-- **要計測**: v2 は計測済みで式の余裕 約 76%（`AI_REQUIREMENTS.md` §7）。v3 は等しさを比べるマップが 129 項目分大きい。等式が式の数・評価の上限に当たらないかを**最大の payload でエミュレータ計測**する（U3）。当たったら v3 の doc は「Functions が `requirements/current` へ書く」案に切り替える（その場合は計画を出し直す）
+- **計測済み（U3・database-engineer 2026-11-26。エミュレータ・demo-afro-cms・`tests/rules/proposalV3.test.mjs` の計測テスト）**: 最大の payload（全 20 問上限＋generated・edited とも上限ちょうど・4 バイト文字）の v3 submit は**上限内**。式の詰め物（比較 10 個の関数 1 個 ≒ 50 式）が trivial な書き込みで 19 個、v2 submit で 14 個、v3 submit で 14 個まで通る → v3 の消費は約 250〜300 式／1,000（**余裕 約 70%**。等式はマップの大きさで式の数が増えない）。参照: 存在しない文書の `exists()` を v2・v3 とも さらに 8 個足せる（各操作 10 の上限。v3 は v2 と同じ `getAfter(aiDraft)` 1 回）。文書の大きさ（最大）: `aiDrafts` 522,615 B（1 MiB の 49.8%）・`requirements/current` と approvals の写し 約 275,420 B（26.3%）。計画の出し直しは不要。計測テストは式の余裕 20% [TARGET] と参照 5 個を下回ると落ちる
+- **必須の章のゲート（security-engineer U3 監査の条件・lead DECISION 2026-11-26）**: `saveAiDraftEdits` が edited と同じ書き込みで aiDraft の `submitReady: { requiredOk, templateVersion }` を置く（`requiredOk` は `reqDocRequiredOk`＝`REQ_DOC_REQUIRED_CHAPTERS`（0.1 は c01・c02・c19・c21）の全項目が proposed か na で文が空白だけでない）。提案には写さない。worker は discardEdits で edited と一緒に消す。`proposalV3Ok` は `submitReady.requiredOk == true`・版が `generated.template.version` と一致・`template.id == 'TPL-WEB-REQ'` を条件にする（無い＝拒否）。ゲートを足した後の計測（同日・同じ方法）: v3 submit の詰め物 13 個（消費 約 300〜350 式・**余裕 約 65%**）・`exists()` の余裕 9（v2 は 14 個・9 で不変）
 - `approveOk` / `submitOrWithdrawOk` の `d.proposal == r.proposal` は版に関係なく働く（変更なし）
 
 ---
@@ -233,7 +234,7 @@ v3 の仮定: 入力 25,000（今の見込み 19,000 ＋カタログ 41 項目 �
 |---|---|---|
 | 担当開発者（アサイン済み） | 生成・編集・作り直し・承認の依頼 | callable（`authz.ts`）＋Rules（`aiDrafts` はクライアント書き込み不可） |
 | 管理者 | 上と同じ＋編集の破棄（記録が残る） | 同上（今の仕様のまま） |
-| お客様 | 提出された文書を見る・承認・差し戻し相談。**編集しない**。生出力・根拠のキー名・要確認の数字・使用量は見ない | Rules（`aiDrafts` を読めない）。表示は提出済みの写しだけ |
+| お客様 | 提出された文書を見る・承認・差し戻し相談。**編集しない**。生出力・要確認の数字・使用量は見ない。根拠のキー名・`by`・AI追加の印（`source:'ai_added'`）は画面に出さない（提出の写しには入り、SDK では読める。2026-11-26 ユーザー受容。ref docs/reviews/2026-11-26-reqdoc-u3-security.md T-01） | Rules（`aiDrafts` を読めない）。表示は提出済みの写しだけ |
 | 未アサイン開発者・無効アカウント | 何もできない | callable・Rules（今のテストを v3 でも回す） |
 
 ### 6.3 矛盾・抜け（C-xx）
