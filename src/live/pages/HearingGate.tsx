@@ -20,7 +20,7 @@ export default function HearingGate({ children }: { children: ReactNode }) {
 
   if (loading) return <RouteLoader label="プロジェクト" />;
   if (error) return <LoadError what="プロジェクト" />;
-  if (!project) return <EmptyState title="プロジェクトを選んでください" body="ヒアリングは、プロジェクトの詳細から開きます。" action={{ to: base, label: 'プロジェクトの一覧へ' }} />;
+  if (!project) return <EmptyState title="プロジェクトを選んでください" body="ヒアリング・要件定義は、プロジェクトの詳細から開きます。" action={{ to: base, label: 'プロジェクトの一覧へ' }} />;
 
   return (
     <Box>

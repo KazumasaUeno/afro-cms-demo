@@ -46,11 +46,38 @@ export interface ProjectDoc {
   requirements: { status: ReqStatus; revision: number; analyzedAt?: string; approvedAt?: string; approvedBy?: string; approvalId?: string };
   archived: boolean;
   updatedAt: string;
+  /** 相談の要約（最後の 1 件の写し。無い案件は相談なし＝null。Migration 不要。LIVE_DASHBOARD_TASKS_CONSULT §2.2） */
+  consult: ConsultSummary | null;
+}
+
+/** projects/{pid}.consult（messages の最後の 1 件の写し。firestore.rules consultOk がメッセージと同じ書き込みでだけ許す） */
+export interface ConsultSummary {
+  count: number;
+  lastAt: string;
+  lastSide: 'client' | 'afro';
+  lastName: string;
+}
+
+/**
+ * 案件の consult（相談の要約）。lastAt は read() の serverTimestamps: 'estimate' で、送った直後（サーバーの時刻が未確定）も端末の推定時刻になる。
+ * それでも読めない値（壊れた・欠けた）は fallbackAt（案件の updatedAt）にする（1970 年にすると一覧の並び・「○分前」が壊れる。U3 レビュー #2）
+ */
+export function consultOf(v: unknown, fallbackAt?: string): ConsultSummary | null {
+  if (!v || typeof v !== 'object') return null;
+  const c = v as DocumentData;
+  if (typeof c.count !== 'number' || c.count < 1) return null;
+  return {
+    count: c.count,
+    lastAt: toIso(c.lastAt) ?? fallbackAt ?? new Date(0).toISOString(),
+    lastSide: c.lastSide === 'client' ? 'client' : 'afro',
+    lastName: String(c.lastName ?? ''),
+  };
 }
 
 export function projectDoc(s: Snap): ProjectDoc {
   const d = read(s);
   const r = (d.requirements ?? {}) as DocumentData;
+  const updatedAt = toIso(d.updatedAt) ?? new Date(0).toISOString();
   return {
     id: s.id,
     clientName: String(d.clientName ?? ''),
@@ -70,7 +97,8 @@ export function projectDoc(s: Snap): ProjectDoc {
       approvalId: typeof r.approvalId === 'string' ? r.approvalId : undefined,
     },
     archived: d.archived === true,
-    updatedAt: toIso(d.updatedAt) ?? new Date(0).toISOString(),
+    updatedAt,
+    consult: consultOf(d.consult, updatedAt),
   };
 }
 
@@ -199,6 +227,9 @@ export function toApprovalLog(projectId: string, s: Snap): ApprovalLog {
 /** 招待中だけの人の id（accounts の uid とぶつからない形） */
 export const INVITE_PREFIX = 'invite:';
 
+/** 一覧の購読の上限（案件・承認履歴・ユーザー。repositories.tsx。案件一覧が上限に達したら画面で注記する＝dashboard.ts listLimitNote） */
+export const LIST_LIMIT = 500;
+
 /** 1 案件の担当の開発者の上限（firestore.rules の projUpdateOk・adminMembersOk と同じ 20） */
 export const MAX_MEMBERS = 20;
 
@@ -236,5 +267,62 @@ export function devFromInvite(s: Snap): DevUser {
     affiliation: d.affiliation === 'internal' ? 'internal' : 'partner',
     ...(typeof d.partnerCompany === 'string' ? { partnerCompany: d.partnerCompany } : {}),
     status: 'active', createdAt: toIso(d.createdAt) ?? '',
+  };
+}
+
+export type TaskStatus = 'todo' | 'doing' | 'review' | 'done';
+const TASK_STATUS_SET: readonly TaskStatus[] = ['todo', 'doing', 'review', 'done'];
+
+/** 構築タスク（projects/{pid}/tasks/{tid}。docs/design/LIVE_DASHBOARD_TASKS_CONSULT.md §2.1）。主担当は持たない（assigneeUids[0]） */
+export interface TaskDoc {
+  id: string;
+  title: string;
+  page: string;
+  assigneeUids: string[];
+  status: TaskStatus;
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+  updatedBy: string;
+}
+
+export function taskDoc(s: Snap): TaskDoc {
+  const d = read(s);
+  const status = TASK_STATUS_SET.includes(d.status) ? (d.status as TaskStatus) : 'todo';
+  const epoch = new Date(0).toISOString();
+  return {
+    id: s.id,
+    title: String(d.title ?? ''),
+    page: String(d.page ?? ''),
+    assigneeUids: Array.isArray(d.assigneeUids) ? d.assigneeUids.map(String) : [],
+    status,
+    createdAt: toIso(d.createdAt) ?? epoch,
+    createdBy: String(d.createdBy ?? ''),
+    updatedAt: toIso(d.updatedAt) ?? toIso(d.createdAt) ?? epoch,
+    updatedBy: String(d.updatedBy ?? ''),
+  };
+}
+
+/** 相談のメッセージ（projects/{pid}/messages/{seq 6 桁}。docs/design/LIVE_DASHBOARD_TASKS_CONSULT.md §2.2）。編集・削除なし */
+export interface MessageDoc {
+  id: string;
+  seq: number;
+  text: string;
+  side: 'client' | 'afro';
+  authorUid: string;
+  authorName: string;
+  at: string;
+}
+
+export function messageDoc(s: Snap): MessageDoc {
+  const d = read(s);
+  return {
+    id: s.id,
+    seq: typeof d.seq === 'number' ? d.seq : 0,
+    text: String(d.text ?? ''),
+    side: d.side === 'client' ? 'client' : 'afro',
+    authorUid: String(d.authorUid ?? ''),
+    authorName: String(d.authorName ?? ''),
+    at: toIso(d.at) ?? new Date().toISOString(),
   };
 }

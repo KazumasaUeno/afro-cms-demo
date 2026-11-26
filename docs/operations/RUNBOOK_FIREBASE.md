@@ -163,3 +163,28 @@
 | G-7 | functions のデプロイ（段 2。MODE=off）→ worker の invoker を確かめる | `npm run deploy:firebase -- --project afro-cms-4a6ff --only functions`。デプロイが invoker を付けていなければ `gcloud run services add-iam-policy-binding generaterequirementsdrafttask --region asia-northeast1 --member serviceAccount:<OIDC の SA> --role roles/run.invoker --project afro-cms-4a6ff` | 関数 3 本・キュー 1 個・invoker の binding | 9.6 の 4／`remove-iam-policy-binding` |
 
 - 段 1（Rules）・段 3（hosting）・段 4（internal＋Smoke 1 回）は計画 §7 の順で、それぞれ別に GO をもらう
+
+## 10. 相談（チャット）が上限 5,000 件に達した・荒らされた（2026-11-25 セキュリティ M-1。`docs/design/LIVE_DASHBOARD_TASKS_CONSULT.md` §2.2）
+
+> **ここは手順の文面で、実行済みではない**。本番データへの直接操作は CLAUDE.md §9（バックアップ・影響の確定・実行計画・**ユーザーの承認**）を通してから。Admin SDK は **`projectId: 'afro-cms-4a6ff'` を明示**する（このPCの gcloud / ADC の既定は別のお客様の本番。`emulators:exec` を通さないスクリプトを既定のまま走らせない）
+
+### 10.1 気づき方
+- 画面: その案件の相談の返信欄の代わりに「上限の 5000 件に達しました」が出る（`src/live/consult.ts` consultBlock）。お客様からの問い合わせで気づくことが多い
+- Console → Firestore → `projects/{pid}` の `consult.count`（5000 で止まる。Rules の `consultOk` が `count <= 5000`）。荒らしは `consult.count` が短時間に増えている・`messages` の `authorUid` が 1 人に偏っている
+- 1 件 2 秒の間隔（Rules）があるので、1 人が 5,000 件に達するには最短でも約 2 時間45分かかる。日に 1 回 `consult.count` の大きい順を見れば間に合う（自動の通知は無い）
+
+### 10.2 荒らしを止める（速い順。データは消さない）
+1. 送っている人の `accounts/{uid}.status` を `disabled` にする（ユーザー管理の「無効にする」。Rules の roleOf が `none` になり、送信・閲覧とも止まる）
+2. 案件をアーカイブする（`archived: true`。その案件へは誰も送れない。consultOk が `archived == false` を要求）
+3. それでも続くなら Auth でそのユーザーを無効化する（Console → Authentication → ユーザー → 無効にする）
+
+### 10.3 上限に達した会話を再び使えるようにする【開発 → ユーザーの承認の後】
+Rules は番号（`seq` = 文書 ID `000001`〜`005000`）の重複を「上書き」として拒否するので、**`consult.count` だけを 0 に戻しても送れない**（000001 が既にある）。手順:
+1. **退避**: `projects/{pid}/messages` を全件書き出す（Admin SDK で読んで JSON に保存。または `gcloud firestore export gs://<bucket> --collection-ids=messages --project afro-cms-4a6ff`）。件数が 5,000 で一致することを確かめる
+2. 退避先をお客様・ユーザーに伝え、保存期間を決める（保持期間は NC-11 と一緒に決める。未決）
+3. **削除**: `messages` を 500 件ずつ batch で削除（Admin SDK。Rules は通らない）
+4. **戻す**: `projects/{pid}.consult` を消す（`FieldValue.delete()`。`updatedAt` は変えない）。consult が無ければ次の送信は seq 1 から始まる
+5. 確かめる: その案件で 1 件送れる（担当の開発者）・画面の上限の案内が消える
+
+- 戻し方: 1 の退避ファイルから `messages` と `consult`（count・最後の 1 件の lastAt / lastSide / lastName）を Admin SDK で書き戻す
+- 急ぎでなければ、**新しい案件を作ってそちらで続ける**方が安全（データを消さない）。古い案件はアーカイブして読むだけにする
