@@ -34,7 +34,7 @@ export function isolatedEmulatorEnv(base = process.env) {
   const { pathKey, value } = pathWithJavaHome(base);
   const env = { ...base, [pathKey]: value };
   delete env.GOOGLE_APPLICATION_CREDENTIALS;
-  // 関数の読み込み（firebase-admin）は既定 10 秒で打ち切られる。メモリの少ないPCで落ちたため 60 秒にする（2026-11-19 実測）
+  // 関数の読み込み（firebase-admin）は既定 10 秒で打ち切られる。メモリの少ないPCで落ちたため 60 秒（2026-11-19 実測）→ それでも時々落ちるため 180 秒（2026-11-26）
   env.FUNCTIONS_DISCOVERY_TIMEOUT ??= '180';
   return env;
 }
