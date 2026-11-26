@@ -1,9 +1,8 @@
 import { useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { ApprovalLog, DemoState, Member, Project, RequirementSession } from '@/types';
+import type { Member, Project } from '@/types';
 import { RouteLoader } from '@/components/layout/RouteLoader';
 import { useRepositories } from '@/repositories';
-import { blankWork } from '@/store/projectWork';
 import { devUserToPerson } from '@/data/people';
 import { ProjectDetailView, ProjectNotFound } from '@/features/projects/ProjectDetailView';
 import { ClientStatusPanel } from '@/features/projects/ClientStatusPanel';
@@ -12,33 +11,8 @@ import { SitePreviewPendingButton } from '@/features/quality/SitePreviewButton';
 import { useAccountPeople, useLiveProjects } from '../repositories';
 import { useLiveSession } from '../session';
 import { LoadError } from './shared';
-
-/**
- * live の案件の state（プロジェクト詳細の見た目の部品 ProjectDetailView・ClientStatusPanel が読む形）。
- * live が持つのは要件（ヒアリングの回答・状態・AI 分析／承認の日時）と承認の記録だけ（BACKEND_FIREBASE §14）。
- * 日程・サイトマップ・デザイン・品質・ページ・診断は持たないので、まだ始まっていない案件と同じ空の値（blankWork）。
- * live の「AI 分析済み」は承認の依頼（completeAnalysis＝submit）と同じ書き込みなので、依頼の日時は analyzedAt
- */
-export function liveProjectView(p: Project, req: RequirementSession, logs: readonly ApprovalLog[]): DemoState {
-  const work = blankWork(p.id);
-  return {
-    version: 0,
-    userName: '',
-    currentProjectId: p.id,
-    projects: [p],
-    requirements: req,
-    sitemap: work.sitemap,
-    design: work.design,
-    qualityChecks: work.qualityChecks,
-    pages: work.pages,
-    diagnoses: work.diagnoses,
-    signage: work.signage,
-    approvalRequests: req.status !== 'draft' && req.analyzedAt ? { requirements: req.analyzedAt } : {},
-    approvalLogs: logs.map((l) => ({ ...l, projectId: l.projectId ?? p.id })),
-    activities: [],
-    settings: { reducedMotion: 'system', companyName: '' },
-  };
-}
+import { liveProjectView } from '../projectView';
+import { blankWork } from '@/store/projectWork';
 
 /** 名前を読めない（読み込み中・権限で読めない）担当者 */
 const nobody = (id: string): Member => devUserToPerson({ id, name: '—', role: '', email: '', affiliation: 'internal', status: 'active', createdAt: '' });
@@ -70,16 +44,18 @@ function Detail({ p, list }: { p: Project; list: Project[] }) {
   const navigate = useNavigate();
   const { projects, requirements, approvals } = useRepositories();
   const { data: req, loading: reqLoading, error: reqError } = requirements.useCurrent(p.id);
-  const { data: logs } = approvals.useHistory(p.id);
+  const { data: logs, loading: logsLoading, error: logsError } = approvals.useHistory(p.id);
   // 担当ディレクター（作成した人）と開発担当（memberUids）の名前は accounts から
   const doc = useLiveProjects().data.find((x) => x.id === p.id);
   const memberUids = doc?.memberUids ?? [];
   // useAccountPeople は uid の並びを文字列の key にして読むので、配列を毎回作ってよい
   const people = useAccountPeople([p.ownerId, ...memberUids]);
-  const state = useMemo(() => liveProjectView(p, req, logs), [p, req, logs]);
+  const state = useMemo(() => liveProjectView(p, req, logs, blankWork(p.id)), [p, req, logs]);
 
-  if (reqLoading) return <RouteLoader label="プロジェクト" />;
+  if (reqLoading || logsLoading) return <RouteLoader label="プロジェクト" />;
   if (reqError) return <LoadError what="プロジェクト" />;
+  // 承認の記録が読めないとき「履歴なし」と同じ見た目にしない（review 2026-11-26 Minor）
+  if (logsError) return <LoadError what="承認の記録" />;
 
   const owner = people[p.ownerId] ?? nobody(p.ownerId);
   const devNames = memberUids.map((u) => people[u]?.name).filter((n): n is string => !!n);

@@ -23,7 +23,7 @@ import { approvalSteps, type ApprovalKey } from '@/features/portal/portalSteps';
 /**
  * プロジェクト詳細の見た目（demo と live で同じ部品。2026-11-26 ユーザー指示「live はデモと全く同じ見た目に」）。
  * データの出どころは呼び出し側が決める（demo: DemoStore ／ live: Firestore の repositories から作った案件の state）。
- * ここは表示だけ（読み書きの hook を持たない）
+ * 状態は持たず書き込みもしない（承認の記録だけ ApprovalHistory が repository から読む）
  */
 
 /** 段階の最後のお客様の承認（2026-11-17 ユーザー指示「各段階で最後に承認。ヒアリングは要らない、リリースまで」） */
