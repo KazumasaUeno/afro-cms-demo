@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { checkHostingBuild, checkLiveAiFlag, parseTestCounts } from '../../scripts/deploy-firebase.mjs';
+import { checkBuiltAiFlag, checkHostingBuild, checkLiveAiFlag, parseTestCounts } from '../../scripts/deploy-firebase.mjs';
 
 const PROJECT = 'afro-cms-prod';
 const OTHER = 'afro-cms-other';
@@ -144,4 +144,22 @@ test('checkLiveAiFlag: off / internal / on は明示されていれば通して�
 test('checkLiveAiFlag: 3 つ以外の値は拒否', () => {
   withEnv('VITE_FEATURE_AI_REQUIREMENTS=Internal\n', (f) => assert.throws(() => checkLiveAiFlag(f), /不正です/));
   withEnv('VITE_FEATURE_AI_REQUIREMENTS=true\n', (f) => assert.throws(() => checkLiveAiFlag(f), /不正です/));
+});
+
+test('checkLiveAiFlag: 引用符の中の空白・末尾のコメント・export・単引用符（dotenv と同じ読み）', () => {
+  withEnv('VITE_FEATURE_AI_REQUIREMENTS=" internal "\n', (f) => assert.throws(() => checkLiveAiFlag(f), /不正です/));
+  withEnv('VITE_FEATURE_AI_REQUIREMENTS=on # 公開\n', (f) => assert.equal(checkLiveAiFlag(f), 'on'));
+  withEnv("export VITE_FEATURE_AI_REQUIREMENTS='internal'\n", (f) => assert.equal(checkLiveAiFlag(f), 'internal'));
+});
+
+// ---- checkBuiltAiFlag（ビルドに焼き込まれた値と突き合わせる。code review 2026-11-26 Major） ----
+
+test('checkBuiltAiFlag: build-meta.json が無い・壊れているなら拒否', () => {
+  withDist({ 'assets/a.js': 'x' }, (dir) => assert.throws(() => checkBuiltAiFlag('internal', dir), /build-meta\.json がありません/));
+  withDist({ 'build-meta.json': '{' }, (dir) => assert.throws(() => checkBuiltAiFlag('internal', dir), /読めません/));
+});
+
+test('checkBuiltAiFlag: 焼き込んだ値が違えば拒否、同じなら通す', () => {
+  withDist({ 'build-meta.json': JSON.stringify({ mode: 'live', aiFlag: 'off' }) }, (dir) => assert.throws(() => checkBuiltAiFlag('internal', dir), /=off でビルドされています/));
+  withDist({ 'build-meta.json': JSON.stringify({ mode: 'live', aiFlag: 'internal' }) }, (dir) => assert.doesNotThrow(() => checkBuiltAiFlag('internal', dir)));
 });

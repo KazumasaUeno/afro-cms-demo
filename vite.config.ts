@@ -57,6 +57,22 @@ function liveHtml(emulator: boolean, build: boolean, projectId: string): Plugin 
   };
 }
 
+/**
+ * live のビルドに、焼き込んだ AI フラグを dist-live/build-meta.json として残す（deploy:firebase が送る前に .env.live.local と突き合わせる）。
+ * loadEnv は vite がバンドルへ入れるのと同じ解決（シェルの環境変数・.env・.env.local・.env.live・.env.live.local）。値は parseAiFlagMode と同じ判定
+ */
+function buildMeta(mode: string): Plugin {
+  return {
+    name: 'afro-build-meta',
+    apply: 'build',
+    generateBundle() {
+      const raw = loadEnv(mode, process.cwd(), 'VITE_').VITE_FEATURE_AI_REQUIREMENTS;
+      const aiFlag = raw === 'internal' || raw === 'on' ? raw : 'off';
+      this.emitFile({ type: 'asset', fileName: 'build-meta.json', source: JSON.stringify({ mode, aiFlag }) });
+    },
+  };
+}
+
 export default defineConfig(({ mode, command }) => {
   const live = LIVE_MODES.includes(mode);
   const emulator = mode === 'emulator';
@@ -77,7 +93,7 @@ export default defineConfig(({ mode, command }) => {
   return {
     // GitHub Pages 用のビルドだけサブパスにする（.github/workflows/pages.yml が VITE_BASE を渡す）
     base: process.env.VITE_BASE ?? '/',
-    plugins: [react(), ...(live ? [liveHtml(emulator, command === 'build', projectId)] : [])],
+    plugins: [react(), ...(live ? [liveHtml(emulator, command === 'build', projectId)] : []), ...(mode === 'live' ? [buildMeta(mode)] : [])],
     resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
     // ビルド時定数（文字列で置き換える）。demo では `'demo' === 'live'` が偽になり、live の import ごと落ちる
     define: {

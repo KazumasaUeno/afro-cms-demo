@@ -98,12 +98,30 @@ export const LIVE_ENV_FILE = join(root, '.env.live.local');
  */
 export function checkLiveAiFlag(envFile = LIVE_ENV_FILE) {
   const raw = readEnvValue('VITE_FEATURE_AI_REQUIREMENTS', [envFile]);
-  if (raw === undefined || raw.trim() === '') {
+  if (raw === undefined || raw === '') {
     throw new Error('.env.live.local に VITE_FEATURE_AI_REQUIREMENTS がありません（off / internal / on のどれかを明示して build:live し直す。今の本番は internal）');
   }
-  const mode = raw.trim();
-  if (!['off', 'internal', 'on'].includes(mode)) throw new Error(`VITE_FEATURE_AI_REQUIREMENTS=${mode} は不正です（off / internal / on）`);
-  return mode;
+  // 前後の空白も含めて完全一致（dotenv は引用符の中の空白を残し、画面側は off と解釈するため）
+  if (!['off', 'internal', 'on'].includes(raw)) throw new Error(`VITE_FEATURE_AI_REQUIREMENTS=${raw} は不正です（off / internal / on）`);
+  return raw;
+}
+
+/**
+ * dist-live に焼き込まれた AI フラグ（vite.config.ts の buildMeta が書く build-meta.json）が、期待する値と同じか。
+ * .env.live.local をビルド後に書き換えた・シェルの環境変数で上書きされた、を送る前に止める（code review 2026-11-26 Major）
+ */
+export function checkBuiltAiFlag(expected, dir = join(root, 'dist-live')) {
+  const file = join(dir, 'build-meta.json');
+  if (!existsSync(file)) throw new Error('dist-live/build-meta.json がありません（npm run build:live し直す）');
+  let meta;
+  try {
+    meta = JSON.parse(readFileSync(file, 'utf8'));
+  } catch {
+    throw new Error('dist-live/build-meta.json が読めません（npm run build:live し直す）');
+  }
+  if (meta?.aiFlag !== expected) {
+    throw new Error(`dist-live は VITE_FEATURE_AI_REQUIREMENTS=${meta?.aiFlag} でビルドされています（.env.live.local は ${expected}。シェルの環境変数・他の .env を確かめて build:live し直す）`);
+  }
 }
 
 export const AI_LEGAL_CLEARANCE_FILE = join(root, 'docs', 'legal', 'AI_REQUIREMENTS_LEGAL_CLEARANCE.md');
@@ -159,8 +177,10 @@ function main() {
   const args = parseDeployArgs(process.argv.slice(2));
   const { project, targets } = checkDeploy(args);
   if (targets.includes('hosting')) {
-    console.log(`[deploy] VITE_FEATURE_AI_REQUIREMENTS=${checkLiveAiFlag()}`);
+    const aiFlag = checkLiveAiFlag();
     checkHostingBuild(project);
+    checkBuiltAiFlag(aiFlag);
+    console.log(`[deploy] VITE_FEATURE_AI_REQUIREMENTS=${aiFlag}（dist-live と一致）`);
   }
   if (targets.includes('firestore:rules')) checkRulesBeforeDeploy();
   if (targets.includes('functions')) {

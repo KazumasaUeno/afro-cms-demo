@@ -961,4 +961,5 @@
 
 - deploy: hosting を出す前に `.env.live.local` の `VITE_FEATURE_AI_REQUIREMENTS`（off / internal / on）が明示されているかを確かめ、無い・不正なら止める（`scripts/deploy-firebase.mjs` の `checkLiveAiFlag`。2026-11-26 に worktree の `.env.live.local` から抜け、本番の AI 画面が off で出た）。テスト 3 件追加（`tests/rules/deploy-build.test.mjs`）
 - test: functions エミュレータの読み込み待ちを 60→180 秒（`scripts/test-functions.mjs`。60 秒で時々落ちる。reqdoc U2 レビューの持ち越し）
+- 追加（code review Major）: live のビルドが焼き込んだ AI フラグを `dist-live/build-meta.json` に書き（`vite.config.ts` buildMeta）、送る前に `.env.live.local` と一致するかを確かめる（`checkBuiltAiFlag`。ビルド後の書き換え・シェルの環境変数での上書きも止まる）。値は前後の空白も含めて完全一致
 - 画面・Rules・Functions の変更なし
