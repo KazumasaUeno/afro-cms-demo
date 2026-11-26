@@ -247,3 +247,11 @@
 - アイグランの案件 `r3DKL56HfOq8HmvNBTTX` は allowlist に入れていない（実在の顧客の情報を Anthropic へ送ってよいかのユーザー確認待ち）
 - 途中で止まった 3 回: emulator の時間切れ 1 回、並行作業との port 衝突 2 回、本番の値を off に固定していたテスト（ai-flow フラグ2）1 回 → off か internal を許し on を止める形に直した（e7be19c）
 - [DECISION] ユーザー 2026-11-25「送って」: アイグラン（実在の顧客）の案件 `r3DKL56HfOq8HmvNBTTX` を allowlist に追加。ヒアリングの回答と公開サイトの本文を Anthropic へ送ることをユーザーが了承（契約上の可否はユーザー判断）。ヒアリングに個人名・電話・メールを入れない運用
+
+## 0.50.0 リリース 2026-11-26 夕（JST。ユーザー GO「本番に出して」）
+
+- main ed2cbaf（0.50.0：live のプロジェクト詳細をデモと同じ見た目・要件定義書の配置調整・要件定義書ひな型 U1〜U4）＋ e877e9e（`functions/.env.afro-cms-4a6ff` に `AI_REQUIREMENTS_PROPOSAL_VERSION=2` を明示。既定 2 でも firebase の非対話デプロイが値を要求して止まった）
+- Rules＋Indexes: test:rules 595/595 → released。**11-25 午後（3e3387d）以降に出していなかった構築タスク（`projects/{pid}/tasks`）・相談（`messages`・`consult`）の Rules もここで本番へ入った**（Hosting は 45ac8c9 で画面が先に出ていた）。v3 の提案の受け付けと必須の章のゲートは v3 だけで、v1・v2 は不変。戻し: 3e3387d の `firestore.rules` を `--only firestore:rules`
+- Functions: test:functions 239/239 → 5 本 update（`AI_REQUIREMENTS_MODE=internal`・allowlist は変更なし・版 2）。[FACT] 更新後も worker の実行 SA は `afro-cms-ai-worker@`、invoker は `afro-cms-functions@` だけ、`ANTHROPIC_API_KEY` の secretAccessor は worker だけ（gcloud で確認）。戻し: 3e3387d 以降の直前の main で `--only functions`
+- Hosting: dist-live（`aiFlag internal`。deploy の検査で一致）release complete。[FACT] `https://afro-cms-4a6ff.web.app/` と深いパスが 200、X-Frame-Options DENY・CSP frame-ancestors・HSTS、`LiveProjectDetailPage` の chunk に「制作の8段階」。ログインしての画面確認は未実施（本番のアカウントはユーザーだけ）。戻し: Firebase Console の Hosting のリリース履歴から直前（45ac8c9）へ
+- 途中で止まったこと: deploy の test:rules がローカル画面用のエミュレータ（8080/9099）と衝突 → ユーザーがエミュレータを停止して実行、反映後に再起動・架空データを再投入
