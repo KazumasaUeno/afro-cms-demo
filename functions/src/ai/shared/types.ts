@@ -191,6 +191,8 @@ export interface RequirementSession {
   answerMeta?: Record<string, AnswerMeta>;
   analyzedAt?: ISODate;
   approvedAt?: ISODate;
+  /** live だけ: 管理者の代理承認（2026-11-26 ADMIN_FULL_RIGHTS_PLAN L-2）。本人の承認は持たない（既存データ互換）。demo は持たない */
+  approvedVia?: 'proxy';
   /** live だけ: 確認依頼（分析完了）のときに保存した要件定義書の写し（BACKEND_FIREBASE §3・§5.5）。demo は持たず回答から毎回作る。v1（Proposal）か v2（AI 下書き。isProposalV2 で分ける） */
   proposal?: StoredProposal;
 }
@@ -318,6 +320,11 @@ export interface ApprovalLog {
   target: string;
   /** どの案件の承認か（0.20.0 から。無い古い記録はデモのデータを持つ案件のもの） */
   projectId?: string;
+  /**
+   * live だけ: 管理者の代理承認（approvals の proxy:true。2026-11-26 ADMIN_FULL_RIGHTS_PLAN L-2・L-4・§7-5）。demo の記録は持たない。
+   * note は代理の理由。sameAsRequester は同じ版の確認の依頼（submit）と同じ人が代理で承認したとき true（依頼が履歴に無ければ false）
+   */
+  proxy?: { note: string; sameAsRequester: boolean };
 }
 
 /* ---------- CMS ---------- */
