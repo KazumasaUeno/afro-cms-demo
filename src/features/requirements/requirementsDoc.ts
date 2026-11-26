@@ -6,7 +6,7 @@ import { buildProposal } from './buildProposal';
 import { DATA_MODE } from '@/repositories/mode';
 import { answerText, isAnswered } from './validation';
 import { isProposalV2, isProposalV3, type StoredProposal } from '@/types/aiDraft';
-import { reqDocChaptersHtml, REQ_DOC_COPY } from './aiDraft/reqDocView';
+import { reqDocChaptersHtml } from './aiDraft/reqDocView';
 import { esc, proposalV1Html, proposalV2Html } from './aiDraft/proposalV2Format';
 
 /**
@@ -114,7 +114,7 @@ ${answers}
 <h2>3. スケジュール</h2>
 ${scheduleSection(state.schedule)}
 <h2>4. 非機能要件（アフロ標準）</h2>
-${isProposalV3(proposal) ? `<p class="note-plain">${esc(REQ_DOC_COPY.ch23.overlap)}</p>` : ''}${nonFunctionalSection()}
+${nonFunctionalSection()}
 </body></html>`;
 }
 

@@ -26,5 +26,5 @@ functions/lib
 # AI 評価の出力（生の出力・採点表。実装計画 §6 L1）
 prototypes/ai-requirements-eval/out/
 
-# エミュレータ専用のログイン情報（scripts/seed-emulator-reqdoc.mjs の手順で作る使い捨て。コミットしない）
+# エミュレータ専用のログイン情報の手元メモ（どのスクリプトも作らない。scripts/seed-emulator.mjs --set-password で決めた使い捨てのパスワードを手で書く。コミットしない）
 .emulator-login.local

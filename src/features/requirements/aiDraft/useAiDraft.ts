@@ -4,9 +4,9 @@ import { isEditableV3, type AiDraftDoc, type AnyAiEditable } from '@/types/aiDra
 import { answersHash } from '@/shared/ai/answersHash';
 import { useToast } from '@/hooks/useToast';
 import { getAiDraftPort } from './aiDraftPort';
-import { saveHoldCount } from './reqDocView';
+import { editableTextV3, saveHoldCount, saveHoldReasons } from './reqDocView';
 import {
-  AI_DRAFT_COPY, AUTOSAVE_DEBOUNCE_MS, aiDraftServerKey, decideResync, deriveAiDraftState, isJobRunning, isNoResponseError, nextRequestId, outcomeOfResponse,
+  AI_DRAFT_COPY, AUTOSAVE_DEBOUNCE_MS, aiDraftServerKey, canConfirmGenerated, decideResync, deriveAiDraftState, isJobRunning, isNoResponseError, nextRequestId, outcomeOfResponse,
   saveErrorMessage, startErrorMessage, type AiFlagMode, type AiViewerRole, type AutosaveState, type LastRequest, type SaveErrorView,
   type StartErrorView,
 } from './aiDraftState';
@@ -159,7 +159,7 @@ export function useAiDraft(i: AiDraftHookInput) {
         for (;;) {
           const v = version.current;
           const body = latest.current as AnyAiEditable;
-          // 対象外・不採用の理由が空の間は送らない（送るとサーバーの検査 reqDocEditable.ts で拒否される。REQDOC_U4_UI.md §3.2）。入力されたら次の自動保存で送る
+          // 対象外・不採用の理由・AI追加の項目名が空の間は送らない（離れるときは LiveRequirementsPage が leaveDecision で確かめる。送るとサーバーの検査 reqDocEditable.ts で拒否される。REQDOC_U4_UI.md §3.2）。入力されたら次の自動保存で送る
           if (saveHoldCount(body) > 0) { setSave('pending'); return false; }
           setSave('saving');
           await port.saveEdits(i.projectId, body);
@@ -196,10 +196,15 @@ export function useAiDraft(i: AiDraftHookInput) {
     timer.current = setTimeout(() => { void flush(); }, AUTOSAVE_DEBOUNCE_MS);
   }, [flush]);
 
-  /** 「内容を確認した」: generated の 3 欄をそのまま edited へ（ダイアログなしで即時に送る） */
+  // 保存を止めている欠け（v3 の対象外・不採用の理由／AI追加の項目名）。画面の表示と、離れるときの判定に使う
+  const holdReasons = useMemo(() => saveHoldReasons(local), [local]);
+  const hold = holdReasons.naReason + holdReasons.addedLabel;
+
+  /** 「内容を確認した」: generated の 3 欄をそのまま edited へ（ダイアログなしで即時に送る）。未保存の編集・欠けがある間は上書きしない（canConfirmGenerated） */
   const confirm = useCallback(async () => {
     const g = doc?.generated;
     if (!g) return false;
+    if (!canConfirmGenerated({ save: saveRef.current, hold: saveHoldCount(latest.current), running: doc?.job?.state === 'running' })) return false;
     const e = pickEditable(g);
     latest.current = e;
     setLocal(e);
@@ -214,11 +219,22 @@ export function useAiDraft(i: AiDraftHookInput) {
     return flush();
   }, [flush]);
 
-  /** 「変更をコピー」（generation-running のとき。プレーンテキスト） */
+  /** 画面を離れるときに「破棄して移動」を選んだ: 待っている保存を送らない（後片付けの送信も止める） */
+  const discardPending = useCallback(() => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    sentVersion.current = version.current;
+  }, []);
+
+  /** 「変更をコピー」（generation-running のとき。プレーンテキスト。v3 は reqDocView の editableTextV3 だけ） */
+  const docRef = useRef(doc);
+  docRef.current = doc;
   const pendingText = useCallback((): string => {
     const e = latest.current;
     if (!e) return '';
-    if (isEditableV3(e)) return [e.summary, '', ...e.points.flatMap((p) => [`■ ${p.title}`, p.detail, p.impact, '']), ...Object.values(e.doc.items).map((it) => it.text).filter(Boolean), ...e.doc.added.flatMap((a) => [`■ ${a.label}`, a.text])].join('\n');
+    if (isEditableV3(e)) {
+      const g = docRef.current?.generated;
+      return editableTextV3(e, (g && 'template' in g ? g.template?.version : undefined) ?? '');
+    }
     const d = e.draft;
     return [
       e.summary, '',
@@ -245,7 +261,7 @@ export function useAiDraft(i: AiDraftHookInput) {
   return {
     available: active, loading, loadError, doc, view, running, now,
     generate, starting, startError, clearStartError: () => setStartError(null),
-    local, update, flush, resave, confirm, save, savedAt, saveError, pendingText,
+    local, update, flush, resave, confirm, save, savedAt, saveError, pendingText, hold, holdReasons, discardPending,
   };
 }
 

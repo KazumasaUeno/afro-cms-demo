@@ -1,7 +1,7 @@
-import { useState, type MouseEvent, type ReactNode } from 'react';
-import { Box, Button, Stack } from '@mui/material';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography } from '@mui/material';
 import { ArrowLeft, ListChecks, Send, Sparkles } from 'lucide-react';
-import { Link as RouterLink, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, Navigate, useBlocker, useLocation, useNavigate } from 'react-router-dom';
 import { AiBadge, PageHeader, Reveal, StatusPill, Surface } from '@/components/ui';
 import { RouteLoader } from '@/components/layout/RouteLoader';
 import { DATA_MODE, useCurrentRequirements, useRepositories } from '@/repositories';
@@ -14,11 +14,11 @@ import {
   HearingAnswersSection, NonFunctionalSection, ReqDocTabs, RequirementsHowTo, ScheduleSection, type ReqDocSectionId,
 } from '@/features/requirements/RequirementsDocSections';
 import { AI_FLAG_MODE, getAiDraftPort } from '@/features/requirements/aiDraft/aiDraftPort';
-import { AI_DRAFT_COPY, APPROVAL_BLOCK_COPY, aiPanelVisible } from '@/features/requirements/aiDraft/aiDraftState';
+import { AI_DRAFT_COPY, APPROVAL_BLOCK_COPY, aiPanelVisible, LEAVE_COPY, leaveDecision, shouldBlockLeave } from '@/features/requirements/aiDraft/aiDraftState';
 import { useAiDraft } from '@/features/requirements/aiDraft/useAiDraft';
 import { AiDraftPanel } from '@/features/requirements/aiDraft/AiDraftPanel';
 import { isProposalV3 } from '@/types/aiDraft';
-import { liveHowToStep } from '@/features/requirements/aiDraft/reqDocView';
+import { liveHowToStep, needsResave, saveHoldText } from '@/features/requirements/aiDraft/reqDocView';
 import { useLiveSession } from '../session';
 
 /** フラグ on の画面の印の説明（RequirementsPage と同じ。DEC lead F4） */
@@ -57,13 +57,28 @@ export default function LiveRequirementsPage() {
   });
   const autoStart = !!(location.state as { autoStart?: boolean } | null)?.autoStart;
 
-  /** 画面を移る前に、未保存の編集を待たずに送る（§3.1。外したときの送信は useAiDraft の後片付けにもある） */
-  const leave = (to: string) => async (e?: MouseEvent) => {
-    if (ai.save !== 'pending') return; // 送るものが無ければ RouterLink のまま移る
-    e?.preventDefault();
-    await ai.flush();
-    navigate(to);
-  };
+  // アプリの中で別の画面へ移るとき（戻る導線・メニュー・ブラウザの戻る。§3.1）: 送れる変更は送り切ってから移る。
+  // 送れない（理由・項目名の欠けで止めている／保存に失敗した）・送っても失敗したら「破棄して移動／編集を続ける」を確かめる（黙って捨てない）。
+  // 同じ画面の中の URL の変化（autoStart の state を消す replace）は止めない。再読み込み・タブを閉じるのは useAiDraft の beforeunload
+  const leaveInput = { save: ai.save, hold: ai.hold };
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => currentLocation.pathname !== nextLocation.pathname && shouldBlockLeave(leaveInput));
+  const [askLeave, setAskLeave] = useState(false);
+  const blocked = blocker.state === 'blocked';
+  useEffect(() => {
+    if (!blocked) { setAskLeave(false); return undefined; }
+    let alive = true;
+    const d = leaveDecision(leaveInput);
+    if (d === 'go') { blocker.proceed?.(); return undefined; }
+    if (d === 'confirm') { setAskLeave(true); return undefined; }
+    void ai.flush().then((ok) => {
+      if (!alive) return;
+      if (ok) blocker.proceed?.();
+      else setAskLeave(true);
+    });
+    return () => { alive = false; };
+    // 止めた時点の 1 回だけ判定する（保存の状態の変化で判定し直さない）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blocked]);
 
   // 読み込み中は描画せず、書き込みも呼ばない（repositories/types.ts の決まり）
   if (loading) return <RouteLoader label="要件定義書" />;
@@ -72,7 +87,7 @@ export default function LiveRequirementsPage() {
   const hasDraft = status === 'draft' && !ai.loading && !!ai.doc?.generated && ['ready', 'confirmed', 'running'].includes(ai.view.key);
   const step = liveHowToStep(status, hasDraft);
   const answersButton = (
-    <Button variant="outlined" size="small" startIcon={<ListChecks size={15} />} component={RouterLink} to={routes.answers} onClick={(e: MouseEvent) => void leave(routes.answers)(e)}>
+    <Button variant="outlined" size="small" startIcon={<ListChecks size={15} />} component={RouterLink} to={routes.answers}>
       {status !== 'approved' ? '回答を見直す' : 'ヒアリングの回答'}
     </Button>
   );
@@ -102,7 +117,7 @@ export default function LiveRequirementsPage() {
 
   return (
     <Box>
-      <Button component={RouterLink} to={routes.project(req.projectId)} onClick={(e: MouseEvent) => void leave(routes.project(req.projectId))(e)} size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>
+      <Button component={RouterLink} to={routes.project(req.projectId)} size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>
         プロジェクト詳細
       </Button>
       <PageHeader
@@ -131,8 +146,9 @@ export default function LiveRequirementsPage() {
               return false;
             }
             // v3: サーバーの submitReady（保存のたびに必須の章を判定）が無い・false なら、今の編集を送り直してから依頼する（Rules が submitReady を提出の条件にする＝U3）
+            // 別の版のひな型で判定した submitReady も送り直す（needsResave）
             const g = ai.doc?.generated;
-            if (g && isProposalV3(g) && ai.doc?.submitReady?.requiredOk !== true && !(await ai.resave())) {
+            if (g && isProposalV3(g) && needsResave(ai.doc?.submitReady, g.template?.version ?? '') && !(await ai.resave())) {
               toast(APPROVAL_BLOCK_COPY['save-failed'], 'error');
               return false;
             }
@@ -147,6 +163,16 @@ export default function LiveRequirementsPage() {
       {/* live に日程は無い（承認後に入力します。RequirementsDocSections の ScheduleSection） */}
       {section === 'schedule' && <ScheduleSection />}
       {section === 'nonfunctional' && <NonFunctionalSection />}
+      <Dialog open={blocked && askLeave} onClose={() => blocker.reset?.()} maxWidth="xs" fullWidth aria-labelledby="reqdoc-leave-title">
+        <DialogTitle id="reqdoc-leave-title">{LEAVE_COPY.title}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">{LEAVE_COPY.body(ai.hold > 0 ? saveHoldText(ai.holdReasons) : ai.save === 'failed' ? (ai.saveError?.message ?? LEAVE_COPY.failed) : LEAVE_COPY.failed)}</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => blocker.reset?.()}>{LEAVE_COPY.stay}</Button>
+          <Button color="error" onClick={() => { ai.discardPending(); blocker.proceed?.(); }}>{LEAVE_COPY.discard}</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

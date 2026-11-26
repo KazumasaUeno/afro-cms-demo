@@ -6,19 +6,19 @@ import { Surface } from '@/components/ui';
 import { tokens } from '@/theme/tokens';
 import { reqDocCatalogOf } from '@/shared/ai/reqDocCatalog';
 import { AI_DRAFT_LIMITS, isEditableV3, type AiEditableV3, type AiGeneratedV3, type ProposalV3 } from '@/types/aiDraft';
-import { AI_DRAFT_COPY, APPROVAL_BLOCK_COPY, approvalBlock } from './aiDraftState';
-import { Field, PointsFields, SaveStatus } from './AiDraftEditor';
+import { AI_DRAFT_COPY, APPROVAL_BLOCK_COPY, approvalBlock, canConfirmGenerated } from './aiDraftState';
+import { Field, PointsFields, SaveStatus, type AiDraftEditorProps } from './editorParts';
 import { ProposalV2Body, ProposalV2Summary } from './ProposalV2Body';
 import { ReqDocChapters } from './ReqDocChapters';
-import { CoverFields, type ReqDocEdit } from './ReqDocV3Edit';
-import { buildReqDocView, flagsFor, missingNaReasons, remainingFlaggedV3, REQ_DOC_COPY, reqDocSubmitBlock, submitBlockText } from './reqDocView';
-import type { AiDraftEditorProps } from './AiDraftEditor';
+import { CoverFields, useReqDocChaptersEditor, type ReqDocEdit } from './ReqDocV3Edit';
+import { buildReqDocView, flagsFor, remainingFlaggedV3, REQ_DOC_COPY, reqDocSubmitBlock, saveHoldReasons, saveHoldText, submitBlockText } from './reqDocView';
 
 /**
  * 提案 v3 の下書き（docs/design/REQDOC_U4_UI.md §3.2）。live の要件定義書の「1. 改善提案」タブの中。
  * - 一番上に「表示／編集」。表示＝お客様に出る形そのもの（要確認の数字だけ <mark>）、編集＝同じ Surface・SectionTitle・KeyValueRows の並びで値を入力にする。既定は編集
  * - 主操作（内容を確認した → 承認を依頼する）・保存の状態・作り直すは actionsSlot（PageHeader の右）へ描く。slot がまだ無い最初の描画だけタブの中に出す
- * - 必須の章（01・02・19・21）の未確定・対象外の理由の欠け・版のカタログ無しは押せない（reqDocSubmitBlock）。対象外の理由が空の間は自動保存を送らない（useAiDraft）
+ * - 必須の章（01・02・19・21）の未確定・対象外の理由の欠け・AI追加の項目名の欠け・版のカタログ無しは押せない（reqDocSubmitBlock）。理由・項目名が空の間は自動保存を送らない（useAiDraft）
+ * - 「内容を確認した」は未保存の編集・欠けがある間は押せない（generated で上書きして手元の編集を失うため。canConfirmGenerated）
  */
 export function AiDraftReviewV3({ ai, view, generated, role, isAssignedDeveloper, reqStatus, onRegenerate, onRequestApproval, notes, actionsSlot }: AiDraftEditorProps & { generated: AiGeneratedV3 }) {
   const reasonId = useId();
@@ -35,21 +35,23 @@ export function AiDraftReviewV3({ ai, view, generated, role, isAssignedDeveloper
   const editing = mode === 'edit' && view.canEdit;
   const block = approvalBlock({ hasEdited: view.hasEdited, save: ai.save, running: ai.running, reqStatus, role, isAssignedDeveloper });
   const docBlock = reqDocSubmitBlock(local, version);
-  // 理由の欠けは保存も止めている（save が pending のまま）ので、保存中より先にその理由を出す
-  const shownBlock = docBlock?.kind === 'na-reason' ? null : block && block !== 'not-allowed' && block !== 'not-draft' ? block : null;
+  // 理由・項目名の欠けは保存も止めている（save が pending のまま）ので、保存中より先にその理由を出す
+  const shownBlock = docBlock?.kind === 'na-reason' || docBlock?.kind === 'added-label' ? null : block && block !== 'not-allowed' && block !== 'not-draft' ? block : null;
   const { flags: _f, ...base } = generated;
   void _f;
   const preview: ProposalV3 = { ...base, ...local, version: 3 };
   const counts = buildReqDocView(local.doc, version).counts;
   const topFlags = flagsFor(flags);
-  const held = missingNaReasons(local.doc);
+  const holdReasons = saveHoldReasons(local);
+  const held = holdReasons.naReason + holdReasons.addedLabel;
 
   const edit: Omit<ReqDocEdit, 'onAskDelete'> = { local, catalog, readOnly, flags, onChange: (next) => ai.update(next) };
+  const chaptersEditor = useReqDocChaptersEditor(edit);
   const setPoint = (idx: number, patch: Partial<AiEditableV3['points'][number]>) =>
     ai.update({ ...local, points: local.points.map((p, i) => (i === idx ? { ...p, ...patch } : p)) });
 
   const primary = !view.canEdit ? null : !confirmed ? (
-    <Button variant="contained" onClick={() => void ai.confirm()} disabled={ai.running || ai.save === 'saving'} startIcon={<CheckCircle2 size={16} />}>
+    <Button variant="contained" onClick={() => void ai.confirm()} disabled={!canConfirmGenerated({ save: ai.save, hold: held, running: ai.running })} startIcon={<CheckCircle2 size={16} />}>
       {remaining.length ? AI_DRAFT_COPY.ready.confirmWithFlags : AI_DRAFT_COPY.ready.confirm}
     </Button>
   ) : (
@@ -67,7 +69,7 @@ export function AiDraftReviewV3({ ai, view, generated, role, isAssignedDeveloper
   const showSaveStatus = view.canEdit || (ai.running && ai.save !== 'idle');
   const actions = (
     <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ flexWrap: 'wrap', rowGap: 1 }}>
-      {showSaveStatus && <Box sx={{ alignSelf: 'center' }}><SaveStatus ai={ai} confirmed={confirmed} held={held} heldText={REQ_DOC_COPY.naReasonHold} /></Box>}
+      {showSaveStatus && <Box sx={{ alignSelf: 'center' }}><SaveStatus ai={ai} confirmed={confirmed} held={held} heldText={() => saveHoldText(holdReasons)} /></Box>}
       {onRegenerate && view.canGenerate && (
         <Button variant="outlined" startIcon={<RefreshCw size={15} />} onClick={onRegenerate} disabled={ai.running || ai.starting}>{AI_DRAFT_COPY.answersChanged.regenerate}</Button>
       )}
@@ -116,7 +118,7 @@ export function AiDraftReviewV3({ ai, view, generated, role, isAssignedDeveloper
             <Typography variant="h4" component="h2" sx={{ mb: 1.5 }}>改善ポイントと提案内容</Typography>
             <PointsFields points={local.points} readOnly={readOnly} flags={topFlags} onChange={setPoint} columns={{ xs: '1fr', sm: 'repeat(2, 1fr)', xl: 'repeat(3, 1fr)' }} />
           </Box>
-          <ReqDocChapters proposal={preview} approval={{ status: reqStatus }} flags={flags} edit={edit} />
+          <ReqDocChapters proposal={preview} approval={{ status: reqStatus }} flags={flags} editor={chaptersEditor} />
         </>
       ) : (
         <>

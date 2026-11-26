@@ -1,18 +1,20 @@
-import { Box, Button, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { useState } from 'react';
+import { Box, Button, Dialog, DialogActions, DialogContent, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import { Trash2 } from 'lucide-react';
 import { AiBadge, StatusPill } from '@/components/ui';
 import type { ReqDocCatalog } from '@/shared/ai/reqDocCatalog';
 import { REQ_DOC_LIMITS, type AiEditableV3, type ProposalV3Doc, type ReqDocAddedItem } from '@/types/aiDraft';
 import { evidenceLabel } from './aiDraftState';
-import { Field } from './AiDraftEditor';
+import { Field } from './editorParts';
+import type { ReqDocChaptersEditor } from './ReqDocChapters';
 import {
-  flagsFor, isKubunEditable, itemTextMax, KUBUN_LABEL, REQ_DOC_COPY, setAdded, setCover, setItem, setNote, statusOptions,
+  flagsFor, isKubunEditable, itemTextMax, KUBUN_LABEL, removeAdded, REQ_DOC_COPY, setAdded, setCover, setItem, setNote, statusOptions, type ReqDocRow,
 } from './reqDocView';
 
 /**
  * 提案 v3 の「編集」の欄（docs/design/REQDOC_U4_UI.md §3.2）。表示と同じ Surface・SectionTitle・KeyValueRows の中で、値（v）だけを入力にする。
  * - 固定は入力も状態の操作も出さない（表示と同じ行。検査の正は functions/src/ai/reqDocEditable.ts）
- * - 対象外・不採用で理由が空なら欄を error にする（その間は自動保存を送らない＝useAiDraft の saveHoldCount）
+ * - 対象外・不採用で理由が空、AI追加の項目名が空なら欄を error にする（その間は自動保存を送らない＝useAiDraft の saveHoldCount）
  * - AI追加は編集と削除だけ（足すボタンは出さない）。削除の確認は呼び出し側の Dialog
  * - 入力はプレーンテキスト（TextField の値だけ）
  */
@@ -90,7 +92,9 @@ export function AddedEditCell({ item, edit }: { item: ReqDocAddedItem; edit: Req
           </Button>
         )}
       </Stack>
-      <Field label="項目名" value={item.label} max={REQ_DOC_LIMITS.addedLabel} multiline={false} readOnly={edit.readOnly} flags={flagsFor(edit.flags, item.id)} onChange={(v) => set({ label: v })} />
+      <Field label="項目名" value={item.label} max={REQ_DOC_LIMITS.addedLabel} multiline={false} readOnly={edit.readOnly} flags={flagsFor(edit.flags, item.id)} onChange={(v) => set({ label: v })}
+        error={!item.label.trim() ? REQ_DOC_COPY.addedLabelRequired : undefined}
+      />
       <Field
         label={na ? '不採用の理由' : '内容'} value={item.text} max={REQ_DOC_LIMITS.itemText} readOnly={edit.readOnly} flags={flagsFor(edit.flags, item.id)}
         onChange={(v) => set({ text: v })} error={na && !item.text.trim() ? REQ_DOC_COPY.naReasonRequired : undefined}
@@ -126,4 +130,41 @@ export function CoverFields({ edit }: { edit: Omit<ReqDocEdit, 'onAskDelete'> })
       ))}
     </Box>
   );
+}
+
+/**
+ * ReqDocChapters の「編集」の描き方（行の入力・特記事項の入力・AI追加の削除の確認ダイアログ）。
+ * 表示の部品（ReqDocChapters）がこのファイルを import しないよう、編集の画面（AiDraftReviewV3）がここで作って渡す
+ */
+export function useReqDocChaptersEditor(edit: Omit<ReqDocEdit, 'onAskDelete'>): ReqDocChaptersEditor {
+  const [askDelete, setAskDelete] = useState<string | null>(null);
+  const editing: ReqDocEdit = { ...edit, onAskDelete: setAskDelete };
+  const deleting = askDelete ? edit.local.doc.added.find((a) => a.id === askDelete) : undefined;
+  const cell = (r: ReqDocRow) => {
+    if (r.kind === 'item') {
+      const cat = edit.catalog?.items.find((i) => i.id === r.id);
+      return cat && isKubunEditable(cat.kubun) && edit.local.doc.items[r.id] ? <ItemEditCell id={r.id} edit={editing} /> : null;
+    }
+    if (r.kind === 'added') {
+      const a = edit.local.doc.added.find((x) => x.id === r.id);
+      return a ? <AddedEditCell item={a} edit={editing} /> : null;
+    }
+    return null;
+  };
+  const overlay = (
+    <Dialog open={!!deleting} onClose={() => setAskDelete(null)} maxWidth="xs" fullWidth aria-labelledby="reqdoc-delete-title">
+      <DialogContent sx={{ pt: 3 }}>
+        <Typography id="reqdoc-delete-title" variant="h3" sx={{ mb: 1 }}>{REQ_DOC_COPY.deleteTitle}</Typography>
+        {deleting && <Typography variant="body2" color="text.secondary">{deleting.label}</Typography>}
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 3 }}>
+        <Button variant="outlined" onClick={() => setAskDelete(null)}>{REQ_DOC_COPY.deleteCancel}</Button>
+        <Button variant="contained" color="error" onClick={() => {
+          if (deleting) edit.onChange(removeAdded(edit.local, deleting.id));
+          setAskDelete(null);
+        }}>{REQ_DOC_COPY.deleteAction}</Button>
+      </DialogActions>
+    </Dialog>
+  );
+  return { cell, notes: (chapterId) => <NotesEditCell chapterId={chapterId} edit={editing} />, overlay };
 }

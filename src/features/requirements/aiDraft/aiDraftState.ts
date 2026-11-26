@@ -145,6 +145,41 @@ export function canRequestApproval(a: ApprovalInput): boolean {
   return approvalBlock(a) === null;
 }
 
+// ---------------- 画面を離れるとき（§3.1・§3.3） ----------------
+
+/**
+ * アプリの中で別の画面へ移るとき（戻る導線・メニュー・ブラウザの戻る）の扱い。
+ * - go: 送るものが無い（idle・saved）→ そのまま移る
+ * - flush: 送れる未保存の変更がある（pending・saving）→ 送り切ってから移る。送れなければ confirm にする
+ * - confirm: 送れない（理由・項目名の欠けで止めている hold>0、または保存に失敗した）→ 「破棄して移動／編集を続ける」を確かめる
+ */
+export type LeaveDecision = 'go' | 'flush' | 'confirm';
+
+export function leaveDecision(i: { save: AutosaveState; hold: number }): LeaveDecision {
+  if (i.save === 'idle' || i.save === 'saved') return 'go';
+  if (i.save === 'failed' || i.hold > 0) return 'confirm';
+  return 'flush';
+}
+
+/** アプリの中の移動を止めて確かめるか（useBlocker の条件。同じ画面の中の URL の変化は止めない） */
+export const shouldBlockLeave = (i: { save: AutosaveState; hold: number }): boolean => leaveDecision(i) !== 'go';
+
+export const LEAVE_COPY = {
+  title: '保存していない変更があります',
+  body: (reason: string) => `${reason ? `${reason}。` : ''}このまま移動すると、保存していない変更は破棄されます。`,
+  stay: '編集を続ける',
+  discard: '破棄して移動',
+  failed: '保存できませんでした',
+} as const;
+
+/**
+ * 「内容を確認した」（generated をそのまま edited へ）を押せるか。未保存の編集（pending・saving・failed）や
+ * 保存を止めている欠け（hold>0）がある間は押せない（押すと手元の編集を generated で上書きして失う）
+ */
+export function canConfirmGenerated(i: { save: AutosaveState; hold: number; running: boolean }): boolean {
+  return !i.running && i.hold === 0 && (i.save === 'idle' || i.save === 'saved');
+}
+
 // ---------------- サーバー値の取り込み（§3.3・§3.5） ----------------
 
 /**

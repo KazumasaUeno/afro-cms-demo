@@ -60,6 +60,9 @@ export const REQ_DOC_COPY = {
   by: { ai: 'AI の下書き', server: 'ヒアリングの選択肢・案件情報から転記', human: '担当者が記入' } as Record<ReqDocItemAuthor, string>,
   naReasonRequired: '対象外（不採用）にするときは理由を書いてください',
   naReasonHold: (n: number) => `理由が未入力の項目が ${n} 件あります。入力すると保存します`,
+  /** AI追加の項目名が空（サーバーの検査 reqDocEditable.ts は 1 文字以上。空のまま送ると保存がすべて拒否される） */
+  addedLabelRequired: '項目名を入力してください',
+  addedLabelHold: (n: number) => `項目名が未入力の追加項目が ${n} 件あります。入力すると保存します`,
   deleteTitle: 'この追加項目を削除しますか？ 作り直さない限り元に戻せません。',
   deleteCancel: 'キャンセル',
   deleteAction: '削除する',
@@ -334,28 +337,63 @@ export function requiredOpenCount(doc: ProposalV3Doc, templateVersion: string): 
   return catalog.items.filter((c) => {
     if (!chapters.includes(c.chapterId)) return false;
     const it = items[c.id];
-    return !(it && (it.status === 'proposed' || it.status === 'na') && it.text.trim() !== '');
+    return !(it && (it.status === 'proposed' || it.status === 'na') && !isBlank(it.text));
   }).length;
 }
 
+const NL = '\n';
+
+/** 空白だけ・文字列でない（保存値の形が崩れていても落ちない） */
+const isBlank = (s: unknown): boolean => typeof s !== 'string' || !s.trim();
+
 /** 対象外・不採用で理由（文）が空の件数（この間は自動保存を送らない。送ると reqDocEditable.ts:72・:90 で拒否） */
 export function missingNaReasons(doc: ProposalV3Doc): number {
-  const items = Object.values(doc?.items ?? {}).filter((it) => it.status === 'na' && !it.text.trim()).length;
-  return items + (doc?.added ?? []).filter((a) => a.status === 'na' && !a.text.trim()).length;
+  const items = Object.values(doc?.items ?? {}).filter((it) => it?.status === 'na' && isBlank(it.text)).length;
+  return items + (doc?.added ?? []).filter((a) => a?.status === 'na' && isBlank(a.text)).length;
 }
 
-/** 自動保存を止める件数（v3 で対象外・不採用の理由が空。v2 は常に 0）。useAiDraft の flush が見る（§3.2） */
+/** AI追加で項目名が空の件数（サーバーは label 1 文字以上＝reqDocEditable.ts の str(a.label, 1, …)。空白だけも欠けとして数える） */
+export function missingAddedLabels(doc: ProposalV3Doc): number {
+  return (doc?.added ?? []).filter((a) => isBlank(a?.label)).length;
+}
+
+/** 自動保存を止める理由の件数（v3 だけ。v2 は常に 0） */
+export interface SaveHoldReasons { naReason: number; addedLabel: number }
+
+export function saveHoldReasons(e: AnyAiEditable | null | undefined): SaveHoldReasons {
+  if (!e || !isEditableV3(e)) return { naReason: 0, addedLabel: 0 };
+  return { naReason: missingNaReasons(e.doc), addedLabel: missingAddedLabels(e.doc) };
+}
+
+/** 自動保存を止める件数（v3 で対象外・不採用の理由が空＋AI追加の項目名が空）。useAiDraft の flush が見る（§3.2） */
 export function saveHoldCount(e: AnyAiEditable | null | undefined): number {
-  return e && isEditableV3(e) ? missingNaReasons(e.doc) : 0;
+  const r = saveHoldReasons(e);
+  return r.naReason + r.addedLabel;
+}
+
+/** 保存を止めている理由の文（保存の状態の欄。理由の欠けを先に出す） */
+export function saveHoldText(r: SaveHoldReasons): string {
+  return [r.naReason ? REQ_DOC_COPY.naReasonHold(r.naReason) : '', r.addedLabel ? REQ_DOC_COPY.addedLabelHold(r.addedLabel) : ''].filter(Boolean).join('／');
+}
+
+/**
+ * 承認の依頼の前に今の編集を送り直すか（v3）。サーバーの submitReady が無い・false・別の版のひな型で判定したものなら送り直す
+ * （保存と同じ書き込みでサーバーが今の版で判定し直す。Rules が submitReady を提出の条件にする＝U3）
+ */
+export function needsResave(submitReady: { requiredOk: boolean; templateVersion: string } | undefined, templateVersion: string): boolean {
+  return submitReady?.requiredOk !== true || submitReady.templateVersion !== templateVersion;
 }
 
 /** 提出を止める理由（押せるなら null）。approvalBlock（aiDraftState.ts）の後に見る */
-export type ReqDocSubmitBlock = { kind: 'catalog-missing'; version: string } | { kind: 'required-open'; count: number } | { kind: 'na-reason'; count: number };
+export type ReqDocSubmitBlock =
+  | { kind: 'catalog-missing'; version: string } | { kind: 'required-open'; count: number } | { kind: 'na-reason'; count: number } | { kind: 'added-label'; count: number };
 
 export function reqDocSubmitBlock(e: AiEditableV3, templateVersion: string): ReqDocSubmitBlock | null {
   if (!reqDocCatalogOf(templateVersion)) return { kind: 'catalog-missing', version: templateVersion };
   const na = missingNaReasons(e.doc);
   if (na) return { kind: 'na-reason', count: na };
+  const label = missingAddedLabels(e.doc);
+  if (label) return { kind: 'added-label', count: label };
   // 可否は共有の reqDocRequiredOk（サーバーは保存のたびに同じ関数で aiDrafts.submitReady を書き、Rules が提出の条件にする＝U3。画面の制御は境界ではない）
   if (!reqDocRequiredOk(e.doc, templateVersion)) return { kind: 'required-open', count: Math.max(1, requiredOpenCount(e.doc, templateVersion)) };
   return null;
@@ -364,6 +402,7 @@ export function reqDocSubmitBlock(e: AiEditableV3, templateVersion: string): Req
 export function submitBlockText(b: ReqDocSubmitBlock): string {
   if (b.kind === 'catalog-missing') return REQ_DOC_COPY.catalogMissing(b.version);
   if (b.kind === 'na-reason') return REQ_DOC_COPY.naReasonHold(b.count);
+  if (b.kind === 'added-label') return REQ_DOC_COPY.addedLabelHold(b.count);
   return REQ_DOC_COPY.requiredBlock(b.count);
 }
 
@@ -436,17 +475,28 @@ export function setCover(e: AiEditableV3, key: keyof ProposalV3Doc['cover'], tex
   return { ...e, doc: { ...e.doc, cover: { ...e.doc.cover, [key]: text.slice(0, REQ_DOC_LIMITS.coverField) } } };
 }
 
-/** 「変更をコピー」用のプレーンテキスト */
+/**
+ * 「変更をコピー」用のプレーンテキスト（保存できなかった編集を手元に残す。useAiDraft の pendingText の v3 はこれだけ）。
+ * 編集できる欄を漏らさない: 要約・改善ポイント・表紙の 4 欄・ひな型の項目（項目名・状態・文）・AI追加（項目名・採否・内容・追加した理由）・章末の特記事項
+ */
 export function editableTextV3(e: AiEditableV3, templateVersion: string): string {
   const catalog = reqDocCatalogOf(templateVersion);
   const label = (id: string) => catalog?.items.find((i) => i.id === id)?.label ?? id;
+  const chapter = (id: string) => catalog?.chapters.find((c) => c.id === id)?.title ?? id;
+  // 状態の名前は編集の切替と同じ（statusOptions。個別＝確定案／対象外、選択＝採用案／不採用）
+  const status = (id: string, st: string) => {
+    const cat = catalog?.items.find((i) => i.id === id);
+    return (cat ? statusOptions(cat.kubun).find((o) => o.value === st)?.label : undefined) ?? (st === 'std_pending' ? REQ_DOC_COPY.count.pending : st);
+  };
+  const cover = (Object.keys(REQ_DOC_COPY.cover) as (keyof ProposalV3Doc['cover'])[]).filter((k) => e.doc.cover?.[k]).map((k) => `${REQ_DOC_COPY.cover[k]}: ${e.doc.cover[k]}`);
   return [
     e.summary, '',
     ...e.points.flatMap((p) => [`■ ${p.title}`, p.detail, p.impact, '']),
-    ...Object.entries(e.doc.items).filter(([, it]) => it.text).map(([id, it]) => `■ ${label(id)}\n${it.text}`),
-    ...e.doc.added.map((a) => `■ ${a.label}（${REQ_DOC_COPY.addedClient}）\n${a.text}\n${a.reason}`),
-    ...Object.values(e.doc.notes).filter(Boolean),
-  ].join('\n');
+    ...cover,
+    ...Object.entries(e.doc.items).filter(([, it]) => it.text || it.status === 'na').map(([id, it]) => [`■ ${label(id)}（${status(id, it.status)}）`, it.text].join(NL)),
+    ...e.doc.added.map((a) => [`■ ${a.label}（${REQ_DOC_COPY.addedClient}・${a.status === 'na' ? '不採用' : '採用案'}）`, a.text, REQ_DOC_COPY.addedReason(a.reason)].join(NL)),
+    ...Object.entries(e.doc.notes).filter(([, t]) => t).map(([id, t]) => [`■ ${chapter(id)} ${REQ_DOC_COPY.notesLabel}`, t].join(NL)),
+  ].join(NL);
 }
 
 // ---------------- 要件定義書 PDF（§4。文は画面と同じ buildReqDocView の行） ----------------
