@@ -12,6 +12,7 @@ import type { ProposalPoint } from '@/types';
 import { type StoredProposal } from '@/types/aiDraft';
 import { proposalVersionOf, REQ_DOC_COPY } from './aiDraft/reqDocView';
 import { ReqDocChapters } from './aiDraft/ReqDocChapters';
+import { ReqDocCoverRows } from './aiDraft/ReqDocV3Edit';
 import { reqDocCatalogOf } from '@/shared/ai/reqDocCatalog';
 import { AI_DRAFT_COPY } from './aiDraft/aiDraftState';
 import { ProposalV2Body, ProposalV2Summary } from './aiDraft/ProposalV2Body';
@@ -105,6 +106,8 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
                 </Box>
               )}
               {aiCard && <ProposalV2Summary proposal={aiCard} />}
+              {/* v3 の表紙の発注者・受注者・作成者・承認者（会社名と役職まで。空は「—」。REQDOC_U4_UI.md §4 の表紙と同じ欄） */}
+              {v3 && <Box sx={{ mb: 2 }}><ReqDocCoverRows cover={v3.doc?.cover} /></Box>}
               <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
                 {[...proposal.purposes, ...proposal.improves].slice(0, 8).map((t) => (
                   <StatusPill key={t} tone="primary" dot={false} icon={<Target size={12} />}>{t}</StatusPill>
