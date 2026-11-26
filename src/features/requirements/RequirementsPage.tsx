@@ -47,10 +47,7 @@ export default function RequirementsPage() {
   const isAssigned = liveRole === 'developer';
   const aiOn = DATA_MODE === 'live' && !!getAiDraftPort() && aiPanelVisible(AI_FLAG_MODE, aiRole, isAssigned);
   const aiGen = aiOn && aiCanGenerate(AI_FLAG_MODE, aiRole, isAssigned);
-  // ヒアリング → 要件定義の 2 画面（0.49.1。2026-11-25 ユーザー「要件定義へ進むを押してもヒアリングの見出しのまま」）。
-  // 「要件定義へ進む」で要件定義の画面（routes.doc。live は src/live/pages/LiveRequirementsPage.tsx）へ移る。
-  // 生成できる人だけ、着いた画面で下書きが無ければ生成を始める（autoStart。既にあれば作り直さない）。
-  // 生成できない人（internal の開発者）も、管理者が作った下書きを見られるように画面は開く
+  // 要件定義（AI 下書き）は別の画面（0.49.1。routes.doc → src/live/pages/LiveRequirementsPage.tsx）。ここはヒアリングだけ
 
   // 読み込み中は描画せず、書き込みも呼ばない（repositories/types.ts の決まり）
   if (loading) return <RouteLoader label="ヒアリング" />;

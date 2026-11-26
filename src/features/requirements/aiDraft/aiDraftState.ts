@@ -256,8 +256,6 @@ export const AI_SEND_NOTICE = {
 } as const;
 
 export const AI_DRAFT_COPY = {
-  tabHearing: 'ヒアリング',
-  tabAi: 'AI 下書き',
   // ヒアリングの画面のボタン（2026-11-25 ユーザー指示で「AI で下書きを作る」から変更。押すと要件定義の画面（/ai-studio/requirements・/dev/requirements）へ進み、無ければ生成を始める）
   goToRequirements: '要件定義へ進む',
   // 要件定義の画面の中の生成ボタン（0.49.1。「要件定義へ進む」と同じ文言を 2 回出さない）
