@@ -386,3 +386,7 @@ test('generation-running で保存できなかった変更: 生成中は待ち�
   assert.deepEqual(S.decideResync({ save: 'failed', staleByRegen: true, jobRunning: true }), { resync: false, clearSaveError: false, clearStale: false });
   assert.deepEqual(S.decideResync({ save: 'failed', staleByRegen: true, jobRunning: false }), { resync: true, clearSaveError: true, clearStale: true });
 });
+
+test('evidenceLabel: alt-missing は「無い画像の割合」と読める表示名（0% が基準内でも逆の意味に読めない。2026-11-26 ユーザー指摘）', () => {
+  assert.equal(S.evidenceLabel('alt-missing'), '代替テキストが無い画像の割合');
+});

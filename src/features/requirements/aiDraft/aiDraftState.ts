@@ -530,7 +530,7 @@ export const EVIDENCE_LABELS: Record<AiEvidenceKey, string> = {
   'q-market': '競合の良い点', 'q-content': '掲載したいコンテンツ', 'q-feature': '必要な機能', 'q-cv': '重要なコンバージョン',
   'q-seo': '上位表示したいキーワード', 'q-ops': '公開後の更新担当', 'q-schedule': '公開希望時期', 'q-other': 'その他のご要望',
   https: 'HTTPS', viewport: 'スマホ表示の設定', 'title-length': 'ページタイトルの長さ', description: 'ページの説明文',
-  'h1-count': '大見出し（h1）の数', 'alt-missing': '画像の代替テキスト', 'page-size': 'ページの容量', 'response-time': '応答時間',
+  'h1-count': '大見出し（h1）の数', 'alt-missing': '代替テキストが無い画像の割合', 'page-size': 'ページの容量', 'response-time': '応答時間',
   sitemap: 'サイトマップ', 'structured-data': '構造化データ',
 };
 
