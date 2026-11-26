@@ -956,6 +956,7 @@
 ## 0.49.1 — 2026-11-25
 
 - live: 要件定義を別の画面にした（2026-11-25 ユーザー「要件定義へ進むを押してもヒアリングの見出しのまま」）。管理者 `/ai-studio/requirements`・開発者 `/dev/requirements`（`src/live/pages/LiveRequirementsPage.tsx`。HearingGate の中で対象のプロジェクトを上に出す）。見出しは「要件定義」（上の小見出しは 管理者画面／開発者画面）、中身は従来の AI 下書き（AiDraftPanel / AiDraftEditor）。ヒアリングの「要件定義へ進む」はこの画面へ移る（画面の中の切り替えはやめた）。生成は従来どおり、生成できる人がヒアリングから来たときに下書きが無ければ自動で始め（既にあれば作り直さない。再読み込みでは再び始めない）、パネルのボタンでも作れる。パネルの生成ボタンは「AI で要件定義を作る」（`AI_DRAFT_COPY.generate`。ヒアリングのボタンは `AI_DRAFT_COPY.goToRequirements`「要件定義へ進む」）。「ヒアリングに戻る」で戻る（未保存の編集は送ってから移る）。要件が draft でない（承認依頼の後・承認済み）／フラグ off のときはヒアリングの画面（改善提案書の表示）へ転送するので、プロジェクト詳細の「要件定義書を見る」は変わらない。この画面を開いている間もメニューは「プロジェクト」を選択中（`liveNav.ts`・`tests/unit/liveNav.test.mjs`）。demo は変わらない（該当の分岐は live のフラグ on のときだけ）。Rules・Functions の変更なし
+
 ## Unreleased (要件定義書ひな型)
 
 - U1 カタログと型（画面・生成・Rules は未変更・未デプロイ）: 会社標準ひな型 TPL-WEB-REQ 0.1 の項目カタログ `src/shared/ai/reqDocCatalog.ts`（章 19・項目 129＝固定 32／個別 74／選択 23。09・13・20 章は欠番のまま。項目ごとに区分・確認対象・下書きの担当 ai 41／server 8／human 48／standard 32・材料の質問 ID）。`scripts/gen-ai-shared.mjs` が functions へ写す。`src/types/aiDraft.ts` に提案 v3 の型（`ProposalV3`・`AiEditableV3`・`AiGeneratedV3`・`isProposalV3`・`REQ_DOC_LIMITS`）を追加（v1・v2 と `StoredProposal` は不変。v3 を `StoredProposal` へ入れるのは U4）。単体テスト 56 → 71 件（抜き出した本文との照合）
