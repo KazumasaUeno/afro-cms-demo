@@ -43,7 +43,7 @@ export interface ProjectDoc {
   launchDate?: string;
   ownerUid: string;
   memberUids: string[];
-  requirements: { status: ReqStatus; revision: number; analyzedAt?: string; approvedAt?: string; approvedBy?: string; approvalId?: string };
+  requirements: { status: ReqStatus; revision: number; analyzedAt?: string; approvedAt?: string; approvedBy?: string; approvalId?: string; approvedVia?: 'proxy' };
   archived: boolean;
   updatedAt: string;
   /** 相談の要約（最後の 1 件の写し。無い案件は相談なし＝null。Migration 不要。LIVE_DASHBOARD_TASKS_CONSULT §2.2） */
@@ -95,6 +95,7 @@ export function projectDoc(s: Snap): ProjectDoc {
       approvedAt: toIso(r.approvedAt),
       approvedBy: typeof r.approvedBy === 'string' ? r.approvedBy : undefined,
       approvalId: typeof r.approvalId === 'string' ? r.approvalId : undefined,
+      ...(r.approvedVia === 'proxy' ? { approvedVia: 'proxy' as const } : {}),
     },
     archived: d.archived === true,
     updatedAt,
@@ -158,6 +159,7 @@ export function toSession(projectId: string, p: ProjectDoc | null, r: ReqDoc | n
     answerMeta: r?.answerMeta ?? {},
     analyzedAt: p?.requirements.analyzedAt,
     approvedAt: p?.requirements.approvedAt,
+    ...(p?.requirements.approvedVia === 'proxy' ? { approvedVia: 'proxy' as const } : {}),
     ...(fixed ? { proposal: fixed } : {}),
   };
 }
@@ -225,18 +227,54 @@ function proposalV1ForSave(p: Proposal): Proposal {
 
 const ACTION: Record<string, string> = { submit: '要件定義書の確認を依頼', approve: '要件定義書を承認', withdraw: '確認依頼を差し戻し' };
 
+/** 代理承認の操作の文（お客様ポータル・管理者画面の両方で「代理」と明示する。ADMIN_FULL_RIGHTS_PLAN L-4・§7-5） */
+export const proxyApprovalText = (actorName: string) => `アフロ（${actorName || '管理者'}）が代理で承認`;
+
+/**
+ * 承認の記録 1 件 → 履歴の 1 行。名前は記録の actorName だけを使う（approvedBy の uid から accounts を引かない。
+ * お客様は管理者の accounts を読めない。§7-5）。代理承認（proxy:true・approve）は操作の文と理由（note）を出す。
+ * sameAsRequester はこの 1 件からは分からないので false（一覧は toApprovalLogs が同じ版の依頼と突き合わせる）
+ */
 export function toApprovalLog(projectId: string, s: Snap): ApprovalLog {
-  const d = read(s);
+  return approvalLogFrom(projectId, s.id, read(s));
+}
+
+/** toApprovalLog の本体（Firestore の Snap を作らずに単体テストできる形） */
+export function approvalLogFrom(projectId: string, id: string, d: DocumentData): ApprovalLog {
   const action = String(d.action ?? '');
+  const actor = String(d.actorName ?? '');
+  const proxy = d.proxy === true && action === 'approve';
   return {
-    id: s.id,
+    id,
     at: toIso(d.at) ?? new Date().toISOString(),
-    actor: String(d.actorName ?? ''),
-    side: d.side === 'client' ? 'client' : 'afro',
-    action: ACTION[action] ?? action,
+    actor,
+    side: proxy ? 'afro' : d.side === 'client' ? 'client' : 'afro',
+    action: proxy ? proxyApprovalText(actor) : ACTION[action] ?? action,
     target: `要件定義（第${Number(d.revision) || 0}版）`,
     projectId,
+    ...(proxy ? { proxy: { note: typeof d.note === 'string' ? d.note : '', sameAsRequester: false } } : {}),
   };
+}
+
+/**
+ * 承認の記録の一覧 → 履歴（並びはそのまま）。代理承認は、同じ版の確認の依頼（submit）と actorUid が同じなら sameAsRequester を立てる
+ * （依頼と代理承認を同じ人がしたことを画面に出す。§7-5）。uid は画面に出さない
+ */
+export function approvalLogsFrom(projectId: string, docs: readonly { id: string; data: DocumentData }[]): ApprovalLog[] {
+  const requester = new Map<number, string>();
+  for (const { data } of docs) {
+    if (data.action === 'submit' && typeof data.actorUid === 'string') requester.set(Number(data.revision) || 0, data.actorUid);
+  }
+  return docs.map(({ id, data }) => {
+    const log = approvalLogFrom(projectId, id, data);
+    if (!log.proxy) return log;
+    const by = requester.get(Number(data.revision) || 0);
+    return { ...log, proxy: { ...log.proxy, sameAsRequester: !!by && by === data.actorUid } };
+  });
+}
+
+export function toApprovalLogs(projectId: string, snaps: readonly Snap[]): ApprovalLog[] {
+  return approvalLogsFrom(projectId, snaps.map((s) => ({ id: s.id, data: read(s) })));
 }
 
 /** 招待中だけの人の id（accounts の uid とぶつからない形） */

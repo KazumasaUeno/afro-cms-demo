@@ -16,7 +16,7 @@ import { NewDevTaskDialog } from '@/features/dev/NewDevTaskDialog';
 import type { TaskDoc, TaskStatus } from '../model';
 import { useAccountPeople, useLiveCurrentProject, useLiveProjects, useLiveTaskActions, useLiveTasks } from '../repositories';
 import { useLiveSession } from '../session';
-import { isAssignee, prepareNewTask, taskCounts, taskLimitNote, taskPages, visibleTasks } from '../tasks';
+import { addTaskBlock, canEditTasks, isAssignee, prepareNewTask, taskCounts, taskLimitNote, taskPages, visibleTasks } from '../tasks';
 import { EmptyState, LoadError } from './shared';
 
 /** 390px の状態タブで 4 等分に収まらない名前だけ短くする（aria-label は正式名。demo の DevTasksPage と同じ） */
@@ -25,7 +25,8 @@ const SHORT_LABEL: Partial<Record<TaskStatus, string>> = { review: 'レビュー
 /**
  * live の構築タスク（docs/design/LIVE_DASHBOARD_TASKS_CONSULT.md §1.2・U2）。見た目は demo の DevTasksPage と同じ（部品を再利用）。
  * - 対象は表示中の 1 案件（切り替えは既存の select()）。お客様は開けない（ルートと Rules の両方）
- * - 追加・状態の変更は担当の開発者だけ。admin は見るだけ（ボタンを出さない。権限の実体は firestore.rules の taskCreateOk / taskUpdateOk）
+ * - 追加・状態の変更は担当の開発者と admin（全案件。2026-11-26 ADMIN_FULL_RIGHTS_PLAN U5。権限の実体は firestore.rules の taskCreateOk / taskUpdateOk）。
+ *   担当は memberUids の中だけ（L-5）なので、担当の開発者が 0 人の案件では admin も追加できない（理由を出す）
  * - 削除は無い（誤登録は「完了」で閉じる）。live にアクティビティは無いので記録しない
  * メニューへの追加は U4（それまでは URL から開く）
  */
@@ -44,9 +45,11 @@ export default function LiveTasksPage() {
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const canEdit = account.role === 'developer' && !!project?.memberUids.includes(uid);
+  const canEdit = !!project && canEditTasks(account.role, uid, project.memberUids);
+  // 「自分の担当のみ」は担当になれる開発者だけ（admin はタスクの担当に入らない＝L-5）
+  const canFilterMine = canEdit && account.role === 'developer';
   const all = tasksQ.data;
-  const tasks = useMemo(() => visibleTasks(all, uid, mineOnly && canEdit), [all, uid, mineOnly, canEdit]);
+  const tasks = useMemo(() => visibleTasks(all, uid, mineOnly && canFilterMine), [all, uid, mineOnly, canFilterMine]);
   const counts = useMemo(() => taskCounts(tasks), [tasks]);
   const memberUids = project?.memberUids ?? [];
   const peopleIds = useMemo(() => [...new Set([...memberUids, ...all.flatMap((t) => t.assigneeUids)])], [memberUids, all]);
@@ -70,6 +73,7 @@ export default function LiveTasksPage() {
     }
   };
   const limitNote = taskLimitNote(all.length);
+  const addBlock = canEdit ? addTaskBlock(memberUids) : null;
 
   return (
     <>
@@ -78,18 +82,18 @@ export default function LiveTasksPage() {
         icon={<ListTodo size={15} />}
         title="構築タスク"
         description={canEdit
-          ? '採用デザインをもとに、ページごとに実装します。担当の開発者がタスクを追加し、状態を変えます。'
-          : 'この案件の構築タスクを確認できます（管理者は見るだけです。追加・状態の変更は担当の開発者が行います）。'}
+          ? '採用デザインをもとに、ページごとに実装します。担当の開発者と管理者がタスクを追加し、状態を変えます。'
+          : 'この案件の構築タスクを確認できます（追加・状態の変更は担当の開発者が行います）。'}
         actions={
           <Stack direction="row" spacing={1.5} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
-            {canEdit && (
+            {canFilterMine && (
               <FormControlLabel
                 control={<Switch checked={mineOnly} onChange={(e) => setMineOnly(e.target.checked)} />}
                 label="自分の担当のみ"
                 sx={{ mr: 0, minHeight: 44 }}
               />
             )}
-            {canEdit && (
+            {canEdit && !addBlock && (
               <Button variant="contained" startIcon={<Plus size={16} />} onClick={() => setAdding(true)} sx={{ minHeight: 44 }}>タスクを追加</Button>
             )}
           </Stack>
@@ -110,6 +114,7 @@ export default function LiveTasksPage() {
       )}
 
       {limitNote && <Alert severity="info" sx={{ mb: 2 }} data-testid="tasks-limit-note">{limitNote}</Alert>}
+      {addBlock && <Alert severity="info" sx={{ mb: 2 }} data-testid="tasks-add-block">{addBlock}</Alert>}
 
       {tasksQ.error ? (
         <LoadError what="構築タスク" />
@@ -213,7 +218,7 @@ export default function LiveTasksPage() {
         })}
       </Menu>
 
-      {canEdit && (
+      {canEdit && !addBlock && (
         <NewDevTaskDialog
           open={adding}
           pages={taskPages(all)}

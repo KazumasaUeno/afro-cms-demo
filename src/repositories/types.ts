@@ -66,10 +66,16 @@ export interface RequirementsRepo {
   saveNow(): Promise<boolean>;
 }
 
+/** 管理者の代理承認（live だけ。proxyNote は理由。repository が制御文字を除いて 1〜200 字を検査する） */
+export interface ProxyApproval { proxyNote: string }
+
 export interface ApprovalsRepo {
   useHistory(projectId: string): Query<ApprovalLog[]>;
-  /** by: 実際に操作した側（省略時はアフロ。管理者画面からの代理承認は 2026-11-12 に廃止し、画面からは client だけを渡す） */
-  approveRequirements(projectId: string, by?: AnswerSide): Promise<void>;
+  /**
+   * by: 実際に操作した側（省略時はアフロ。画面からは client だけを渡す）。
+   * live だけ: { proxyNote } は管理者の代理承認（2026-11-26 ADMIN_FULL_RIGHTS_PLAN L-2・§2。理由は必須）。demo は代理承認を扱わない（画面も出さない）
+   */
+  approveRequirements(projectId: string, by?: AnswerSide | ProxyApproval): Promise<void>;
 }
 
 export interface AccountsRepo {

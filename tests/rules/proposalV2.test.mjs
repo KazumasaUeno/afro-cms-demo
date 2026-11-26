@@ -75,7 +75,10 @@ describe('submit v2: 拒否（偽造・欠け・版）', () => {
   deny('v2 の欄が欠ける（draft なし）→ 拒否', (({ draft: _d, ...rest }) => rest)(V2));
   deny('v1 の形に version:2 だけ付ける → 拒否', { ...PROPOSAL, version: 2 });
   deny('お客様は v2 を submit できない', V2, {}, { uid: 'client1' });
-  deny('admin は v2 を submit できない', V2, {}, { uid: 'admin1' });
+  test('admin は担当外の案件でも v2 を submit できる（2026-11-26 R-2）', async () => {
+    await seedAi(env);
+    await assertSucceeds(submitBatch(dbAs(env, 'admin1'), { uid: 'admin1', proposal: V2 }));
+  });
   deny('未アサインの開発者は v2 を submit できない', V2, {}, { uid: 'devC' });
   test('承認の写し（approvals）の proposal を改変 → 拒否', async () => {
     await seedAi(env);

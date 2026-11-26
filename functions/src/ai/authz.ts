@@ -2,7 +2,9 @@
  * AI 下書きの関数の認可（firestore.rules の roleOf と同じ判定。設計 §2.1「認可」）。
  * - auth あり・email_verified・accounts/{uid} が active で accounts.email == token.email → その role。違えば 'none'
  * - 生成: admin、または developer かつ uid ∈ memberUids。archived の案件は拒否
- * - 編集の保存（saveAiDraftEdits。計画 F-a）: developer かつ uid ∈ memberUids だけ（admin も不可）
+ * - 編集の保存（saveAiDraftEdits。計画 F-a）: admin、または developer かつ uid ∈ memberUids。archived の案件は拒否
+ *   （2026-11-26 ユーザー決定で admin を追加。ADMIN_FULL_RIGHTS_PLAN R-8。旧 DEC F5「admin は不可」を置き換え）。
+ *   お客様・担当外の開発者・無効化／メール不一致の admin（role 'none'）は不可
  * - エラーの文言は固定（入力の値を入れない）
  */
 import type { Firestore } from 'firebase-admin/firestore';
@@ -48,8 +50,10 @@ export function assertCanGenerate(caller: Caller, project: ProjectLike | undefin
   if (project.archived === true) throw new HttpsError('failed-precondition', 'project-archived');
 }
 
-/** 編集を保存できるか（アサインされた開発者だけ。admin・お客様は不可） */
+/** 編集を保存できるか（admin、またはアサインされた開発者。お客様・担当外は不可。archived は不可） */
 export function assertCanEdit(caller: Caller, project: ProjectLike | undefined): void {
-  if (!project || caller.role !== 'developer' || !isMember(project, caller.uid)) throw new HttpsError('permission-denied', 'not allowed');
+  if (!project) throw new HttpsError('permission-denied', 'not allowed');
+  const ok = caller.role === 'admin' || (caller.role === 'developer' && isMember(project, caller.uid));
+  if (!ok) throw new HttpsError('permission-denied', 'not allowed');
   if (project.archived === true) throw new HttpsError('failed-precondition', 'project-archived');
 }

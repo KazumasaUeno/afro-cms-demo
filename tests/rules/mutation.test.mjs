@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs';
 import { getDoc } from 'firebase/firestore';
 import { AI_PATH, EDITED, GENERATED, MAX_EDITED, MAX_GENERATED, aiDraftDoc, proposalV2, seedAi } from './aiFixtures.mjs';
 import {
-  ANSWERS, PROPOSAL, T0, approvalDoc, approveBatch, claimAccount, claimBatch, dbAs, doc, inviteDoc, seed, serverTimestamp, stamp, submitBatch, updateDoc, writeBatch,
+  ANSWERS, PROPOSAL, PROXY_NOTE, T0, USERS, approvalDoc, approveBatch, claimAccount, claimBatch, dbAs, doc, inviteDoc, proxyApproveBatch, seed, serverTimestamp, setDoc, stamp, submitBatch, updateDoc, writeBatch,
 } from './fixtures.mjs';
 
 const BASE = readRules();
@@ -262,4 +262,50 @@ describe('AI: submit v2 ・aiDrafts の変異テスト（元＝拒否／1 条件
     async (env) => { await seedAi(env); return getDoc(doc(dbAs(env, 'client1'), AI_PATH)); },
     () => mutate(BASE, `allow get, list: if isAdmin() || assigned(pid);${NL}        allow create, update, delete: if false;`,
       `allow get, list: if isAdmin() || assigned(pid) || clientOf(pid);${NL}        allow create, update, delete: if false;`));
+});
+
+// ================= TEST-10: admin の分岐・代理承認の強制（ADMIN_FULL_RIGHTS_PLAN、脅威モデル TEST-10） =================
+// roleOf == 'admin' の条件を緩める（T-01・T-02）／ proxy・approvedVia・note・actorRole の強制を外す（T-04）変異が、攻撃で検出されること
+describe('TEST-10: admin の分岐と代理承認の変異テスト（元＝拒否／1 条件を外した変異＝許可）', () => {
+  const pair = (name, attack, mutant) => test(name, async () => {
+    const rules = mutant();
+    assert.notEqual(rules, BASE);
+    await withRules(BASE, async (env) => { await assertFails(attack(env)); });
+    await withRules(rules, async (env) => { await assertSucceeds(attack(env)); });
+  });
+  const noteOf = (note) => approvalDoc('admin1', 'approve', 1, { answers: ANSWERS, proposal: PROPOSAL, proxy: true, note });
+  const drop = (o, ...keys) => Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k)));
+  const sendAs = (env, uid) => {
+    const db = dbAs(env, uid); const b = writeBatch(db);
+    b.set(doc(db, 'projects/p1/messages/000001'), { schemaVersion: 1, seq: 1, text: 'x', side: 'afro', authorUid: uid, authorName: USERS[uid].name, at: serverTimestamp() });
+    b.update(doc(db, 'projects/p1'), { consult: { count: 1, lastAt: serverTimestamp(), lastSide: 'afro', lastName: USERS[uid].name } });
+    return b.commit();
+  };
+  pair("担当外の開発者が基本情報を変える ← projUpdateOk の admin の分岐の r == 'admin'",
+    async (env) => { await seed(env); return updateDoc(doc(dbAs(env, 'devC'), 'projects/p1'), { siteName: '乗っ取り', ...stamp('devC') }); },
+    () => mutate(BASE, `|| (r == 'admin'${NL}`, `|| ((r == 'admin' || r == 'developer')${NL}`));
+  pair("担当外の開発者がタスクを作る ← taskCreateOk の r == 'admin'",
+    async (env) => { await seed(env); return setDoc(doc(dbAs(env, 'devC'), 'projects/p1/tasks/x'), { schemaVersion: 1, title: 't', page: 'p', assigneeUids: ['devA'], status: 'todo', createdAt: serverTimestamp(), createdBy: 'devC', ...stamp('devC') }); },
+    () => mutate(BASE, "      return ((r == 'developer' && request.auth.uid in p.memberUids) || r == 'admin')", "      return ((r == 'developer' && request.auth.uid in p.memberUids) || r != 'none')"));
+  pair("担当外の開発者が相談を送る ← sideOf の r == 'admin'",
+    async (env) => { await seed(env); return sendAs(env, 'devC'); },
+    () => mutate(BASE, "|| r == 'admin' ? 'afro'", "|| r != 'none' ? 'afro'"));
+  pair('代理承認の記録に proxy が無い ← proxyApproveOk の d.proxy == true と adminProxyApprove の l.proxy == true',
+    async (env) => { await seed(env, { reqState: 'analyzed' }); return proxyApproveBatch(dbAs(env, 'admin1'), { mutate: { log: drop(noteOf(PROXY_NOTE), 'proxy') } }); },
+    () => mutate(mutate(BASE, ' && d.proxy == true', ''), '&& l.proxy == true ', ''));
+  pair("代理承認で requirements に approvedVia が無い ← a.approvedVia == 'proxy' と pa.approvedVia == 'proxy'",
+    async (env) => {
+      await seed(env, { reqState: 'analyzed' });
+      return proxyApproveBatch(dbAs(env, 'admin1'), { mutate: { project: { 'requirements.status': 'approved', 'requirements.approvedAt': serverTimestamp(), 'requirements.approvedBy': 'admin1', 'requirements.approvalId': 'requirements-r1-approve', ...stamp('admin1') } } });
+    },
+    () => mutate(mutate(BASE, "&& a.approvedVia == 'proxy'", ''), "&& pa.approvedVia == 'proxy'", ''));
+  pair('お客様が承認の記録に proxy: true を付ける ← approveOk の hasOnly と clientApprove の相互照合',
+    async (env) => { await seed(env, { reqState: 'analyzed' }); return approveBatch(dbAs(env, 'client1'), { mutate: { log: { ...approvalDoc('client1', 'approve', 1, { answers: ANSWERS, proposal: PROPOSAL }), proxy: true } } }); },
+    () => mutate(mutate(BASE, "'answers','proposal','actorRole']);", "'answers','proposal','actorRole','proxy']);"), "&& l.side == 'client' && !l.keys().hasAny(['proxy'])", "&& l.side == 'client'"));
+  pair('代理承認の note に改行 ← !d.note.matches(reNoteControl())',
+    async (env) => { await seed(env, { reqState: 'analyzed' }); return proxyApproveBatch(dbAs(env, 'admin1'), { note: '電話で\n確認' }); },
+    () => mutate(BASE, ' && !d.note.matches(reNoteControl())', ''));
+  pair("開発者が submit の記録で actorRole: 'admin' を名乗る ← d.get('actorRole', acc.role) == acc.role",
+    async (env) => { await seed(env); return submitBatch(dbAs(env, 'devA'), { mutate: { log: approvalDoc('devA', 'submit', 1, { answers: ANSWERS, proposal: PROPOSAL, actorRole: 'admin' }) } }); },
+    () => mutate(BASE, " && d.get('actorRole', acc.role) == acc.role", ''));
 });

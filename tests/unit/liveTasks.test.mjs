@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  TASK_LIMIT, TASK_STATUS_ORDER, myOpenTasks, nextBuildAction, prepareNewTask, taskCounts, taskLimitNote, taskPages, visibleTasks,
+  TASK_LIMIT, TASK_STATUS_ORDER, addTaskBlock, canEditTasks, myOpenTasks, nextBuildAction, prepareNewTask, taskCounts, taskLimitNote, taskPages, visibleTasks,
 } from '../../src/live/tasks.ts';
 import { taskDoc } from '../../src/live/model.ts';
 import { DEV_TASK_PAGE_MAX, DEV_TASK_TITLE_MAX, WHOLE_SITE } from '../../src/data/devTaskLimits.ts';
@@ -57,12 +57,28 @@ test('nextBuildAction: 開発者は自分の担当のレビュー待ちが最優
   assert.equal(nextBuildAction('approved', [], 'u1').cta, 'タスクを追加する');
 });
 
-test('nextBuildAction: admin（uid null・見るだけ）は全タスクを数え、追加・ヒアリングへのボタンは出さない', () => {
+test('nextBuildAction: admin（uid null）は全タスクを数え、追加・ヒアリングへのボタンは管理者画面の URL で出す（2026-11-26 U5。以前は見るだけ＝ボタンなし）', () => {
   const a = nextBuildAction('approved', [t('a', 'review', ['u2']), t('b', 'review', ['u3'])], null);
   assert.equal(a.title, 'レビュー待ちのタスクが 2 件あります');
   assert.equal(a.to, '/tasks');
-  assert.equal(nextBuildAction('draft', [], null).to, undefined);
-  assert.equal(nextBuildAction('approved', [], null).to, undefined);
+  assert.equal(nextBuildAction('draft', [], null).to, '/ai-studio');
+  assert.equal(nextBuildAction('draft', [], null).cta, 'ヒアリングを開く');
+  assert.equal(nextBuildAction('approved', [], null).to, '/tasks');
+  assert.equal(nextBuildAction('approved', [], null).cta, 'タスクを追加する');
+  assert.equal(nextBuildAction('analyzed', [], null).to, undefined);
+});
+
+test('canEditTasks・addTaskBlock: admin は全案件、開発者は担当だけ。担当 0 人の案件は admin も追加できない（L-5）', () => {
+  assert.equal(canEditTasks('admin', 'a1', []), true);
+  assert.equal(canEditTasks('admin', 'a1', ['u1']), true);
+  assert.equal(canEditTasks('developer', 'u1', ['u1']), true);
+  assert.equal(canEditTasks('developer', 'u9', ['u1']), false);
+  assert.equal(canEditTasks('client', 'u1', ['u1']), false);
+  assert.match(addTaskBlock([]), /担当の開発者がいないため/);
+  assert.equal(addTaskBlock(['u1']), null);
+  // admin が作るタスクでも担当は memberUids の中だけ（admin 自身は入れられない）
+  const r = prepareNewTask({ title: '題名', page: 'トップ', assigneeUids: ['a1'] }, ['u1']);
+  assert.equal(r.ok, false);
 });
 
 test('prepareNewTask: trim して保存の形にする（Rules の validTask と同じ条件）', () => {

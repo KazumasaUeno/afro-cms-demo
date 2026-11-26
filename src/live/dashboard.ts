@@ -40,7 +40,7 @@ export interface DashboardCopy {
 }
 
 /**
- * 画面の文言（admin: 全案件・見るだけ ／ developer: 担当案件）。
+ * 画面の文言（admin: 全案件 ／ developer: 担当案件）。
  * 空の表示は demo の開発者ダッシュボードと同じ文言。admin には作成とユーザー管理（担当の割り当て）を案内する（設計 §1.1）
  */
 export function dashboardCopy(role: DashboardRole, count: number): DashboardCopy {

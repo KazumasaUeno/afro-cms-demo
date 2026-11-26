@@ -50,7 +50,11 @@ describe('確認依頼（submit: draft → analyzed）', () => {
     await assertFails(submitBatch(dbAs(env, uid), opts));
   });
   deny('お客様は submit できない', { uid: 'client1' }, 'client1');
-  deny('admin は submit できない', { uid: 'admin1' }, 'admin1');
+  // 2026-11-26 ユーザー決定（ADMIN_FULL_RIGHTS_PLAN R-2）: admin は担当外（memberUids に無い）の案件でも submit できる。admin の文書は actorRole: 'admin'
+  test('admin は担当外の案件でも submit できる（side afro・actorRole admin）', async () => {
+    await seed(env);
+    await assertSucceeds(submitBatch(dbAs(env, 'admin1'), { uid: 'admin1' }));
+  });
   deny('アサイン外の開発者は submit できない', { uid: 'devC' }, 'devC');
   deny('無効化された開発者は submit できない', { uid: 'devOff' }, 'devOff');
   deny('状態だけ更新（ログなし）→ 拒否', { mutate: { skipLog: true } });
@@ -173,7 +177,8 @@ describe('お客様の承認（approve: analyzed → approved）', () => {
   deny('他案件のお客様は承認できない', { uid: 'client2' }, 'client2');
   deny('無効化されたお客様は承認できない', { uid: 'clientOff' }, 'clientOff');
   deny('SEC-3 / §25-2: 開発者は承認できない（代理承認の禁止）', { uid: 'devA' }, 'devA');
-  deny('admin は承認できない', { uid: 'admin1' }, 'admin1');
+  // admin の承認は代理承認の形（proxy: true・note・approvedVia: 'proxy'）だけ。お客様と同じ形では拒否（adminProxy.test.mjs TEST-04）
+  deny('admin がお客様と同じ形（proxy・note・approvedVia なし）で承認 → 拒否', { uid: 'admin1' }, 'admin1');
   deny('draft のときは承認できない', {}, 'client1', 'draft');
   deny('同じ revision で 2 回目（approved 後）→ 拒否', {}, 'client1', 'approved');
   deny('状態だけ更新（ログなし）→ 拒否', { mutate: { skipLog: true } });

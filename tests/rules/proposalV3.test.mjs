@@ -131,7 +131,10 @@ describe('submit v3: 拒否（偽造・欠け・版）', () => {
   deny('aiDraft に edited が無い（確認していない）→ 拒否', V3, { aiDraft: aiDraftDocV3({ edited: null, submitReady: { requiredOk: true, templateVersion: GENERATED_V3.template.version } }) });
   deny("aiDraft の state=='failed' → 拒否", V3, { aiDraft: aiDraftDocV3({ state: 'failed' }) });
   deny('お客様は v3 を submit できない', V3, {}, { uid: 'client1' });
-  deny('admin は v3 を submit できない', V3, {}, { uid: 'admin1' });
+  test('admin は担当外の案件でも v3 を submit できる（2026-11-26 R-2）', async () => {
+    await seedV3();
+    await assertSucceeds(submitBatch(dbAs(env, 'admin1'), { uid: 'admin1', proposal: V3 }));
+  });
   deny('未アサインの開発者は v3 を submit できない', V3, {}, { uid: 'devC' });
   deny('無効の開発者（アサイン済み）は v3 を submit できない', V3, {}, { uid: 'devOff' });
   test('承認の写し（approvals）の doc を改変 → 拒否', async () => {

@@ -68,7 +68,7 @@ export function generationAllowed(flags: AiFlags, role: FlagRole, projectId: str
 }
 
 /**
- * 編集の保存（saveAiDraftEdits）を許すか。編集はアサインされた開発者だけ（admin は不可）なので、
+ * 編集の保存（saveAiDraftEdits）を許すか。役割（admin・アサインされた開発者。2026-11-26 に admin を追加）の判定は authz 側なので、
  * 'internal' では「allowlist の案件」だけで判定する（役割の判定は authz 側）。
  * [DECISION backend-engineer U2] 'internal' を「admin だけ」にすると社内試験で編集→承認依頼を通せないため
  */

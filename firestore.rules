@@ -236,15 +236,33 @@ service cloud.firestore {
           && existsAfter(apprPath(pid, approvalId(b.revision, 'withdraw'))));
     }
 
-    // M-2: お客様が変えられるのは 4 キーだけ
+    // M-2: お客様が変えられるのは 4 キーだけ（approvedVia は書けない＝本人の承認）
+    // 相互照合（ADMIN_FULL_RIGHTS_PLAN §7-1）: 同じバッチの承認文書が side 'client' で proxy を持たないこと（代理の記録をお客様の承認に数えない）
     function clientApprove(pid) {
       let b = resource.data.requirements;
       let a = request.resource.data.requirements;
+      let l = getAfter(apprPath(pid, approvalId(b.revision, 'approve'))).data;
       return b.status == 'analyzed' && a.status == 'approved'
         && a.diff(b).affectedKeys().hasOnly(['status','approvedAt','approvedBy','approvalId'])
         && a.approvedAt == request.time && a.approvedBy == request.auth.uid
         && a.approvalId == approvalId(b.revision, 'approve')
-        && existsAfter(apprPath(pid, a.approvalId));
+        && !a.keys().hasAny(['approvedVia'])
+        && l.side == 'client' && !l.keys().hasAny(['proxy']);
+    }
+
+    // admin の代理承認（2026-11-26 ユーザー決定。ADMIN_FULL_RIGHTS_PLAN §2・§7、脅威モデル R-4）:
+    // お客様の 4 キーに approvedVia == 'proxy' を加えた 5 キーだけ。approvedBy は admin 本人。
+    // 相互照合: 同じバッチの承認文書が proxy == true・side 'afro'・actorUid == 本人（proxyApproveOk が中身を検査）
+    function adminProxyApprove(pid) {
+      let b = resource.data.requirements;
+      let a = request.resource.data.requirements;
+      let l = getAfter(apprPath(pid, approvalId(b.revision, 'approve'))).data;
+      return b.status == 'analyzed' && a.status == 'approved'
+        && a.diff(b).affectedKeys().hasOnly(['status','approvedAt','approvedBy','approvalId','approvedVia'])
+        && a.approvedAt == request.time && a.approvedBy == request.auth.uid
+        && a.approvalId == approvalId(b.revision, 'approve')
+        && a.approvedVia == 'proxy'
+        && l.proxy == true && l.side == 'afro' && l.actorUid == request.auth.uid;
     }
 
     // §28.4 の allow update（式は同じ。役割の判定を 1 回にまとめた形）
@@ -252,9 +270,17 @@ service cloud.firestore {
       let r = roleOf(a);
       let mine = r == 'developer' && request.auth.uid in resource.data.memberUids;
       return
-           // admin: アサインだけ（Low-2: archived は書けない）
+           // admin: アサイン
            (r == 'admin' && ch.hasOnly(['memberUids','updatedAt','updatedBy'])
               && request.resource.data.memberUids is list && request.resource.data.memberUids.size() <= 20)
+           // admin（2026-11-26 ユーザー決定「開発の事なら何でも」。R-1: mine とは別の分岐で roleOf == 'admin' だけを条件にする）:
+           // 担当の開発者と同じ 基本情報・アーカイブ／解除・確認依頼／差し戻し を全案件で。加えて代理承認（adminProxyApprove）
+        || (r == 'admin'
+              && ((ch.hasOnly(['clientName','siteName','industry','accent','launchDate','updatedAt','updatedBy'])
+                     && validProject(request.resource.data))
+                  || (ch.hasOnly(['archived','updatedAt','updatedBy']) && request.resource.data.archived is bool)
+                  || (ch.hasOnly(['requirements','updatedAt','updatedBy'])
+                     && (devTransition(pid) || adminProxyApprove(pid)))))
            // 開発者: 基本情報（siteUrl / siteUrlKey は作成後に変えない。§5.4）
         || (mine && ch.hasOnly(['clientName','siteName','industry','accent','launchDate','updatedAt','updatedBy'])
               && validProject(request.resource.data))
@@ -268,7 +294,7 @@ service cloud.firestore {
 
     // §28.5 の allow update（回答: 事前も事後も draft＝M-4 ／ 提案: submit と同じバッチでだけ）
     // 回答の入力は アサインされた開発者 と admin（2026-11-11 ユーザー決定。admin はアサイン不要）。
-    // 提案（draft → analyzed の submit）は従来どおり アサインされた開発者だけ
+    // 提案（draft → analyzed の submit）も アサインされた開発者 と admin（2026-11-26 ユーザー決定。R-2）
     function reqUpdateOk(pid, a, ch, before, after) {
       let d = request.resource.data;
       let r = roleOf(a);
@@ -279,18 +305,21 @@ service cloud.firestore {
               && ch.hasOnly(['answers','answerMeta','updatedAt','updatedBy'])
               && validAnswers(d.answers)
               && d.answerMeta is map && d.answerMeta.keys().hasOnly(d.answers.keys()))
-        || (mine
+        || ((mine || r == 'admin')
               && before.requirements.status == 'draft' && after.requirements.status == 'analyzed'
               && ch.hasOnly(['proposal','proposalRevision','updatedAt','updatedBy'])
               && d.proposalRevision == after.requirements.revision
               && validStoredProposal(d.proposal, pid));
     }
 
-    // §28.6 の allow create（お客様の承認 ／ 開発者の submit・withdraw）
+    // §28.6 の allow create（お客様の承認 ／ 開発者の submit・withdraw ／ admin の submit・withdraw・代理承認）
+    // admin の文書は actorRole: 'admin' が必須（R-5。開発者・お客様は 'admin' を名乗れない＝各関数の actorRole の一致）
     function apprCreateOk(pid, aid, a) {
       let r = roleOf(a);
       return (r == 'client' && a.projectId == pid && approveOk(pid, aid, a))
-          || (r == 'developer' && request.auth.uid in proj(pid).memberUids && submitOrWithdrawOk(pid, aid, a));
+          || (r == 'developer' && request.auth.uid in proj(pid).memberUids && submitOrWithdrawOk(pid, aid, a))
+          || (r == 'admin' && request.resource.data.actorRole == 'admin'
+              && (request.resource.data.action == 'approve' ? proxyApproveOk(pid, aid, a) : submitOrWithdrawOk(pid, aid, a)));
     }
 
     // R-1: requirements/current の create では proposal / proposalRevision を持たせない（validProposal の迂回を防ぐ）
@@ -307,7 +336,7 @@ service cloud.firestore {
     // - 開発者: 作成者が自分だけをアサインした案件（従来どおり）
     // - admin（2026-11-25 ユーザー決定「管理者もプロジェクトを作れるように」）: ownerUid・createdBy は自分、memberUids は
     //   画面で選んだ開発者の uid（0〜20 人。空でもよく、後から「担当を変更」で割り当てる）。admin 自身は入れない
-    //   （admin はアサインで権限が増えないため意味が無い）。作成後に admin が変えられるのは従来どおり memberUids だけ（projUpdateOk）
+    //   （admin はアサインで権限が増えないため意味が無い）。作成後の admin の書き込みは projUpdateOk の admin の分岐（2026-11-26 から担当の開発者と同じ範囲＋アサイン）
     function memberAt(m, i)   { return m.size() <= i || (m[i] is string && m[i] != ''); }
     function adminMembersOk(m) {
       return m is list && m.size() <= 20 && m.toSet().size() == m.size() && !(request.auth.uid in m)
@@ -333,7 +362,7 @@ service cloud.firestore {
     }
 
     // ================= projects/{pid}/tasks（構築タスク。docs/design/LIVE_DASHBOARD_TASKS_CONSULT.md §2.1・§3） =================
-    // 2026-11-25 ユーザー決定（NC-2 推奨案）: 作成・状態変更はその案件の担当の開発者だけ。admin は見るだけ。削除なし（誤登録は完了で閉じる）。
+    // 2026-11-25 ユーザー決定（NC-2 推奨案）: 作成・状態変更はその案件の担当の開発者（2026-11-26 から admin も全案件で）。削除なし（誤登録は完了で閉じる）。
     // お客様は読めない（社内の作業）。題名・ページ・担当の変更は後回し（update は status だけ）
     // 役割の判定は acctOrNull() の 1 回だけ（isDev() 等を並べると active() が展開され 1 リクエスト 1000 式の上限に近づく）
     function taskKeys() { return ['schemaVersion','title','page','assigneeUids','status','createdAt','createdBy','updatedAt','updatedBy']; }
@@ -347,17 +376,21 @@ service cloud.firestore {
         && d.status in taskStatuses();
     }
     // 担当はその案件の memberUids の中だけ（作成時。担当を外れた人の uid は残る＝画面で「担当外」）
+    // admin（2026-11-26 ユーザー決定。R-7）: 全案件で作成・状態変更できる。担当は memberUids の中だけのまま
+    // （担当 0 人の案件では admin も作れない＝ADMIN_FULL_RIGHTS_PLAN L-5）
     function taskCreateOk(pid, a) {
       let d = request.resource.data;
       let p = proj(pid);
-      return roleOf(a) == 'developer' && request.auth.uid in p.memberUids
+      let r = roleOf(a);
+      return ((r == 'developer' && request.auth.uid in p.memberUids) || r == 'admin')
         && validTask(d) && d.status == 'todo'
         && p.memberUids.hasAll(d.assigneeUids)
         && d.createdAt == request.time && d.createdBy == request.auth.uid
         && stamped();
     }
     function taskUpdateOk(pid, a) {
-      return roleOf(a) == 'developer' && request.auth.uid in proj(pid).memberUids
+      let r = roleOf(a);
+      return ((r == 'developer' && request.auth.uid in proj(pid).memberUids) || r == 'admin')
         && changed().hasOnly(['status','updatedAt','updatedBy'])
         && request.resource.data.status in taskStatuses()
         && stamped();
@@ -365,7 +398,7 @@ service cloud.firestore {
 
     // ================= projects/{pid}/messages と projects/{pid}.consult（相談。LIVE_DASHBOARD_TASKS_CONSULT.md §2.2・§3） =================
     // 2026-11-25 ユーザー決定（NC-1・NC-3・NC-5・NC-7 推奨案）: 送れるのは その案件のお客様（side 'client'）と担当の開発者全員（side 'afro'）。
-    // admin は見るだけ。添付なし・編集/削除なし。保持期間は NC-11 とまとめて後で決める（それまでは消さない）
+    // admin も全案件で送れる（2026-11-26 ユーザー決定。side は 'afro'）。添付なし・編集/削除なし。保持期間は NC-11 とまとめて後で決める（それまでは消さない）
     // 会話の正は messages。consult は最後の 1 件の写しで、メッセージの作成と同じ書き込み（トランザクション）でだけ変えられる:
     //   consultOk（案件側）が count+1・時刻・送った側・名前と、同じ番号のメッセージの existsAfter を要求し、
     //   メッセージ側が getAfter の consult と seq・side・名前・時刻の一致を要求する（片方だけの書き込みはどちらかが拒否）
@@ -375,10 +408,11 @@ service cloud.firestore {
     function seqId(n) {
       return n < 10 ? '00000' + string(n) : n < 100 ? '0000' + string(n) : n < 1000 ? '000' + string(n) : '00' + string(n);
     }
-    // 送った側は役割から決まる（クライアントが選べない）。admin・担当外・他案件のお客様・無効化された人は 'none'
+    // 送った側は役割から決まる（クライアントが選べない）。担当外・他案件のお客様・無効化された人は 'none'
+    // admin は全案件で 'afro'（2026-11-26 ユーザー決定。R-6。'client' になるのはその案件のお客様だけのまま）
     function sideOf(a, r, pid, members) {
       return r == 'client' && a.projectId == pid ? 'client'
-           : r == 'developer' && request.auth.uid in members ? 'afro'
+           : (r == 'developer' && request.auth.uid in members) || r == 'admin' ? 'afro'
            : 'none';
     }
     function consultKeys() { return ['count','lastAt','lastSide','lastName']; }
@@ -458,7 +492,7 @@ service cloud.firestore {
       }
 
       // ---------- messages（相談。上の msgCreateOk / consultOk。追記のみ） ----------
-      // 会話は orderBy('seq') limitToLast(50)（単一フィールド。複合 Index 不要）。admin は見るだけ
+      // 会話は orderBy('seq') limitToLast(50)（単一フィールド。複合 Index 不要）
       match /messages/{mid} {
         allow get, list: if canRead(pid);
         allow create: if msgCreateOk(pid, mid, acctOrNull());
@@ -472,20 +506,45 @@ service cloud.firestore {
         && d.actorName == a.name && d.at == request.time;
     }
 
-    // お客様の承認（本人のみ。§25-2）
+    // お客様の承認（本人のみ。§25-2）。proxy・note は持てない（hasOnly）。actorRole は任意で 'client' だけ（R-5）。
+    // 相互照合（§7-1）: 同じバッチの requirements に approvedVia が無いこと
     function approveOk(pid, aid, acc) {
       let b = proj(pid).requirements;
       let r = get(reqPath(pid)).data;
       let d = request.resource.data;
+      let pa = getAfter(projPath(pid)).data.requirements;
       return actorOk(d, acc) && d.action == 'approve' && d.side == 'client'
-        && b.status == 'analyzed' && getAfter(projPath(pid)).data.requirements.status == 'approved'
+        && b.status == 'analyzed' && pa.status == 'approved' && !pa.keys().hasAny(['approvedVia'])
         && d.revision == b.revision && aid == approvalId(b.revision, 'approve')
         && r.get('proposalRevision', -1) == b.revision
         && d.answers == r.answers && d.proposal == r.proposal
-        && d.keys().hasOnly(['schemaVersion','kind','action','revision','side','actorUid','actorName','actorEmail','at','answers','proposal']);
+        && d.get('actorRole', 'client') == 'client'
+        && d.keys().hasOnly(['schemaVersion','kind','action','revision','side','actorUid','actorName','actorEmail','at','answers','proposal','actorRole']);
     }
 
-    // M-3: 開発者が作れるのは submit / withdraw だけ、side は必ず 'afro'
+    // admin の代理承認の記録（2026-11-26 ユーザー決定。ADMIN_FULL_RIGHTS_PLAN §2・§7、脅威モデル R-3）。
+    // 文書 ID はお客様の承認と同じ requirements-r{rev}-approve（create のみ＝お客様の承認と代理承認はどちらか 1 回だけ。T-05）。
+    // side は 'afro'（'client' は本人の行動として数えられる。F-8）・proxy: true・actorRole: 'admin'（apprCreateOk で強制）・
+    // note（お客様の同意の確認方法。trim 後 1〜200 字。向きの制御と C0 制御文字（改行を含む）・DEL は拒否）は必須。
+    // 相互照合（§7-1）: 同じバッチの requirements が approvedVia == 'proxy'
+    function reProxyNote() { return '(?s)[\\s\\p{Z}\\x{FEFF}\\x{0B}]*([^\\s\\p{Z}\\x{FEFF}\\x{0B}]|[^\\s\\p{Z}\\x{FEFF}\\x{0B}].{0,198}[^\\s\\p{Z}\\x{FEFF}\\x{0B}])[\\s\\p{Z}\\x{FEFF}\\x{0B}]*'; }
+    function reNoteControl() { return '(?s).*[\\x{202A}-\\x{202E}\\x{2066}-\\x{2069}\\x{00}-\\x{1F}\\x{7F}].*'; }
+    function proxyApproveOk(pid, aid, acc) {
+      let b = proj(pid).requirements;
+      let r = get(reqPath(pid)).data;
+      let d = request.resource.data;
+      let pa = getAfter(projPath(pid)).data.requirements;
+      return actorOk(d, acc) && d.action == 'approve' && d.side == 'afro' && d.proxy == true
+        && d.note.matches(reProxyNote()) && !d.note.matches(reNoteControl())
+        && b.status == 'analyzed' && pa.status == 'approved' && pa.approvedVia == 'proxy'
+        && d.revision == b.revision && aid == approvalId(b.revision, 'approve')
+        && r.get('proposalRevision', -1) == b.revision
+        && d.answers == r.answers && d.proposal == r.proposal
+        && d.keys().hasOnly(['schemaVersion','kind','action','revision','side','actorUid','actorName','actorEmail','at','answers','proposal','proxy','note','actorRole']);
+    }
+
+    // M-3: 開発者（と admin。2026-11-26）が作れるのは submit / withdraw だけ、side は必ず 'afro'。
+    // actorRole は任意（あれば呼び出し者の役割と一致。R-5。admin は apprCreateOk で必須）
     function submitOrWithdrawOk(pid, aid, acc) {
       let b = proj(pid).requirements;
       let a = getAfter(projPath(pid)).data.requirements;
@@ -496,13 +555,13 @@ service cloud.firestore {
               && d.revision == a.revision && aid == approvalId(a.revision, 'submit')
               && d.answers == getAfter(reqPath(pid)).data.answers
               && d.proposal == getAfter(reqPath(pid)).data.proposal
-              && d.keys().hasOnly(['schemaVersion','kind','action','revision','side','actorUid','actorName','actorEmail','at','answers','proposal']))
+              && d.keys().hasOnly(['schemaVersion','kind','action','revision','side','actorUid','actorName','actorEmail','at','answers','proposal','actorRole']))
         || (d.action == 'withdraw'
               && b.status == 'analyzed' && a.status == 'draft'
               && d.revision == b.revision && aid == approvalId(b.revision, 'withdraw')
-              && d.keys().hasOnly(['schemaVersion','kind','action','revision','side','actorUid','actorName','actorEmail','at','note'])
+              && d.keys().hasOnly(['schemaVersion','kind','action','revision','side','actorUid','actorName','actorEmail','at','note','actorRole'])
               && optStr(d, 'note', 0, 200))
-      );
+      ) && d.get('actorRole', acc.role) == acc.role;
     }
 
     // ================= validProposal（§28.7・M-11・R-2） =================

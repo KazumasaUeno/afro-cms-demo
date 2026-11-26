@@ -17,7 +17,7 @@ import { EmptyState, LoadError, ReqStatusPill } from './shared';
 
 /**
  * live のダッシュボード（docs/design/LIVE_DASHBOARD_TASKS_CONSULT.md §1.1・U1）。
- * - 開発者（/dev）: 担当案件 ／ 管理者（/dashboard）: 全案件・見るだけ。材料は既存の案件一覧の購読だけ（追加の Read 0）
+ * - 開発者（/dev）: 担当案件 ／ 管理者（/dashboard）: 全案件（操作は担当の開発者と同じ。2026-11-26）。材料は既存の案件一覧の購読だけ（追加の Read 0）
  * - 出すもの: 要件の状態ごとの件数と案件のカード（demo の開発者ダッシュボードと同じ見た目 ProjectCardView）
  * - 構築状況（U2）: 表示中の 1 案件のタスクの状態別件数・構築で次にやること・（開発者は）あなたのタスク上位 3 件。
  *   購読は構築タスク画面と同じ useLiveTasks（キー t:{pid}）
@@ -68,7 +68,7 @@ export default function LiveDashboardPage() {
             </Stack>
           </Surface>
 
-          {/* 相談の未対応（U3）。admin は見るだけ、開発者は担当案件（全員が返信者） */}
+          {/* 相談の未対応（U3）。admin は全案件、開発者は担当案件（どちらも返信できる） */}
           <Surface padding={{ xs: 2, md: 2.5 }} data-testid="dashboard-consult">
             <Stack direction="row" spacing={1.5} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
               <MessageSquare size={18} color={tokens.color.muted} aria-hidden />
@@ -99,7 +99,7 @@ export default function LiveDashboardPage() {
   );
 }
 
-/** 構築状況（表示中の 1 案件。設計 §1.1）。admin は見るだけ（全タスクを数え、行き先のボタンは構築タスク画面だけ） */
+/** 構築状況（表示中の 1 案件。設計 §1.1）。admin は全タスクを数え、行き先は管理者画面の URL（admin は担当の開発者と同じ操作ができる。2026-11-26 U5） */
 function BuildStatus({ role }: { role: DashboardRole }) {
   const project = useLiveCurrentProject();
   const { uid } = useLiveSession();

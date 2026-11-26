@@ -71,6 +71,15 @@ export function isJobRunning(doc: AiDraftDoc | null | undefined, now: number): b
   return Number.isFinite(until) && until > now;
 }
 
+/**
+ * この案件で開発の操作（編集・承認の依頼・タスク・相談の返信）ができるか。
+ * 管理者は全案件の担当の開発者と同じ（2026-11-26 ユーザー決定。docs/design/ADMIN_FULL_RIGHTS_PLAN.md）。
+ * 役割の値は live の accounts.role（demo はこの判定を使わない＝L-7）
+ */
+export function canWorkOnProject(role: AiViewerRole | null | undefined, isAssignedDeveloper: boolean): boolean {
+  return role === 'admin' || (role === 'developer' && isAssignedDeveloper);
+}
+
 /** パネルを描画するか（フラグ・役割。§1 と DEC lead F5） */
 export function aiPanelVisible(flagMode: AiFlagMode, role: AiViewerRole, isAssignedDeveloper: boolean): boolean {
   if (flagMode === 'off' || role === 'client') return false;
@@ -94,7 +103,8 @@ export function deriveAiDraftState(i: AiDraftStateInput): AiDraftView {
   if (!aiPanelVisible(i.flagMode, i.role, i.isAssignedDeveloper)) return base;
   if (i.reqStatus !== 'draft') return { ...base, key: 'notDraft' };
   const canGenerate = aiCanGenerate(i.flagMode, i.role, i.isAssignedDeveloper);
-  const readOnly = i.role === 'admin';
+  // 閲覧のみは開発の操作ができない人だけ（管理者も編集・承認の依頼ができる。ADMIN_FULL_RIGHTS_PLAN U2）
+  const readOnly = !canWorkOnProject(i.role, i.isAssignedDeveloper);
   if (!doc) return { ...base, key: 'none', canGenerate, readOnly };
   if (doc.job?.state === 'running') {
     if (isJobRunning(doc, i.now)) {
@@ -108,7 +118,7 @@ export function deriveAiDraftState(i: AiDraftStateInput): AiDraftView {
   }
   const answersChanged = !!i.answersHashNow && !!doc.answersHash && doc.answersHash !== i.answersHashNow;
   const lastErrorNote = doc.lastError ? AI_DRAFT_COPY.regenFailedNote(shortErrorMessage(doc.lastError.code)) : null;
-  const canEdit = !readOnly && i.role === 'developer' && i.isAssignedDeveloper;
+  const canEdit = !readOnly;
   return { ...base, key: hasEdited ? 'confirmed' : 'ready', answersChanged, readOnly, lastErrorNote, canGenerate, canEdit };
 }
 
@@ -132,7 +142,7 @@ export type ApprovalBlock = 'not-allowed' | 'not-draft' | 'running' | 'no-edited
 
 /** 押せないときの理由（押せるなら null）。理由の文言は APPROVAL_BLOCK_COPY（not-allowed・not-draft はボタン自体を出さない） */
 export function approvalBlock(a: ApprovalInput): ApprovalBlock | null {
-  if (a.role !== 'developer' || !a.isAssignedDeveloper) return 'not-allowed';
+  if (!canWorkOnProject(a.role, a.isAssignedDeveloper)) return 'not-allowed';
   if (a.reqStatus !== 'draft') return 'not-draft';
   if (a.running) return 'running';
   if (!a.hasEdited) return 'no-edited';

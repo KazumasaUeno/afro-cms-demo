@@ -1,5 +1,5 @@
-import { Box, Button, Dialog, DialogActions, DialogContent, Stack, Typography } from '@mui/material';
-import { ArrowRight, BadgeCheck, CheckCircle2, Download, Globe, Quote, RotateCcw, Send, Target, TrendingUp } from 'lucide-react';
+import { Box, Button, Dialog, DialogActions, DialogContent, Stack, TextField, Typography } from '@mui/material';
+import { ArrowRight, BadgeCheck, CheckCircle2, Download, Globe, Quote, RotateCcw, Send, Target, TrendingUp, UserCheck } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
@@ -22,6 +22,7 @@ import { downloadRequirementsDoc } from './requirementsDoc';
 import { useToast } from '@/hooks/useToast';
 import { useHearingRoutes } from './hearingRoutes';
 import { useLiveRoleOptional } from '@/live/session';
+import { cleanProxyNote, PROXY_NOTE_MAX, proxyNoteLength, validateProxyNote } from '@/live/proxyApproval';
 import { useDemoOptional } from '@/store/DemoStore';
 
 const PRIORITY: Record<ProposalPoint['priority'], { label: string; tone: PillTone; color: string }> = {
@@ -31,8 +32,9 @@ const PRIORITY: Record<ProposalPoint['priority'], { label: string; tone: PillTon
 };
 
 /**
- * variant='client'（live のお客様ポータル）: お客様本人の「承認する」だけを出す（§25-2。代理承認は demo・live とも無い。2026-11-12）。
- * live の開発者: 承認待ちの間だけ「差し戻す」（requirements.reset＝analyzed → draft。回答は残す。§6）。
+ * variant='client'（live のお客様ポータル）: お客様本人の「承認する」だけを出す（§25-2）。
+ * live の開発者・管理者: 承認待ちの間だけ「差し戻す」（requirements.reset＝analyzed → draft。回答は残す。§6）。
+ * live の管理者: 承認待ちの間だけ「代理で承認」（理由は必須。2026-11-26 ADMIN_FULL_RIGHTS_PLAN L-2・U4）。demo は代理承認を出さない（L-7）
  * live では保存した提案（req.proposal＝承認の対象と同じ写し）を見せる。無ければ回答から作る（demo は常に回答から作る）
  */
 /** v2 の印の説明（事実どおり。DEC lead F4。お客様向けの確定文言は LEGAL Q-4） */
@@ -58,6 +60,11 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
   const client = variant === 'client';
   const [confirmApprove, setConfirmApprove] = useState(false);
   const [approving, setApproving] = useState(false);
+  // 代理承認（live の管理者だけ）。null＝閉じている
+  const [proxyNote, setProxyNote] = useState<string | null>(null);
+  const canProxy = live && !client && role === 'admin' && req.status === 'analyzed';
+  const proxyClean = cleanProxyNote(proxyNote ?? '');
+  const proxyError = proxyNote === null ? null : validateProxyNote(proxyClean);
   // PDF の作成中は押せなくし、文言で知らせる（REQDOC_U4_UI.md §4。以前は downloadRequirementsDoc の pdfBusy で黙って無視していた）
   const [pdfBusy, setPdfBusy] = useState(false);
   const proposal: StoredProposal = useMemo(() => req.proposal ?? buildProposal(req.answers, req.competitors), [req.proposal, req.answers, req.competitors]);
@@ -69,8 +76,8 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
   const v1 = ver === 1 && 'currentScore' in proposal ? proposal : null;
   const aiCard = v2 ?? v3;
   const catalogMissing = !!v3 && !reqDocCatalogOf(v3.template?.version ?? '');
-  // 差し戻し: demo は管理者画面の「差し戻す」（承認待ちの間）と「回答をやり直す」、live はアサインされた開発者の「差し戻す」（承認待ちの間だけ）
-  const canReset = live ? role === 'developer' && req.status === 'analyzed' && !client : !approved && !dev;
+  // 差し戻し: demo は管理者画面の「差し戻す」（承認待ちの間）と「回答をやり直す」、live はアサインされた開発者と管理者の「差し戻す」（承認待ちの間だけ。U3）
+  const canReset = live ? (role === 'developer' || role === 'admin') && req.status === 'analyzed' && !client : !approved && !dev;
   const answered = REQUIREMENT_QUESTIONS.filter((q) => isAnswered(req.answers[q.id])).length;
   // 内容の確認待ちの回答（0.17 までの保存データでお客様が入力したもの）が残っている間は承認できない（reducer と同じ条件）
   const pending = pendingConfirmations(req).length;
@@ -215,20 +222,27 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
                   role="status"
                   sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, minHeight: 40, borderRadius: 3, bgcolor: tokens.color.successSoft, color: tokens.color.successInk, fontWeight: 650, fontSize: 14 }}
                 >
-                  <BadgeCheck size={18} /> 承認済み {formatDateTime(req.approvedAt)}
+                  <BadgeCheck size={18} /> {req.approvedVia === 'proxy' ? '代理で承認済み' : '承認済み'} {formatDateTime(req.approvedAt)}
                 </Box>
               ) : client ? (
                 <Button variant="contained" startIcon={<CheckCircle2 size={16} />} disabled={approving || catalogMissing} onClick={() => setConfirmApprove(true)}>
                   承認する
                 </Button>
               ) : (
-                // 管理者・開発者は承認しない（承認はお客様ポータルだけ。2026-11-12 ユーザー判断）
-                <Box
-                  role="status"
-                  sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 0.75, minHeight: 40, borderRadius: 3, bgcolor: tokens.color.warningSoft, color: tokens.color.warningInk, fontWeight: 650, fontSize: 14, whiteSpace: { sm: 'nowrap' } }}
-                >
-                  お客様の承認待ち（お客様ポータルで承認します）
-                </Box>
+                // 開発者は承認しない（承認はお客様ポータル。2026-11-12 ユーザー判断）。live の管理者だけ代理で承認できる（2026-11-26 U4）
+                <>
+                  <Box
+                    role="status"
+                    sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 0.75, minHeight: 40, borderRadius: 3, bgcolor: tokens.color.warningSoft, color: tokens.color.warningInk, fontWeight: 650, fontSize: 14, whiteSpace: { sm: 'nowrap' } }}
+                  >
+                    お客様の承認待ち（お客様ポータルで承認します）
+                  </Box>
+                  {canProxy && (
+                    <Button variant="outlined" startIcon={<UserCheck size={16} />} disabled={approving || catalogMissing} onClick={() => setProxyNote('')}>
+                      代理で承認
+                    </Button>
+                  )}
+                </>
               )}
               {/* サイトマップはお客様の承認で作られる（0.29.4）。承認前に出すと、空のサイトマップから要件定義書へ戻されるだけなので出さない */}
               {!dev && !live && approved && <Button variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate('/site')}>サイトマップへ進む</Button>}
@@ -258,6 +272,38 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
           </Button>
         </DialogActions>
       </Dialog>
+
+      {canProxy && (
+        <Dialog open={proxyNote !== null} onClose={() => !approving && setProxyNote(null)} maxWidth="xs" fullWidth aria-labelledby="req-proxy-title">
+          <DialogContent sx={{ pt: 3 }}>
+            <Typography id="req-proxy-title" variant="h3" sx={{ mb: 1 }}>お客様の代わりに承認しますか？</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              承認すると、この内容でサイトの制作に進みます。「アフロ（あなたの名前）が代理で承認」と理由・日時が承認の履歴に残り、お客様ポータルにも表示されます。
+            </Typography>
+            <TextField
+              label="代理で承認する理由" required fullWidth size="small" autoFocus
+              value={proxyNote ?? ''} onChange={(e) => setProxyNote(e.target.value)} disabled={approving}
+              error={!!proxyNote && !!proxyError}
+              helperText={proxyNote && proxyError ? proxyError : `例：11/26 の打ち合わせで口頭で承認をいただいた（${proxyNoteLength(proxyClean)}/${PROXY_NOTE_MAX}字）`}
+            />
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Button variant="outlined" disabled={approving} onClick={() => setProxyNote(null)}>キャンセル</Button>
+            <Button
+              variant="contained" disabled={approving || !!proxyError}
+              onClick={() => {
+                setApproving(true);
+                void write(approvals.approveRequirements(req.projectId, { proxyNote: proxyClean }), '要件定義書を代理で承認しました').then((ok) => {
+                  setApproving(false);
+                  if (ok) setProxyNote(null);
+                });
+              }}
+            >
+              {approving ? '承認しています…' : '代理で承認する'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
 
       <Dialog open={confirmApprove} onClose={() => !approving && setConfirmApprove(false)} maxWidth="xs" fullWidth aria-labelledby="req-approve-title">
         <DialogContent sx={{ pt: 3 }}>

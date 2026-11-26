@@ -39,7 +39,7 @@ function liveItem(area: AreaId, demoTo: string, to: string, match: string[], hin
 
 /**
  * 役割ごとのナビ（2026-11-25 ユーザー決定 U4: admin と開発者はどちらも「ダッシュボード / プロジェクト / 構築タスク / 相談」の 4 つだけ。
- * admin は見るだけ。名前・アイコンは demo の開発者画面のレールと同じ）。
+ * admin は全案件で担当の開発者と同じ操作ができる（2026-11-26 ADMIN_FULL_RIGHTS_PLAN）。名前・アイコンは demo の開発者画面のレールと同じ）。
  * - ヒアリング・要件定義: メニューから外した（demo と同じ。プロジェクト詳細の「ヒアリング」から開く。開いている間は「プロジェクト」を選択中にする。
  *   admin の /ai-studio/requirements は '/ai-studio' の前方一致で入る）
  * - ユーザー管理（admin）: メニューから外した。上部バーのアカウントのメニューから開く（LiveShell）
@@ -48,10 +48,10 @@ function liveItem(area: AreaId, demoTo: string, to: string, match: string[], hin
  */
 export const LIVE_NAV: Record<LiveRole, NavItem[]> = {
   admin: [
-    liveItem('dev', '/dev', '/dashboard', ['/dashboard'], '全案件と構築状況（見るだけ）'),
+    liveItem('dev', '/dev', '/dashboard', ['/dashboard'], '全案件と構築状況'),
     liveItem('admin', '/projects', '/projects', ['/projects', '/ai-studio']),
-    liveItem('dev', '/dev/tasks', '/tasks', ['/tasks'], '全案件の構築タスク（見るだけ）'),
-    liveItem('dev', '/dev/chat', '/chat', ['/chat'], 'お客様からの相談（見るだけ）'),
+    liveItem('dev', '/dev/tasks', '/tasks', ['/tasks'], '全案件の構築タスク'),
+    liveItem('dev', '/dev/chat', '/chat', ['/chat'], '全案件のお客様からの相談'),
   ],
   developer: [
     liveItem('dev', '/dev', '/dev', ['/dev']),

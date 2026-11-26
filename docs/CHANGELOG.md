@@ -977,3 +977,11 @@
 - 要件定義書の配置調整: 主操作を見出しの右に 1 行、保存の状態と押せない理由は「表示／編集」の下の 1 本の注記、開いたときは「表示」。生成中・保存中で依頼できない理由も出す。保存失敗の注記は編集できる人にだけ
 - dev: vite の dev サーバーが `.emulator-login.local` を配らない（`server.fs.deny`。vite 8.3 の既定を並べて追加）
 - レビュー: `docs/reviews/2026-11-26-live-detail-and-reqdoc-polish.md`（Approve with comments・Minor 修正済み）。単体テスト 161 件
+
+## 0.51.0 — 2026-11-26（管理者の権限）
+
+- live: 管理者は全案件（担当に入っていなくても）で担当の開発者と同じ操作ができる（2026-11-26 ユーザー決定。11-10 の「管理者は見るだけ」と AI 下書きの DEC F5 を置き換え）: ヒアリングの入力・AI で要件定義を作る／作り直す・編集・承認の依頼と差し戻し・構築タスク・相談の返信（アフロ側として）。Rules・Functions（saveAiDraftEdits）・画面。設計 `docs/design/ADMIN_FULL_RIGHTS_PLAN.md`・脅威モデル `docs/reviews/2026-11-26-admin-full-rights-threat-model.md`
+- live: 管理者がお客様の承認を代理で記録できる（理由 1〜200 字が必須・制御文字と文字の向きの制御は拒否）。承認の記録は `side:'afro'`・`proxy:true`・`note`・`actorRole:'admin'`、要件は `approvedVia:'proxy'`（Rules が両方向で照合し、お客様は代理の印を書けない）。承認の履歴（管理者画面・お客様ポータル）に「アフロ（名前）が代理で承認」と理由、確認の依頼と同じ人なら その旨を出す。承認済みの印は「代理で承認済み」
+- 新しい承認の記録に `actorRole`（その時の役割）を付ける。既存の記録は書き換えない
+- AI のフラグ・allowlist・回数上限・外部送信の方針は変更なし。demo は変更なし
+- 既知の制約: 担当の開発者が 0 人の案件では管理者も構築タスクを作れない（docs/TODO.md）。代理承認の法的な有効性は LEGAL REVIEW REQUIRED

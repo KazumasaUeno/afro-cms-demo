@@ -314,6 +314,14 @@ for (const [name, prep, msg] of exhaust) {
   });
 }
 
+// TEST-08（ADMIN_FULL_RIGHTS_PLAN・脅威モデル T-08）: 全案件で生成できる admin にも利用者の日の上限が効く
+test('上限: admin にも利用者の日の上限（10/日）が効く・enqueue 0 回', async () => {
+  assert.equal(AI_QUOTA.userPerDay, 10);
+  await db.doc('aiUsage/202611').set({ count: 0, costMicroUsd: 0, byDay: {}, byUid: { '2026-11-20:adm': AI_QUOTA.userPerDay } });
+  await assert.rejects(call('adm', {}), (e) => e.code === 'resource-exhausted' && e.message === 'quota-user-day');
+  assert.equal(enqueued.length, 0);
+});
+
 // ---------- 失敗時の保持 ----------
 test('保持: 下書きありで再生成が失敗 → state ready のまま・lastError だけ', async () => {
   await readyDraft(false);
@@ -349,9 +357,33 @@ for (const c of EDITED_CASES) {
     }
   });
 }
-test('編集: admin・お客様・未アサインは拒否', async () => {
+// 2026-11-26 ユーザー決定（ADMIN_FULL_RIGHTS_PLAN R-8・TEST-08）: admin は担当外でも保存できる（assertCanEdit）
+test('編集: admin は担当外の案件でも保存できる', async () => {
   await withGenerated();
-  for (const uid of ['adm', 'cli', 'devB']) await assert.rejects(save(uid, EDITED), code('not allowed'));
+  assert.deepEqual(await save('adm', EDITED), { ok: true });
+  const d = await ai();
+  assert.deepEqual([d.edited, d.editedBy], [EDITED, 'adm']);
+});
+test('編集: お客様・未アサイン・無効の開発者は拒否', async () => {
+  await withGenerated();
+  for (const uid of ['cli', 'devB', 'off']) await assert.rejects(save(uid, EDITED), code('not allowed'));
+  assert.equal((await ai()).edited, undefined);
+});
+test('TEST-03/08: 無効化・メール不一致・未確認メールの admin は保存も生成もできない', async () => {
+  await withGenerated();
+  await db.doc('accounts/admOff').set({ schemaVersion: 1, status: 'disabled', email: 'admOff@x.example', role: 'admin', name: 'n' });
+  await assert.rejects(save('admOff', EDITED), code('not allowed'));
+  const as = (token) => handleSaveEdits({ auth: { uid: 'adm', token }, data: { projectId: 'p1', edited: EDITED } }, edeps);
+  await assert.rejects(as({ email: 'changed@x.example', email_verified: true }), code('not allowed'));
+  await assert.rejects(as({ email: 'adm@x.example', email_verified: false }), code('not allowed'));
+  assert.equal((await ai()).edited, undefined);
+  await assert.rejects(call('admOff', { requestId: uuid(2), regenerate: true }), code('not allowed'));
+  await assert.rejects(handleRequestDraft({ auth: auth('adm', false), data: { projectId: 'p1', requestId: uuid(3), regenerate: true } }, rdeps()), code('not allowed'));
+});
+test('編集: admin でもアーカイブした案件は保存できない', async () => {
+  await withGenerated();
+  await db.doc('projects/p1').update({ archived: true });
+  await assert.rejects(save('adm', EDITED), code('project-archived'));
 });
 test('編集: 要件が draft でない・generated が無いと拒否', async () => {
   await assert.rejects(save('devA', EDITED), code('no-generated'));

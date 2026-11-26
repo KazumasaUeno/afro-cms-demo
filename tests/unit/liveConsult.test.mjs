@@ -26,12 +26,17 @@ test('seqId: 6 桁ゼロ埋め（Rules の seqId と同じ）・範囲外は thr
   for (const n of [0, 5001, 1.5, -1]) assert.throws(() => seqId(n));
 });
 
-test('consultSide: お客様は自分の案件・開発者は担当・admin は送れない', () => {
+test('consultSide: お客様は自分の案件・開発者は担当・admin は全案件で afro（2026-11-26 L-6。以前は送れない＝null）', () => {
   assert.equal(consultSide('client', 'c1', 'p1', p('p1')), 'client');
   assert.equal(consultSide('client', 'c1', 'p2', p('p1')), null);
   assert.equal(consultSide('developer', 'devA', undefined, p('p1')), 'afro');
   assert.equal(consultSide('developer', 'devZ', undefined, p('p1')), null);
-  assert.equal(consultSide('admin', 'a1', undefined, p('p1', { memberUids: ['a1'] })), null);
+  assert.equal(consultSide('admin', 'a1', undefined, p('p1', { memberUids: ['a1'] })), 'afro');
+  // 担当でない案件・担当 0 人の案件でも admin は afro 側（お客様には「アフロ」側として見える）
+  assert.equal(consultSide('admin', 'a1', undefined, p('p1')), 'afro');
+  assert.equal(consultSide('admin', 'a1', undefined, p('p1', { memberUids: [] })), 'afro');
+  // お客様は 'afro' を名乗れない
+  assert.equal(consultSide('client', 'c1', 'p1', p('p1', { memberUids: ['c1'] })), 'client');
 });
 
 test('未対応 = 最後がお客様 ／ 返信あり = 最後がアフロ ／ 相談なしはどちらでもない', () => {

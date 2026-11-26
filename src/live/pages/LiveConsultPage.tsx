@@ -25,7 +25,7 @@ const PRIVACY_NOTE = 'パスワード・カード番号などは送らないで�
  * live の相談（docs/design/LIVE_DASHBOARD_TASKS_CONSULT.md §1.3・U3）。見た目は demo の ChatPage と同じ（features/chat/ChatParts を再利用）。
  * - お客様（/portal/chat）: 自分の案件の会話 1 本。担当者から返信があれば「返信あり」（最後がアフロ。NC-5）
  * - 開発者（/dev/chat）: 担当の案件の一覧 → 会話。担当の開発者は全員が返信できる（NC-1。demo の「担当ディレクターだけ」とは違う）
- * - 管理者（/chat）: 全案件の一覧 → 会話。見るだけ
+ * - 管理者（/chat）: 全案件の一覧 → 会話。返信できる（2026-11-26 L-6）
  * 未対応＝最後のメッセージがお客様（既読は持たない）。一覧・未対応は案件一覧の consult（追加 Read 0）。メール通知・添付は無い（NC-4・NC-7）。
  * 権限の実体は firestore.rules の consultOk / msgCreateOk（ここは表示の出し分け）。メニューは U4（liveNav.ts。未対応・返信ありの印も案件一覧の consult）
  */
@@ -85,7 +85,7 @@ function ConsultInbox({ mode, docs }: { mode: 'dev' | 'admin'; docs: readonly Pr
       icon={<MessageSquare size={15} />}
       title="相談チャット"
       description={admin
-        ? `すべてのプロジェクトのお客様からの相談です（見るだけ。返信は各プロジェクトの担当の開発者が開発者画面から行います）。${count > 0 ? `未対応が ${count} 件あります（最後のメッセージがお客様のもの）。` : '未対応はありません。'}`
+        ? `すべてのプロジェクトのお客様からの相談です。管理者と各プロジェクトの担当の開発者が返信できます。${count > 0 ? `未対応が ${count} 件あります（最後のメッセージがお客様のもの）。` : '未対応はありません。'}`
         : `担当のプロジェクトのお客様からの相談です。担当の開発者は全員が返信できます。${count > 0 ? `未対応が ${count} 件あります（最後のメッセージがお客様のもの）。` : '未対応はありません。'}`}
     />
   );
@@ -242,7 +242,8 @@ function ConsultThread({ project, mode, logHeight }: { project: ProjectDoc; mode
 
       {!side ? (
         <ChatReadOnlyNote>
-          {mode === 'admin' ? '返信は担当の開発者が開発者画面から行います（閲覧のみ）' : 'この案件の相談には送信できません（閲覧のみ）'}
+          {/* admin は全案件に返信できる（consultSide。ADMIN_FULL_RIGHTS_PLAN L-6）ので、ここに来るのは送れない開発者・お客様だけ */}
+          この案件の相談には送信できません（閲覧のみ）
         </ChatReadOnlyNote>
       ) : blocked ? (
         <ChatReadOnlyNote>{blocked}</ChatReadOnlyNote>

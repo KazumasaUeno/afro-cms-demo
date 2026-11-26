@@ -1,9 +1,10 @@
 import { DEV_TASK_PAGE_MAX, DEV_TASK_TITLE_MAX, WHOLE_SITE } from '@/data/devTaskLimits';
 import type { ReqStatus, TaskDoc, TaskStatus } from './model';
+import type { LiveRole } from './session';
 
 /**
  * live の構築タスクの導出（docs/design/LIVE_DASHBOARD_TASKS_CONSULT.md §1.2・§2.1・U2）。画面（LiveTasksPage・ダッシュボードの構築状況）が使う。
- * 権限の実体は firestore.rules の taskCreateOk / taskUpdateOk（作成・状態変更は担当の開発者だけ、admin は見るだけ、削除なし、お客様は読めない）。
+ * 権限の実体は firestore.rules の taskCreateOk / taskUpdateOk（作成・状態変更は担当の開発者と admin（全案件。2026-11-26 ADMIN_FULL_RIGHTS_PLAN U5）、削除なし、お客様は読めない）。
  * ここは表示の絞り込みと、Rules に送る前の入力の検査（Rules と同じ条件）だけ
  */
 
@@ -51,22 +52,40 @@ export function myOpenTasks(tasks: readonly TaskDoc[], uid: string, n = 3): Task
     .slice(0, n);
 }
 
+/**
+ * タスクを追加・状態を変更できるか（画面の出し分け。実体は Rules）。
+ * 担当の開発者（memberUids）と admin（全案件。2026-11-26 ADMIN_FULL_RIGHTS_PLAN U5）。お客様は開けない
+ */
+export function canEditTasks(role: LiveRole, uid: string, memberUids: readonly string[]): boolean {
+  return role === 'admin' || (role === 'developer' && memberUids.includes(uid));
+}
+
+/**
+ * 追加できない理由（追加できるなら null）。担当は memberUids の中だけ（L-5）なので、担当の開発者が 0 人の案件では admin も追加できない
+ */
+export function addTaskBlock(memberUids: readonly string[]): string | null {
+  return memberUids.length ? null : '担当の開発者がいないため、タスクを追加できません。先に「担当を変更」で開発者を割り当ててください。';
+}
+
 export interface BuildAction { title: string; cta?: string; to?: string }
 
 /**
  * ダッシュボードの「構築で次にやること」（demo の nextDevAction の live 版。デプロイの記録は live に無いので見ない＝NC-6）。
- * uid: 開発者は自分の担当のレビュー待ちを数える。null（admin・見るだけ）は案件の全タスクを数え、行き先のボタンは出さない
+ * uid: 開発者は自分の担当のレビュー待ちを数える。null（admin。タスクの担当にならない）は案件の全タスクを数える。
+ * admin も担当の開発者と同じ操作ができる（2026-11-26 U5）ので、行き先は管理者画面の URL（/tasks・/ai-studio）で出す
  */
 export function nextBuildAction(req: ReqStatus, tasks: readonly TaskDoc[], uid: string | null): BuildAction {
-  const review = tasks.filter((t) => t.status === 'review' && (uid === null || isAssignee(t, uid))).length;
+  const admin = uid === null;
+  const review = tasks.filter((t) => t.status === 'review' && (admin || isAssignee(t, uid))).length;
+  const tasksPath = admin ? '/tasks' : '/dev/tasks';
   if (review > 0) {
-    return uid === null
-      ? { title: `レビュー待ちのタスクが ${review} 件あります`, cta: 'タスクを見る', to: '/tasks' }
-      : { title: `レビュー待ちが ${review} 件あります`, cta: 'タスクを見る', to: '/dev/tasks' };
+    return admin
+      ? { title: `レビュー待ちのタスクが ${review} 件あります`, cta: 'タスクを見る', to: tasksPath }
+      : { title: `レビュー待ちが ${review} 件あります`, cta: 'タスクを見る', to: tasksPath };
   }
-  if (req === 'draft') return uid === null ? { title: 'ヒアリングの入力中です' } : { title: 'ヒアリングを入力しましょう', cta: 'ヒアリングを開く', to: '/dev/hearing' };
+  if (req === 'draft') return { title: 'ヒアリングを入力しましょう', cta: 'ヒアリングを開く', to: admin ? '/ai-studio' : '/dev/hearing' };
   if (req === 'analyzed') return { title: '要件定義書はお客様の承認待ちです' };
-  if (tasks.length === 0) return uid === null ? { title: '構築タスクはまだありません' } : { title: '構築タスクを追加しましょう', cta: 'タスクを追加する', to: '/dev/tasks' };
+  if (tasks.length === 0) return { title: '構築タスクを追加しましょう', cta: 'タスクを追加する', to: tasksPath };
   return { title: '今すぐ対応が必要なものはありません' };
 }
 

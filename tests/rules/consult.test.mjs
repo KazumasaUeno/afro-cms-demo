@@ -1,5 +1,6 @@
 // projects/{pid}/messages と projects/{pid}.consult（相談）の許可・拒否（docs/design/LIVE_DASHBOARD_TASKS_CONSULT.md §2.2・§3。U3）
-// 2026-11-25 ユーザー決定: 送れるのはお客様（自分の案件）と担当の開発者全員 ／ admin は見るだけ ／ 編集・削除なし ／ 添付なし
+// 2026-11-25 ユーザー決定: 送れるのはお客様（自分の案件）と担当の開発者全員 ／ 編集・削除なし ／ 添付なし
+// 2026-11-26 ユーザー決定（ADMIN_FULL_RIGHTS_PLAN R-6）: admin も全案件で送れる（side は 'afro' 固定）
 // 既定の世界（fixtures.mjs seed）: p1 は devA・devB・devOff（無効）が担当、お客様 client1 ／ p2 は devC、お客様 client2
 import { after, before, beforeEach, describe, test } from 'node:test';
 import { assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
@@ -88,7 +89,9 @@ describe('messages: 送信（メッセージ作成＋consult 更新を 1 回の�
     if (prep) await prep();
     await assertFails(sendBatch(uid, opts));
   });
-  deny('admin は送れない（見るだけ）', 'admin1', { msg: { side: 'afro' }, consult: { lastSide: 'afro' } });
+  test('admin は担当外の案件でも送れる（side afro）', async () => {
+    await assertSucceeds(sendBatch('admin1'));
+  });
   deny('担当外の開発者は送れない', 'devC');
   deny('他案件のお客様は送れない', 'client2', { pid: 'p1' });
   deny('無効化された開発者・お客様は送れない（開発者）', 'devOff');

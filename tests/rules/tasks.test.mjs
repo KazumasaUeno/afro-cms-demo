@@ -1,5 +1,6 @@
 // projects/{pid}/tasks（構築タスク）の許可・拒否（docs/design/LIVE_DASHBOARD_TASKS_CONSULT.md §2.1・§3。U2）
-// 2026-11-25 ユーザー決定: 作成・状態変更は担当の開発者だけ ／ admin は見るだけ ／ 削除なし ／ お客様は読めない
+// 2026-11-25 ユーザー決定: 作成・状態変更は担当の開発者だけ ／ 削除なし ／ お客様は読めない
+// 2026-11-26 ユーザー決定（ADMIN_FULL_RIGHTS_PLAN R-7）: admin も全案件で作成・状態変更できる（担当は memberUids の中だけのまま）
 // 既定の世界（fixtures.mjs seed）: p1 は devA・devB・devOff（無効）が担当、お客様 client1 ／ p2 は devC、お客様 client2
 import { after, before, beforeEach, describe, test } from 'node:test';
 import { assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
@@ -95,7 +96,11 @@ describe('tasks: create', () => {
   });
 
   const deny = (name, uid, over, pid = 'p1') => test(name, async () => { await assertFails(create(uid, over, pid)); });
-  deny('admin は作れない（見るだけ）', 'admin1', { assigneeUids: ['devA'] });
+  test('admin は担当外の案件でも作れる（担当は案件の memberUids の中）', async () => {
+    await assertSucceeds(create('admin1', { assigneeUids: ['devA'] }));
+  });
+  deny('admin でも担当に memberUids の外（自分）を入れる → 拒否（R-7）', 'admin1', { assigneeUids: ['admin1'] });
+  deny('admin でも担当に memberUids の外（devC）を入れる → 拒否（R-7）', 'admin1', { assigneeUids: ['devA', 'devC'] });
   deny('お客様は作れない', 'client1', { assigneeUids: ['devA'] });
   deny('担当外の開発者は作れない', 'devC', {});
   deny('無効化された開発者は作れない', 'devOff', {});
@@ -134,8 +139,11 @@ describe('tasks: update（状態の変更だけ）', () => {
   test('タスクの担当でない（案件の担当の）開発者も状態を変えられる', async () => {
     await assertSucceeds(setStatus('devB', 'review'));
   });
-  test('admin・お客様・担当外の開発者・無効化された開発者は変えられない', async () => {
-    await assertFails(setStatus('admin1', 'done'));
+  test('admin は担当外の案件でも状態を変えられる（2026-11-26 R-7）', async () => {
+    await assertSucceeds(setStatus('admin1', 'done'));
+    await assertSucceeds(setStatus('admin1', 'doing', {}, 'projects/p2/tasks/t2'));
+  });
+  test('お客様・担当外の開発者・無効化された開発者は変えられない', async () => {
     await assertFails(setStatus('client1', 'done'));
     await assertFails(setStatus('devC', 'done'));
     await assertFails(setStatus('devOff', 'done'));

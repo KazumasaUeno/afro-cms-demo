@@ -33,9 +33,9 @@ export default function RequirementsPage() {
   const routes = useHearingRoutes();
   const status = req.status;
   const [analyzing, setAnalyzing] = useState(false);
-  // live: AI 分析（＝お客様への確認依頼）はアサインされた開発者だけ（Rules reqUpdateOk）。管理者は回答の入力だけ（§25-1）
+  // live: AI 分析（＝お客様への確認依頼）はアサインされた開発者と管理者（Rules reqUpdateOk。ADMIN_FULL_RIGHTS_PLAN U1。demo は従来どおり）
   const liveRole = useLiveRoleOptional();
-  const canAnalyze = DATA_MODE !== 'live' || liveRole === 'developer';
+  const canAnalyze = DATA_MODE !== 'live' || liveRole === 'developer' || liveRole === 'admin';
   const view: View = analyzing ? 'analyzing' : status === 'draft' ? 'input' : 'result';
   const url = req.answers['q-url'];
   // スマホの入力画面は説明・バッジを出さず、質問までの距離を縮める（保存の状態は下のバーに出る）
@@ -44,7 +44,8 @@ export default function RequirementsPage() {
   // AI 下書き（VITE_FEATURE_AI_REQUIREMENTS。off なら今と同じ。docs/design/AI_REQUIREMENTS_UI.md §1・DEC lead F5）
   // live の開発者が読める案件は memberUids に入っている案件だけ（repositories.tsx の購読条件）＝アサインされた開発者
   const aiRole = liveRole ?? 'client';
-  const isAssigned = liveRole === 'developer';
+  // 管理者は全案件の担当の開発者と同じ（ADMIN_FULL_RIGHTS_PLAN U1）
+  const isAssigned = liveRole === 'developer' || liveRole === 'admin';
   const aiOn = DATA_MODE === 'live' && !!getAiDraftPort() && aiPanelVisible(AI_FLAG_MODE, aiRole, isAssigned);
   const aiGen = aiOn && aiCanGenerate(AI_FLAG_MODE, aiRole, isAssigned);
   // 要件定義（AI 下書き）は別の画面（0.49.1。routes.doc → src/live/pages/LiveRequirementsPage.tsx）。ここはヒアリングだけ

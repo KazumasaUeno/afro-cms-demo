@@ -103,16 +103,45 @@ test('状態 ready: 下書きあり・未確認。前回の作り直しの失敗
   assert.equal(n.lastErrorNote, '前回の作り直しは失敗しました（AI の応答が時間内に返らなかったため中止しました）。表示中の下書きはそのまま使えます。');
 });
 
-test('状態 confirmed＋重ねる注記: answersChanged・configChanged は常に false（Q-U1）・管理者は閲覧のみ', () => {
+test('状態 confirmed＋重ねる注記: answersChanged・configChanged は常に false（Q-U1）・管理者も編集できる（2026-11-26 で閲覧のみを廃止）', () => {
   const v = S.deriveAiDraftState(dev({ doc: doc({ edited: EDITED }), answersHashNow: 'h2', configHashNow: 'c2' }));
   assert.equal(v.key, 'confirmed');
   assert.equal(v.answersChanged, true);
   assert.equal(v.configChanged, false);
   assert.equal(S.deriveAiDraftState(dev({ answersHashNow: null })).answersChanged, false);
+  // ADMIN_FULL_RIGHTS_PLAN U2: 管理者は全案件で担当の開発者と同じ（以前は readOnly=true・canEdit=false を固定していた）
   const admin = S.deriveAiDraftState(dev({ role: 'admin', isAssignedDeveloper: false, doc: doc({ edited: EDITED }) }));
-  assert.equal(admin.readOnly, true);
-  assert.equal(admin.canEdit, false);
+  assert.equal(admin.readOnly, false);
+  assert.equal(admin.canEdit, true);
   assert.equal(admin.canGenerate, true);
+});
+
+test('管理者（U2）: ready・none・failed で編集・生成でき、閲覧のみにならない。生成中は誰も編集しない', () => {
+  const adm = (over) => S.deriveAiDraftState(dev({ role: 'admin', isAssignedDeveloper: false, ...over }));
+  const ready = adm({});
+  assert.equal(ready.key, 'ready');
+  assert.equal(ready.canEdit, true);
+  assert.equal(ready.readOnly, false);
+  assert.equal(adm({ doc: null }).readOnly, false);
+  assert.equal(adm({ doc: null }).canGenerate, true);
+  assert.equal(adm({ doc: doc({ state: 'failed', generated: undefined }) }).canGenerate, true);
+  const running = adm({ doc: doc({ job: { state: 'running', by: 'u-other', leaseUntil: iso(NOW + 60_000) } }) });
+  assert.equal(running.canEdit, false);
+  // internal（社内だけ）でも管理者は生成できる（F5 は変えない＝L-8）。開発者は従来どおり生成なし
+  assert.equal(adm({ flagMode: 'internal' }).canGenerate, true);
+  assert.equal(adm({ flagMode: 'internal' }).canEdit, true);
+  // フラグ off は管理者でも出さない
+  assert.equal(adm({ flagMode: 'off' }).key, 'hidden');
+});
+
+test('canWorkOnProject: 管理者は全案件・開発者は担当だけ・お客様と未ログインは不可', () => {
+  assert.equal(S.canWorkOnProject('admin', false), true);
+  assert.equal(S.canWorkOnProject('admin', true), true);
+  assert.equal(S.canWorkOnProject('developer', true), true);
+  assert.equal(S.canWorkOnProject('developer', false), false);
+  assert.equal(S.canWorkOnProject('client', true), false);
+  assert.equal(S.canWorkOnProject(null, true), false);
+  assert.equal(S.canWorkOnProject(undefined, true), false);
 });
 
 // ---------- 承認を依頼する（§3.4） ----------
@@ -127,8 +156,13 @@ test('承認を依頼するは edited ありだけ（保存中・失敗・生成
   assert.equal(S.approvalBlock({ ...ok, save: 'failed' }), 'save-failed');
   assert.equal(S.approvalBlock({ ...ok, running: true }), 'running');
   assert.equal(S.approvalBlock({ ...ok, reqStatus: 'analyzed' }), 'not-draft');
-  assert.equal(S.approvalBlock({ ...ok, role: 'admin' }), 'not-allowed');
+  // ADMIN_FULL_RIGHTS_PLAN U2: 管理者も承認を依頼できる（以前は 'not-allowed'）。担当外でも同じ
+  assert.equal(S.approvalBlock({ ...ok, role: 'admin' }), null);
+  assert.equal(S.approvalBlock({ ...ok, role: 'admin', isAssignedDeveloper: false }), null);
+  assert.equal(S.approvalBlock({ ...ok, role: 'admin', isAssignedDeveloper: false, hasEdited: false }), 'no-edited');
+  assert.equal(S.approvalBlock({ ...ok, role: 'admin', reqStatus: 'analyzed' }), 'not-draft');
   assert.equal(S.approvalBlock({ ...ok, isAssignedDeveloper: false }), 'not-allowed');
+  assert.equal(S.approvalBlock({ ...ok, role: 'client' }), 'not-allowed');
 });
 
 // ---------- v1 / v2 の描画（§6） ----------

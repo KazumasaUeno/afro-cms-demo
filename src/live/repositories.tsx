@@ -16,11 +16,12 @@ import { REQ_DOC_COPY, reqDocSubmitBlock, submitBlockText } from '@/features/req
 import { isJobRunning } from '@/features/requirements/aiDraft/aiDraftState';
 import { db } from './firebase';
 import {
-  clientFromAccount, clientFromInvite, deepIso, devFromAccount, devFromInvite, INVITE_PREFIX, LIST_LIMIT, MAX_MEMBERS, messageDoc, projectDoc, proposalForSave, proposalV2FromDraft, proposalV3FromDraft, reqDoc, toApprovalLog, toProject,
+  clientFromAccount, clientFromInvite, deepIso, devFromAccount, devFromInvite, INVITE_PREFIX, LIST_LIMIT, MAX_MEMBERS, messageDoc, projectDoc, proposalForSave, proposalV2FromDraft, proposalV3FromDraft, reqDoc, toApprovalLogs, toProject,
   taskDoc, toSession, type MessageDoc, type ProjectDoc, type ReqDoc, type TaskDoc, type TaskStatus,
 } from './model';
 import { TASK_LIMIT, newestTasksInOrder, type NewTaskInput } from './tasks';
 import { cleanConsultText, consultBlock, consultSide, seqId, validateConsultText } from './consult';
+import { cleanProxyNote, validateProxyNote } from './proxyApproval';
 import { PendingAnswers } from './pendingAnswers';
 import { cancelScheduledWrites, type ScheduledWrite } from './pendingWrites';
 import type { LiveSession } from './session';
@@ -144,7 +145,7 @@ export function useLiveTasks(projectId: string | null): Query<TaskDoc[]> {
     onSnapshot(query(tasksCol(projectId!), orderBy('createdAt', 'desc'), limit(TASK_LIMIT)), (s) => next(newestTasksInOrder(s.docs.map(taskDoc))), fail), NO_TASKS);
 }
 
-/** タスクの追加・状態の変更（担当の開発者だけ。Rules の taskCreateOk / taskUpdateOk と同じ形。削除は無い） */
+/** タスクの追加・状態の変更（担当の開発者と admin。Rules の taskCreateOk / taskUpdateOk と同じ形。削除は無い） */
 export function useLiveTaskActions(): {
   create: (projectId: string, input: NewTaskInput) => Promise<void>;
   setStatus: (projectId: string, taskId: string, status: TaskStatus) => Promise<void>;
@@ -153,8 +154,9 @@ export function useLiveTaskActions(): {
   const uid = session.uid;
   const role = session.account.role;
   return useMemo(() => {
+    // 担当の開発者と admin（全案件。2026-11-26 ADMIN_FULL_RIGHTS_PLAN U5）。担当かどうかの実体は Rules（taskCreateOk / taskUpdateOk）
     const guard = () => {
-      if (role !== 'developer') throw new Error('構築タスクを変更できるのは、担当の開発者だけです');
+      if (role !== 'developer' && role !== 'admin') throw new Error('構築タスクを変更できるのは、担当の開発者と管理者だけです');
     };
     return {
       create: async (projectId, input) => {
@@ -191,7 +193,7 @@ export function useLiveMessages(projectId: string | null, max: number): Query<Me
 }
 
 /**
- * 相談を 1 件送る（お客様＝自分の案件、担当の開発者＝返信。admin は送れない）。
+ * 相談を 1 件送る（お客様＝自分の案件、担当の開発者と admin＝返信（admin は全案件。L-6））。
  * runTransaction: 案件を読む → seq = count + 1 → メッセージの作成と consult の更新を同じ書き込みにする（Rules の consultOk / msgCreateOk が両方の一致を強制）。
  * 同時に送られたら片方が競合でやり直し、次の番号になる。通信が切れて結果が分からないまま再送すると二重になりうる（設計 §2.2。送信中はボタンを無効にする）
  */
@@ -289,8 +291,11 @@ function planAnswer(questionId: string, value: AnswerValue): Plan {
   return validateAnswer(q, value, false) ? { kind: 'hold' } : { kind: 'write', value };
 }
 
-/** 承認の記録を作る人（Rules の actorOk: uid・token のメール・accounts の名前） */
-const actor = (s: LiveSession) => ({ actorUid: s.uid, actorName: s.account.name, actorEmail: s.email });
+/**
+ * 承認の記録を作る人（Rules の actorOk: uid・token のメール・accounts の名前）。
+ * actorRole はいまの役割（Rules: あれば roleOf と一致。admin の文書では必須。ADMIN_FULL_RIGHTS_PLAN §2・§7-3）
+ */
+const actor = (s: LiveSession) => ({ actorUid: s.uid, actorName: s.account.name, actorEmail: s.email, actorRole: s.account.role });
 
 export function useLiveRepositoriesImpl(): Repositories {
   const data = useLiveData();
@@ -518,10 +523,20 @@ export function useLiveRepositoriesImpl(): Repositories {
       approvals: {
         useHistory: (projectId) => useSnapshot<ApprovalLog[]>(projectId ? `a:${projectId}` : null, (next, fail) =>
           onSnapshot(query(collection(db, 'projects', projectId, 'approvals'), orderBy('at', 'desc'), limit(LIST_LIMIT)),
-            (s) => next(s.docs.map((d) => toApprovalLog(projectId, d))), fail), NO_LOGS),
+            (s) => next(toApprovalLogs(projectId, s.docs)), fail), NO_LOGS),
         approveRequirements: async (projectId, by) => {
-          // live の承認はお客様本人だけ（§25-2・§7.3。代理承認は作らない）
-          if (by !== 'client' || session.account.role !== 'client') throw new Error('要件定義書の承認はお客様ご本人だけが行えます');
+          // 承認はお客様本人（by='client'）か、管理者の代理（by={ proxyNote }。2026-11-26 ADMIN_FULL_RIGHTS_PLAN L-2・§2）だけ。開発者は承認しない
+          const role = session.account.role;
+          const proxy = typeof by === 'object' && by !== null;
+          if (proxy ? role !== 'admin' : by !== 'client' || role !== 'client') {
+            throw new Error(proxy ? '代理で承認できるのは管理者だけです' : '要件定義書の承認はお客様ご本人だけが行えます');
+          }
+          // 理由は送る前に Rules が拒否する文字を除いて検査する（§7-2）
+          const note = proxy ? cleanProxyNote(by.proxyNote) : '';
+          if (proxy) {
+            const err = validateProxyNote(note);
+            if (err) throw new Error(err);
+          }
           let rev = -1;
           try {
             await runTransaction(db, async (tx) => {
@@ -533,13 +548,15 @@ export function useLiveRepositoriesImpl(): Repositories {
               const ref = apprRef(projectId, rev, 'approve');
               const rs = await tx.get(reqRef(projectId));
               const raw = (rs.data() ?? {}) as DocumentData;
+              // 代理: side は 'afro'（本人の行動と数えない）・proxy・note・actorRole 'admin'。requirements に approvedVia:'proxy'（本人の承認は項目なし）
               tx.set(ref, {
-                schemaVersion: 1, kind: 'requirements', action: 'approve', revision: rev, side: 'client', ...actor(session), at: serverTimestamp(),
+                schemaVersion: 1, kind: 'requirements', action: 'approve', revision: rev, side: proxy ? 'afro' : 'client', ...actor(session), at: serverTimestamp(),
+                ...(proxy ? { proxy: true, note } : {}),
                 answers: raw.answers ?? {}, ...(raw.proposal ? { proposal: raw.proposal } : {}),
               });
               tx.update(projRef(projectId), {
                 'requirements.status': 'approved', 'requirements.approvedAt': serverTimestamp(), 'requirements.approvedBy': uid,
-                'requirements.approvalId': ref.id, ...stamp(uid),
+                'requirements.approvalId': ref.id, ...(proxy ? { 'requirements.approvedVia': 'proxy' } : {}), ...stamp(uid),
               });
             });
           } catch (e) {

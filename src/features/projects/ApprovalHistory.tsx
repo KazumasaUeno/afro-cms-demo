@@ -6,6 +6,7 @@ import { useRepositories } from '@/repositories';
 import { downloadText } from '@/services/download';
 import { jstStamp as stamp, toCsv } from '@/services/csv';
 import { tokens } from '@/theme/tokens';
+import type { ApprovalLog } from '@/types';
 
 /**
  * 承認の履歴（日時つき）。後で「承認しましたよね」と示せる証跡として、管理者画面（プロジェクト詳細）と開発者画面の両方に出す。
@@ -14,6 +15,9 @@ import { tokens } from '@/theme/tokens';
 
 const SIDE = { client: { label: 'お客様', tone: 'success' }, afro: { label: 'アフロ', tone: 'info' } } as const;
 const SHOW = 8;
+
+/** CSV の操作の欄に足す代理承認の理由（代理でなければ空） */
+const proxyCsv = (p: ApprovalLog['proxy']) => (p ? `（代理の理由：${p.note}${p.sameAsRequester ? '・確認の依頼と同じ人が代理で承認' : ''}）` : '');
 
 export function ApprovalHistory({ projectId, siteName }: { projectId: string; siteName: string }) {
   // 依頼の行の補い（demo の approvalRequests）は repository の demo 実装が行う（ここで DemoStore を読まない＝live でも動く。0.47.4）
@@ -24,7 +28,7 @@ export function ApprovalHistory({ projectId, siteName }: { projectId: string; si
   const shown = all ? logs : logs.slice(0, SHOW);
 
   const download = () => {
-    const rows = [['日時（日本時間）', '立場', '操作した人', '操作', '対象'], ...logs.map((l) => [stamp(l.at), SIDE[l.side].label, l.actor, l.action, l.target])];
+    const rows = [['日時（日本時間）', '立場', '操作した人', '操作', '対象'], ...logs.map((l) => [stamp(l.at), SIDE[l.side].label, l.actor, l.action + proxyCsv(l.proxy), l.target])];
     downloadText(`承認履歴_${siteName}.csv`, toCsv(rows), 'text/csv;charset=utf-8');
   };
 
@@ -57,6 +61,12 @@ export function ApprovalHistory({ projectId, siteName }: { projectId: string; si
                   <Typography variant="body2" sx={{ fontWeight: 650, overflowWrap: 'anywhere' }}>{l.action}</Typography>
                 </Stack>
                 <Typography variant="caption" sx={{ display: 'block', overflowWrap: 'anywhere' }}>{l.target}・{l.actor}</Typography>
+                {/* 代理承認（live だけ。demo の記録は proxy を持たない）: 理由と、依頼と同じ人が承認したことを出す（ADMIN_FULL_RIGHTS_PLAN §7-5） */}
+                {l.proxy && (
+                  <Typography variant="caption" data-testid="approval-proxy-note" sx={{ display: 'block', overflowWrap: 'anywhere', color: tokens.color.warningInk }}>
+                    代理の理由：{l.proxy.note}{l.proxy.sameAsRequester ? '（確認の依頼と同じ人が代理で承認）' : ''}
+                  </Typography>
+                )}
               </Box>
             </Box>
           ))}

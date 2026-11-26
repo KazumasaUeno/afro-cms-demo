@@ -9,6 +9,7 @@ export const PAST = Timestamp.fromDate(new Date('2026-10-01T00:00:00Z'));
 export const USERS = {
   admin1: { role: 'admin', name: '管理 一郎', email: 'admin1@afro.example' },
   admin2: { role: 'admin', name: '管理 二郎', email: 'admin2@afro.example' },
+  adminOff: { role: 'admin', name: '無効 管理', email: 'adminoff@afro.example', status: 'disabled' },
   devA: { role: 'developer', name: '社内 開発A', email: 'deva@afro.example', affiliation: 'internal', devRole: 'フロントエンド' },
   devB: { role: 'developer', name: '協力 開発B', email: 'devb@partner.example', affiliation: 'partner', partnerCompany: '協力会社X' },
   devC: { role: 'developer', name: '社内 開発C', email: 'devc@afro.example', affiliation: 'internal' },
@@ -102,13 +103,36 @@ export function inviteDoc(fields) {
   return { schemaVersion: 1, status: 'invited', createdAt: T0, createdBy: 'admin1', ...fields };
 }
 
+// admin の文書は actorRole: 'admin' が必須（ADMIN_FULL_RIGHTS_PLAN §2・R-5）。画面（live の repositories）も同じ形で書く
 export function approvalDoc(uid, action, revision, extra = {}) {
   const u = USERS[uid];
   return {
     schemaVersion: 1, kind: 'requirements', action, revision,
     side: u.role === 'client' ? 'client' : 'afro',
-    actorUid: uid, actorName: u.name, actorEmail: u.email, at: serverTimestamp(), ...extra,
+    actorUid: uid, actorName: u.name, actorEmail: u.email, at: serverTimestamp(),
+    ...(u.role === 'admin' ? { actorRole: 'admin' } : {}), ...extra,
   };
+}
+
+export const PROXY_NOTE = '2026-11-26 にお客様（顧客 一子 様）と電話で内容を確認し、承認の意思を確認しました';
+
+/** admin の代理承認（analyzed → approved。approvedVia: 'proxy'＋承認文書 proxy: true・note・side 'afro'。§2 の契約） */
+export function proxyApproveBatch(db, { uid = 'admin1', pid = 'p1', rev = 1, answers = ANSWERS, proposal = PROPOSAL, note = PROXY_NOTE, mutate = {} } = {}) {
+  const aid = mutate.aid ?? `requirements-r${rev}-approve`;
+  const b = writeBatch(db);
+  if (!mutate.skipProject) {
+    b.update(doc(db, `projects/${pid}`), mutate.project ?? {
+      'requirements.status': 'approved', 'requirements.approvedAt': serverTimestamp(),
+      'requirements.approvedBy': uid, 'requirements.approvalId': `requirements-r${rev}-approve`, 'requirements.approvedVia': 'proxy', ...stamp(uid),
+    });
+  }
+  if (!mutate.skipLog) {
+    const log = mutate.log ?? approvalDoc(uid, 'approve', rev, { answers, proposal, proxy: true, note });
+    for (const [k, v] of Object.entries(log)) if (v === undefined) delete log[k]; // undefined = その項目を落とす
+    b.set(doc(db, `projects/${pid}/approvals/${aid}`), log);
+  }
+  if (mutate.req) b.update(doc(db, `projects/${pid}/requirements/current`), mutate.req);
+  return b.commit();
 }
 
 /** 本人のトークン（email_verified 既定 true）で Firestore を返す */

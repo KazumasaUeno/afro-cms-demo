@@ -68,7 +68,8 @@ export function useDemoRepositories(): Repositories {
           const { state } = useDemo();
           return ready(useMemo(() => approvalHistoryOf(state, projectId), [state, projectId]));
         },
-        approveRequirements: (_projectId, by) => run({ type: 'approveRequirements', by }),
+        // 代理承認（{ proxyNote }）は live だけ（demo の画面は出さない。ADMIN_FULL_RIGHTS_PLAN L-7）
+        approveRequirements: (_projectId, by) => (typeof by === 'object' ? Promise.reject(new Error('デモでは代理承認を扱いません')) : run({ type: 'approveRequirements', by })),
       },
       accounts: {
         useClientAccounts: () => ready(clientAccountsState(useDemo().state)),

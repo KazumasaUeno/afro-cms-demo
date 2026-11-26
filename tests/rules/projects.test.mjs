@@ -211,16 +211,18 @@ describe('projects: update（基本情報・アサイン・アーカイブ。Low
     await assertFails(upd('admin1', { memberUids: Array.from({ length: 21 }, (_, i) => `u${i}`), ...stamp('admin1') }));
     await assertFails(upd('admin1', { memberUids: 'devA', ...stamp('admin1') }));
   });
-  test('admin は基本情報・要件の状態を変えられない（§25-1）', async () => {
-    await assertFails(upd('admin1', { siteName: 'x', ...stamp('admin1') }));
+  // 2026-11-26 ユーザー決定（ADMIN_FULL_RIGHTS_PLAN L-1）: admin は担当外の案件でも基本情報を変えられる。要件の状態は承認の文書なしには変えられない
+  test('admin は基本情報を変えられる（L-1）／要件の状態は直接変えられない', async () => {
+    await assertSucceeds(upd('admin1', { siteName: 'x', ...stamp('admin1') }));
     await assertFails(upd('admin1', { 'requirements.status': 'approved', ...stamp('admin1') }));
   });
   test('Low-2: 開発者はアーカイブ・解除できる', async () => {
     await assertSucceeds(upd('devA', { archived: true, ...stamp('devA') }));
     await assertSucceeds(upd('devA', { archived: false, ...stamp('devA') }));
   });
-  test('Low-2: admin の archived 書き込み → 拒否', async () => {
-    await assertFails(upd('admin1', { archived: true, ...stamp('admin1') }));
+  test('L-1: admin はアーカイブ・解除できる（Low-2 を置き換え）', async () => {
+    await assertSucceeds(upd('admin1', { archived: true, ...stamp('admin1') }));
+    await assertSucceeds(upd('admin1', { archived: false, ...stamp('admin1') }));
   });
   test('archived が bool でない → 拒否', async () => {
     await assertFails(upd('devA', { archived: 'yes', ...stamp('devA') }));

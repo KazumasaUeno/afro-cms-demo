@@ -49,7 +49,8 @@ export default function LiveRequirementsPage() {
 
   const role = account.role;
   const aiRole = role;
-  const isAssigned = role === 'developer';
+  // 開発者が読める案件は memberUids の案件だけ＝担当。管理者は全案件の担当の開発者と同じ（ADMIN_FULL_RIGHTS_PLAN U1）
+  const isAssigned = role === 'developer' || role === 'admin';
   const aiOn = DATA_MODE === 'live' && !!getAiDraftPort() && aiPanelVisible(AI_FLAG_MODE, aiRole, isAssigned);
   const ai = useAiDraft({
     projectId: req.projectId, answers: req.answers, reqStatus: status, role: aiRole, isAssignedDeveloper: isAssigned, uid, flagMode: AI_FLAG_MODE,

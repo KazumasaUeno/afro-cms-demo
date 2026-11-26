@@ -5,7 +5,7 @@ import type { LiveRole } from './session';
 
 /**
  * live の相談の導出（docs/design/LIVE_DASHBOARD_TASKS_CONSULT.md §1.3・§2.2・§4・U3）。画面（LiveConsultPage・ダッシュボード）が使う。
- * 権限の実体は firestore.rules の consultOk / msgCreateOk（送れるのはその案件のお客様と担当の開発者全員、admin は見るだけ、
+ * 権限の実体は firestore.rules の consultOk / msgCreateOk（送れるのはその案件のお客様と担当の開発者全員と admin（2026-11-26〜）、
  * 編集・削除なし、アーカイブした案件へは送れない、2 秒に 1 件・1 案件 5,000 件・1 件 1000 字）。
  * ここは表示の出し分けと、Rules に送る前の検査（Rules と同じ条件）だけ。既読は持たない（未対応＝最後がお客様）
  */
@@ -19,10 +19,14 @@ export function seqId(n: number): string {
   return String(n).padStart(6, '0');
 }
 
-/** 送った側（役割から決まる。firestore.rules sideOf と同じ）。送れない人は null */
+/**
+ * 送った側（役割から決まる。firestore.rules sideOf と同じ）。送れない人は null。
+ * admin は全案件で 'afro' 側として返信できる（担当の開発者と同じ。2026-11-26 ADMIN_FULL_RIGHTS_PLAN L-6）
+ */
 export function consultSide(role: LiveRole, uid: string, accountProjectId: string | undefined, p: Pick<ProjectDoc, 'id' | 'memberUids'>): 'client' | 'afro' | null {
   if (role === 'client') return accountProjectId === p.id ? 'client' : null;
   if (role === 'developer') return p.memberUids.includes(uid) ? 'afro' : null;
+  if (role === 'admin') return 'afro';
   return null;
 }
 
@@ -34,7 +38,7 @@ export const hasReply = (p: Pick<ProjectDoc, 'consult'>): boolean => p.consult?.
 
 /**
  * 未対応の案件の数（メッセージの数ではない。§4）。
- * 開発者は担当の案件（＝返信する案件。全員が返信者）、admin は全案件（見るだけ）。お客様は 0（対象外）。
+ * 開発者は担当の案件（＝返信する案件。全員が返信者）、admin は全案件（admin も返信できる。2026-11-26〜）。お客様は 0（対象外）。
  * アーカイブした案件は数えない（返信できない＝対応しようがない。2026-11-25 lead SAFE ASSUMPTION。一覧の行の「未対応」の印はそのまま出す）
  */
 export function unansweredCount(docs: readonly Pick<ProjectDoc, 'consult' | 'memberUids' | 'archived'>[], role: LiveRole, uid: string): number {

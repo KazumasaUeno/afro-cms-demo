@@ -1,6 +1,6 @@
 /**
  * saveAiDraftEdits（onCall。計画 §4 U1 の代替 F-a）: 開発者の edited を検査して Admin SDK で書く（aiDrafts はクライアントから書けない）。
- * - アサインされた開発者だけ（admin・お客様は不可）。フラグの内側（editAllowed）
+ * - admin とアサインされた開発者（お客様・担当外は不可。authz.assertCanEdit。2026-11-26 に admin を追加）。フラグの内側（editAllowed）
  * - transaction で 要件が draft・aiDraft と generated があること・生成中（job running）でないこと を確かめる（submit と同時に保存させない）
  * - 書くのは edited / editedAt / editedBy / updatedAt / updatedBy と、v3 だけ submitReady（サーバー欄に触れない）
  * - submitReady（v3）: { requiredOk, templateVersion }。必須の章（REQ_DOC_REQUIRED_CHAPTERS）が埋まっているかを edited と同じ書き込みで記録し、
