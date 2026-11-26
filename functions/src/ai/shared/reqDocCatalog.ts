@@ -16,7 +16,7 @@
  *   'derived:openItems'＝「未確定」の項目の一覧（サーバーが集める）。
  *   fill が ai の項目の質問 ID は AI_SENT_QUESTION_IDS の中だけ（q-infra・q-dns-* は AI へ送らない）
  */
-import type { AiSiteCheckKey, ReqDocFill, ReqDocKubun } from './aiDraft';
+import type { AiSiteCheckKey, ProposalV3Doc, ReqDocFill, ReqDocKubun } from './aiDraft';
 
 export const REQ_DOC_TEMPLATE = { id: 'TPL-WEB-REQ', version: '0.1', date: '2026-11-24' } as const;
 
@@ -237,4 +237,26 @@ export const REQ_DOC_CATALOG: Record<string, ReqDocCatalog> = {
 /** 版のカタログ（無い版は undefined。表示側は「旧版の項目」として扱う＝設計 §6.1） */
 export function reqDocCatalogOf(version: string): ReqDocCatalog | undefined {
   return Object.prototype.hasOwnProperty.call(REQ_DOC_CATALOG, version) ? REQ_DOC_CATALOG[version] : undefined;
+}
+
+/**
+ * お客様へ出す前に必ず埋める章（版ごと）。[DECISION] ユーザー 2026-11-25「推奨で」（REQUIREMENTS_DOC_TEMPLATE.md §7 PM 条件 2）: 01・02・19・21。
+ * 他の章は「未確定」のまま提出できる。saveAiDraftEdits が保存のたびに reqDocRequiredOk で判定して aiDraft の submitReady に書き、
+ * Rules（proposalV3Ok）が submit の条件にする。画面（U4）も同じ関数で「承認を依頼する」の可否を出す
+ */
+export const REQ_DOC_REQUIRED_CHAPTERS: Record<string, readonly string[]> = {
+  '0.1': ['c01', 'c02', 'c19', 'c21'],
+};
+
+/** 必須の章の全項目が「確定案」か「対象外」で、文が空白だけでないか。版のカタログか必須の章が無ければ false */
+export function reqDocRequiredOk(doc: Pick<ProposalV3Doc, 'items'> | null | undefined, version: string): boolean {
+  const catalog = reqDocCatalogOf(version);
+  const chapters = Object.prototype.hasOwnProperty.call(REQ_DOC_REQUIRED_CHAPTERS, version) ? REQ_DOC_REQUIRED_CHAPTERS[version] : undefined;
+  if (!catalog || !chapters || !chapters.length || !doc || !doc.items) return false;
+  const required = catalog.items.filter((i) => chapters.includes(i.chapterId));
+  if (!required.length) return false;
+  return required.every((i) => {
+    const it = Object.prototype.hasOwnProperty.call(doc.items, i.id) ? doc.items[i.id] : undefined;
+    return !!it && (it.status === 'proposed' || it.status === 'na') && typeof it.text === 'string' && it.text.trim() !== '';
+  });
 }

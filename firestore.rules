@@ -553,9 +553,29 @@ service cloud.firestore {
                  'competitors': g.competitors, 'siteCheck': g.siteCheck, 'origin': g.origin,
                  'summary': e.summary, 'points': e.points, 'draft': e.draft};
     }
-    // 版ごとの受け付け（B-M4）: version を持たない = v1（従来の validProposal）、version == 2 = v2。それ以外は拒否
+    // v3 の submit（docs/design/REQUIREMENTS_DOC_TEMPLATE.md §3.3・U3）: v2 と同じく中身を再検証せず、generated のサーバー欄（flags を除く）＋
+    // template ＋ edited の 3 欄（summary・points・doc）とマップリテラル 1 本の等式で一致することだけを見る。
+    // doc の検査（カタログとキーの過不足・固定は std_pending だけ・by と evidence は generated のまま・AI追加は追加不可・上限）は
+    // edited を書ける唯一の経路 callable saveAiDraftEdits（functions/src/ai/reqDocEditable.ts）と worker の再検証が行う（F-a）。
+    // generated が v3 でない（v2 の下書きに v3 の形を出す）・edited に doc が無い → 不一致か評価エラー＝拒否。
+    // 必須の章のゲート（security-engineer U3 監査の条件・lead DECISION 2026-11-26）: saveAiDraftEdits が edited と同じ書き込みで置く submitReady
+    // （requiredOk＝01・02・19・21 章の全項目が確定案か対象外で文あり、templateVersion＝判定に使ったひな型の版）が true で版が generated と一致すること。
+    // submitReady が無い（v3 以前に保存した edited・discardEdits の後）→ 拒否
+    // 変数名を v2（ai・g・e）と分けるのは、tests/rules/mutation.test.mjs の変異のアンカー（v2 の式の文字列）を 1 件に保つため
+    function proposalV3Ok(p, pid) {
+      let a3 = getAfter(aiDraftPath(pid)).data;
+      let g3 = a3.generated;
+      let e3 = a3.edited;
+      return a3.state == 'ready' && g3.version == 3 && g3.template.id == 'TPL-WEB-REQ'
+        && a3.get('submitReady', {}).get('requiredOk', false) == true && a3.submitReady.templateVersion == g3.template.version
+        && p == {'version': 3, 'hostname': g3.hostname, 'issue': g3.issue, 'purposes': g3.purposes, 'improves': g3.improves,
+                 'competitors': g3.competitors, 'siteCheck': g3.siteCheck, 'origin': g3.origin, 'template': g3.template,
+                 'summary': e3.summary, 'points': e3.points, 'doc': e3.doc};
+    }
+    // 版ごとの受け付け（B-M4）: version を持たない = v1（従来の validProposal）、version == 3 = v3、それ以外の version は v2 の等式
+    // （version == 2 のときだけ一致しうる）。v1・v2 の保存済みの文書はそのまま有効（バックフィルしない）
     function validStoredProposal(p, pid) {
-      return p is map && (('version' in p) ? proposalV2Ok(p, pid) : validProposal(p));
+      return p is map && (!('version' in p) ? validProposal(p) : (p.version == 3 ? proposalV3Ok(p, pid) : proposalV2Ok(p, pid)));
     }
 
     // 管理者の横断一覧（collectionGroup('approvals')）
