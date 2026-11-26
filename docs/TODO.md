@@ -80,3 +80,8 @@
 - [ ] **Anthropic API キーの期限 2027-11-20 15:00 JST**（キー名 `afro-cms-functions-3`（2026-11-20 に 2 本を漏えいのため削除し作り直し。Secret は v3 のみ有効）、Workspace `afro-cms`（個人の組織・地域 US・月 $20 上限）、2026-11-20 作成。連携済みアカウントは個人なので、組織を離れると無効になる）。期限の 1 か月前に作り直して `ANTHROPIC_API_KEY`（Secret Manager）を差し替え、関数をデプロイし直す。手順は `docs/operations/RUNBOOK_FIREBASE.md` §9.2
 
 - [ ] test:functions の不安定（2026-11-25）: エミュレータが関数の定義を 60 秒で読み込めず（`User code failed to load ... Timeout after 60000`）、provisionInvitee 系 16 件が「Function a... is not valid JSON」で落ちることがある。デプロイ用スクリプトが止めるので本番には出ない（安全側）。再実行で通る。恒久対応の候補: test-functions.mjs で FUNCTIONS_DISCOVERY_TIMEOUT を延ばす／読み込み完了を待ってからテストを始める
+
+## reqdoc（2026-11-26 セキュリティ確認 U3 より）
+
+- [ ] T-02 aiDrafts の 90 日削除の実行者を作る（v3 は約 2〜3 倍の大きさ）。担当: backend-engineer。リリースの判断（機能フラグを開く）までに
+- [ ] T-03 承認の一覧（approvals）の購読件数を絞る、`proposal`・`answers` を単一フィールド Index の除外にする（版ごとに約 275KB の写し）
