@@ -2,8 +2,8 @@ import type { ReactNode } from 'react';
 import { Box, Button, ButtonBase, Stack, Typography } from '@mui/material';
 import { ArrowRight, BadgeCheck, Clock, Eye, MessageSquare, Send, UserRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import type { ISODate, Project } from '@/types';
-import { useDemo } from '@/store/DemoStore';
+import type { DemoState, ISODate, Project } from '@/types';
+import { useDemoOptional } from '@/store/DemoStore';
 import { DATA_MODE, useRepositories } from '@/repositories';
 import { StatusPill, Surface } from '@/components/ui';
 import { relativeTime } from '@/services/time';
@@ -48,8 +48,10 @@ function SectionLabel({ id, children, count }: { id: string; children: ReactNode
  * プロジェクト詳細（管理者画面・開発者画面の両方）で使う。
  * 見た目は上の「制作の8段階」の承認の欄に揃える（お願い中＝warningSoft のカード、済んだこと＝日付つきのタイムライン。0.42.0）。
  */
-export function ClientStatusPanel({ project }: { project: Project }) {
-  const { state } = useDemo();
+export function ClientStatusPanel({ project, view }: { project: Project; /** live の案件の state（Firestore の要件・承認から作る。2026-11-26）。省略時は DemoStore */ view?: DemoState }) {
+  const demo = useDemoOptional();
+  const state = view ?? demo?.state;
+  if (!state) throw new Error('ClientStatusPanel needs view or DemoStoreProvider');
   const { projects } = useRepositories();
   const navigate = useNavigate();
   // 行き先はいまのエリアの中（開発者画面に無い画面の行は押せない表示にする。0.26.0）

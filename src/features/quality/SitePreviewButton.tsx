@@ -35,3 +35,19 @@ export function SitePreviewButton({ checkScreen = '品質チェック', projectI
   // 押せないボタンにも理由を出す（disabled の要素はマウスの出来事を受けないので span で包む）
   return design ? button : <Tooltip title="デザインが採用されると見られます"><span>{button}</span></Tooltip>;
 }
+
+/**
+ * デザインがまだ無い案件の「制作中のサイトを見る」（押せない。上の SitePreviewButton の採用前と同じ見た目）。
+ * live はデザインのデータを持たない（BACKEND_FIREBASE §14）ので、プロジェクト詳細はこれを出す（2026-11-26 live をデモと同じ見た目に）
+ */
+export function SitePreviewPendingButton({ size }: { size?: 'small' | 'medium' }) {
+  return (
+    <Tooltip title="デザインが採用されると見られます">
+      <span>
+        <Button component="a" target="_blank" rel="noopener noreferrer" variant="outlined" size={size} startIcon={<ExternalLink size={16} />} disabled sx={{ flexShrink: 0 }}>
+          制作中のサイトを見る
+        </Button>
+      </span>
+    </Tooltip>
+  );
+}

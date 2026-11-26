@@ -6,6 +6,7 @@
 - [ ] **AI 下書きの「AI 設定が変わった」注記（画面設計 `docs/design/AI_REQUIREMENTS_UI.md` §2 状態 8・Q-U1）**: クライアントが今の `configHash` を知る手段（callable の返り値・公開の設定文書・ビルド時定数）が無いため、`aiDraftState.ts` は `configChanged` を常に false にしている（DEC lead 2026-11-24）。手段を決めたら `deriveAiDraftState` の `configHashNow` を使う
 - [ ] **AI 下書きの `aiDrafts` の生出力を期限で消すバッチ**（設計 `docs/design/AI_REQUIREMENTS.md` §7・Q-7。案は承認から 90 日で `generated` を削除。**LEGAL REVIEW REQUIRED**・期間は未確定）: 定期実行の関数（Cloud Scheduler）は未実装。お客様公開（`AI_REQUIREMENTS_MODE=on`）は、これが実装済みか、ユーザーの書面での受け入れが `docs/legal/AI_REQUIREMENTS_LEGAL_CLEARANCE.md` にあるまで出さない（計画 §5 L-c）
 - [ ] **AI 下書きの callable の App Check**: `requestRequirementsDraft`・`saveAiDraftEdits` も全体の `ENFORCE_APP_CHECK`（`functions/src/index.ts`。今は false）に従う。下の「App Check を有効にして enforce」と同時に true にする（お客様公開＝段 5 の前に済ませる）
+- [ ] **要件定義書の「表示／編集」切り替えで編集が残ることの描画テスト**（review 2026-11-26 #8。`docs/reviews/2026-11-26-live-detail-and-reqdoc-polish.md`）: 今の `tests/unit/reqDocU4Review.test.mjs` はソースの正規表現だけ。描画テストの基盤（jsdom 等＝依存追加は lead 承認）を入れるときに「編集→表示→編集」で値が残ることを確かめる
 - [ ] **表示速度の実測（PageSpeed Insights 等）は v1 で見送り**（ユーザー 2026-11-20・設計 Q-3。新しい外部サービス＝ユーザー判断）。それまでサイト診断は基本チェックだけで、速度の数値を出さない
 - [ ] **AI 下書きのクラウド作業（U5。未実施）**: `docs/operations/RUNBOOK_FIREBASE.md` §9.10 の G-0〜G-7 をユーザーの GO ごとに行い、§9.9 の Release Gate の出力を記録する（段 4 の前）
 
