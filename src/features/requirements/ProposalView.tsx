@@ -58,6 +58,8 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
   const client = variant === 'client';
   const [confirmApprove, setConfirmApprove] = useState(false);
   const [approving, setApproving] = useState(false);
+  // PDF の作成中は押せなくし、文言で知らせる（REQDOC_U4_UI.md §4。以前は downloadRequirementsDoc の pdfBusy で黙って無視していた）
+  const [pdfBusy, setPdfBusy] = useState(false);
   const proposal: StoredProposal = useMemo(() => req.proposal ?? buildProposal(req.answers, req.competitors), [req.proposal, req.answers, req.competitors]);
   // v2（AI 下書きを開発者が確認したもの。AI_REQUIREMENTS_UI.md §6）はサイトスコアを出さない（live・demo とも）
   // 版の判定は v3 → v2 → v1（U4。v3 を v1 として扱わない）。v3 は v2 と同じ表紙・改善ポイントに、ひな型の章（ReqDocChapters）を足す
@@ -198,7 +200,15 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
               {/* 差し戻す（回答を残して入力へ戻す）は demo・live 共通。demo は承認待ちの間だけ（0.29.3） */}
               {canReset && (live || req.status === 'analyzed') && <Button variant="text" startIcon={<RotateCcw size={16} />} onClick={() => setConfirmReset('sendBack')}>差し戻す</Button>}
               {canReset && !live && <Button variant="text" onClick={() => setConfirmReset('reset')}>回答をやり直す</Button>}
-              <Button variant="outlined" startIcon={<Download size={16} />} onClick={() => void downloadRequirementsDoc({ requirements: req, projects: projectList, schedule }, toast)}>要件定義書をダウンロード（PDF）</Button>
+              <Button
+                variant="outlined" startIcon={<Download size={16} />} disabled={pdfBusy}
+                onClick={() => {
+                  setPdfBusy(true);
+                  void downloadRequirementsDoc({ requirements: req, projects: projectList, schedule }, toast).finally(() => setPdfBusy(false));
+                }}
+              >
+                {pdfBusy ? REQ_DOC_COPY.pdfBusy : '要件定義書をダウンロード（PDF）'}
+              </Button>
               {approved ? (
                 <Box
                   role="status"
