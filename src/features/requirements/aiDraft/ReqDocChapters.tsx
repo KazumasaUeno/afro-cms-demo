@@ -5,13 +5,14 @@ import { tokens } from '@/theme/tokens';
 import type { ProposalV3 } from '@/types/aiDraft';
 import { KeyValueRows, muted } from '../RequirementsDocSections';
 import { FlaggedText } from './ProposalV2Body';
-import { buildReqDocView, chapter23Rows, countChips, flagsFor, isKubunEditable, removeAdded, REQ_DOC_COPY, type ReqDocApprovalState, type ReqDocRow } from './reqDocView';
+import { buildReqDocView, countChips, flagsFor, isKubunEditable, removeAdded, REQ_DOC_COPY, type ReqDocApprovalState, type ReqDocRow } from './reqDocView';
 import { AddedEditCell, ItemEditCell, NotesEditCell, type ReqDocEdit } from './ReqDocV3Edit';
 
 /**
- * 提案 v3 の「AI 要件定義（会社標準ひな型）」（docs/design/REQDOC_U4_UI.md §2）。「1. 改善提案」タブの中、改善ポイントの下。
- * - デモの「2. ヒアリングの回答」と同じ形: 章ごとに Surface＋SectionTitle（sub に「確定 n / m」）＋KeyValueRows。全章を開いたまま縦に並べる（開閉・目次は作らない）
- * - 表示はプレーンテキスト（文字ノードだけ）。行に根拠・書いた元・「AI追加」は無い（buildReqDocView が入れない＝お客様に出さない。Q-8）
+ * 提案 v3 の「AI 要件定義（会社標準ひな型）」（docs/design/REQDOC_U4_UI.md §2・最終節）。「1. 改善提案」タブの中、改善ポイントの下。
+ * - 文は Word のひな型の文章のまま（表紙 → 本書の目的と利用方法 → 01〜22 章 → 23 章。全章・全項目をひな型の順に。文の正は shared/ai/reqDocCatalog.ts の REQ_DOC_TEXT）
+ * - 枠はデモの「2. ヒアリングの回答」と同じ: 章ごとに Surface＋SectionTitle（sub に「確定 n / m」）＋KeyValueRows（見出し「項目  ｜ 区分」→ ひな型の文）。開閉・目次は作らない
+ * - 表示はプレーンテキスト（文字ノードだけ）。行に根拠・書いた元・「AI追加」は無い（buildReqDocView が入れない＝お客様に出さない。Q-8）。状態のチップは文の横に出すだけ
  * - `flags`（要確認の数字）は開発者の下書きの確認からだけ渡す。お客様・承認後の表示では渡さない
  */
 export function ReqDocChapters({ proposal, approval, flags, edit }: {
@@ -22,7 +23,8 @@ export function ReqDocChapters({ proposal, approval, flags, edit }: {
   const [askDelete, setAskDelete] = useState<string | null>(null);
   const editing: ReqDocEdit | undefined = edit ? { ...edit, onAskDelete: setAskDelete } : undefined;
   const version = proposal.template?.version ?? '';
-  const view = buildReqDocView(proposal.doc, version);
+  const view = buildReqDocView(proposal.doc, version, approval);
+  const line = (s: string, key?: string) => <Typography key={key ?? s} variant="body2" sx={{ color: tokens.color.ink }}>{s}</Typography>;
   const value = (r: ReqDocRow) => (
     <Stack spacing={0.5} sx={{ minWidth: 0 }}>
       {r.chips.length > 0 && (
@@ -51,16 +53,30 @@ export function ReqDocChapters({ proposal, approval, flags, edit }: {
   return (
     <Stack spacing={2}>
       <Box>
-        <Typography variant="h4" component="h2" sx={{ mb: 0.5 }}>{REQ_DOC_COPY.sectionTitle}</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{REQ_DOC_COPY.sectionBody}</Typography>
+        <Typography variant="h4" component="h2" sx={{ mb: 1 }}>{REQ_DOC_COPY.sectionTitle}</Typography>
         <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
           {countChips(view.counts).map((c) => <StatusPill key={c.label} tone={c.tone} dot={false}>{c.label}</StatusPill>)}
         </Stack>
       </Box>
-      {view.catalogMissing ? (
+      {view.catalogMissing || !view.cover || !view.purpose || !view.closing ? (
         <Surface>{muted(REQ_DOC_COPY.catalogMissing(version))}</Surface>
       ) : (
         <>
+          {/* 表紙（ひな型の 1 行目・版・案件名〜改訂履歴） */}
+          <Surface>
+            <SectionTitle title={view.cover.title} />
+            <Stack spacing={0.5}>
+              <Typography variant="caption" sx={{ display: 'block' }}>{view.cover.versionLine}</Typography>
+              {view.cover.lines.map((l) => line(l))}
+            </Stack>
+          </Surface>
+          <Surface>
+            <SectionTitle title={view.purpose.title} />
+            <Stack spacing={1}>
+              {line(view.purpose.body)}
+              {line(view.purpose.legend)}
+            </Stack>
+          </Surface>
           {view.chapters.map((ch) => (
             <Surface key={ch.id}>
               <SectionTitle
@@ -72,11 +88,13 @@ export function ReqDocChapters({ proposal, approval, flags, edit }: {
                   </Stack>
                 ) : <Typography variant="caption">{REQ_DOC_COPY.chapterSub(ch.confirmed, ch.total)}</Typography>}
               />
+              <Box sx={{ mb: 1.5 }}>{line(ch.intro)}</Box>
               <KeyValueRows rows={[
-                ...ch.rows.filter((r) => !editing || r.kind !== 'notes').map((r) => ({ k: r.label, v: cell(r) })),
-                // 編集では特記事項の欄を空でも出す（16 章は欄なし）
+                ...ch.rows.map((r) => ({ k: r.label, v: cell(r) })),
+                // 編集では特記事項の欄を入力にする（16 章は欄なし）
                 ...(editing && ch.hasNotes ? [{ k: REQ_DOC_COPY.notesLabel, v: <NotesEditCell chapterId={ch.id} edit={editing} /> }] : []),
               ]} />
+              {!editing && ch.notesLine && <Box sx={{ mt: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{line(ch.notesLine)}</Box>}
             </Surface>
           ))}
           {view.legacy.length > 0 && (
@@ -86,8 +104,13 @@ export function ReqDocChapters({ proposal, approval, flags, edit }: {
             </Surface>
           )}
           <Surface>
-            <SectionTitle title={REQ_DOC_COPY.ch23.title} />
-            <KeyValueRows rows={chapter23Rows(approval).map((r) => ({ k: r.k, v: r.muted ? muted(r.v) : r.v }))} />
+            <SectionTitle title={view.closing.heading} />
+            <Stack spacing={1}>
+              {line(view.closing.body)}
+              {view.closing.lines.map((l) => line(l))}
+              {line(view.closing.approvalLine)}
+            </Stack>
+            {view.closing.status && <Typography variant="caption" sx={{ display: 'block', mt: 1.5 }}>{view.closing.status}</Typography>}
             <Typography variant="caption" sx={{ display: 'block', mt: 1.5, color: tokens.color.muted }}>{REQ_DOC_COPY.ch23.overlap}</Typography>
           </Surface>
         </>

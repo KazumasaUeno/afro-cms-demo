@@ -259,3 +259,91 @@ export function reqDocRequiredOk(doc: Pick<ProposalV3Doc, 'items'> | null | unde
     return !!it && (it.status === 'proposed' || it.status === 'na') && typeof it.text === 'string' && it.text.trim() !== '';
   });
 }
+
+// ---------------- ひな型の文章（2026-11-26 夕のユーザー決定「Word のひな型の文章をそのまま使う」。REQDOC_U4_UI.md 最終節） ----------------
+//
+// 画面（ReqDocChapters）と PDF（reqDocChaptersHtml）はここの文と文型だけから組み立てる（同じ文を 2 か所に書かない）。
+// 文の正は docs/reference/requirements-template-v0.1.extracted.txt。tests/unit/reqDocTemplateText.test.mjs が、空の doc を描いた全行と本文を照合する（空白の違いだけ許す）
+
+export const REQ_DOC_KUBUN_LABEL: Record<ReqDocKubun, string> = { fixed: '固定', individual: '個別', optional: '選択' };
+
+/** 表紙の行のキー（client・vendor は doc.cover、project は 01 章の案件名、authorApprover は doc.cover の author と approver、approvedAt は承認日） */
+export type ReqDocCoverLineKey = 'project' | 'client' | 'vendor' | 'authorApprover' | 'approvedAt' | 'history';
+
+export interface ReqDocTemplateText {
+  /** 表紙の 1 行目 */
+  title: string;
+  /** 「標準ひな型  /  Ver.0.1  /  2026/11/24」 */
+  versionLine: string;
+  cover: { key: ReqDocCoverLineKey; label: string; blank: string }[];
+  purpose: { title: string; body: string; legend: string };
+  /** 個別・選択・特記の未記入 */
+  blank: string;
+  /** 固定（確認中）の標準仕様の未記入 */
+  fixedBlank: string;
+  notesLabel: string;
+  /** 項目の無い最終章（23） */
+  closing: { no: string; title: string; body: string; lines: { label: string; blank: string }[]; approvalLine: string };
+}
+
+export const REQ_DOC_TEXT: Record<string, ReqDocTemplateText> = {
+  '0.1': {
+    title: 'WEBサイト構築・ホスティング要件定義書',
+    versionLine: '標準ひな型  /  Ver.0.1  /  2026/11/24',
+    cover: [
+      { key: 'project', label: '案件名', blank: '［記入］' },
+      { key: 'client', label: '発注者', blank: '［記入］' },
+      { key: 'vendor', label: '受注者', blank: '［記入］' },
+      { key: 'authorApprover', label: '作成者・承認者', blank: '［記入］' },
+      { key: 'approvedAt', label: '承認日', blank: '［YYYY/MM/DD］' },
+      { key: 'history', label: '改訂履歴', blank: '［版・日付・変更内容・担当者］' },
+    ],
+    purpose: {
+      title: '本書の目的と利用方法',
+      body: '本書はWEBサイトの構築、公開およびホスティングに関する提供範囲と仕様を発注者・受注者間で明確にするための文書である。［ ］内を案件に応じて記入し、不要な項目は対象外と明記する。固定要件は受注者の標準仕様確定後に記載し、未確定のまま提供を約束しない。変更は双方の確認を経て反映する。契約書・見積書との整合を確認する。',
+      legend: '区分：固定＝共通仕様（確認中）／個別＝案件ごとに決定／選択＝採否を決定。',
+    },
+    blank: '［記入］',
+    fixedBlank: '［確認中・確定後記載］',
+    notesLabel: '特記事項・対象外・追加費用・承認状況',
+    closing: {
+      no: '23',
+      title: '標準仕様の管理・最終承認',
+      body: '固定要件は標準仕様書の版番号、適用日、根拠資料を明記し、本書の該当章に反映する。標準仕様の変更は既存契約への適用可否を確認する。',
+      lines: [
+        { label: '標準仕様書', blank: '［名称・版・適用日・承認者］' },
+        { label: '未決事項', blank: '［内容・担当者・期限・影響範囲］' },
+      ],
+      approvalLine: '発注者承認：［氏名・日付］受注者承認：［氏名・日付］',
+    },
+  },
+};
+
+/** 版の文章（無い版は undefined） */
+export function reqDocTextOf(version: string): ReqDocTemplateText | undefined {
+  return Object.prototype.hasOwnProperty.call(REQ_DOC_TEXT, version) ? REQ_DOC_TEXT[version] : undefined;
+}
+
+/** 章の見出し「01  プロジェクト概要・体制」 */
+export const reqDocChapterHeading = (no: string, title: string): string => `${no}  ${title}`;
+
+/** 章の冒頭の文（01〜22 章で同じ文型） */
+export const reqDocChapterIntro = (title: string): string =>
+  `本章では、${title}に関する適用範囲および具体的な仕様を定める。以下の内容を確認し、合意した事項を記載する。`;
+
+/** 項目の見出し「案件名  ｜ 個別」 */
+export const reqDocItemHeading = (item: Pick<ReqDocCatalogItem, 'label' | 'kubun'>): string => `${item.label}  ｜ ${REQ_DOC_KUBUN_LABEL[item.kubun]}`;
+
+/**
+ * 項目の文（区分ごとの文型はひな型どおり）。value は確定内容・標準仕様・採否・仕様の欄に入る文（空なら未記入の［ ］）。
+ * 文末の「。」はひな型が付けるので、value の末尾の「。」は 1 つ落とす（「。。」にしない）
+ */
+export function reqDocItemSentence(item: Pick<ReqDocCatalogItem, 'label' | 'kubun' | 'target'>, value: string, text: ReqDocTemplateText): string {
+  const v0 = value.trim().replace(/。$/, '');
+  if (item.kubun === 'fixed') return `${item.label}については受注者の標準仕様を適用する予定とする。確認対象：${item.target}。標準仕様：${v0 || text.fixedBlank}。`;
+  if (item.kubun === 'optional') return `${item.label}の提供有無および適用条件を双方で決定する。確認対象：${item.target}。採否・仕様：${v0 || text.blank}。`;
+  return `${item.label}について、${item.target}を確認のうえ、案件固有の条件を定める。確定内容：${v0 || text.blank}。`;
+}
+
+/** 章末の行「特記事項・対象外・追加費用・承認状況：{内容}」（ひな型どおり文末の「。」は無い） */
+export const reqDocNotesLine = (value: string, text: ReqDocTemplateText): string => `${text.notesLabel}：${value.trim() || text.blank}`;

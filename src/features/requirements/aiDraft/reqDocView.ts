@@ -8,7 +8,10 @@
  * - 版の判定は v3 → v2 → v1（v1 は version を持たない）
  * - HTML の文字列はすべて esc() を通す
  */
-import { REQ_DOC_REQUIRED_CHAPTERS, reqDocCatalogOf, reqDocRequiredOk, type ReqDocCatalog, type ReqDocCatalogItem } from '@/shared/ai/reqDocCatalog';
+import {
+  REQ_DOC_KUBUN_LABEL, REQ_DOC_REQUIRED_CHAPTERS, REQ_DOC_TEMPLATE, REQ_DOC_TEXT, reqDocCatalogOf, reqDocChapterHeading, reqDocChapterIntro, reqDocItemHeading, reqDocItemSentence,
+  reqDocNotesLine, reqDocRequiredOk, reqDocTextOf, type ReqDocCatalog, type ReqDocCatalogItem, type ReqDocCoverLineKey, type ReqDocTemplateText,
+} from '@/shared/ai/reqDocCatalog';
 import {
   isEditableV3, isProposalV2, isProposalV3, REQ_DOC_LIMITS, type AiEditableV3, type AnyAiEditable, type ProposalV3, type ProposalV3Doc, type ReqDocAddedItem, type ReqDocItem,
   type ReqDocItemAuthor, type ReqDocItemStatus, type ReqDocKubun, type StoredProposal,
@@ -41,15 +44,14 @@ export function liveHowToStep(status: 'draft' | 'analyzed' | 'approved', hasDraf
 
 export const REQ_DOC_COPY = {
   sectionTitle: 'AI 要件定義（会社標準ひな型 v0.1）',
-  sectionBody: 'WEBサイト構築 要件定義書ひな型 v0.1 の章立てです。区分: 固定＝アフロの標準仕様／個別＝この案件で決める／選択＝採否を決める。',
   count: { confirmed: '確定', open: '未確定', pending: '確認中', na: '対象外' },
   chapterSub: (n: number, total: number) => `確定 ${n} / ${total}`,
   required: '提出前に必須',
   openEmpty: '未確定（ヒアリングで確認します）',
-  stdPending: 'アフロの標準仕様の確定後に記載します',
   target: (t: string) => `確認対象: ${t}`,
   addedReason: (r: string) => `追加した理由: ${r}`,
-  notesLabel: '特記事項・対象外・追加費用・承認状況',
+  /** 編集の欄の名前（文の正は shared/ai/reqDocCatalog.ts の REQ_DOC_TEXT） */
+  notesLabel: REQ_DOC_TEXT[REQ_DOC_TEMPLATE.version].notesLabel,
   addedClient: '追加項目',
   addedEditor: 'AI追加',
   legacy: '旧版の項目',
@@ -66,13 +68,7 @@ export const REQ_DOC_COPY = {
   requiredBlock: (n: number) => `01・02・19・21 章に未確定の項目が ${n} 件あります。埋めると承認を依頼できます。`,
   submitNote: (open: number, pending: number) => `未確定 ${open} 件・確認中 ${pending} 件のまま、お客様に提出します。`,
   ch23: {
-    title: '23. 標準仕様の管理・最終承認',
-    std: '標準仕様書',
-    stdText: '名称・版・適用日・承認者は、標準仕様の確定後に記載します',
-    open: '未決事項',
-    openText: '22. 未決事項・課題管理 のとおりです',
-    approval: '承認',
-    approvalText: 'このタブの下「要件定義書の承認」で記録します',
+    approval: (state: string) => `承認の状態: ${state}（このタブの下「要件定義書の承認」で記録します）`,
     overlap: '「4. 非機能要件」はアフロ標準のたたき台です。標準仕様が確定したら、固定の章（11・12・14・15・16）に記載し、そちらを正とします。',
   },
   coverHelper: '会社名と役職まで（氏名は入れません）',
@@ -81,7 +77,7 @@ export const REQ_DOC_COPY = {
   pdfBusy: 'PDF を作っています…',
 } as const;
 
-export const KUBUN_LABEL: Record<ReqDocKubun, string> = { fixed: '固定', individual: '個別', optional: '選択' };
+export const KUBUN_LABEL: Record<ReqDocKubun, string> = REQ_DOC_KUBUN_LABEL;
 
 /** 提出前に必須の章（§3.3。正は shared/ai/reqDocCatalog.ts の REQ_DOC_REQUIRED_CHAPTERS＝サーバーの submitReady と Rules も同じ） */
 export const requiredChaptersOf = (templateVersion: string): readonly string[] =>
@@ -111,18 +107,20 @@ export function statusOptions(k: ReqDocKubun): StatusOption[] {
     : [{ value: 'proposed', label: '確定案' }, { value: 'open', label: '未確定' }, { value: 'na', label: '対象外' }];
 }
 
-// ---------------- 表示の行（§2.2・§2.3） ----------------
+// ---------------- 表示の行（§2.2・§2.3。文はひな型の文章のまま＝REQDOC_U4_UI.md 最終節） ----------------
 
 export type ChipTone = 'neutral' | 'primary' | 'warning' | 'info';
 export interface Chip { label: string; tone: ChipTone }
 
 /** 表示の 1 行。根拠・書いた元・「AI追加」は持たない（お客様に出さない＝Q-8） */
 export interface ReqDocRow {
-  kind: 'item' | 'added' | 'notes' | 'legacy';
+  kind: 'item' | 'added' | 'legacy';
   id: string;
+  /** ひな型の項目はひな型の見出し「案件名  ｜ 個別」 */
   label: string;
+  /** 状態のチップ（文の横に出すだけ。文の代わりにしない） */
   chips: Chip[];
-  /** 文（空なら mutedText を出す） */
+  /** ひな型の項目はひな型の文（確定内容が未記入なら「［記入］」）。空なら mutedText を出す */
   text: string;
   mutedText?: string;
   captions: string[];
@@ -130,26 +128,53 @@ export interface ReqDocRow {
 
 export interface ReqDocChapterView {
   id: string;
+  /** ひな型の章の見出し「01  プロジェクト概要・体制」 */
   heading: string;
+  /** 章の冒頭の文 */
+  intro: string;
   confirmed: number;
   total: number;
   required: boolean;
   hasNotes: boolean;
   rows: ReqDocRow[];
+  /** 章末の特記の行（REQ_DOC_TEXT の notesLabel）（特記欄の無い 16 章は null） */
+  notesLine: string | null;
 }
 
 export interface ReqDocCounts { confirmed: number; open: number; pending: number; na: number }
 
+/** 表紙（ひな型の 1 行目・版の行・案件名〜改訂履歴の行） */
+export interface ReqDocCoverView { title: string; versionLine: string; lines: string[] }
+
+/** 項目の無い最終章（23） */
+export interface ReqDocClosingView {
+  heading: string;
+  body: string;
+  lines: string[];
+  approvalLine: string;
+  /** 承認の状態（ひな型の文ではない。承認待ち・承認済みのときだけ） */
+  status: string | null;
+}
+
 export interface ReqDocView {
   version: string;
-  /** その版のカタログが無い（§2.3 最終行。章の代わりに文を出し、承認を止める） */
+  /** その版のカタログか文章が無い（§2.3 最終行。章の代わりに文を出し、承認を止める） */
   catalogMissing: boolean;
+  cover: ReqDocCoverView | null;
+  purpose: ReqDocTemplateText['purpose'] | null;
   chapters: ReqDocChapterView[];
   legacy: ReqDocRow[];
+  closing: ReqDocClosingView | null;
   counts: ReqDocCounts;
 }
 
-const kubunChip = (k: ReqDocKubun): Chip => ({ label: KUBUN_LABEL[k], tone: 'neutral' });
+/** 23 章・表紙の承認の状態 */
+export interface ReqDocApprovalState {
+  status: 'draft' | 'analyzed' | 'approved';
+  approvedAtText?: string;
+  /** 承認日時（ISO）。表紙の承認日に YYYY/MM/DD で入れる */
+  approvedAt?: string;
+}
 
 /** 状態の区分（集計と行で同じ） */
 type Bucket = keyof ReqDocCounts;
@@ -159,23 +184,17 @@ function bucketOf(it: Pick<ReqDocItem, 'status' | 'text'>, fixed: boolean): Buck
   return isOpenItem(it) ? 'open' : 'confirmed';
 }
 
-function itemRow(cat: ReqDocCatalogItem, it: ReqDocItem | undefined): ReqDocRow {
-  const base = { kind: 'item' as const, id: cat.id, label: cat.label, captions: [] as string[] };
-  const fixed = cat.kubun === 'fixed';
+function itemRow(cat: ReqDocCatalogItem, it: ReqDocItem | undefined, text: ReqDocTemplateText): ReqDocRow {
   const cur = it ?? { status: 'open' as const, text: '' };
-  const b = bucketOf(cur, fixed);
-  if (b === 'pending') {
-    return { ...base, chips: [kubunChip(cat.kubun), { label: '確認中', tone: 'info' }], text: '', mutedText: REQ_DOC_COPY.stdPending, captions: [REQ_DOC_COPY.target(cat.target)] };
-  }
-  if (b === 'na') {
-    return { ...base, chips: [kubunChip(cat.kubun), { label: cat.kubun === 'optional' ? '不採用' : '対象外', tone: 'neutral' }], text: cur.text };
-  }
-  if (b === 'open') {
-    return { ...base, chips: [kubunChip(cat.kubun), { label: '未確定', tone: 'warning' }], text: cur.text, mutedText: REQ_DOC_COPY.openEmpty };
-  }
-  const chips: Chip[] = [kubunChip(cat.kubun)];
-  if (cat.kubun === 'optional') chips.push({ label: '採用案', tone: 'primary' });
-  return { ...base, chips, text: cur.text };
+  const b = bucketOf(cur, cat.kubun === 'fixed');
+  const chips: Chip[] =
+    b === 'pending' ? [{ label: '確認中', tone: 'info' }]
+      : b === 'na' ? [{ label: cat.kubun === 'optional' ? '不採用' : '対象外', tone: 'neutral' }]
+        : b === 'open' ? [{ label: '未確定', tone: 'warning' }]
+          : cat.kubun === 'optional' ? [{ label: '採用案', tone: 'primary' }] : [];
+  // 固定（確認中）は文を持たない（std_pending）。ひな型の「標準仕様：［確認中・確定後記載］」のまま出す
+  const value = b === 'pending' ? '' : cur.text;
+  return { kind: 'item', id: cat.id, label: reqDocItemHeading(cat), chips, text: reqDocItemSentence(cat, value, text), captions: [] };
 }
 
 function addedRow(a: ReqDocAddedItem): ReqDocRow {
@@ -191,13 +210,49 @@ function addedRow(a: ReqDocAddedItem): ReqDocRow {
   };
 }
 
+const pad2 = (n: number) => String(n).padStart(2, '0');
+/** ISO → YYYY/MM/DD（端末の日付。読めなければ空） */
+function ymdSlash(iso: string | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : `${d.getFullYear()}/${pad2(d.getMonth() + 1)}/${pad2(d.getDate())}`;
+}
+
+function coverValue(key: ReqDocCoverLineKey, doc: ProposalV3Doc, catalog: ReqDocCatalog, text: ReqDocTemplateText, approval: ReqDocApprovalState | undefined): string {
+  const c = doc?.cover;
+  switch (key) {
+    case 'project': {
+      // 案件名は 01 章の案件名の項目（案件の欄から転記）を正とする
+      const cat = catalog.items.find((i) => i.feeds.includes('project:siteName'));
+      const it = cat && doc?.items && Object.prototype.hasOwnProperty.call(doc.items, cat.id) ? doc.items[cat.id] : undefined;
+      return it && it.status !== 'na' ? it.text : '';
+    }
+    case 'client': return c?.client ?? '';
+    case 'vendor': return c?.vendor ?? '';
+    case 'authorApprover': {
+      const a = (c?.author ?? '').trim();
+      const b = (c?.approver ?? '').trim();
+      return a || b ? `${a || text.blank}／${b || text.blank}` : '';
+    }
+    case 'approvedAt': return approval?.status === 'approved' ? ymdSlash(approval.approvedAt) : '';
+    case 'history': return '';
+  }
+}
+
+function approvalStatusText(a: ReqDocApprovalState | undefined): string | null {
+  if (!a) return null;
+  const state = a.status === 'approved' ? `承認済み ${a.approvedAtText ?? ''}`.trim() : a.status === 'analyzed' ? 'お客様の承認待ち' : '';
+  return state ? REQ_DOC_COPY.ch23.approval(state) : null;
+}
+
 /** 表示の章と行。client かどうかで内容は変えない（お客様に出さない欄は最初から入れない） */
-export function buildReqDocView(doc: ProposalV3Doc, templateVersion: string): ReqDocView {
+export function buildReqDocView(doc: ProposalV3Doc, templateVersion: string, approval?: ReqDocApprovalState): ReqDocView {
   const catalog = reqDocCatalogOf(templateVersion);
+  const text = reqDocTextOf(templateVersion);
   const counts: ReqDocCounts = { confirmed: 0, open: 0, pending: 0, na: 0 };
   const items = doc?.items ?? {};
   const added = Array.isArray(doc?.added) ? doc.added : [];
-  if (!catalog) return { version: templateVersion, catalogMissing: true, chapters: [], legacy: [], counts };
+  if (!catalog || !text) return { version: templateVersion, catalogMissing: true, cover: null, purpose: null, chapters: [], legacy: [], closing: null, counts };
   const requiredIds = requiredChaptersOf(templateVersion);
   const known = new Set(catalog.items.map((i) => i.id));
   const chapters = catalog.chapters.map((ch): ReqDocChapterView => {
@@ -205,11 +260,11 @@ export function buildReqDocView(doc: ProposalV3Doc, templateVersion: string): Re
     const rows: ReqDocRow[] = [];
     let confirmed = 0;
     for (const cat of cats) {
-      const it = items[cat.id];
+      const it = Object.prototype.hasOwnProperty.call(items, cat.id) ? items[cat.id] : undefined;
       const b = bucketOf(it ?? { status: 'open', text: '' }, cat.kubun === 'fixed');
       counts[b] += 1;
       if (b === 'confirmed') confirmed += 1;
-      rows.push(itemRow(cat, it));
+      rows.push(itemRow(cat, it, text));
     }
     const adds = added.filter((a) => a.chapterId === ch.id);
     for (const a of adds) {
@@ -218,11 +273,10 @@ export function buildReqDocView(doc: ProposalV3Doc, templateVersion: string): Re
       if (b === 'confirmed') confirmed += 1;
       rows.push(addedRow(a));
     }
-    const note = ch.hasNotes ? (doc?.notes?.[ch.id] ?? '') : '';
-    if (note.trim()) rows.push({ kind: 'notes', id: `${ch.id}-notes`, label: REQ_DOC_COPY.notesLabel, chips: [], text: note, captions: [] });
     return {
-      id: ch.id, heading: `${ch.no}. ${ch.title}`, confirmed, total: cats.length + adds.length,
+      id: ch.id, heading: reqDocChapterHeading(ch.no, ch.title), intro: reqDocChapterIntro(ch.title), confirmed, total: cats.length + adds.length,
       required: requiredIds.includes(ch.id), hasNotes: ch.hasNotes, rows,
+      notesLine: ch.hasNotes ? reqDocNotesLine(doc?.notes?.[ch.id] ?? '', text) : null,
     };
   });
   // カタログに無い id（旧版の項目）は落とさない（§2.3）
@@ -230,7 +284,30 @@ export function buildReqDocView(doc: ProposalV3Doc, templateVersion: string): Re
     const it = items[id];
     return { kind: 'legacy', id, label: id, chips: [{ label: REQ_DOC_COPY.legacy, tone: 'neutral' }], text: it?.text ?? '', ...(it?.text ? {} : { mutedText: REQ_DOC_COPY.openEmpty }), captions: [] };
   });
-  return { version: templateVersion, catalogMissing: false, chapters, legacy, counts };
+  const cover: ReqDocCoverView = {
+    title: text.title, versionLine: text.versionLine,
+    lines: text.cover.map((l) => `${l.label}：${coverValue(l.key, doc, catalog, text, approval).trim() || l.blank}`),
+  };
+  const cl = text.closing;
+  const closing: ReqDocClosingView = {
+    heading: reqDocChapterHeading(cl.no, cl.title), body: cl.body, lines: cl.lines.map((l) => `${l.label}：${l.blank}`), approvalLine: cl.approvalLine,
+    status: approvalStatusText(approval),
+  };
+  return { version: templateVersion, catalogMissing: false, cover, purpose: text.purpose, chapters, legacy, closing, counts };
+}
+
+/**
+ * ひな型の順に並べた文の行（表紙 → 本書の目的 → 01〜22 章 → 23 章）。画面と PDF はこの順と文で描く。
+ * tests/unit/reqDocTemplateText.test.mjs が、空の doc の行とひな型の本文を照合する
+ */
+export function reqDocTemplateLines(view: ReqDocView): string[] {
+  if (view.catalogMissing || !view.cover || !view.purpose || !view.closing) return [];
+  return [
+    view.cover.title, view.cover.versionLine, ...view.cover.lines,
+    view.purpose.title, view.purpose.body, view.purpose.legend,
+    ...view.chapters.flatMap((ch) => [ch.heading, ch.intro, ...ch.rows.flatMap((r) => [r.label, r.text]), ...(ch.notesLine ? [ch.notesLine] : [])]),
+    view.closing.heading, view.closing.body, ...view.closing.lines, view.closing.approvalLine,
+  ];
 }
 
 /** 件数のチップ（0 件は出さない。§2.1） */
@@ -372,72 +449,31 @@ export function editableTextV3(e: AiEditableV3, templateVersion: string): string
   ].join('\n');
 }
 
-// ---------------- 要件定義書 PDF（§4） ----------------
+// ---------------- 要件定義書 PDF（§4。文は画面と同じ buildReqDocView の行） ----------------
 
 const nl = (s: string) => esc(s).replace(/\n/g, '<br>');
+const chipText = (chips: Chip[]) => (chips.length ? `<br><span class="muted">${esc(chips.map((c) => c.label).join('・'))}</span>` : '');
 
-/** PDF の表紙に足す行（<dl> の中身） */
-export function proposalV3CoverHtml(p: ProposalV3): string {
-  const c = p.doc?.cover ?? { client: '', vendor: '', author: '', approver: '' };
-  const v = (s: string) => (s && s.trim() ? esc(s) : '—');
-  return `<dt>ひな型</dt><dd>${esc(p.template?.id ?? 'TPL-WEB-REQ')} 版 ${esc(p.template?.version ?? '')}</dd>
-<dt>${REQ_DOC_COPY.cover.client}</dt><dd>${v(c.client)}</dd>
-<dt>${REQ_DOC_COPY.cover.vendor}</dt><dd>${v(c.vendor)}</dd>
-<dt>${REQ_DOC_COPY.cover.author}</dt><dd>${v(c.author)}</dd>
-<dt>${REQ_DOC_COPY.cover.approver}</dt><dd>${v(c.approver)}</dd>
-`;
-}
-
-const STATUS_PREFIX = (it: Pick<ReqDocItem, 'status' | 'text'>, kubun: ReqDocKubun): string => {
-  if (it.status === 'na') return kubun === 'optional' ? '［不採用］' : '［対象外］';
-  if (isOpenItem(it)) return '［未確定］';
-  return kubun === 'optional' ? '［採用案］' : '';
-};
-
-/** 23 章の承認の行の状態 */
-export interface ReqDocApprovalState { status: 'draft' | 'analyzed' | 'approved'; approvedAtText?: string }
-
-export function chapter23Rows(a: ReqDocApprovalState): { k: string; v: string; muted?: boolean }[] {
-  const state = a.status === 'approved' ? `承認済み ${a.approvedAtText ?? ''}`.trim() : a.status === 'analyzed' ? 'お客様の承認待ち' : '';
-  return [
-    { k: REQ_DOC_COPY.ch23.std, v: `確認中・${REQ_DOC_COPY.ch23.stdText}`, muted: true },
-    { k: REQ_DOC_COPY.ch23.open, v: REQ_DOC_COPY.ch23.openText },
-    { k: REQ_DOC_COPY.ch23.approval, v: state ? `${REQ_DOC_COPY.ch23.approvalText}（${state}）` : REQ_DOC_COPY.ch23.approvalText },
-  ];
-}
-
-/** 「1. 改善提案」の後半: AI 要件定義（01〜22 章・旧版の項目・23 章）。要約・改善ポイント・基本チェックは proposalPointsHtml */
+/** 「1. 改善提案」の後半: AI 要件定義（表紙・本書の目的・01〜22 章・旧版の項目・23 章）。要約・改善ポイント・基本チェックは proposalPointsHtml */
 export function reqDocChaptersHtml(p: ProposalV3, approval: ReqDocApprovalState): string {
   const version = p.template?.version ?? '';
-  const catalog = reqDocCatalogOf(version);
-  const head = `<h3>${esc(REQ_DOC_COPY.sectionTitle)}</h3><p class="muted">${esc(REQ_DOC_COPY.sectionBody)}</p>`;
-  if (!catalog) return `${head}<p class="muted">${esc(REQ_DOC_COPY.catalogMissing(version))}</p>`;
-  const items = p.doc?.items ?? {};
-  const added = p.doc?.added ?? [];
-  const known = new Set(catalog.items.map((i) => i.id));
-  const tr = (k: string, kubun: string, v: string) => `<tr><th>${k}</th><td>${kubun}</td><td>${v}</td></tr>`;
-  const chapters = catalog.chapters.map((ch) => {
-    const rows = catalog.items.filter((i) => i.chapterId === ch.id).map((cat) => {
-      const it = items[cat.id] ?? { status: 'open' as const, text: '' };
-      if (cat.kubun === 'fixed' || it.status === 'std_pending') return tr(esc(cat.label), esc(KUBUN_LABEL[cat.kubun]), '標準仕様：［確認中・確定後記載］');
-      return tr(esc(cat.label), esc(KUBUN_LABEL[cat.kubun]), `${STATUS_PREFIX(it, cat.kubun)}${nl(it.text)}`);
-    });
-    for (const a of added.filter((x) => x.chapterId === ch.id)) {
-      const pre = a.status === 'na' ? '［不採用］' : a.text.trim() ? '［採用案］' : '［未確定］';
-      rows.push(tr(`${esc(a.label)}（${REQ_DOC_COPY.addedClient}）`, '', `${pre}${nl(a.text)}${a.reason.trim() ? `<br><span class="muted">${esc(REQ_DOC_COPY.addedReason(a.reason))}</span>` : ''}`));
-    }
-    if (ch.hasNotes) {
-      const note = p.doc?.notes?.[ch.id] ?? '';
-      rows.push(tr(esc(REQ_DOC_COPY.notesLabel), '', note.trim() ? nl(note) : '<span class="muted">記載なし</span>'));
-    }
-    return `<h3>${esc(ch.no)}. ${esc(ch.title)}</h3><table class="reqdoc"><tr><th>項目</th><th>区分</th><th>内容</th></tr>${rows.join('')}</table>`;
-  }).join('');
-  const legacyIds = Object.keys(items).filter((id) => !known.has(id)).sort();
-  const legacy = legacyIds.length
-    ? `<h3>${esc(REQ_DOC_COPY.legacy)}</h3><table class="reqdoc">${legacyIds.map((id) => tr(esc(id), '', nl(items[id]?.text ?? ''))).join('')}</table>`
-    : '';
-  const ch23 = `<h3>${esc(REQ_DOC_COPY.ch23.title)}</h3><table>${chapter23Rows(approval).map((r) => `<tr><th>${esc(r.k)}</th><td>${esc(r.v)}</td></tr>`).join('')}</table><p class="muted">${esc(REQ_DOC_COPY.ch23.overlap)}</p>`;
-  return `${head}${chapters}${legacy}${ch23}`;
+  const view = buildReqDocView(p.doc, version, approval);
+  const head = `<h3>${esc(REQ_DOC_COPY.sectionTitle)}</h3>`;
+  if (view.catalogMissing || !view.cover || !view.purpose || !view.closing) return `${head}<p class="muted">${esc(REQ_DOC_COPY.catalogMissing(version))}</p>`;
+  const cover = `<h3>${esc(view.cover.title)}</h3><p>${esc(view.cover.versionLine)}</p><p>${view.cover.lines.map(esc).join('<br>')}</p>`;
+  const purpose = `<h3>${esc(view.purpose.title)}</h3><p>${esc(view.purpose.body)}</p><p>${esc(view.purpose.legend)}</p>`;
+  const row = (r: ReqDocRow) => {
+    const k = r.kind === 'added' ? `${esc(r.label)}（${esc(REQ_DOC_COPY.addedClient)}）` : esc(r.label);
+    const v = r.text.trim() ? nl(r.text) : `<span class="muted">${esc(r.mutedText ?? '')}</span>`;
+    const chips = r.kind === 'added' ? chipText(r.chips.filter((c) => c.label !== REQ_DOC_COPY.addedClient)) : chipText(r.chips);
+    return `<tr><th>${k}</th><td>${v}${chips}${r.captions.map((c) => `<br><span class="muted">${esc(c)}</span>`).join('')}</td></tr>`;
+  };
+  const chapters = view.chapters.map((ch) =>
+    `<h3>${esc(ch.heading)}</h3><p>${esc(ch.intro)}</p><table class="reqdoc">${ch.rows.map(row).join('')}</table>${ch.notesLine ? `<p>${nl(ch.notesLine)}</p>` : ''}`).join('');
+  const legacy = view.legacy.length ? `<h3>${esc(REQ_DOC_COPY.legacy)}</h3><table class="reqdoc">${view.legacy.map(row).join('')}</table>` : '';
+  const c = view.closing;
+  const closing = `<h3>${esc(c.heading)}</h3><p>${esc(c.body)}</p><p>${c.lines.map(esc).join('<br>')}</p><p>${esc(c.approvalLine)}</p>${c.status ? `<p class="muted">${esc(c.status)}</p>` : ''}<p class="muted">${esc(REQ_DOC_COPY.ch23.overlap)}</p>`;
+  return `${head}${cover}${purpose}${chapters}${legacy}${closing}`;
 }
 
 export type { AiEditableV3, ProposalV3, ProposalV3Doc };

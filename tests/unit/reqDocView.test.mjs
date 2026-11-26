@@ -44,17 +44,25 @@ test('保存値の読み出しは v3 を落とさない（storedProposalOf・pro
   assert.equal(M.storedProposalOf({ version: 9 }), undefined);
 });
 
-test('表示の行: 全章・区分と状態のチップ・固定は確認中', () => {
+test('表示の行: 全章・ひな型の見出しと文・状態のチップ・固定は確認中', () => {
   const view = V.buildReqDocView(fullDoc(), '0.1');
   assert.equal(view.catalogMissing, false);
   assert.equal(view.chapters.length, cat.chapters.length);
-  assert.equal(view.chapters[0].heading, '01. プロジェクト概要・体制');
+  assert.equal(view.chapters[0].heading, '01  プロジェクト概要・体制');
+  assert.equal(view.chapters[0].intro, '本章では、プロジェクト概要・体制に関する適用範囲および具体的な仕様を定める。以下の内容を確認し、合意した事項を記載する。');
+  const ind = view.chapters[0].rows.find((r) => r.id === 't01-03');
+  assert.equal(ind.label, '背景・課題  ｜ 個別');
+  assert.equal(ind.text, '背景・課題について、現状の課題を確認のうえ、案件固有の条件を定める。確定内容：背景・課題の内容。');
+  assert.deepEqual(ind.chips, []);
   const fixed = view.chapters.find((c) => c.id === 'c11').rows[0];
-  assert.deepEqual(fixed.chips.map((c) => c.label), ['固定', '確認中']);
-  assert.equal(fixed.mutedText, V.REQ_DOC_COPY.stdPending);
-  assert.ok(fixed.captions[0].startsWith('確認対象: '));
+  assert.deepEqual(fixed.chips.map((c) => c.label), ['確認中']);
+  assert.equal(fixed.text, 'ホスティング方式については受注者の標準仕様を適用する予定とする。確認対象：提供事業者・プラン。標準仕様：［確認中・確定後記載］。');
+  assert.deepEqual(fixed.captions, []);
   const opt = view.chapters.find((c) => c.id === 'c07').rows[0];
-  assert.deepEqual(opt.chips.map((c) => c.label), ['選択', '採用案']);
+  assert.deepEqual(opt.chips.map((c) => c.label), ['採用案']);
+  assert.equal(opt.text, '問い合わせの提供有無および適用条件を双方で決定する。確認対象：項目・宛先・自動返信・迷惑対策。採否・仕様：問い合わせの内容。');
+  // 表紙: 案件名は 01 章の案件名の項目、作成者・承認者は 2 欄を 1 行に
+  assert.deepEqual(view.cover.lines.slice(0, 4), ['案件名：案件名の内容', '発注者：株式会社A 部長', '受注者：［記入］', '作成者・承認者：［記入］']);
   assert.equal(view.counts.pending, cat.items.filter((i) => i.kubun === 'fixed').length);
   assert.equal(view.counts.open, 0);
 });
@@ -83,14 +91,16 @@ test('未確定・対象外・特記事項・旧版の項目・カタログ無�
   const view = V.buildReqDocView(d, '0.1');
   const c01 = view.chapters[0];
   const r = c01.rows.find((x) => x.id === 't01-03');
-  assert.deepEqual(r.chips.map((c) => c.label), ['個別', '未確定']);
-  assert.equal(r.mutedText, V.REQ_DOC_COPY.openEmpty);
-  assert.equal(c01.rows.at(-1).label, V.REQ_DOC_COPY.notesLabel);
+  assert.deepEqual(r.chips.map((c) => c.label), ['未確定']);
+  assert.match(r.text, /確定内容：［記入］。$/);
+  assert.equal(c01.notesLine, '特記事項・対象外・追加費用・承認状況：追加費用なし');
   assert.equal(c01.confirmed, c01.total - 1);
-  assert.deepEqual(view.chapters.find((c) => c.id === 'c07').rows[1].chips.map((c) => c.label), ['選択', '不採用']);
+  const na = view.chapters.find((c) => c.id === 'c07').rows[1];
+  assert.deepEqual(na.chips.map((c) => c.label), ['不採用']);
+  assert.match(na.text, /採否・仕様：不要。$/);
   assert.equal(view.legacy.length, 1);
   assert.equal(view.legacy[0].chips[0].label, '旧版の項目');
-  assert.equal(view.chapters.find((c) => c.id === 'c16').rows.some((x) => x.kind === 'notes'), false);
+  assert.equal(view.chapters.find((c) => c.id === 'c16').notesLine, null);
   assert.equal(V.buildReqDocView(d, '9.9').catalogMissing, true);
   assert.deepEqual(V.countChips({ confirmed: 2, open: 0, pending: 1, na: 0 }).map((c) => c.label), ['確定 2', '確認中 1']);
 });
@@ -139,20 +149,21 @@ test('要確認の数字: 「id:数字」と「数字」を分けて読む（開
   assert.deepEqual(rem, ['18', '背景・課題: 5', 'チャット: 3']);
 });
 
-test('PDF: v3 の章・状態の頭・追加項目・23 章（esc 済み）。v2 の HTML は変えない', () => {
+test('PDF: v3 の表紙・章・ひな型の文と状態・追加項目・23 章（esc 済み）。v2 の HTML は変えない', () => {
   const d = fullDoc();
   d.items['t01-03'] = { status: 'open', text: '', evidence: [], by: 'ai' };
   d.items['t07-02'] = { status: 'na', text: '<b>不要</b>', evidence: ['q-feature'], by: 'ai' };
   const html = V.reqDocChaptersHtml(v3(d), { status: 'analyzed' });
-  assert.match(html, /<h3>01\. プロジェクト概要・体制<\/h3>/);
-  assert.match(html, /［未確定］/);
-  assert.match(html, /［不採用］&lt;b&gt;不要&lt;\/b&gt;/);
+  assert.match(html, /<h3>WEBサイト構築・ホスティング要件定義書<\/h3>/);
+  assert.match(html, /発注者：株式会社A 部長/);
+  assert.match(html, /<h3>01  プロジェクト概要・体制<\/h3>/);
+  assert.match(html, /確定内容：［記入］。<br><span class="muted">未確定<\/span>/);
+  assert.match(html, /採否・仕様：&lt;b&gt;不要&lt;\/b&gt;。<br><span class="muted">不採用<\/span>/);
   assert.match(html, /標準仕様：［確認中・確定後記載］/);
   assert.match(html, /チャット（追加項目）/);
-  assert.match(html, /23\. 標準仕様の管理・最終承認/);
+  assert.match(html, /23  標準仕様の管理・最終承認/);
   assert.match(html, /お客様の承認待ち/);
   assert.doesNotMatch(html, /AI追加|q-feature/);
-  assert.match(V.proposalV3CoverHtml(v3(d)), /TPL-WEB-REQ 版 0\.1[\s\S]*株式会社A 部長[\s\S]*—/);
   assert.doesNotMatch(F.proposalV2Html(v3(d)), /要件定義書（下書き）/);
   const v2 = { ...base, version: 2, summary: '', points: [], draft: { goal: '', target: '', contents: '', features: '', nonFunctional: '', operation: '', schedule: '', openQuestions: [] } };
   assert.match(F.proposalV2Html(v2), /要件定義書（下書き）/);

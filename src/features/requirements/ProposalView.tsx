@@ -12,7 +12,6 @@ import type { ProposalPoint } from '@/types';
 import { type StoredProposal } from '@/types/aiDraft';
 import { proposalVersionOf, REQ_DOC_COPY } from './aiDraft/reqDocView';
 import { ReqDocChapters } from './aiDraft/ReqDocChapters';
-import { ReqDocCoverRows } from './aiDraft/ReqDocV3Edit';
 import { reqDocCatalogOf } from '@/shared/ai/reqDocCatalog';
 import { AI_DRAFT_COPY } from './aiDraft/aiDraftState';
 import { ProposalV2Body, ProposalV2Summary } from './aiDraft/ProposalV2Body';
@@ -106,8 +105,7 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
                 </Box>
               )}
               {aiCard && <ProposalV2Summary proposal={aiCard} />}
-              {/* v3 の表紙の発注者・受注者・作成者・承認者（会社名と役職まで。空は「—」。REQDOC_U4_UI.md §4 の表紙と同じ欄） */}
-              {v3 && <Box sx={{ mb: 2 }}><ReqDocCoverRows cover={v3.doc?.cover} /></Box>}
+              {/* v3 の表紙（発注者・受注者・作成者・承認者）はひな型の表紙として ReqDocChapters の先頭に出す（REQDOC_U4_UI.md 最終節） */}
               <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
                 {[...proposal.purposes, ...proposal.improves].slice(0, 8).map((t) => (
                   <StatusPill key={t} tone="primary" dot={false} icon={<Target size={12} />}>{t}</StatusPill>
@@ -148,7 +146,7 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
       {/* 改善ポイント（v2 は根拠・基本チェック・要件定義書の下書きを含む ProposalV2Body。flags の印は渡さない） */}
       {v2 && <ProposalV2Body proposal={v2} />}
       {v3 && <ProposalV2Body proposal={v3} />}
-      {v3 && <ReqDocChapters proposal={v3} approval={{ status: req.status, approvedAtText: req.approvedAt ? formatDateTime(req.approvedAt) : undefined }} />}
+      {v3 && <ReqDocChapters proposal={v3} approval={{ status: req.status, approvedAtText: req.approvedAt ? formatDateTime(req.approvedAt) : undefined, approvedAt: req.approvedAt || undefined }} />}
       {v1 && <Box>
         <Typography variant="h4" component="h2" sx={{ mb: 1.5 }}>改善ポイントと提案内容</Typography>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', xl: 'repeat(3, 1fr)' }, gap: 2 }}>

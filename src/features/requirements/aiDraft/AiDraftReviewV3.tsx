@@ -10,7 +10,7 @@ import { AI_DRAFT_COPY, APPROVAL_BLOCK_COPY, approvalBlock } from './aiDraftStat
 import { Field, PointsFields, SaveStatus } from './AiDraftEditor';
 import { ProposalV2Body, ProposalV2Summary } from './ProposalV2Body';
 import { ReqDocChapters } from './ReqDocChapters';
-import { CoverFields, ReqDocCoverRows, type ReqDocEdit } from './ReqDocV3Edit';
+import { CoverFields, type ReqDocEdit } from './ReqDocV3Edit';
 import { buildReqDocView, flagsFor, missingNaReasons, remainingFlaggedV3, REQ_DOC_COPY, reqDocSubmitBlock, submitBlockText } from './reqDocView';
 import type { AiDraftEditorProps } from './AiDraftEditor';
 
@@ -120,9 +120,9 @@ export function AiDraftReviewV3({ ai, view, generated, role, isAssignedDeveloper
         </>
       ) : (
         <>
+          {/* 表紙の 4 欄はひな型の表紙として ReqDocChapters の先頭に出す */}
           <Surface>
             <ProposalV2Summary proposal={preview} highlight={topFlags} />
-            <ReqDocCoverRows cover={preview.doc?.cover} />
           </Surface>
           <ProposalV2Body proposal={preview} highlight={topFlags} />
           <ReqDocChapters proposal={preview} approval={{ status: reqStatus }} flags={flags} />

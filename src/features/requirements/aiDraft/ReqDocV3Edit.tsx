@@ -3,7 +3,6 @@ import { Trash2 } from 'lucide-react';
 import { AiBadge, StatusPill } from '@/components/ui';
 import type { ReqDocCatalog } from '@/shared/ai/reqDocCatalog';
 import { REQ_DOC_LIMITS, type AiEditableV3, type ProposalV3Doc, type ReqDocAddedItem } from '@/types/aiDraft';
-import { KeyValueRows, muted } from '../RequirementsDocSections';
 import { evidenceLabel } from './aiDraftState';
 import { Field } from './AiDraftEditor';
 import {
@@ -113,13 +112,6 @@ export function NotesEditCell({ chapterId, edit }: { chapterId: string; edit: Re
 }
 
 const COVER_KEYS: (keyof ProposalV3Doc['cover'])[] = ['client', 'vendor', 'author', 'approver'];
-
-/** 表紙の 4 欄（表示）。空は「—」 */
-export function ReqDocCoverRows({ cover }: { cover: ProposalV3Doc['cover'] | undefined }) {
-  return (
-    <KeyValueRows rows={COVER_KEYS.map((k) => ({ k: REQ_DOC_COPY.cover[k], v: cover?.[k]?.trim() ? cover[k] : muted('—') }))} />
-  );
-}
 
 /** 表紙の 4 欄（編集。会社名と役職まで） */
 export function CoverFields({ edit }: { edit: Omit<ReqDocEdit, 'onAskDelete'> }) {

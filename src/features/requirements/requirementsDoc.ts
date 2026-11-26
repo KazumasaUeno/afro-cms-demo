@@ -6,7 +6,7 @@ import { buildProposal } from './buildProposal';
 import { DATA_MODE } from '@/repositories/mode';
 import { answerText, isAnswered } from './validation';
 import { isProposalV2, isProposalV3, type StoredProposal } from '@/types/aiDraft';
-import { proposalV3CoverHtml, reqDocChaptersHtml, REQ_DOC_COPY } from './aiDraft/reqDocView';
+import { reqDocChaptersHtml, REQ_DOC_COPY } from './aiDraft/reqDocView';
 import { esc, proposalV1Html, proposalV2Html } from './aiDraft/proposalV2Format';
 
 /**
@@ -106,9 +106,9 @@ ${DATA_MODE === 'live' ? '' : DEMO_NOTE}<h1>要件定義書</h1>
 <dt>状態</dt><dd>${esc(status)}</dd>
 <dt>AI 分析</dt><dd>${esc(formatDateTime(req.analyzedAt))}</dd>
 <dt>出力</dt><dd>${esc(formatDateTime(new Date().toISOString()))}</dd>
-${isProposalV3(proposal) ? proposalV3CoverHtml(proposal) : ''}</dl>
+</dl>
 <h2>1. 改善提案</h2>
-${isProposalV3(proposal) ? `${proposalV2Html(proposal)}${reqDocChaptersHtml(proposal, { status: req.status, approvedAtText: req.approvedAt ? formatDateTime(req.approvedAt) : undefined })}` : isProposalV2(proposal) ? proposalV2Html(proposal) : proposalV1Html(proposal, DATA_MODE !== 'live')}
+${isProposalV3(proposal) ? `${proposalV2Html(proposal)}${reqDocChaptersHtml(proposal, { status: req.status, approvedAtText: req.approvedAt ? formatDateTime(req.approvedAt) : undefined, approvedAt: req.approvedAt || undefined })}` : isProposalV2(proposal) ? proposalV2Html(proposal) : proposalV1Html(proposal, DATA_MODE !== 'live')}
 <h2>2. ヒアリングの回答</h2>
 ${answers}
 <h2>3. スケジュール</h2>
