@@ -17,6 +17,7 @@ import { AI_FLAG_MODE, getAiDraftPort } from '@/features/requirements/aiDraft/ai
 import { AI_DRAFT_COPY, APPROVAL_BLOCK_COPY, aiPanelVisible } from '@/features/requirements/aiDraft/aiDraftState';
 import { useAiDraft } from '@/features/requirements/aiDraft/useAiDraft';
 import { AiDraftPanel } from '@/features/requirements/aiDraft/AiDraftPanel';
+import { isProposalV3 } from '@/types/aiDraft';
 import { liveHowToStep } from '@/features/requirements/aiDraft/reqDocView';
 import { useLiveSession } from '../session';
 
@@ -126,6 +127,12 @@ export default function LiveRequirementsPage() {
           onRequestApproval={async () => {
             // 提出の前に編集を送り切る。保存できなかったら依頼しない（edited が無い依頼はサーバーが拒否する）
             if (!(await ai.flush())) {
+              toast(APPROVAL_BLOCK_COPY['save-failed'], 'error');
+              return false;
+            }
+            // v3: サーバーの submitReady（保存のたびに必須の章を判定）が無い・false なら、今の編集を送り直してから依頼する（Rules が submitReady を提出の条件にする＝U3）
+            const g = ai.doc?.generated;
+            if (g && isProposalV3(g) && ai.doc?.submitReady?.requiredOk !== true && !(await ai.resave())) {
               toast(APPROVAL_BLOCK_COPY['save-failed'], 'error');
               return false;
             }

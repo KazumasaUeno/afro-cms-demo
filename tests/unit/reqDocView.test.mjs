@@ -190,3 +190,21 @@ test('自動保存を止める件数（対象外・不採用の理由が空。v2
   assert.equal(V.saveHoldCount({ summary: '', points: [], draft: {} }), 0);
   assert.equal(V.saveHoldCount(null), 0);
 });
+
+test('提出の可否は共有の reqDocRequiredOk（サーバーの submitReady）と一致する', () => {
+  const e = { summary: '', points: [], doc: fullDoc() };
+  const cases = [
+    e,
+    V.setItem(e, 't01-01', { status: 'open' }, cat), // 文があっても未確定は不可
+    V.setItem(e, 't02-01', { status: 'proposed', text: '   ' }, cat),
+    V.setItem(e, 't19-01', { status: 'na', text: '不要' }, cat), // 対象外＋理由は可
+    V.setItem(e, 't03-01', { status: 'open', text: '' }, cat), // 必須でない章
+  ];
+  for (const x of cases) {
+    const b = V.reqDocSubmitBlock(x, '0.1');
+    assert.equal(b === null || b.kind === 'na-reason', C.reqDocRequiredOk(x.doc, '0.1'), JSON.stringify(b));
+  }
+  assert.equal(V.requiredOpenCount(cases[1].doc, '0.1'), 1);
+  assert.deepEqual(V.requiredChaptersOf('0.1'), C.REQ_DOC_REQUIRED_CHAPTERS['0.1']);
+  assert.deepEqual(V.requiredChaptersOf('9.9'), []);
+});

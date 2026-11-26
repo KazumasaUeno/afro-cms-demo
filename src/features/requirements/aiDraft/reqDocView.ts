@@ -8,7 +8,7 @@
  * - 版の判定は v3 → v2 → v1（v1 は version を持たない）
  * - HTML の文字列はすべて esc() を通す
  */
-import { reqDocCatalogOf, type ReqDocCatalog, type ReqDocCatalogItem } from '@/shared/ai/reqDocCatalog';
+import { REQ_DOC_REQUIRED_CHAPTERS, reqDocCatalogOf, reqDocRequiredOk, type ReqDocCatalog, type ReqDocCatalogItem } from '@/shared/ai/reqDocCatalog';
 import {
   isEditableV3, isProposalV2, isProposalV3, REQ_DOC_LIMITS, type AiEditableV3, type AnyAiEditable, type ProposalV3, type ProposalV3Doc, type ReqDocAddedItem, type ReqDocItem,
   type ReqDocItemAuthor, type ReqDocItemStatus, type ReqDocKubun, type StoredProposal,
@@ -61,6 +61,8 @@ export const REQ_DOC_COPY = {
   deleteTitle: 'この追加項目を削除しますか？ 作り直さない限り元に戻せません。',
   deleteCancel: 'キャンセル',
   deleteAction: '削除する',
+  /** 画面の判定は通るのに、サーバーの submitReady が無い・false（保存し直しても拒否された） */
+  requiredNotSaved: '必須の章（01・02・19・21）の内容の保存が確認できませんでした。少し待ってから、もう一度「承認を依頼する」を押してください。',
   requiredBlock: (n: number) => `01・02・19・21 章に未確定の項目が ${n} 件あります。埋めると承認を依頼できます。`,
   submitNote: (open: number, pending: number) => `未確定 ${open} 件・確認中 ${pending} 件のまま、お客様に提出します。`,
   ch23: {
@@ -81,8 +83,9 @@ export const REQ_DOC_COPY = {
 
 export const KUBUN_LABEL: Record<ReqDocKubun, string> = { fixed: '固定', individual: '個別', optional: '選択' };
 
-/** 提出前に必須の章（§3.3。lead-architect 決定） */
-export const REQUIRED_CHAPTER_IDS: readonly string[] = ['c01', 'c02', 'c19', 'c21'];
+/** 提出前に必須の章（§3.3。正は shared/ai/reqDocCatalog.ts の REQ_DOC_REQUIRED_CHAPTERS＝サーバーの submitReady と Rules も同じ） */
+export const requiredChaptersOf = (templateVersion: string): readonly string[] =>
+  Object.prototype.hasOwnProperty.call(REQ_DOC_REQUIRED_CHAPTERS, templateVersion) ? REQ_DOC_REQUIRED_CHAPTERS[templateVersion] : [];
 
 // ---------------- 項目の状態 ----------------
 
@@ -195,6 +198,7 @@ export function buildReqDocView(doc: ProposalV3Doc, templateVersion: string): Re
   const items = doc?.items ?? {};
   const added = Array.isArray(doc?.added) ? doc.added : [];
   if (!catalog) return { version: templateVersion, catalogMissing: true, chapters: [], legacy: [], counts };
+  const requiredIds = requiredChaptersOf(templateVersion);
   const known = new Set(catalog.items.map((i) => i.id));
   const chapters = catalog.chapters.map((ch): ReqDocChapterView => {
     const cats = catalog.items.filter((i) => i.chapterId === ch.id);
@@ -218,7 +222,7 @@ export function buildReqDocView(doc: ProposalV3Doc, templateVersion: string): Re
     if (note.trim()) rows.push({ kind: 'notes', id: `${ch.id}-notes`, label: REQ_DOC_COPY.notesLabel, chips: [], text: note, captions: [] });
     return {
       id: ch.id, heading: `${ch.no}. ${ch.title}`, confirmed, total: cats.length + adds.length,
-      required: REQUIRED_CHAPTER_IDS.includes(ch.id), hasNotes: ch.hasNotes, rows,
+      required: requiredIds.includes(ch.id), hasNotes: ch.hasNotes, rows,
     };
   });
   // カタログに無い id（旧版の項目）は落とさない（§2.3）
@@ -241,14 +245,20 @@ export function countChips(c: ReqDocCounts): Chip[] {
 
 // ---------------- 提出の判定（§3.3） ----------------
 
-/** 提出前に必須の章（01・02・19・21）に残る未確定の件数（AI追加の文の無い採用案も数える） */
+/**
+ * 提出前に必須の章に残る、埋まっていない項目の件数（表示の数。可否の正は reqDocRequiredOk＝サーバーの submitReady と同じ関数）。
+ * 数える規則も reqDocRequiredOk と同じ: 「確定案」か「対象外」で文が空白だけでない項目以外。AI追加は数えない（サーバーも見ない）
+ */
 export function requiredOpenCount(doc: ProposalV3Doc, templateVersion: string): number {
   const catalog = reqDocCatalogOf(templateVersion);
   if (!catalog) return 0;
+  const chapters = requiredChaptersOf(templateVersion);
   const items = doc?.items ?? {};
-  let n = catalog.items.filter((c) => REQUIRED_CHAPTER_IDS.includes(c.chapterId) && c.kubun !== 'fixed' && isOpenItem(items[c.id])).length;
-  n += (doc?.added ?? []).filter((a) => REQUIRED_CHAPTER_IDS.includes(a.chapterId) && a.status === 'proposed' && !a.text.trim()).length;
-  return n;
+  return catalog.items.filter((c) => {
+    if (!chapters.includes(c.chapterId)) return false;
+    const it = items[c.id];
+    return !(it && (it.status === 'proposed' || it.status === 'na') && it.text.trim() !== '');
+  }).length;
 }
 
 /** 対象外・不採用で理由（文）が空の件数（この間は自動保存を送らない。送ると reqDocEditable.ts:72・:90 で拒否） */
@@ -269,10 +279,8 @@ export function reqDocSubmitBlock(e: AiEditableV3, templateVersion: string): Req
   if (!reqDocCatalogOf(templateVersion)) return { kind: 'catalog-missing', version: templateVersion };
   const na = missingNaReasons(e.doc);
   if (na) return { kind: 'na-reason', count: na };
-  const req = requiredOpenCount(e.doc, templateVersion);
-  if (req) return { kind: 'required-open', count: req };
-  // TODO(U3 後): 同じ判定をサーバーでも行う（lead-architect 決定 2026-11-26。画面の制御は境界ではない＝CLAUDE.md 1.8）。
-  //   置き場所（Rules の提出の検査か Functions か）は U3 の結果を見て決める。クライアントは src/live/repositories.tsx の completeAnalysis でも同じ関数で止めている
+  // 可否は共有の reqDocRequiredOk（サーバーは保存のたびに同じ関数で aiDrafts.submitReady を書き、Rules が提出の条件にする＝U3。画面の制御は境界ではない）
+  if (!reqDocRequiredOk(e.doc, templateVersion)) return { kind: 'required-open', count: Math.max(1, requiredOpenCount(e.doc, templateVersion)) };
   return null;
 }
 

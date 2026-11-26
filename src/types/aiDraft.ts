@@ -185,6 +185,8 @@ export interface AiDraftDoc {
   edited?: AnyAiEditable;
   editedAt?: ISODate;
   editedBy?: string;
+  /** v3 だけ。サーバー（saveAiDraftEdits）が保存のたびに reqDocRequiredOk で書く。Rules が提出の条件にする（U3） */
+  submitReady?: { requiredOk: boolean; templateVersion: string };
   discardLog?: { by: string; at: ISODate; role: 'admin' }[];
   usage?: { input: number; output: number; cacheRead: number; costMicroUsd: number };
   quota?: { day: string; dayCount: number; month: string; monthCount: number };

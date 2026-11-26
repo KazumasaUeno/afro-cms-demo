@@ -207,6 +207,13 @@ export function useAiDraft(i: AiDraftHookInput) {
     return flush();
   }, [doc, flush]);
 
+  /** 変更が無くても今の編集をもう一度送る（v3 の submitReady が無い・false のまま提出しようとしたとき。サーバーが保存と同じ書き込みで submitReady を書く） */
+  const resave = useCallback(async () => {
+    if (!latest.current) return false;
+    version.current += 1;
+    return flush();
+  }, [flush]);
+
   /** 「変更をコピー」（generation-running のとき。プレーンテキスト） */
   const pendingText = useCallback((): string => {
     const e = latest.current;
@@ -238,7 +245,7 @@ export function useAiDraft(i: AiDraftHookInput) {
   return {
     available: active, loading, loadError, doc, view, running, now,
     generate, starting, startError, clearStartError: () => setStartError(null),
-    local, update, flush, confirm, save, savedAt, saveError, pendingText,
+    local, update, flush, resave, confirm, save, savedAt, saveError, pendingText,
   };
 }
 

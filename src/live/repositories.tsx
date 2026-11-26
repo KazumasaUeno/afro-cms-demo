@@ -12,7 +12,7 @@ import { projectFromDraft, siteHost } from '@/features/projects/projectForm';
 import type { Query, Repositories } from '@/repositories/types';
 import type { AnswerValue, ApprovalLog, ClientAccount, DevUser } from '@/types';
 import type { AiDraftDoc, AiEditableV3, StoredProposal } from '@/types/aiDraft';
-import { reqDocSubmitBlock, submitBlockText } from '@/features/requirements/aiDraft/reqDocView';
+import { REQ_DOC_COPY, reqDocSubmitBlock, submitBlockText } from '@/features/requirements/aiDraft/reqDocView';
 import { isJobRunning } from '@/features/requirements/aiDraft/aiDraftState';
 import { db } from './firebase';
 import {
@@ -462,11 +462,14 @@ export function useLiveRepositoriesImpl(): Repositories {
               if (isJobRunning(deepIso(ai) as AiDraftDoc, Date.now())) throw new Error('AI 下書きの生成が終わってから依頼してください');
               // Rules（proposalV2Ok）はマップの等式で比べる: 値を変えずに写す（flags は写さない）
               if ((ai.generated as DocumentData).version === 3) {
-                // 提出前に必須の章（01・02・19・21）の未確定は画面と同じ関数で止める。クライアントの検査は境界ではない:
-                // TODO(U3 後): サーバー側（Rules の提出の検査か Functions）でも拒否する（lead-architect 決定 2026-11-26）
+                // 提出前に必須の章（01・02・19・21）の未確定は画面と同じ関数で止める。境界はサーバー: saveAiDraftEdits が保存のたびに
+                // 共有の reqDocRequiredOk で submitReady を書き、Rules（proposalV3Ok）が submitReady.requiredOk を提出の条件にする（U3）
                 const e3 = ai.edited as AiEditableV3;
-                const block = e3?.doc ? reqDocSubmitBlock(e3, String((ai.generated as DocumentData).template?.version ?? '')) : { kind: 'catalog-missing' as const, version: '' };
+                const tv = String((ai.generated as DocumentData).template?.version ?? '');
+                const block = e3?.doc ? reqDocSubmitBlock(e3, tv) : { kind: 'catalog-missing' as const, version: '' };
                 if (block) throw new Error(submitBlockText(block));
+                const sr = ai.submitReady as { requiredOk?: unknown; templateVersion?: unknown } | undefined;
+                if (!sr || sr.requiredOk !== true || sr.templateVersion !== tv) throw new Error(REQ_DOC_COPY.requiredNotSaved);
                 proposal = proposalV3FromDraft(ai.generated as DocumentData, ai.edited as DocumentData);
               } else {
                 proposal = proposalV2FromDraft(ai.generated as DocumentData, ai.edited as DocumentData);

@@ -173,7 +173,7 @@ export function storedProposalOf(v: unknown): StoredProposal | undefined {
 
 /**
  * v3 の提案（会社標準ひな型）。generated のサーバー欄・template（flags を除く）＋ edited の summary・points・doc を値を変えずに写す。
- * TODO(U3): firestore.rules の validStoredProposal が v3 を受け付けるのは U3（別担当）。それまで live の提出は Rules で拒否されうる
+ * Rules（U3 の proposalV3Ok）はこの写しと aiDrafts の generated・edited の一致と submitReady.requiredOk を提出の条件にする
  */
 export function proposalV3FromDraft(g: DocumentData, e: DocumentData): ProposalV3 {
   return {
