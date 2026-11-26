@@ -256,3 +256,10 @@
 - Hosting: dist-live（`aiFlag internal`。deploy の検査で一致）release complete。[FACT] `https://afro-cms-4a6ff.web.app/` と深いパスが 200、X-Frame-Options DENY・CSP frame-ancestors・HSTS、`LiveProjectDetailPage` の chunk に「制作の8段階」。ログインしての画面確認は未実施（本番のアカウントはユーザーだけ）。戻し: Firebase Console の Hosting のリリース履歴から直前（45ac8c9）へ
 - 途中で止まったこと: deploy の test:rules がローカル画面用のエミュレータ（8080/9099）と衝突 → ユーザーがエミュレータを停止して実行、反映後に再起動・架空データを再投入
 - 追記（同日・ユーザー決定「3 に切り替える」。本番で改善提案しか出ず、ひな型の章立てが出ないため）: main 39e9e0c で `AI_REQUIREMENTS_PROPOSAL_VERSION=3`。test:functions 239/239 → functions 5 本 update。[FACT] gcloud で worker・callable の環境が `AI_REQUIREMENTS_MODE=internal`・`AI_REQUIREMENTS_PROPOSAL_VERSION=3`、invoker は `afro-cms-functions@` だけ。費用の概算は最大約 0.27 USD/回（Sonnet 5.5・max_tokens 24,000。上限 200 回/月・Anthropic 月 20 USD は据え置き）。既存の v2 下書きはそのまま、作り直した案件から v3。本番での v3 生成の実物は未確認（最初の 1 回は架空の試験案件で確かめる）。戻し: 2 にして `--only functions`
+
+## 0.51.0 リリース 2026-11-26 夜（JST。ユーザー GO「終わったら本番に出して」）— 管理者の全操作・代理承認（XL）
+
+- main 5e5fa82（3afd697＋7f09e37 レビュー修正＋5e5fa82 functions の共有型の写し直し）。レビュー: code-reviewer Approve w/c・security 実装後監査 APPROVE WITH CONDITIONS・Codex DEEP P2 1 → 修正 → 再レビューで未解決 0（`docs/reviews/2026-11-26-admin-full-rights-code.md`）
+- 順番は A-1 どおり **Rules → Functions → Hosting**: Rules test:rules 752/752 → released ／ Functions test:functions 243/243 → 5 本 update（1 回目は functions/src/ai/shared/types.ts の写しが古く deploy の検査で中止 → `gen-ai-shared` で写し直して再実行）／ Hosting dist-live（aiFlag internal）release complete
+- [FACT] 本番: `/` 200・X-Frame-Options DENY・「代理で承認」が ApprovalHistory/model の chunk にある。worker の invoker は `afro-cms-functions@` だけ、`ANTHROPIC_API_KEY` の secretAccessor は worker だけ、saveAiDraftEdits の環境は版 3。ログインしての画面確認は未実施（ユーザー）
+- 戻し: **Hosting を先に** 45ac8c9 以降の直前のリリース（0.50.0）へ戻し、その後 Rules を b5de514 の `firestore.rules` で出し直す（逆順だと確認依頼・承認が全件失敗する。A-1）。Functions は b5de514 で `--only functions`
