@@ -67,7 +67,11 @@ export interface RequirementsRepo {
 }
 
 /** 管理者の代理承認（live だけ。proxyNote は理由。repository が制御文字を除いて 1〜200 字を検査する） */
-export interface ProxyApproval { proxyNote: string }
+export interface ProxyApproval {
+  proxyNote: string;
+  /** ダイアログを開いた時点の確認依頼の日時（requirements.analyzedAt）。承認の時点で一致しなければ止める（別の人の差し戻し・再提出で、見ていない版を承認しない。Codex P2 2026-11-26） */
+  expectedAnalyzedAt: string;
+}
 
 export interface ApprovalsRepo {
   useHistory(projectId: string): Query<ApprovalLog[]>;

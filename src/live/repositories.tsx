@@ -21,7 +21,7 @@ import {
 } from './model';
 import { TASK_LIMIT, newestTasksInOrder, type NewTaskInput } from './tasks';
 import { cleanConsultText, consultBlock, consultSide, seqId, validateConsultText } from './consult';
-import { cleanProxyNote, validateProxyNote } from './proxyApproval';
+import { cleanProxyNote, validateProxyNote, proxyVersionOk } from './proxyApproval';
 import { PendingAnswers } from './pendingAnswers';
 import { cancelScheduledWrites, type ScheduledWrite } from './pendingWrites';
 import type { LiveSession } from './session';
@@ -545,6 +545,10 @@ export function useLiveRepositoriesImpl(): Repositories {
               const p = projectDoc(ps);
               rev = p.requirements.revision;
               if (p.requirements.status !== 'analyzed') throw new Error('いまは承認できる状態ではありません');
+              // 代理: 確認した版のままか（ダイアログを開いた後に差し戻し・再提出されていたら承認しない）
+              if (proxy && !proxyVersionOk(by.expectedAnalyzedAt, p.requirements.analyzedAt)) {
+                throw new Error('要件定義書が更新されました。内容を確認し直してから代理で承認してください');
+              }
               const ref = apprRef(projectId, rev, 'approve');
               const rs = await tx.get(reqRef(projectId));
               const raw = (rs.data() ?? {}) as DocumentData;
@@ -564,6 +568,10 @@ export function useLiveRepositoriesImpl(): Repositories {
             if (rev >= 0 && String((e as { code?: string }).code ?? '').endsWith('permission-denied')) {
               const existing = await getDoc(apprRef(projectId, rev, 'approve')).catch(() => null);
               if (existing?.exists()) {
+                // 同じ操作の二重送信だけ成功扱い。お客様の承認と代理承認がぶつかったときは、事実と違う「承認しました」を出さない（code review Minor 2026-11-26）
+                if ((existing.data()?.proxy === true) !== proxy) {
+                  throw new Error(proxy ? 'お客様がすでに承認しています' : 'アフロがすでに代理で承認しています');
+                }
                 console.warn('approval already exists', { projectId, aid: existing.id });
                 return;
               }

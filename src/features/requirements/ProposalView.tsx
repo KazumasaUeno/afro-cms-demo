@@ -62,6 +62,8 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
   const [approving, setApproving] = useState(false);
   // 代理承認（live の管理者だけ）。null＝閉じている
   const [proxyNote, setProxyNote] = useState<string | null>(null);
+  // ダイアログを開いた時点の版（確認依頼の日時）。承認のときに一致を確かめる（Codex P2）
+  const [proxyFor, setProxyFor] = useState('');
   const canProxy = live && !client && role === 'admin' && req.status === 'analyzed';
   const proxyClean = cleanProxyNote(proxyNote ?? '');
   const proxyError = proxyNote === null ? null : validateProxyNote(proxyClean);
@@ -238,7 +240,7 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
                     お客様の承認待ち（お客様ポータルで承認します）
                   </Box>
                   {canProxy && (
-                    <Button variant="outlined" startIcon={<UserCheck size={16} />} disabled={approving || catalogMissing} onClick={() => setProxyNote('')}>
+                    <Button variant="outlined" startIcon={<UserCheck size={16} />} disabled={approving || catalogMissing} onClick={() => { setProxyFor(req.analyzedAt ?? ''); setProxyNote(''); }}>
                       代理で承認
                     </Button>
                   )}
@@ -293,7 +295,7 @@ export function ProposalView({ variant = 'staff' }: { variant?: 'staff' | 'clien
               variant="contained" disabled={approving || !!proxyError}
               onClick={() => {
                 setApproving(true);
-                void write(approvals.approveRequirements(req.projectId, { proxyNote: proxyClean }), '要件定義書を代理で承認しました').then((ok) => {
+                void write(approvals.approveRequirements(req.projectId, { proxyNote: proxyClean, expectedAnalyzedAt: proxyFor }), '要件定義書を代理で承認しました').then((ok) => {
                   setApproving(false);
                   if (ok) setProxyNote(null);
                 });

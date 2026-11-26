@@ -9,6 +9,8 @@
 - [ ] **要件定義書の「表示／編集」切り替えで編集が残ることの描画テスト**（review 2026-11-26 #8。`docs/reviews/2026-11-26-live-detail-and-reqdoc-polish.md`）: 今の `tests/unit/reqDocU4Review.test.mjs` はソースの正規表現だけ。描画テストの基盤（jsdom 等＝依存追加は lead 承認）を入れるときに「編集→表示→編集」で値が残ることを確かめる
 - [ ] **代理承認の法的な有効性**（LEGAL REVIEW REQUIRED。2026-11-26 ユーザー決定で管理者がお客様の承認を代理で記録できる。`docs/design/ADMIN_FULL_RIGHTS_PLAN.md`）: 代理承認がお客様の同意の証明として有効か・契約や利用規約に代理の扱いを書くかは、法務の確認が要る（AI は結論を出さない）
 - [ ] **担当の開発者が 0 人の案件では管理者も構築タスクを作れない**（同計画 L-5。担当者は memberUids の中だけ＝脅威モデル R-7）: 担当を足す画面ができたら解消
+- [ ] **差し戻しの note に制御文字の検査が無い**（security 実装後監査 A-2 2026-11-26。`firestore.rules` submitOrWithdrawOk の `optStr(d,'note',0,200)`）: 代理承認の note と同じ reNoteControl を当てる（admin も書けるようになった）
+- [ ] **代理承認だけの get/getAfter の参照回数（上限 20）を計測する**（同 A-3。推定 約 9 回）: 次に Rules を変えるとき
 - [ ] **表示速度の実測（PageSpeed Insights 等）は v1 で見送り**（ユーザー 2026-11-20・設計 Q-3。新しい外部サービス＝ユーザー判断）。それまでサイト診断は基本チェックだけで、速度の数値を出さない
 - [ ] **AI 下書きのクラウド作業（U5。未実施）**: `docs/operations/RUNBOOK_FIREBASE.md` §9.10 の G-0〜G-7 をユーザーの GO ごとに行い、§9.9 の Release Gate の出力を記録する（段 4 の前）
 

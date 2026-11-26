@@ -3,7 +3,7 @@
 // 実行: npm run test:unit
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanProxyNote, PROXY_NOTE_MAX, proxyNoteLength, validateProxyNote } from '../../src/live/proxyApproval.ts';
+import { cleanProxyNote, PROXY_NOTE_MAX, proxyNoteLength, proxyVersionOk, validateProxyNote } from '../../src/live/proxyApproval.ts';
 import { approvalLogFrom, approvalLogsFrom, proxyApprovalText } from '../../src/live/model.ts';
 
 const ts = (iso) => ({ toDate: () => new Date(iso) });
@@ -79,4 +79,11 @@ test('approvalLogsFrom: 同じ版の依頼（submit）と同じ uid の代理承
   const oldRev = approvalLogsFrom('p1', [{ id: 'a', data: proxyApprove() }, { id: 's', data: submit({ revision: 1 }) }]);
   assert.equal(oldRev[0].proxy.sameAsRequester, false);
   assert.equal(approvalLogsFrom('p1', [{ id: 'a', data: proxyApprove() }])[0].proxy.sameAsRequester, false);
+});
+
+test('proxyVersionOk: ダイアログを開いた時点の確認依頼の日時と一致するときだけ承認できる（Codex P2）', () => {
+  assert.equal(proxyVersionOk('2026-11-26T01:00:00.000Z', '2026-11-26T01:00:00.000Z'), true);
+  assert.equal(proxyVersionOk('2026-11-26T01:00:00.000Z', '2026-11-26T02:00:00.000Z'), false); // 差し戻し→再提出
+  assert.equal(proxyVersionOk('', ''), false);
+  assert.equal(proxyVersionOk(undefined, '2026-11-26T01:00:00.000Z'), false);
 });

@@ -22,3 +22,6 @@ export function validateProxyNote(note: string): string | null {
   if (proxyNoteLength(note) > PROXY_NOTE_MAX) return `理由は${PROXY_NOTE_MAX}文字以内にしてください`;
   return null;
 }
+
+/** 代理承認の時点の版が、ダイアログを開いた時点と同じか（確認依頼の日時で比べる。空・不一致は不可。Codex P2 2026-11-26） */
+export const proxyVersionOk = (expected: string | undefined, current: string | undefined): boolean => !!expected && expected === current;

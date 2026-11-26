@@ -76,3 +76,40 @@
 - **T-06（受容。ユーザー決定に基づく）**: admin の自己依頼→自己代理承認を Rules では止めない。代わりに note 必須・履歴でお客様にも「管理者の代理」と見える・同一人物なら画面で明示する。お客様への通知を付けるかは product-manager へ
 - **NEED CONFIRMATION（lead-architect）**: 「開発者の全書き込み」に 案件の基本情報の編集・アーカイブ（Low-2 で admin 不可と決めた）を含めるか。含めるなら R-1 と同じ形で足し TEST-01/02 に加える
 - 代理承認の法的な有効性（お客様の同意の証明として足りるか）は判断しない → LEGAL REVIEW REQUIRED として requirements-architect へ
+
+## 7. 実装後監査（security-engineer 2026-11-26。範囲 b5de514..3afd697。Plan Review 2 往復目の差分確認を兼ねる）
+
+- 判定: **APPROVED WITH CONDITIONS**（Critical・High 0）。読み取りのみ（コード・テストは未変更）
+- テストの再実行: **未実施**。worktree に firebase.alt-test.json が無く、別ポートでの実行ができなかった。件数（rules 752・functions 243・unit 169）は実装者の報告であり、この監査では再現していない
+
+### R-x と計画 §7 の確認（[FACT] diff を読んで確認）
+
+| 項目 | 結果 | 根拠 |
+|---|---|---|
+| R-1 admin は別の分岐で `mine` は不変 | 充足 | firestore.rules projUpdateOk の `\|\| (r == 'admin' && …)`。`mine` の定義は変更なし |
+| R-2 submit/withdraw | 充足 | reqUpdateOk `(mine \|\| r == 'admin')`、apprCreateOk の admin 分岐 → submitOrWithdrawOk |
+| R-3 代理承認の記録 | 充足 | proxyApproveOk: side 'afro'・proxy==true・note（正規表現と制御文字の拒否）・hasOnly・answers/proposal の等式・ID は approve と同じ |
+| R-4 approvedVia | 充足 | adminProxyApprove の 5 キー・`approvedVia=='proxy'`・`approvedBy==auth.uid` |
+| §7-1 相互照合 | 充足 | adminProxyApprove は `l.proxy/side/actorUid`、proxyApproveOk は `pa.approvedVia`、clientApprove は `l.side=='client' && !proxy`・approvedVia 無し、approveOk は `!pa approvedVia` |
+| R-5 / §7-3 actorRole | 充足 | admin は必須（apprCreateOk）。submitOrWithdrawOk は `d.get('actorRole', acc.role) == acc.role`。お客様は 'client' だけ（任意。計画 §7-3 の「あれば roleOf と一致」に合う） |
+| R-6 相談 | 充足 | sideOf で admin は 'afro'。'client' はお客様の分岐だけ |
+| R-7 tasks | 充足 | `p.memberUids.hasAll(assigneeUids)` は維持 |
+| R-8 callable | 充足 | authz.ts assertCanEdit に admin を追加。archived の拒否は維持。flags は変更なし |
+| §7-4 L-1 と Low-2 の反転 | 受容 | TEST-01/02 に基本情報とアーカイブあり。アーカイブで相談が止まることもテストあり |
+| §7-5 表示 | 充足 | model.ts approvalLogFrom は actorName と note を使い、approvedBy で accounts を引かない。PortalApprovalPage も ApprovalHistory で代理と理由を表示。sameAsRequester は submit の actorUid と照合 |
+| TEST-01〜10 | テスト自体は存在 | tests/rules/adminRights.test.mjs（TEST-01〜07・09）、mutation.test.mjs TEST-10、tests/functions/ai-flow.test.mjs TEST-03/08 |
+
+### 指摘
+
+| # | 重大度 | 場所 | 問題 | 対処 |
+|---|---|---|---|---|
+| A-1 | **Medium（リリース条件）** | src/live/repositories.tsx `actor()`（全ての approvals に actorRole を付ける） | 新しい画面は submit・withdraw・承認のすべてで actorRole を書く。旧 Rules は hasOnly で拒否するので、Hosting を先に出すと本番の確認依頼と承認が全件失敗する | **Rules → Functions → Hosting の順でデプロイする**。Rules を戻すときは Hosting を先に戻す。RUNBOOK / リリース判定に明記 |
+| A-2 | Low | firestore.rules submitOrWithdrawOk の withdraw の `optStr(d,'note',0,200)` | 差し戻しの note には制御文字の検査が無い（既存）。admin も書けるようになり、承認の履歴に表示される場合は代理の note と同じ扱いにすべき | docs/TODO.md。今回は止めない |
+| A-3 | Low | tests/rules/adminRights.test.mjs の 1000 式計測 | 実装者の報告では、代理承認だけの参照回数（get/getAfter の上限 20）は計測していない。今の参照は約 9 回と推定 [INFERENCE] | 次の Rules 変更で計測を足す |
+| A-4 | Info | src/live/model.ts approvalLogsFrom | sameAsRequester は購読の上限（LIST_LIMIT 500）の中だけで照合する。表示用なので安全性への影響は無い | なし |
+
+### 条件（リリース前に満たす）
+1. A-1 のデプロイ順を守る。本番前にユーザーの GO を取る
+2. テストを全件実行した結果（件数・0 件でないこと）を、release の判定に添付する。この監査では再実行していない
+3. 別系統モデルのレビュー（認可の変更）を通す
+4. LEGAL REVIEW REQUIRED（代理承認が同意の証明として有効か）を docs/TODO.md に残したまま、リリースの判断をユーザーに渡す

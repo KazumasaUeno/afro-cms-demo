@@ -45,6 +45,7 @@
 1. `scripts/firebase-projects.mjs` の `PRODUCTION_PROJECT_IDS` を `['<ID>']` に（lead-architect 確認）
 2. `.env.live.local`（コミットしない）に 4 の値
 3. `npm run build:live` → `npm run deploy:firebase -- --project <ID> --only firestore:rules,firestore:indexes` → **`--only functions`（0.46.0 から。`npm --prefix functions ci` の後。hosting より先）** → `--only hosting`
+   - **0.51.0 から: 画面が新しい承認の記録に `actorRole` を付けるので、古い Rules のまま Hosting を出すと確認依頼・差し戻し・承認が全件失敗する。必ず Rules → Functions → Hosting の順。戻すときは Hosting → Rules**（security 実装後監査 A-1 2026-11-26）
    - functions と hosting を 1 回（`--only functions,hosting`）で出さない。画面が先に替わると招待が失敗する（順番の詳細は `docs/TODO.md`）
 4. `https://<ID>.web.app` を開いてログイン画面が出ること、応答ヘッダ（X-Frame-Options 等）を確認
 
