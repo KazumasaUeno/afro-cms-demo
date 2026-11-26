@@ -40,6 +40,9 @@ export function liveHowToStep(status: 'draft' | 'analyzed' | 'approved', hasDraf
   return hasDraft ? 2 : 1;
 }
 
+/** 「表示／編集」の既定（開いたときは表示。開発者が「編集」を押して切り替える。2026-11-26 ユーザー決定。§3.2） */
+export const REQ_DOC_DEFAULT_MODE: 'view' | 'edit' = 'view';
+
 // ---------------- 文言（§6） ----------------
 
 export const REQ_DOC_COPY = {
@@ -68,6 +71,8 @@ export const REQ_DOC_COPY = {
   deleteAction: '削除する',
   /** 画面の判定は通るのに、サーバーの submitReady が無い・false（保存し直しても拒否された） */
   requiredNotSaved: '必須の章（01・02・19・21）の内容の保存が確認できませんでした。少し待ってから、もう一度「承認を依頼する」を押してください。',
+  /** 保存に失敗したまま確認済み（承認を依頼する前）。状態の行の注記の後ろに足す */
+  saveBeforeRequest: '保存するまで承認は依頼できません。',
   requiredBlock: (n: number) => `01・02・19・21 章に未確定の項目が ${n} 件あります。埋めると承認を依頼できます。`,
   submitNote: (open: number, pending: number) => `未確定 ${open} 件・確認中 ${pending} 件のまま、お客様に提出します。`,
   ch23: {

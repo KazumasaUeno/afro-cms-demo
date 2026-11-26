@@ -8,7 +8,7 @@ import { evidenceLabel } from './aiDraftState';
 import { Field } from './editorParts';
 import type { ReqDocChaptersEditor } from './ReqDocChapters';
 import {
-  flagsFor, isKubunEditable, itemTextMax, KUBUN_LABEL, removeAdded, REQ_DOC_COPY, setAdded, setCover, setItem, setNote, statusOptions, type ReqDocRow,
+  flagsFor, isKubunEditable, itemTextMax, removeAdded, REQ_DOC_COPY, setAdded, setCover, setItem, setNote, statusOptions, type ReqDocRow,
 } from './reqDocView';
 
 /**
@@ -51,8 +51,8 @@ export function ItemEditCell({ id, edit }: { id: string; edit: ReqDocEdit }) {
   const naLabel = cat.kubun === 'optional' ? '不採用' : '対象外';
   return (
     <Stack spacing={1} sx={{ minWidth: 0, whiteSpace: 'normal' }}>
+      {/* 区分は行の見出し（「項目 ｜ 区分」）に出ているので、ここでは状態の操作だけ */}
       <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', rowGap: 0.75 }}>
-        <StatusPill tone="neutral" dot={false}>{KUBUN_LABEL[cat.kubun]}</StatusPill>
         <ToggleButtonGroup
           size="small" exclusive value={it.status === 'std_pending' ? null : it.status} disabled={edit.readOnly} aria-label={`${cat.label} の状態`}
           onChange={(_, v: 'proposed' | 'open' | 'na' | null) => v && edit.onChange(setItem(edit.local, id, { status: v }, edit.catalog))}
@@ -76,7 +76,7 @@ export function AddedEditCell({ item, edit }: { item: ReqDocAddedItem; edit: Req
   const na = item.status === 'na';
   const set = (patch: Parameters<typeof setAdded>[2]) => edit.onChange(setAdded(edit.local, item.id, patch));
   return (
-    <Stack spacing={1} sx={{ minWidth: 0, whiteSpace: 'normal' }}>
+    <Stack spacing={1.5} sx={{ minWidth: 0, whiteSpace: 'normal' }}>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', rowGap: 0.75 }}>
         <AiBadge label={REQ_DOC_COPY.addedEditor} tooltip={AI_ADDED_TOOLTIP} />
         <ToggleButtonGroup
@@ -87,7 +87,7 @@ export function AddedEditCell({ item, edit }: { item: ReqDocAddedItem; edit: Req
           <ToggleButton value="na" sx={{ px: 1.25, minHeight: 36 }}>不採用</ToggleButton>
         </ToggleButtonGroup>
         {!edit.readOnly && (
-          <Button size="small" color="error" startIcon={<Trash2 size={15} />} onClick={() => edit.onAskDelete(item.id)} aria-label={`${item.label} を削除`} sx={{ minHeight: 44 }}>
+          <Button size="small" color="error" startIcon={<Trash2 size={15} />} onClick={() => edit.onAskDelete(item.id)} aria-label={`${item.label} を削除`} sx={{ ml: 'auto !important' }}>
             {REQ_DOC_COPY.deleteAction}
           </Button>
         )}

@@ -97,7 +97,7 @@
 
 ### 3.2 編集（draft・下書きあり。「1. 改善提案」タブの中）
 
-- タブの中の一番上に `ToggleButtonGroup`「表示／編集」（今の `AiDraftEditor.tsx:180` と同じ部品）。**「表示」はお客様に出る形そのもの**（§2。要確認の数字だけ `<mark>`）で、今の右側のプレビュー列（`AiDraftEditor.tsx:236-242`・`:258-270`）の代わり。既定は「編集」
+- タブの中の一番上に `ToggleButtonGroup`「表示／編集」（今の `AiDraftEditor.tsx:180` と同じ部品）。**「表示」はお客様に出る形そのもの**（§2。要確認の数字だけ `<mark>`）で、今の右側のプレビュー列（`AiDraftEditor.tsx:236-242`・`:258-270`）の代わり。既定は表示（2026-11-26 ユーザー決定）
 - 「編集」は §2 と**同じ `Surface`・`SectionTitle`・`KeyValueRows` の並び**のまま、`v` の中身だけを入力にする:
   - 要約・改善ポイント: 今の `AiDraftEditor.tsx:169-201` の欄（`Field`・分野・優先度）
   - 項目: 状態の `ToggleButtonGroup`（個別＝確定案／未確定／対象外、選択＝採用案／未確定／不採用）＋`Field`（`{n} / 400文字`。t22-01 は `REQ_DOC_LIMITS.openItemsText`）＋caption で確認対象・書いた元（「AI の下書き」「ヒアリングの選択肢・案件情報から転記」「担当者が記入」）・根拠のチップ（`AiDraftEditor.tsx:191-196` の形）＋`FlagLine`

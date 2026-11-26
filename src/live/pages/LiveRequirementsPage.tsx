@@ -91,15 +91,18 @@ export default function LiveRequirementsPage() {
       {status !== 'approved' ? '回答を見直す' : 'ヒアリングの回答'}
     </Button>
   );
+  // demo の RequirementsDocPage と同じ 1 行（高さのそろった small のボタン＋AI の印）。md 以上は折り返さない。
+  // 保存の状態・押せない理由はここに置かない（AiDraftReviewV3 の「表示／編集」の行。2026-11-26 ユーザー指摘）
+  const actionRow = { gap: 1, flexWrap: { xs: 'wrap', md: 'nowrap' }, whiteSpace: 'nowrap' } as const;
   const actions: ReactNode = status === 'draft' ? (hasDraft ? (
-    <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+    <Stack direction="row" alignItems="center" sx={actionRow}>
       {answersButton}
       <AiBadge label="AI" tooltip={AI_LIVE_TOOLTIP} />
-      {/* 主操作（内容を確認した → 承認を依頼する）と保存の状態は AiDraftReviewV3 がここへ描く */}
+      {/* 主操作（作り直す・内容を確認した → 承認を依頼する）は AiDraftReviewV3 がここへ描く */}
       <Box ref={setActionsSlot} sx={{ display: 'contents' }} />
     </Stack>
   ) : undefined) : (
-    <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+    <Stack direction="row" alignItems="center" sx={actionRow}>
       {answersButton}
       <AiBadge label="AI" tooltip={AI_LIVE_TOOLTIP} />
       {status === 'analyzed' && <StatusPill tone="info" icon={<Send size={13} />}>お客様の承認待ち</StatusPill>}

@@ -524,5 +524,11 @@ export const EVIDENCE_LABELS: Record<AiEvidenceKey, string> = {
   sitemap: 'サイトマップ', 'structured-data': '構造化データ',
 };
 
+/** v3 の根拠キーのうち、ヒアリングの質問・基本チェック以外（reqDocCatalog の feeds。'site_text'・'project:*'・'schedule:*'） */
+const REQ_DOC_EVIDENCE_LABELS: Record<string, string> = {
+  site_text: '現行サイトの本文', 'project:siteName': '案件名', 'project:clientName': '顧客名',
+  'schedule:releaseDate': '公開日', 'schedule:deliveryDate': '納品日', 'schedule:buildDue': '構築の期日',
+};
+
 /** 未知のキーはそのまま出す（保存値を信用しない） */
-export const evidenceLabel = (k: string): string => (EVIDENCE_LABELS as Record<string, string>)[k] ?? k;
+export const evidenceLabel = (k: string): string => (EVIDENCE_LABELS as Record<string, string>)[k] ?? REQ_DOC_EVIDENCE_LABELS[k] ?? k;

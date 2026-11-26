@@ -212,3 +212,26 @@ test('PDF: 重なりの注記は 23 章に 1 回だけ（4. 非機能要件の�
   assert.equal(html.split(V.REQ_DOC_COPY.ch23.overlap).length - 1, 1);
   assert.doesNotMatch(src('features/requirements/requirementsDoc.ts'), /ch23\.overlap/);
 });
+
+// ---------------- 2026-11-26 ユーザー決定: 開いたときは「表示」・主操作の行に説明を置かない ----------------
+
+test('「表示／編集」の既定は表示（REQ_DOC_DEFAULT_MODE）。切り替えは mode の state だけで、編集中の値は ai.local に残る', () => {
+  assert.equal(V.REQ_DOC_DEFAULT_MODE, 'view');
+  const s = src('features/requirements/aiDraft/AiDraftReviewV3.tsx');
+  assert.match(s, /useState<'view' \| 'edit'>\(REQ_DOC_DEFAULT_MODE\)/);
+  // 表示でも編集でも同じ local（ai.local）から描く（切り替えで編集を捨てない）
+  assert.match(s, /const local: AiEditableV3 = ai\.local && isEditableV3\(ai\.local\)/);
+});
+
+test('PageHeader の主操作の行にボタンの下の説明・保存の状態を置かない（状態の行の Note へ）', () => {
+  const s = src('features/requirements/aiDraft/AiDraftReviewV3.tsx');
+  const actions = s.slice(s.indexOf('const actions = ('), s.indexOf('const showSaveStatus'));
+  assert.doesNotMatch(actions, /Typography|SaveStatus/);
+  assert.match(s, /<Note tone="danger" role="alert" id=\{reasonId\}/);
+});
+
+test('根拠キーの表示名: v3 の site_text・project:*・schedule:* も日本語で出す', () => {
+  assert.equal(S.evidenceLabel('site_text'), '現行サイトの本文');
+  assert.equal(S.evidenceLabel('project:siteName'), '案件名');
+  assert.equal(S.evidenceLabel('q-issue'), '現在の課題');
+});

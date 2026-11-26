@@ -31,13 +31,18 @@ export function ReqDocTabs({ value, onChange }: { value: ReqDocSectionId; onChan
 }
 
 /** 見出しと値の 2 列の表（スマホは縦に積む） */
-export function KeyValueRows({ rows }: { rows: { k: string; v: React.ReactNode }[] }) {
+/**
+ * 見出しと値の 2 列（md 以上）。form＝値が入力欄の行（開発者の編集だけ）: 見出しの列を狭め、見出しを最初の操作の行の高さにそろえ、行の罫線を列の間で切らない。
+ * 既定（form なし）は demo・お客様の表示のまま変えない
+ */
+export function KeyValueRows({ rows, form = false }: { rows: { k: string; v: React.ReactNode }[]; form?: boolean }) {
+  const line = `1px solid ${tokens.color.border}`;
   return (
-    <Box component="dl" sx={{ m: 0, display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(0,2fr) minmax(0,3fr)' }, columnGap: 2 }}>
+    <Box component="dl" sx={{ m: 0, display: 'grid', gridTemplateColumns: { xs: '1fr', md: form ? 'minmax(0,1fr) minmax(0,3fr)' : 'minmax(0,2fr) minmax(0,3fr)' }, columnGap: form ? 0 : 2 }}>
       {rows.map((r, i) => (
         <Fragment key={i}>
-          <Box component="dt" sx={{ pt: 1.25, pb: { xs: 0, md: 1.25 }, borderTop: { md: i ? `1px solid ${tokens.color.border}` : 'none' }, color: tokens.color.muted, fontSize: 13, fontWeight: 600 }}>{r.k}</Box>
-          <Box component="dd" sx={{ m: 0, py: 1.25, borderTop: { md: i ? `1px solid ${tokens.color.border}` : 'none' }, borderBottom: { xs: `1px solid ${tokens.color.border}`, md: 'none' }, fontSize: 14, whiteSpace: 'pre-wrap', minWidth: 0, overflowWrap: 'anywhere' }}>{r.v}</Box>
+          <Box component="dt" sx={{ pt: form ? { xs: 1.5, md: 2.25 } : 1.25, pb: { xs: 0, md: 1.25 }, pr: form ? { md: 2 } : 0, borderTop: { md: i ? line : 'none' }, color: tokens.color.muted, fontSize: 13, fontWeight: 600 }}>{r.k}</Box>
+          <Box component="dd" sx={{ m: 0, py: form ? 1.5 : 1.25, borderTop: { md: i ? line : 'none' }, borderBottom: { xs: line, md: 'none' }, fontSize: 14, whiteSpace: 'pre-wrap', minWidth: 0, overflowWrap: 'anywhere' }}>{r.v}</Box>
         </Fragment>
       ))}
     </Box>

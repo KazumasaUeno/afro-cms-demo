@@ -6,6 +6,7 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { tokens } from '@/theme/tokens';
 import { AI_DRAFT_COPY, AI_SEND_NOTICE, errorMessage, type AiViewerRole } from './aiDraftState';
 import { AiDraftEditor } from './AiDraftEditor';
+import { Note } from './editorParts';
 import type { AiDraftHook } from './useAiDraft';
 
 /**
@@ -24,19 +25,6 @@ export function AiSendNotice({ text = AI_SEND_NOTICE.button }: { text?: string }
     <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', bgcolor: tokens.color.infoSoft, color: tokens.color.infoInk, borderRadius: '12px', px: 1.5, py: 1.25 }}>
       <Info size={16} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
       <Typography variant="caption" component="p" sx={{ color: 'inherit', fontWeight: 550, overflowWrap: 'anywhere' }}>{text}</Typography>
-    </Box>
-  );
-}
-
-function Note({ tone, children, role = 'status' }: { tone: 'info' | 'warning' | 'danger'; children: ReactNode; role?: 'status' | 'alert' }) {
-  const c = tone === 'info'
-    ? { bg: tokens.color.infoSoft, ink: tokens.color.infoInk, line: 'transparent' }
-    : tone === 'warning' ? { bg: tokens.color.warningSoft, ink: tokens.color.warningInk, line: 'transparent' }
-      : { bg: tokens.color.dangerSoft, ink: tokens.color.dangerInk, line: tokens.color.dangerLine };
-  return (
-    <Box role={role} sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', bgcolor: c.bg, color: c.ink, border: `1px solid ${c.line}`, borderRadius: '12px', px: 1.5, py: 1.25 }}>
-      {tone === 'info' ? <Info size={16} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} /> : <AlertTriangle size={16} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />}
-      <Box sx={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 550, overflowWrap: 'anywhere' }}>{children}</Box>
     </Box>
   );
 }

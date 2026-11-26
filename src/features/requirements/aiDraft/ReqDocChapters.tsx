@@ -88,7 +88,7 @@ export function ReqDocChapters({ proposal, approval, flags, editor }: {
                 ) : <Typography variant="caption">{REQ_DOC_COPY.chapterSub(ch.confirmed, ch.total)}</Typography>}
               />
               <Box sx={{ mb: 1.5 }}>{line(ch.intro)}</Box>
-              <KeyValueRows rows={[
+              <KeyValueRows form={!!editing} rows={[
                 ...ch.rows.map((r) => ({ k: r.label, v: cell(r) })),
                 // 編集では特記事項の欄を入力にする（16 章は欄なし）
                 ...(editing && ch.hasNotes ? [{ k: REQ_DOC_COPY.notesLabel, v: editing.notes(ch.id) }] : []),

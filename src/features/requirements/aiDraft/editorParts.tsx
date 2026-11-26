@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Box, Button, CircularProgress, MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
-import { AlertTriangle, Check, Copy } from 'lucide-react';
+import { AlertTriangle, Check, Copy, Info } from 'lucide-react';
 import { StatusPill, Surface } from '@/components/ui';
 import { tokens } from '@/theme/tokens';
 import { AI_DRAFT_LIMITS, AI_POINT_AREAS, type AiEditable, type AnyAiGenerated, type AiPointArea, type AiPointPriority } from '@/types/aiDraft';
@@ -35,6 +35,21 @@ export function FlagLine({ text, flags }: { text: string; flags?: readonly strin
   );
 }
 
+/** 画面の中の短い注記（情報・注意・失敗）。AI 下書きのパネルと v3 の状態の行で共有する。action は右端（狭い画面では下）に並べる */
+export function Note({ tone, children, role = 'status', action, id }: { tone: 'info' | 'warning' | 'danger'; children: ReactNode; role?: 'status' | 'alert'; action?: ReactNode; id?: string }) {
+  const c = tone === 'info'
+    ? { bg: tokens.color.infoSoft, ink: tokens.color.infoInk, line: 'transparent' }
+    : tone === 'warning' ? { bg: tokens.color.warningSoft, ink: tokens.color.warningInk, line: 'transparent' }
+      : { bg: tokens.color.dangerSoft, ink: tokens.color.dangerInk, line: tokens.color.dangerLine };
+  return (
+    <Box id={id} role={role} sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', flexWrap: { xs: 'wrap', sm: 'nowrap' }, bgcolor: c.bg, color: c.ink, border: `1px solid ${c.line}`, borderRadius: '12px', px: 1.5, py: 1.25 }}>
+      {tone === 'info' ? <Info size={16} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} /> : <AlertTriangle size={16} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />}
+      <Box sx={{ flex: action ? { xs: '1 1 calc(100% - 24px)', sm: 1 } : 1, minWidth: 0, fontSize: 13.5, fontWeight: 550, overflowWrap: 'anywhere', alignSelf: 'center' }}>{children}</Box>
+      {action && <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0, ml: { xs: 3, sm: 0 }, my: -0.5 }}>{action}</Stack>}
+    </Box>
+  );
+}
+
 export function Field({ label, value, max, onChange, flags, readOnly, multiline = true, minRows = 2, error, helper }: {
   label: string; value: string; max: number; onChange: (v: string) => void; flags?: readonly string[]; readOnly: boolean; multiline?: boolean; minRows?: number;
   /** 入力の誤り（helperText の頭に出し、欄を error にする） */
@@ -51,7 +66,7 @@ export function Field({ label, value, max, onChange, flags, readOnly, multiline 
         onChange={(e) => onChange(e.target.value.slice(0, max))}
         helperText={head ? `${head}・${count}` : count} error={!!error}
         InputProps={{ readOnly }} inputProps={{ maxLength: max }}
-        sx={{ '& textarea': longText }}
+        sx={{ '& textarea': longText, '& .MuiFormHelperText-root': { mx: 0, mt: 0.5 } }}
       />
       <FlagLine text={value} flags={flags} />
     </Box>
@@ -109,10 +124,7 @@ export function PointsFields({ points, readOnly, flags, onChange, columns = { xs
             </Stack>
             <Field label="見出し" value={p.title} max={AI_DRAFT_LIMITS.pointTitle} multiline={false} readOnly={readOnly} flags={flags} onChange={(v) => setPoint(idx, { title: v })} />
             <Field label="内容" value={p.detail} max={AI_DRAFT_LIMITS.pointDetail} minRows={3} readOnly={readOnly} flags={flags} onChange={(v) => setPoint(idx, { detail: v })} />
-            <Box>
-              <Field label="効果" value={p.impact} max={AI_DRAFT_LIMITS.pointImpact} readOnly={readOnly} flags={flags} onChange={(v) => setPoint(idx, { impact: v })} />
-              <Typography variant="caption" component="p" sx={{ mt: 0.25 }}>定性で書く。根拠の無い数字を書かない</Typography>
-            </Box>
+            <Field label="効果" value={p.impact} max={AI_DRAFT_LIMITS.pointImpact} readOnly={readOnly} flags={flags} helper="定性で書く。根拠の無い数字を書かない" onChange={(v) => setPoint(idx, { impact: v })} />
             {!!p.evidence.length && (
               <Stack direction="row" spacing={0.5} alignItems="center" sx={{ flexWrap: 'wrap', rowGap: 0.5 }} aria-label="根拠">
                 <Typography variant="caption" sx={{ mr: 0.5 }}>根拠</Typography>
