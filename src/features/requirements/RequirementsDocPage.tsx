@@ -10,16 +10,8 @@ import { tokens } from '@/theme/tokens';
 import { ProposalView } from './ProposalView';
 import { RequestApprovalButton } from '@/features/portal/RequestApprovalButton';
 import { useHearingRoutes } from './hearingRoutes';
-import { HearingAnswersSection, NonFunctionalSection, RequirementsHowTo, ScheduleSection } from './RequirementsDocSections';
+import { HearingAnswersSection, NonFunctionalSection, REQ_DOC_SECTIONS as SECTIONS, RequirementsHowTo, ScheduleSection, type ReqDocSectionId as SectionId } from './RequirementsDocSections';
 
-/** 要件定義書の節（ダウンロードする要件定義書と同じ並び） */
-const SECTIONS = [
-  { id: 'proposal', label: '1. 改善提案' },
-  { id: 'answers', label: '2. ヒアリングの回答' },
-  { id: 'schedule', label: '3. スケジュール' },
-  { id: 'nonfunctional', label: '4. 非機能要件' },
-] as const;
-type SectionId = (typeof SECTIONS)[number]['id'];
 
 /**
  * 要件定義書の画面（管理者画面 /ai-studio/requirements・開発者画面 /dev/requirements。0.28.0）。

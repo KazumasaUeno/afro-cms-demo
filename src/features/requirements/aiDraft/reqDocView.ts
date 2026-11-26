@@ -27,6 +27,16 @@ export function proposalVersionOf(p: StoredProposal | null | undefined): Proposa
   return 1;
 }
 
+/**
+ * live の「要件定義書のつくり方」のいまここ（0〜4。RequirementsHowTo の current。§3.1）。
+ * draft で下書きが無い（未生成・生成中・失敗）＝2. AI がたたき台を作成、下書きあり＝3. 内容を確認して承認を依頼、承認待ち＝4. お客様が承認、承認済み＝すべて済み
+ */
+export function liveHowToStep(status: 'draft' | 'analyzed' | 'approved', hasDraft: boolean): number {
+  if (status === 'approved') return 4;
+  if (status === 'analyzed') return 3;
+  return hasDraft ? 2 : 1;
+}
+
 // ---------------- 文言（§6） ----------------
 
 export const REQ_DOC_COPY = {

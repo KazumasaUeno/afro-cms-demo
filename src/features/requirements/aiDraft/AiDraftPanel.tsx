@@ -56,9 +56,13 @@ export interface AiDraftPanelProps {
   /** ヒアリングの「要件定義へ進む」（AI_DRAFT_COPY.goToRequirements）から来た（読み込み後に 1 回だけ生成を始め、onAutoStarted で戻す） */
   autoStart?: boolean;
   onAutoStarted?: () => void;
+  /** 未生成・生成中・失敗の面の外枠（live の要件定義書は demo の空の状態の Surface。REQDOC_U4_UI.md §3.1）。既定は Surface */
+  frame?: (body: ReactNode) => ReactNode;
+  /** 下書きの主操作（内容を確認した／承認を依頼する・保存の状態・作り直す）を描く先（PageHeader の右。v3 だけ） */
+  actionsSlot?: HTMLElement | null;
 }
 
-export function AiDraftPanel({ ai, role, isAssignedDeveloper, reqStatus, missing, onMissing, onRequestApproval, autoStart, onAutoStarted }: AiDraftPanelProps) {
+export function AiDraftPanel({ ai, role, isAssignedDeveloper, reqStatus, missing, onMissing, onRequestApproval, autoStart, onAutoStarted, frame, actionsSlot }: AiDraftPanelProps) {
   const { view, doc } = ai;
   const reduced = useReducedMotion();
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -80,7 +84,7 @@ export function AiDraftPanel({ ai, role, isAssignedDeveloper, reqStatus, missing
   }, [autoStart, ai.loading, ai.available]);
 
   if (!ai.available || view.key === 'hidden' || view.key === 'notDraft') return null;
-  if (ai.loading) return <Surface padding={2.5}><LinearProgress aria-label="読み込み中" /></Surface>;
+  if (ai.loading) return frame ? <>{frame(<LinearProgress aria-label="読み込み中" sx={{ width: '100%' }} />)}</> : <Surface padding={2.5}><LinearProgress aria-label="読み込み中" /></Surface>;
 
   const startErr = ai.startError && (
     <Note tone="danger" role="alert">
@@ -151,6 +155,7 @@ export function AiDraftPanel({ ai, role, isAssignedDeveloper, reqStatus, missing
         <AiDraftEditor
           ai={ai} view={view} generated={g} role={role} isAssignedDeveloper={isAssignedDeveloper} reqStatus={reqStatus}
           onRegenerate={view.canGenerate ? () => setRegen(true) : undefined} onRequestApproval={onRequestApproval} notes={notes}
+          actionsSlot={actionsSlot}
         />
         {regenDialog}
       </Box>
@@ -232,7 +237,7 @@ export function AiDraftPanel({ ai, role, isAssignedDeveloper, reqStatus, missing
 
   return (
     <Box aria-live="polite">
-      <Surface padding={{ xs: 2, md: 3 }}>{body}</Surface>
+      {frame ? frame(body) : <Surface padding={{ xs: 2, md: 3 }}>{body}</Surface>}
       {regenDialog}
     </Box>
   );

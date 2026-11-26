@@ -170,3 +170,10 @@ test('v3 の画面: 版の判定を v3 から・HTML を作らない・Firebase 
     assert.doesNotMatch(s, /from ['"]firebase\//, p);
   }
 });
+
+test('live のつくり方のいまここ（§3.1）', () => {
+  assert.equal(V.liveHowToStep('draft', false), 1);
+  assert.equal(V.liveHowToStep('draft', true), 2);
+  assert.equal(V.liveHowToStep('analyzed', true), 3);
+  assert.equal(V.liveHowToStep('approved', false), 4);
+});

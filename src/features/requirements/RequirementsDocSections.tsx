@@ -1,4 +1,4 @@
-import { Box, Stack, Typography } from '@mui/material';
+import { Box, Stack, Tab, Tabs, Typography } from '@mui/material';
 import { Fragment } from 'react';
 import { REQUIREMENT_CATEGORIES, REQUIREMENT_QUESTIONS } from '@/data/requirements';
 import { SectionTitle, Surface } from '@/components/ui';
@@ -11,6 +11,24 @@ import { NON_FUNCTIONAL, NON_FUNCTIONAL_NOTE, ymdText } from './requirementsDoc'
  * 要件定義書の 2〜4 節（ヒアリングの回答・スケジュール・非機能要件）を画面で見せる（2026-11-18 ユーザー指示「要件定義の内容が見れない」。
  * 以前はダウンロードした HTML にしか無かった）。中身は requirementsDoc.ts（ダウンロード）と同じ定義を使う
  */
+
+/** 要件定義書の節（ダウンロードする要件定義書と同じ並び）。demo の RequirementsDocPage と live の LiveRequirementsPage・PortalApprovalPage で共有 */
+export const REQ_DOC_SECTIONS = [
+  { id: 'proposal', label: '1. 改善提案' },
+  { id: 'answers', label: '2. ヒアリングの回答' },
+  { id: 'schedule', label: '3. スケジュール' },
+  { id: 'nonfunctional', label: '4. 非機能要件' },
+] as const;
+export type ReqDocSectionId = (typeof REQ_DOC_SECTIONS)[number]['id'];
+
+/** 節のタブ（demo の RequirementsDocPage と同じ props。live の画面で使う） */
+export function ReqDocTabs({ value, onChange }: { value: ReqDocSectionId; onChange: (v: ReqDocSectionId) => void }) {
+  return (
+    <Tabs value={value} onChange={(_, v: ReqDocSectionId) => onChange(v)} variant="scrollable" allowScrollButtonsMobile aria-label="要件定義書の節" sx={{ mb: 2.5, borderBottom: `1px solid ${tokens.color.border}` }}>
+      {REQ_DOC_SECTIONS.map((s) => <Tab key={s.id} value={s.id} label={s.label} />)}
+    </Tabs>
+  );
+}
 
 /** 見出しと値の 2 列の表（スマホは縦に積む） */
 export function KeyValueRows({ rows }: { rows: { k: string; v: React.ReactNode }[] }) {
@@ -87,14 +105,18 @@ export function NonFunctionalSection() {
  * 要件定義書のつくり方（2026-11-18 ユーザー指示「要件定義の作り方がいまいちわかっていない」）。
  * いまどこまで進んでいるかを 4 段で見せる。status: draft＝ヒアリング入力中 / analyzed＝AI のたたき台ができた / approved＝承認済み
  */
-export function RequirementsHowTo({ status, requested }: { status: RequirementSession['status']; requested: boolean }) {
+export function RequirementsHowTo({ status, requested, current: currentOverride }: {
+  status: RequirementSession['status']; requested: boolean;
+  /** いまここの段（0〜4）。live の draft で「AI がたたき台を作成」「内容を確認して承認を依頼」を示すため（REQDOC_U4_UI.md §3.1）。demo は渡さない＝見た目は不変 */
+  current?: number;
+}) {
   const steps = [
     { title: 'ヒアリングを入力', who: '開発担当者', detail: 'お客様に伺った内容（目的・課題・ターゲット・必要な機能など）を入力します。' },
     { title: 'AI がたたき台を作成', who: 'AI', detail: '回答と現行サイトの分析から、改善提案（要件定義書のたたき台）を作ります。' },
     { title: '内容を確認して承認を依頼', who: '開発担当者', detail: '下の 4 つの節を確認し、必要なら回答を直して作り直します。よければ「承認を依頼する」。' },
     { title: 'お客様が承認', who: 'お客様', detail: '承認されると、スケジュールの入力へ進みます。' },
   ];
-  const current = status === 'draft' ? 0 : status === 'approved' ? 4 : requested ? 3 : 2;
+  const current = currentOverride ?? (status === 'draft' ? 0 : status === 'approved' ? 4 : requested ? 3 : 2);
   return (
     <Surface sx={{ mb: 3 }}>
       <SectionTitle title="要件定義書のつくり方" />

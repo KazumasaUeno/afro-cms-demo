@@ -74,6 +74,8 @@ export interface AiDraftEditorProps {
   onRequestApproval: () => Promise<boolean>;
   /** 注記（answersChanged・再生成失敗）は AiDraftPanel が出す */
   notes?: React.ReactNode;
+  /** 主操作を描く先（v3 だけ。AiDraftPanel の actionsSlot） */
+  actionsSlot?: HTMLElement | null;
 }
 
 /** 版で分ける（v3 → v2）。v3 の下書きを v2 の編集画面で開くと draft が無く落ちる（U4 の持ち越し） */
