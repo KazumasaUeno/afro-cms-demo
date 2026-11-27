@@ -14,7 +14,7 @@ import { changedDone, type WbsSource } from '@/features/schedule/scheduleSource'
 import { wbsStartOf } from '@/features/schedule/wbsProgress';
 import {
   liveWbsDone, liveWbsItems, liveWbsRows, markNotes, scheduleButtons, scheduleOpened, scheduleSaveKind, scheduleTokenOf,
-  SCHEDULE_BLOCKED_TEXT, SCHEDULE_REQUESTED_WBS_NOTE, wbsOpened, wbsTokenOf,
+  SCHEDULE_BLOCKED_TEXT, SCHEDULE_REQUESTED_WBS_NOTE, wbsOpened, wbsTaskListOf, wbsTokenOf,
 } from '@/features/schedule/liveScheduleUi';
 import { ApprovalRequestedPill, RequestApprovalAction } from '@/features/portal/RequestApprovalButtonView';
 import { cleanProxyNote, PROXY_NOTE_MAX, proxyNoteLength, validateProxyNote } from '../proxyApproval';
@@ -60,7 +60,7 @@ export function useLiveWbsSource(pid: string, sch: LiveScheduleQuery, view: Demo
   const start = wbsStartOf(view);
   const items = useMemo(() => liveWbsItems(view.schedule, start), [view.schedule, start]);
   const done = useMemo(() => liveWbsDone(sch.current), [sch.current]);
-  const taskList = tasks.error ? null : tasks.data;
+  const taskList = wbsTaskListOf(afro, tasks);
   return useMemo<WbsSource>(() => ({
     items, done,
     rows: (list, today, d) => liveWbsRows(list, d, taskList, today),

@@ -1,9 +1,10 @@
 // live のスケジュール画面（U3-b）の判定（src/features/schedule/liveScheduleUi.ts・scheduleSource.ts）。React・Firebase を import しない。
 // 実行: npm run test:unit
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import {
-  liveDetailNext, liveWbsDone, liveWbsItems, liveWbsRows, markNotes, scheduleButtons, scheduleOpened, scheduleSaveKind, scheduleTokenOf, SCHEDULE_REQUESTED_WBS_NOTE, wbsOpened, wbsTokenOf,
+  liveDetailNext, liveWbsDone, liveWbsItems, liveWbsRows, markNotes, scheduleButtons, scheduleOpened, scheduleSaveKind, scheduleTokenOf, SCHEDULE_REQUESTED_WBS_NOTE, wbsOpened, wbsTaskListOf, wbsTokenOf,
 } from '../../src/features/schedule/liveScheduleUi.ts';
 import { changedDone, sameDone } from '../../src/features/schedule/scheduleSource.ts';
 import { validateScheduleInput } from '../../src/live/schedule.ts';
@@ -35,6 +36,24 @@ test('liveWbsRows（構築タスクが読めない）: 構築は％不明、後�
   const done = liveWbsRows(its, { quality: true }, null, '2026-12-01').find((r) => r.id === 'build');
   assert.deepEqual([done.done, done.percent, done.status, done.percentUnknown], [true, 100, 'done', undefined]);
   assert.equal(liveWbsRows(its, {}, [], '2026-12-01').find((r) => r.id === 'build').percentUnknown, undefined, 'アフロ側（読める）は従来どおり');
+});
+
+test('wbsTaskListOf → liveWbsRows（配線。QA D-1）: お客様は useLiveTasks が [] でも null 扱いで％不明、アフロの 0 件は 0%', () => {
+  const its = liveWbsItems(sched, '2026-12-01');
+  const build = (afro, tasks) => liveWbsRows(its, {}, wbsTaskListOf(afro, tasks), '2026-12-01').find((r) => r.id === 'build');
+  // お客様: useLiveTasks(null) は { data: [] }（NO_TASKS）を返す
+  const client = build(false, { data: [], error: null });
+  assert.deepEqual([client.percentUnknown, client.tasks], [true, undefined]);
+  assert.equal(liveWbsRows(its, { release: true }, wbsTaskListOf(false, { data: [], error: null }), '2026-12-01').find((r) => r.id === 'build').percent, 100);
+  // アフロ側: 0 件は 0%（％を出す）・読み取りの失敗は％不明
+  const afro0 = build(true, { data: [], error: null });
+  assert.deepEqual([afro0.percentUnknown, afro0.percent, afro0.tasks.total], [undefined, 0, 0]);
+  assert.equal(build(true, { data: [], error: new Error('x') }).percentUnknown, true);
+  // useLiveWbsSource が判定を通っている（空配列で判定する式に戻っていない）
+  const page = readFileSync(new URL('../../src/live/pages/LiveSchedulePage.tsx', import.meta.url), 'utf8');
+  assert.match(page, /const taskList = wbsTaskListOf\(afro, tasks\);/);
+  assert.match(page, /const afro = account\.role === 'admin' \|\| account\.role === 'developer';/);
+  assert.doesNotMatch(page, /tasks\.error \? null : tasks\.data/);
 });
 
 test('SCHEDULE_REQUESTED_WBS_NOTE: 依頼中に WBS を変えるときの注意（CR Minor 4。文言は lead 判断）', () => {

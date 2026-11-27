@@ -48,6 +48,9 @@ emulator / dev サーバーのログに error・denied は 0 件。
 - [FACT] 原因: `useLiveWbsSource`（src/live/pages/LiveSchedulePage.tsx:55・65）はお客様のとき `useLiveTasks(null)` を呼ぶ。`useSnapshot` は key が null のとき `{ data: empty }`（src/live/useSnapshot.ts の snapshotView）、empty は `NO_TASKS = []`（src/live/repositories.tsx:138・151）。`taskList = tasks.error ? null : tasks.data` は `[]` になり、`wbsProgressLive(…, [], …)` は `percentUnknown` を付けない（単体テスト SU-08 も `[]` では undefined を期待）。f340560 の修正は `tasks === null` の経路にしか効かず、お客様では一度も通らない
 - 単体テスト SU-08 は `wbsProgressLive(…, null, …)` を直接呼ぶため緑のまま（部品の「あいだ」が未検証）
 - 差し戻し先: frontend（お客様のときは taskList を null にする等）。回帰テストは hook の配線（お客様→null）を含めること
+- **修正（frontend-engineer）**: 判定を `wbsTaskListOf(afro, tasks)`（src/features/schedule/liveScheduleUi.ts）へ移し、`useLiveWbsSource` は `const taskList = wbsTaskListOf(afro, tasks);` にした。afro（admin・developer）でない人と読み取りの失敗は null、空配列では判定しない（アフロ側の 0 件は 0% のまま）。お客様の画面（/portal/schedule・案件詳細）は同じ hook を通る
+- 回帰テスト（tests/unit/liveScheduleUi.test.mjs「wbsTaskListOf → liveWbsRows（配線。QA D-1）」）: お客様＋`{ data: [] }` → ％不明・後の行に完了印で 100%、アフロ＋0 件 → 0%、アフロ＋失敗 → ％不明、hook の式が `wbsTaskListOf(afro, tasks)` で `tasks.error ? null : tasks.data` に戻っていないことをソースで確認。test:unit 210/0/0、typecheck 0、build・build:live 成功。画面での再確認（/portal/schedule の表示）は未実施
+- demo `/dev/schedule` 1280 幅の約 16px: **この修正とは無関係と判断（再現は未確認）**。WbsSection の origin/main との差分で幅に関わるのは、バーの塗りを `percentUnknown` のときだけ出さない 1 か所だけ（demo の行は percentUnknown を持たない）。注意の文言は `source` があるときだけ。図の幅は枠の `ResizeObserver` の contentRect から決まり（WbsSection.tsx:126-133）、約 16px は縦スクロールバーの幅と同じ。撮影の揺れという QA の仮説と合う
 
 ## 3. demo の見た目の同一性（branch vs origin/main）
 

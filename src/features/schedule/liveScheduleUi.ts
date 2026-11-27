@@ -35,6 +35,14 @@ const devTask = (t: TaskDoc): DevTask => ({
   id: t.id, page: t.page, title: t.title, assigneeId: t.assigneeUids[0] ?? '', assigneeIds: t.assigneeUids, status: t.status, updatedAt: t.updatedAt,
 });
 
+/**
+ * 実績に渡す構築タスク。読めない人（お客様＝afro でない・読み取りの失敗）は null（構築の行は％を出さない）。
+ * 空配列で判定しない（お客様の useLiveTasks(null) も [] を返す。アフロ側の 0 件は 0% のまま。QA D-1）
+ */
+export function wbsTaskListOf(afro: boolean, tasks: { data: readonly TaskDoc[]; error?: unknown }): readonly TaskDoc[] | null {
+  return afro && !tasks.error ? tasks.data : null;
+}
+
 /** 実績（構築の行は構築タスク、他の行は下書きの完了印）。tasks が null（読めない）なら構築の行は後の行の完了印か日付だけで状態を出し、割合は出さない（wbsProgressLive） */
 export function liveWbsRows(items: readonly WbsItem[], done: WbsDone, tasks: readonly TaskDoc[] | null, today: string): WbsRow[] {
   const marked: LiveWbsItem[] = items.map((w) => (w.id !== 'build' && done[w.id] ? { ...w, doneAt: 'marked' } : { ...w }));
