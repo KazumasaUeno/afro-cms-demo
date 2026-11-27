@@ -10,7 +10,8 @@ import { buildProposal } from '@/features/requirements/buildProposal';
 import { isAnswered, validateAnswer } from '@/features/requirements/validation';
 import { projectFromDraft, siteHost } from '@/features/projects/projectForm';
 import type { Query, Repositories } from '@/repositories/types';
-import type { AnswerValue, ApprovalLog, ClientAccount, DevUser } from '@/types';
+import type { AnswerValue, ApprovalLog, ClientAccount, DevUser, WbsId, WbsItem } from '@/types';
+import type { ScheduleDraft } from '@/data/schedule';
 import type { AiDraftDoc, AiEditableV3, StoredProposal } from '@/types/aiDraft';
 import { REQ_DOC_COPY, reqDocSubmitBlock, submitBlockText } from '@/features/requirements/aiDraft/reqDocView';
 import { isJobRunning } from '@/features/requirements/aiDraft/aiDraftState';
@@ -22,6 +23,11 @@ import {
 import { TASK_LIMIT, newestTasksInOrder, type NewTaskInput } from './tasks';
 import { cleanConsultText, consultBlock, consultSide, seqId, validateConsultText } from './consult';
 import { cleanProxyNote, validateProxyNote, proxyVersionOk } from './proxyApproval';
+import {
+  clientNeedsApprovedCopy, cleanScheduleReason, sameAssignees, sameDates, SCHEDULE_CONFLICT_TEXT, SCHEDULE_REVISION_MAX, scheduleApprovedCopyOf, scheduleConflict,
+  scheduleDoc, scheduleForSave, scheduleInternalDoc, validateScheduleInput, validateScheduleReason, validateWbsInput, wbsForSave, wbsWriteChanged,
+  type ScheduleApprovedCopy, type ScheduleCurrent, type ScheduleDates, type ScheduleInternal, type ScheduleSummary,
+} from './schedule';
 import { PendingAnswers } from './pendingAnswers';
 import { cancelScheduledWrites, type ScheduledWrite } from './pendingWrites';
 import type { LiveSession } from './session';
@@ -266,6 +272,309 @@ export function useAccountPeople(uids: readonly string[]): Record<string, DevPer
 
 function unknownPerson(id: string): DevPerson {
   return devUserToPerson({ id, name: '担当者（協力会社）', role: '', email: '', affiliation: 'partner', status: 'active', createdAt: '' });
+}
+
+/* ---------- スケジュール（projects/{pid}.schedule・schedule/current・internal・approvals schedule-r{rev}-*。LIVE_SCHEDULE_PLAN §2・U2-2） ---------- */
+
+const schedRef = (pid: string, sid: 'current' | 'internal') => doc(db, 'projects', pid, 'schedule', sid);
+const schedApprRef = (pid: string, rev: number, action: 'submit' | 'approve' | 'withdraw' | 'reopen') =>
+  doc(db, 'projects', pid, 'approvals', `schedule-r${rev}-${action}`);
+
+/** 競合（ほかの人が先に保存した・表示した後に内容が変わった）。画面は最新を読み込んだ旨を出す（AC-08・L-18） */
+export class ScheduleConflictError extends Error {}
+
+export interface LiveScheduleQuery {
+  summary: ScheduleSummary | null;
+  current: ScheduleCurrent | null;
+  /** 管理者・担当の開発者だけ（お客様は購読しない＝常に null） */
+  internal: ScheduleInternal | null;
+  /** お客様だけ: 下書き中で current の版が最後に承認された版と違うときの承認の記録の写し（clientScheduleView に渡す） */
+  approvedCopy: ScheduleApprovedCopy | null;
+  loading: boolean;
+  error: Error | null;
+}
+
+/**
+ * 1 案件のスケジュール（リアルタイム）。要約は案件文書（p:{pid}）。
+ * 管理者・開発者: 要約があるときだけ current と internal を購読。お客様: current だけ、revision >= 1 のときだけ（S-1）。internal は購読しない
+ */
+export function useLiveSchedule(projectId: string | null): LiveScheduleQuery {
+  const client = useLiveData().session.account.role === 'client';
+  const p = useSnapshot<ProjectDoc | null>(projectId ? `p:${projectId}` : null, (next, fail) =>
+    onSnapshot(projRef(projectId!), (s) => next(s.exists() ? projectDoc(s) : null), fail), null);
+  const summary = p.data?.schedule ?? null;
+  const readCurrent = !!projectId && !!summary && (!client || summary.revision >= 1);
+  const c = useSnapshot<ScheduleCurrent | null>(readCurrent ? `sc:${projectId}` : null, (next, fail) =>
+    onSnapshot(schedRef(projectId!, 'current'), (s) => next(s.exists() ? scheduleDoc(s.data({ serverTimestamps: 'estimate' }), s.data()) : null), fail), null);
+  const readInternal = !!projectId && !!summary && !client;
+  const i = useSnapshot<ScheduleInternal | null>(readInternal ? `si:${projectId}` : null, (next, fail) =>
+    onSnapshot(schedRef(projectId!, 'internal'), (s) => next(s.exists() ? scheduleInternalDoc(s.data({ serverTimestamps: 'estimate' })) : null), fail), null);
+  const copyRev = client && !c.loading ? clientNeedsApprovedCopy(summary, c.data) : null;
+  const a = useSnapshot<ScheduleApprovedCopy | null>(projectId && copyRev !== null ? `sa:${projectId}:${copyRev}` : null, (next, fail) =>
+    onSnapshot(schedApprRef(projectId!, copyRev!, 'approve'), (s) => next(s.exists() ? scheduleApprovedCopyOf(s.data()) : null), fail), null);
+  return useMemo(() => ({
+    summary, current: c.data, internal: i.data, approvedCopy: a.data,
+    loading: p.loading || c.loading || i.loading || a.loading,
+    error: p.error ?? c.error ?? i.error ?? a.error,
+  }), [summary, c.data, i.data, a.data, p.loading, c.loading, i.loading, a.loading, p.error, c.error, i.error, a.error]);
+}
+
+/** 表示した版（承認の引数。ScheduleCurrent をそのまま渡せる。copy があればそれを写す＝L-18） */
+export interface ScheduleShown { revision: number; editSeq: number; copy?: Record<string, unknown> }
+
+export interface LiveScheduleActions {
+  /** 予定日の下書きとメモ（初回は init）。openedEditSeq は開いた時点の internal.editSeq（未作成なら null） */
+  save: (draft: ScheduleDraft, openedEditSeq: number | null) => Promise<void>;
+  /** WBS の日付・担当・完了印。done は変えた行だけ（true＝付ける・false＝外す）。opened は開いた時点の current・internal の editSeq */
+  saveWbs: (wbs: readonly WbsItem[], done: Partial<Record<WbsId, boolean>>, opened: { current: number; internal: number }) => Promise<void>;
+  submit: () => Promise<void>;
+  withdraw: (note: string) => Promise<void>;
+  /** 承認済みの予定日を変える（再計画。理由は必須でお客様にも見える） */
+  reopenAndSave: (draft: ScheduleDraft, note: string, openedEditSeq: number) => Promise<void>;
+  approve: (shown: ScheduleShown) => Promise<void>;
+  proxyApprove: (shown: ScheduleShown & { requestedAt: string | undefined }, note: string) => Promise<void>;
+}
+
+const isDenied = (e: unknown) => String((e as { code?: string }).code ?? '').endsWith('permission-denied');
+
+/** 送信中の保存（submit は先に待つ＝要件定義書の flushNow 相当） */
+const schedInflight = new Map<string, Set<Promise<unknown>>>();
+function trackSched<T>(pid: string, run: Promise<T>): Promise<T> {
+  const set = schedInflight.get(pid) ?? new Set();
+  schedInflight.set(pid, set);
+  set.add(run);
+  const done = () => { set.delete(run); };
+  run.then(done, done);
+  return run;
+}
+
+/**
+ * スケジュールの操作（1 操作＝1 runTransaction。形は firestore.rules の sched* の述語どおり）。
+ * 楽観的排他: 開いた時点の editSeq ≠ TX 内 → ScheduleConflictError（Rules も editSeq == 前 + 1。L-4）。
+ * 承認: 表示した版で送り写しは表示した値（L-18）。二重送信は WARN＋成功扱い、本人と代理がぶつかれば例外。permission-denied は「権限がありません」
+ */
+export function useLiveScheduleActions(projectId: string): LiveScheduleActions {
+  const { session } = useLiveData();
+  return useMemo<LiveScheduleActions>(() => {
+    const { uid, account } = session;
+    const pid = projectId;
+    const afro = () => {
+      if (account.role !== 'admin' && account.role !== 'developer') throw new Error('スケジュールを変更できるのは、担当の開発者と管理者だけです');
+    };
+    const denied = (e: unknown): never => {
+      if (e instanceof ScheduleConflictError) throw e;
+      if (isDenied(e)) {
+        console.warn('schedule write denied', { projectId: pid });
+        throw new Error('権限がありません（担当が変わった・アーカイブされた・ほかの人が先に操作した可能性があります）');
+      }
+      throw e;
+    };
+    /** 書ける状態か（要件定義書の承認後・アーカイブでない）を画面側でも見る */
+    const gate = (ps: { exists: () => boolean }): ProjectDoc => {
+      if (!ps.exists()) throw new Error('案件が見つかりません');
+      const p = projectDoc(ps as Parameters<typeof projectDoc>[0]);
+      if (p.archived) throw new Error('アーカイブ中の案件は変更できません');
+      if (p.requirements.status !== 'approved') throw new Error('要件定義書の承認の後にスケジュールを入れられます');
+      return p;
+    };
+    const checkDraft = (draft: ScheduleDraft) => {
+      const first = Object.values(validateScheduleInput(draft))[0];
+      if (first) throw new Error(first);
+      return scheduleForSave(draft);
+    };
+    const reason = (raw: string) => {
+      const note = cleanScheduleReason(raw);
+      const err = validateScheduleReason(note);
+      if (err) throw new Error(err);
+      return note;
+    };
+    const internalFields = (draft: ScheduleDates, note: string) => ({ draft, note: note || deleteField(), savedByName: account.name });
+
+    const save: LiveScheduleActions['save'] = async (input, openedEditSeq) => {
+      afro();
+      const { draft, note } = checkDraft(input);
+      await trackSched(pid, runTransaction(db, async (tx) => {
+        const ps = await tx.get(projRef(pid));
+        const is = await tx.get(schedRef(pid, 'internal'));
+        const sum = gate(ps).schedule ?? null;
+        const before = is.exists() ? scheduleInternalDoc(is.data()) : null;
+        if (scheduleConflict({ editSeq: openedEditSeq }, { editSeq: before?.editSeq ?? null })) throw new ScheduleConflictError(SCHEDULE_CONFLICT_TEXT.save);
+        if (!sum) {
+          // init（なし → draft）: 要約・current・internal を同じ書き込みで作る。WBS と完了印は持たない（L-23）
+          const cs = await tx.get(schedRef(pid, 'current'));
+          if (cs.exists() || is.exists()) throw new ScheduleConflictError(SCHEDULE_CONFLICT_TEXT.save);
+          tx.update(projRef(pid), { schedule: { status: 'draft', revision: 0 }, ...stamp(uid) });
+          tx.set(schedRef(pid, 'current'), { schemaVersion: 1, revision: 0, editSeq: 0, ...stamp(uid) });
+          tx.set(schedRef(pid, 'internal'), { schemaVersion: 1, draft, ...(note ? { note } : {}), savedByName: account.name, editSeq: 0, ...stamp(uid) });
+          return;
+        }
+        if (!before) throw new Error('スケジュールの記録が見つかりません');
+        const datesChanged = !sameDates(before.draft, draft);
+        if (datesChanged && sum.status === 'requested') throw new Error('お客様に承認を依頼している間は予定日を変えられません。依頼を取り下げてから変えてください');
+        if (datesChanged && sum.status === 'approved') throw new Error('承認済みの予定日を変えるには、理由を入れて再計画してください');
+        const f = internalFields(draft, note);
+        tx.update(schedRef(pid, 'internal'), {
+          ...(datesChanged ? f : { note: f.note, savedByName: f.savedByName }), editSeq: before.editSeq + 1, ...stamp(uid),
+        });
+      })).catch(denied);
+    };
+
+    const saveWbs: LiveScheduleActions['saveWbs'] = async (items, done, opened) => {
+      afro();
+      const row = Object.values(validateWbsInput(items))[0];
+      const first = row && Object.values(row)[0];
+      if (first) throw new Error(first);
+      await trackSched(pid, runTransaction(db, async (tx) => {
+        const ps = await tx.get(projRef(pid));
+        const cs = await tx.get(schedRef(pid, 'current'));
+        const is = await tx.get(schedRef(pid, 'internal'));
+        if (!gate(ps).schedule || !cs.exists() || !is.exists()) throw new Error('先に予定日を保存してください');
+        const rawCur = cs.data() as DocumentData;
+        const cur = scheduleDoc(rawCur);
+        const int = scheduleInternalDoc(is.data());
+        if (!cur || !int) throw new Error('スケジュールの記録が読めません');
+        if (scheduleConflict({ editSeq: opened.current }, { editSeq: cur.editSeq })
+          || scheduleConflict({ editSeq: opened.internal }, { editSeq: int.editSeq })) throw new ScheduleConflictError(SCHEDULE_CONFLICT_TEXT.save);
+        const now = serverTimestamp();
+        const w = wbsForSave(items, rawCur.wbs, done, now, uid);
+        if (wbsWriteChanged(w.wbs, rawCur.wbs, w.marks)) {
+          tx.update(schedRef(pid, 'current'), { wbs: w.wbs, editSeq: cur.editSeq + 1, ...stamp(uid) });
+        }
+        const marks = Object.entries(w.marks);
+        const asgChanged = !sameAssignees(w.assignees, int.assignees);
+        if (marks.length || asgChanged) {
+          // 完了印の記録は行ごと（変えない行は読んだまま残す＝Rules の markOk は前の値との等式）
+          tx.update(schedRef(pid, 'internal'), {
+            ...Object.fromEntries(marks.map(([id, m]) => [`marks.${id}`, m])),
+            ...(asgChanged ? { assignees: Object.keys(w.assignees).length ? w.assignees : deleteField() } : {}),
+            savedByName: account.name, editSeq: int.editSeq + 1, ...stamp(uid),
+          });
+        }
+      })).catch(denied);
+    };
+
+    const submit: LiveScheduleActions['submit'] = async () => {
+      afro();
+      await Promise.allSettled([...(schedInflight.get(pid) ?? [])]);
+      await runTransaction(db, async (tx) => {
+        const ps = await tx.get(projRef(pid));
+        const cs = await tx.get(schedRef(pid, 'current'));
+        const is = await tx.get(schedRef(pid, 'internal'));
+        const sum = gate(ps).schedule ?? null;
+        if (!sum || !cs.exists() || !is.exists()) throw new Error('先に予定日を保存してください');
+        if (sum.status !== 'draft') throw new Error(sum.status === 'requested' ? 'すでに承認を依頼しています' : '承認済みです。予定日を変えるときは再計画してください');
+        const rev = sum.revision + 1;
+        if (rev > SCHEDULE_REVISION_MAX) throw new Error(`承認の依頼は${SCHEDULE_REVISION_MAX}回までです`);
+        const rawCur = cs.data() as DocumentData;
+        const cur = scheduleDoc(rawCur);
+        const draft = scheduleInternalDoc(is.data())?.draft;
+        if (!cur || !draft) throw new Error('予定日を保存してから依頼してください');
+        // current の予定日は下書きの写し（schedDraftCopy）。承認の記録はその後の current の写し（schedCopyOk。wbs は読んだまま）
+        tx.update(schedRef(pid, 'current'), {
+          revision: rev, deliveryDate: draft.deliveryDate, releaseDate: draft.releaseDate,
+          ...(draft.buildDue ? { buildDue: draft.buildDue } : rawCur.buildDue !== undefined ? { buildDue: deleteField() } : {}),
+          editSeq: cur.editSeq + 1, ...stamp(uid),
+        });
+        tx.set(schedApprRef(pid, rev, 'submit'), {
+          schemaVersion: 1, kind: 'schedule', action: 'submit', revision: rev, side: 'afro', ...actor(session), at: serverTimestamp(),
+          ...(draft.buildDue ? { buildDue: draft.buildDue } : {}), deliveryDate: draft.deliveryDate, releaseDate: draft.releaseDate,
+          ...(rawCur.wbs !== undefined ? { wbs: rawCur.wbs } : {}),
+        });
+        tx.update(projRef(pid), {
+          'schedule.status': 'requested', 'schedule.revision': rev, 'schedule.requestedAt': serverTimestamp(), 'schedule.releaseDate': draft.releaseDate, ...stamp(uid),
+        });
+      }).catch(denied);
+    };
+
+    const withdraw: LiveScheduleActions['withdraw'] = async (raw) => {
+      afro();
+      const note = reason(raw);
+      await runTransaction(db, async (tx) => {
+        const sum = gate(await tx.get(projRef(pid))).schedule ?? null;
+        if (sum?.status !== 'requested') throw new Error('取り下げられるのは、お客様の承認待ちの間だけです');
+        tx.set(schedApprRef(pid, sum.revision, 'withdraw'), {
+          schemaVersion: 1, kind: 'schedule', action: 'withdraw', revision: sum.revision, side: 'afro', ...actor(session), at: serverTimestamp(), note,
+        });
+        tx.update(projRef(pid), { 'schedule.status': 'draft', ...stamp(uid) });
+      }).catch(denied);
+    };
+
+    const reopenAndSave: LiveScheduleActions['reopenAndSave'] = async (input, rawNote, openedEditSeq) => {
+      afro();
+      const { draft, note: memo } = checkDraft(input);
+      const note = reason(rawNote);
+      await trackSched(pid, runTransaction(db, async (tx) => {
+        const ps = await tx.get(projRef(pid));
+        const is = await tx.get(schedRef(pid, 'internal'));
+        const sum = gate(ps).schedule ?? null;
+        if (sum?.status !== 'approved') throw new Error('再計画できるのは、お客様の承認の後だけです');
+        const before = is.exists() ? scheduleInternalDoc(is.data()) : null;
+        if (!before) throw new Error('スケジュールの記録が見つかりません');
+        if (scheduleConflict({ editSeq: openedEditSeq }, { editSeq: before.editSeq })) throw new ScheduleConflictError(SCHEDULE_CONFLICT_TEXT.save);
+        tx.update(schedRef(pid, 'internal'), { ...internalFields(draft, memo), editSeq: before.editSeq + 1, ...stamp(uid) });
+        tx.set(schedApprRef(pid, sum.revision, 'reopen'), {
+          schemaVersion: 1, kind: 'schedule', action: 'reopen', revision: sum.revision, side: 'afro', ...actor(session), at: serverTimestamp(), note,
+        });
+        tx.update(projRef(pid), { 'schedule.status': 'draft', ...stamp(uid) });
+      })).catch(denied);
+    };
+
+    /** お客様の承認と代理承認の共通部分（L-18: 表示した版で送る。写しは表示した値） */
+    const approveAs = async (shown: ScheduleShown, proxy: { note: string; requestedAt: string | undefined } | null) => {
+      let rev = -1;
+      try {
+        await runTransaction(db, async (tx) => {
+          const ps = await tx.get(projRef(pid));
+          const cs = await tx.get(schedRef(pid, 'current'));
+          const sum = gate(ps).schedule ?? null;
+          if (sum?.status !== 'requested') throw new Error('いまは承認できる状態ではありません');
+          rev = sum.revision;
+          if (proxy && !proxyVersionOk(proxy.requestedAt, sum.requestedAt)) {
+            throw new ScheduleConflictError('スケジュールが更新されました。内容を確認し直してから代理で承認してください');
+          }
+          const cur = cs.exists() ? scheduleDoc(cs.data() as DocumentData) : null;
+          if (!cur || cur.revision !== sum.revision || scheduleConflict(shown, { editSeq: cur.editSeq, revision: sum.revision })) {
+            throw new ScheduleConflictError(SCHEDULE_CONFLICT_TEXT.approve);
+          }
+          tx.set(schedApprRef(pid, rev, 'approve'), {
+            schemaVersion: 1, kind: 'schedule', action: 'approve', revision: rev, side: proxy ? 'afro' : 'client', ...actor(session), at: serverTimestamp(),
+            ...(proxy ? { proxy: true, note: proxy.note } : {}),
+            ...(shown.copy ?? cur.copy),
+          });
+          tx.update(projRef(pid), {
+            'schedule.status': 'approved', 'schedule.approvedRevision': rev, 'schedule.approvedAt': serverTimestamp(), 'schedule.approvedBy': uid,
+            'schedule.approvalId': `schedule-r${rev}-approve`, 'schedule.approvedVia': proxy ? 'proxy' : deleteField(), ...stamp(uid),
+          });
+        });
+      } catch (e) {
+        // 二重承認（2 タブ・再送）は Rules が拒否する。同じ種類の記録が既にあれば承認済みとして扱う（無音にしない。§4）
+        if (rev >= 0 && isDenied(e)) {
+          const existing = await getDoc(schedApprRef(pid, rev, 'approve')).catch(() => null);
+          if (existing?.exists()) {
+            if ((existing.data()?.proxy === true) !== !!proxy) throw new Error(proxy ? 'お客様がすでに承認しています' : 'アフロがすでに代理で承認しています');
+            console.warn('schedule approval already exists', { projectId: pid, aid: existing.id });
+            return;
+          }
+        }
+        denied(e);
+      }
+    };
+
+    return {
+      save, saveWbs, submit, withdraw, reopenAndSave,
+      approve: async (shown) => {
+        if (account.role !== 'client') throw new Error('スケジュールの承認はお客様ご本人だけが行えます');
+        await approveAs(shown, null);
+      },
+      proxyApprove: async (shown, raw) => {
+        if (account.role !== 'admin') throw new Error('代理で承認できるのは管理者だけです');
+        const note = cleanProxyNote(raw);
+        const err = validateProxyNote(note);
+        if (err) throw new Error(err);
+        await approveAs(shown, { note, requestedAt: shown.requestedAt });
+      },
+    };
+  }, [session, projectId]);
 }
 
 const EMPTY_REQ: ReqDoc | null = null;

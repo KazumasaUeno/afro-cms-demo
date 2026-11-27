@@ -88,6 +88,11 @@ export interface Project {
   /** プレビュー用のブランド色 */
   accent: string;
   launchDate?: ISODate;
+  /**
+   * live だけ: 一覧に出す公開予定日（yyyy-mm-dd。お客様に依頼したスケジュールの公開予定日、無ければ launchDate の日本時間の暦日）。
+   * launchDate は上書きしない（基本情報の編集が launchDate をそのまま戻すため。LIVE_SCHEDULE_PLAN L-21）。demo は持たない
+   */
+  releaseYmd?: string;
   pendingApprovals: number;
   /**
    * 追加開発の元の案件（Project.id。0.31.0。2026-11-13 ユーザー決定）。改善の段階の案件の AI 改善提案から、別の案件として起こしたときだけ持つ。

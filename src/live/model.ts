@@ -1,6 +1,7 @@
 import type { DocumentData, DocumentSnapshot, QueryDocumentSnapshot } from 'firebase/firestore';
 import type { AnswerMeta, AnswerValue, ApprovalLog, ClientAccount, DevUser, Project, Proposal, ProposalPoint, RequirementSession, Stage } from '@/types';
 import { isProposalV2, isProposalV3, type ProposalV2, type ProposalV3, type StoredProposal } from '@/types/aiDraft';
+import { releaseYmdOf, scheduleSummaryOf, type ScheduleStatus, type ScheduleSummary } from './schedule';
 
 /**
  * Firestore の文書（BACKEND_FIREBASE §5）⇔ 画面の型（types/index.ts）。日時は Timestamp → ISO 文字列。
@@ -48,6 +49,11 @@ export interface ProjectDoc {
   updatedAt: string;
   /** 相談の要約（最後の 1 件の写し。無い案件は相談なし＝null。Migration 不要。LIVE_DASHBOARD_TASKS_CONSULT §2.2） */
   consult: ConsultSummary | null;
+  /**
+   * スケジュールの要約（状態の正。無い案件・壊れた値は未作成＝null。LIVE_SCHEDULE_WBS_DATA §2.1）。
+   * 単体テストの古い固定値は持たないことがある（undefined も未作成として扱う）
+   */
+  schedule?: ScheduleSummary | null;
 }
 
 /** projects/{pid}.consult（messages の最後の 1 件の写し。firestore.rules consultOk がメッセージと同じ書き込みでだけ許す） */
@@ -100,6 +106,7 @@ export function projectDoc(s: Snap): ProjectDoc {
     archived: d.archived === true,
     updatedAt,
     consult: consultOf(d.consult, updatedAt),
+    schedule: scheduleSummaryOf(d.schedule),
   };
 }
 
@@ -109,12 +116,31 @@ const STAGE: Record<ReqStatus, { stage: Stage; progress: number; next: string; p
   approved: { stage: 'requirements', progress: 25, next: '要件定義書 承認済み', pending: 0 },
 };
 
+/**
+ * 要件定義書の承認後はスケジュールの段階（LIVE_SCHEDULE_WBS_DATA §5・LIVE_SCHEDULE_PLAN U2-1）。文言・進捗は demo の derivedDemoProject に合わせる
+ * （未作成 21%「スケジュールを入力する」・下書き 23%「承認を依頼する」・依頼中 23%「承認を待つ」）。承認済みの先（制作）は live にまだ無いので
+ * 段階はスケジュールのまま「スケジュール 承認済み」
+ */
+const SCHEDULE_STAGE: Record<ScheduleStatus | 'none', { stage: Stage; progress: number; next: string; pending: number }> = {
+  none: { stage: 'schedule', progress: 21, next: 'スケジュールを入力する', pending: 0 },
+  draft: { stage: 'schedule', progress: 23, next: 'スケジュールの承認を依頼する', pending: 0 },
+  requested: { stage: 'schedule', progress: 23, next: 'お客様のスケジュール承認を待つ', pending: 1 },
+  approved: { stage: 'schedule', progress: 25, next: 'スケジュール 承認済み', pending: 0 },
+};
+
+/**
+ * 案件の文書 → 画面の Project。launchDate は保存値のまま（スケジュールの公開予定日で上書きしない。基本情報の編集フォームが
+ * launchDate をそのまま戻すため。L-21・C-01）。一覧の公開予定日は releaseYmd（submit 済みのスケジュール → 無ければ launchDate の日本時間の暦日）
+ */
 export function toProject(p: ProjectDoc): Project {
-  const s = STAGE[p.requirements.status];
+  const sched = p.schedule ?? null;
+  const s = p.requirements.status === 'approved' ? SCHEDULE_STAGE[sched?.status ?? 'none'] : STAGE[p.requirements.status];
+  const releaseYmd = releaseYmdOf(sched, p.launchDate);
   return {
     id: p.id, clientName: p.clientName, siteName: p.siteName, siteUrl: p.siteUrl, industry: p.industry,
     stage: s.stage, progress: s.progress, ownerId: p.ownerUid, updatedAt: p.updatedAt, nextAction: s.next,
     accent: p.accent, ...(p.launchDate ? { launchDate: p.launchDate } : {}), pendingApprovals: s.pending,
+    ...(releaseYmd ? { releaseYmd } : {}),
   };
 }
 

@@ -29,7 +29,7 @@ test('dashboardCards: 段階・進捗・次の作業は requirements.status か�
   assert.deepEqual(cards.map((p) => [p.stage, p.progress, p.nextAction, p.pendingApprovals]), [
     ['requirements', 15, 'お客様の承認を待つ', 1],
     ['hearing', 5, 'ヒアリングを入力する', 0],
-    ['requirements', 25, '要件定義書 承認済み', 0],
+    ['schedule', 21, 'スケジュールを入力する', 0], // 要件定義書の承認後はスケジュールの段階（LIVE_SCHEDULE_PLAN U2-1）
   ]);
   assert.equal(cards[0].launchDate, '2027-01-10T00:00:00.000Z');
   assert.equal('launchDate' in cards[1], false);
