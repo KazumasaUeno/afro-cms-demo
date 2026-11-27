@@ -19,7 +19,7 @@ test('statusCounts: 状態ごとの件数（無い状態も 0）', () => {
   assert.equal(REQ_STATUS_ORDER.reduce((n, s) => n + c[s], 0), docs.length);
 });
 
-test('REQ_STATUS_ORDER: ヒアリング入力中 → 承認待ち → 承認済み の 3 つ', () => {
+test('REQ_STATUS_ORDER: 要件定義 作成中 → 承認待ち → 承認済み の 3 つ', () => {
   assert.deepEqual([...REQ_STATUS_ORDER], ['draft', 'analyzed', 'approved']);
 });
 

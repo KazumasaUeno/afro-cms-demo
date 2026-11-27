@@ -11,7 +11,7 @@ import type { LiveRole } from './session';
 
 export type DashboardRole = Extract<LiveRole, 'admin' | 'developer'>;
 
-/** 件数を出す順（ヒアリング入力中 → お客様の承認待ち → 承認済み） */
+/** 件数を出す順（要件定義 作成中 → お客様の承認待ち → 承認済み） */
 export const REQ_STATUS_ORDER: readonly ReqStatus[] = ['draft', 'analyzed', 'approved'];
 
 /** 要件の状態ごとの案件数（どの状態も 0 で出す） */

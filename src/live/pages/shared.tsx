@@ -5,7 +5,7 @@ import { StatusPill, Surface, type PillTone } from '@/components/ui';
 import type { ReqStatus } from '../model';
 
 export const REQ_STATUS: Record<ReqStatus, { label: string; tone: PillTone }> = {
-  draft: { label: 'ヒアリング入力中', tone: 'neutral' },
+  draft: { label: '要件定義 作成中', tone: 'neutral' },
   analyzed: { label: 'お客様の承認待ち', tone: 'info' },
   approved: { label: '要件定義書 承認済み', tone: 'success' },
 };
