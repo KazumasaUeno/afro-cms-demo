@@ -349,6 +349,8 @@ describe('TEST-09: 計測（admin の最大の submit・代理承認）', () => 
       assert.ok(k * per >= 200, `${name} の式の余裕が 20% 未満（pad10 ${k} 個）`);
       assert.ok(ref >= 1, `${name} の参照の余裕が無い（exists ${ref} 個）`);
     }
+    // 回帰（L-23）: 合格線ちょうどの internal の同時保存（2026-11-27 計測 pad10 4 個）をこれ以上重くしない
+    assert.ok(res['admin 同時保存（internal: schedIntUpdateOk）'].k >= 4, 'internal の同時保存が G1 の計測値（pad10 4 個）より重くなった');
   });
   after(async () => { const e = await createRulesEnv(); await e.cleanup(); });
 });

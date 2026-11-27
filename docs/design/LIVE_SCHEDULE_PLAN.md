@@ -36,6 +36,7 @@
 | L-20 | **ナビ**: admin・dev は案件詳細のスケジュール区画とルート（`/schedule`・`/dev/schedule`）から入る。**上部のナビ項目は足さない**。ポータルのナビに「スケジュール」（`/portal/schedule`）を足す（`liveNav.test.mjs` の件数を直す）。`/schedule`・`/dev/schedule` は `LiveRequirementsPage` と同じく **HearingGate／選択中の案件の型**で包み、再読み込みしても案件が保たれる | demo の画面構成に合わせる。追加の画面状態を作らない |
 | L-21 | `toProject` は `launchDate` を `releaseDate` で**上書きしない**。表示用の値（`schedule.releaseDate ?? launchDate`）は別の項目で返す（`src/features/projects/projectForm.ts:224` が `launchDate` をそのまま編集フォームへ戻すため。上書きすると基本情報の保存で launchDate が書き換わる） | C-01（書き写さない）・影響分析 9 |
 | L-22 | **main へは release GO まで merge しない**。`.github/workflows/pages.yml` が main への push ごとに demo を公開するため。merge 前に demo のスクリーンショット差分（`RequestApprovalButton` を使う 7 画面＋スケジュール・ポータルのスケジュール・案件詳細）を確認する | 未承認の差分が demo に出るのを防ぐ（影響分析 5） |
+| L-23 | **G1 の結論（lead-architect 2026-11-27）**: init（schedCreateOk）は WBS の行に doneAt を持てず、internal に marks を持てない（init は空の WBS。完了印はその後の保存だけ）。承認記録の `wbs` の写しは**残す**（submit・承認・代理承認は 30% 以上の余裕）。internal の同時保存（余裕 20% ちょうど）は受容し、TEST-09 G1 に「pad10 4 個より重くしない」回帰の assert を置く。2/30 の Rules 検査は再計測で 20% を割る経路が無ければ入れる（割れば画面のみ）。計測値はデータ設計 §12.1。指示文では L-22 だったが L-22（main への merge）が既にあるため L-23 とした | init の 15%（G1）の原因が完了印の相互照合で、写しを外しても減らないため |
 
 ## 2. 契約（Unit 間で同じものを見る。項目の正はデータ設計 §2。下は §1 の修正点だけ）
 

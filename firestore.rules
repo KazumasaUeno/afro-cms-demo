@@ -678,8 +678,9 @@ service cloud.firestore {
               ? (d.schemaVersion == 1 && d.revision == 0
                  && d.keys().hasAll(['schemaVersion','revision','editSeq','updatedAt','updatedBy'])
                  && d.keys().hasOnly(['schemaVersion','revision','editSeq','wbs','updatedAt','updatedBy'])
-                 && (!d.keys().hasAny(['wbs']) || validWbs(d.wbs, {}, getAfter(schedPath(pid, 'internal')).data.get('marks', {}))))
-              : sid == 'internal' && validInternal(d, acc, {}, getAfter(schedPath(pid, 'current')).data.get('wbs', {})));
+                 // init は完了印なし（marks を {} で渡す＝doneAt を付けた行は doneOk で落ちる。L-23・G1）
+                 && (!d.keys().hasAny(['wbs']) || validWbs(d.wbs, {}, {})))
+              : sid == 'internal' && !d.keys().hasAny(['marks']) && validInternal(d, acc, {}, {}));
     }
 
     // ---- schedule/current の update（WBS の保存 ／ submit の予定日の写し）。editSeq は 1 ずつ（L-4）

@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
 import { createRulesEnv } from './guard.mjs';
 import {
-  ANSWERS, PROPOSAL, T0, USERS, approvalDoc, createProjectBatch, dbAs, doc, seed, serverTimestamp, setDoc, stamp, submitBatch, updateDoc, withdrawBatch, writeBatch,
+  ANSWERS, PROPOSAL, T0, USERS, marksDone, scheduleSeed, schedInitBatch, wbsWithDone, approvalDoc, createProjectBatch, dbAs, doc, seed, serverTimestamp, setDoc, stamp, submitBatch, updateDoc, withdrawBatch, writeBatch,
 } from './fixtures.mjs';
 
 let env;
@@ -118,4 +118,13 @@ describe('S-14: 暦日の検査の実験（probe の Rules。firestore.rules は
     assert.deepEqual(out.regex, { '2026-02-28': true, '2026-02-29': false, '2026-02-30': false, '2026-04-31': false, '2028-02-29': true, '2000-02-29': true, '2026-12-31': true });
   });
   after(async () => { const e = await createRulesEnv(); await e.cleanup(); });
+});
+
+describe('L-23: init は完了印・marks を持てない（G1）', () => {
+  test('doneAt 付きの WBS・marks 付きの internal で init → 拒否。無ければ許可', async () => {
+    await scheduleSeed(env, { state: 'none' });
+    await assertFails(schedInitBatch(dbAs(env, 'devA'), { wbs: wbsWithDone(serverTimestamp()) }));
+    await assertFails(schedInitBatch(dbAs(env, 'devA'), { internal: { marks: marksDone(serverTimestamp(), 'devA') } }));
+    await assertSucceeds(schedInitBatch(dbAs(env, 'devA')));
+  });
 });

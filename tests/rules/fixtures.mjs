@@ -285,13 +285,13 @@ export async function scheduleSeed(env, { state = 'draft', rev, done = true, app
   });
 }
 
-/** 初回の保存（init）: 案件の schedule・current・internal を 1 バッチ（最大の payload: 完了印 5 行＋marks・担当 6 件・メモ 200 字） */
+/** 初回の保存（init）: 案件の schedule・current・internal を 1 バッチ（最大の payload: WBS 6 行・担当 6 件・メモ 200 字。init は完了印・marks なし＝L-23） */
 export function schedInitBatch(db, { uid = 'devA', pid = 'p1', wbs, internal = {} } = {}) {
   const b = writeBatch(db);
   b.update(doc(db, `projects/${pid}`), { schedule: { status: 'draft', revision: 0 }, ...stamp(uid) });
-  b.set(doc(db, `projects/${pid}/schedule/current`), { schemaVersion: 1, revision: 0, editSeq: 0, wbs: wbs ?? wbsWithDone(serverTimestamp()), ...stamp(uid) });
+  b.set(doc(db, `projects/${pid}/schedule/current`), { schemaVersion: 1, revision: 0, editSeq: 0, wbs: wbs ?? SCHED_WBS, ...stamp(uid) });
   b.set(doc(db, `projects/${pid}/schedule/internal`), {
-    schemaVersion: 1, draft: SCHED_DATES, note: SCHED_NOTE, assignees: SCHED_ASSIGNEES, marks: marksDone(serverTimestamp(), uid),
+    schemaVersion: 1, draft: SCHED_DATES, note: SCHED_NOTE, assignees: SCHED_ASSIGNEES,
     savedByName: USERS[uid].name, editSeq: 0, ...stamp(uid), ...internal,
   });
   return b.commit();

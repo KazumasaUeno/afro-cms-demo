@@ -299,6 +299,7 @@
 | 再計画（projects / internal / approvals） | 8 / 6 / 13 | 550 / 650 / 300 | 40% / 30% / 65% | 8 / 10 / 9 |
 
 - 結論 [FACT: 上の計測]: **承認記録の wbs の写しを外す必要は無い**（submit・承認・代理承認は全部 30% 以上）。**外れたのは init の schedCreateOk だけ**で、原因は完了印（current.wbs の doneAt 5 行 ⇔ internal.marks 5 件の相互照合）。同じ init を完了印・marks なしで測ると k ≥ 20（上限で打ち切り）[FACT: 一時 probe 2026-11-27]。wbs の写しを外しても init は減らない → L-10 により**ここで止め、lead-architect の判断待ち**（案: init では doneAt・marks を持てない＝初回保存で完了の行は無い、とする）
+- **L-23 適用後（2026-11-27 再計測）**: init は完了印・marks を持てない形にして **schedCreateOk 6 個（≒ 650 式・余裕 30%）**で合格。他の経路は同じ（internal の同時保存 4 個＝20% は受容し、TEST-09 G1 に k ≥ 4 の回帰 assert）。2/30 の Rules 検査は**入れない（画面のみ）**: internal の同時保存が合格線ちょうど（k=4）で、validDates に式を足すと 20% を割る [INFERENCE: 余裕 0 個分。追加後の再計測は未実施]
 - 要件定義書の経路（既存 PATHS）: お客様の承認（approvals: approveOk）が 14 → 13（kind の振り分けの数式分。pad10 1 個の分解能の内）。他は不変。全部 65% 以上
 - 参照（UK-3）: 1 文書の評価で使う get/exists は最大 3（trivial 10 − 残り 7）。1 書き込み（バッチ）の合計は最大 5 文書（accounts・案件・current・internal・承認文書）[INFERENCE: 述語の参照先]。上限 20 の内
 - S-14（2/30）: エミュレータで `timestamp.date(年, 月, 日)` に暦に無い日を渡すと評価エラー＝拒否、正規表現（月末の無い日・うるう年でない 2/29）でも同じ結果 [FACT: tests/rules/schedule.test.mjs S-14]。**firestore.rules には入れていない**（式が増える。init が 20% を割っているため UK-2 を優先＝L-12）。入れるかは init の扱いと合わせて lead-architect が決める。それまで暦日は画面（SU-06）で止める
