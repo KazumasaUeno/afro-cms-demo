@@ -26,10 +26,22 @@ const EFFORT = opt('--effort', DEFAULTS.effort);
 const MAX_TOKENS = Number(opt('--max-tokens', String(DEFAULTS.maxTokens)));
 const CONCURRENCY = Math.max(1, Number(opt('--concurrency', '3')));
 const forced = opt('--provider');
-const cases = opt('--cases') ? CASES.filter((c) => list(opt('--cases')).includes(c.id)) : CASES;
+const fail = (msg) => { console.error(msg); process.exit(2); };
+// --cases-file <out/配下の .mjs>: 実在のお客様の入力（CASES を export）。Git に入らない out/ 配下だけ読む。
+// 送ってよいのはユーザーが了承した送信先だけなので、Anthropic 以外のモデルとは組み合わせない（2026-11-27 アイグラン: Anthropic のみ了承）
+const casesFile = opt('--cases-file');
+let baseCases = CASES;
+if (casesFile) {
+  const abs = resolve(casesFile);
+  const outDir = resolve(here, 'out') + (process.platform === 'win32' ? '\\' : '/');
+  if (!abs.toLowerCase().startsWith(outDir.toLowerCase())) fail('--cases-file は prototypes/ai-design-eval/out/ 配下（Git に入らない場所）のファイルだけ指定できる');
+  baseCases = (await import(new URL(`file:///${abs.replace(/\\/g, '/')}`).href)).CASES ?? [];
+  const nonAnthropic = list(opt('--models', 'claude-sonnet-5-5,claude-opus-5-5')).filter((m) => providerOf(m, opt('--provider')) !== 'anthropic');
+  if (nonAnthropic.length) fail(`--cases-file（実在のお客様の入力）は Anthropic のモデルだけで回す。外す: ${nonAnthropic.join(', ')}`);
+}
+const cases = opt('--cases') ? baseCases.filter((c) => list(opt('--cases')).includes(c.id)) : baseCases;
 const go = args.includes('--go');
 
-const fail = (msg) => { console.error(msg); process.exit(2); };
 if (go && args.includes('--dry-run')) fail('--dry-run と --go は同時に指定できない');
 if (!cases.length) fail('--cases に一致する案件が無い');
 if (!(CAP > 0) || !(RUNS >= 1) || !(MAX_TOKENS >= 1000)) fail('--cap / --runs / --max-tokens の値が不正');
