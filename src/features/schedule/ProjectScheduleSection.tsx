@@ -4,15 +4,17 @@ import type { DemoState } from '@/types';
 import { SectionTitle, Surface } from '@/components/ui';
 import { todayYmd } from '@/features/projects/projectForm';
 import { tokens } from '@/theme/tokens';
-import { MILESTONES, jpDate, untilText } from './SchedulePage';
+import { MILESTONES, jpDate, untilText } from './scheduleParts';
+import type { WbsSource } from './scheduleSource';
 import { WbsSection } from './WbsSection';
 
 /**
  * プロジェクト詳細のスケジュール（2026-11-17 ユーザー指示「プロジェクト選択後にスケジュールを表示しておきたい」）。見るだけ。
  * 詳細で開いている案件は選んでいる案件と違うことがあるので、案件のデータ（workView）を view で受け取る。
- * 編集はスケジュール画面へ（onOpen。案件を選んでから開く）
+ * 編集はスケジュール画面へ（onOpen。案件を選んでから開く）。
+ * wbs: live の WBS のデータ源（実績は構築タスク・完了印から。LIVE_SCHEDULE_PLAN U3。無ければ demo の制作データから導く）
  */
-export function ProjectScheduleSection({ view, dev, onOpen }: { view: DemoState; dev: boolean; onOpen: () => void }) {
+export function ProjectScheduleSection({ view, dev, onOpen, wbs }: { view: DemoState; dev: boolean; onOpen: () => void; wbs?: WbsSource }) {
   const saved = view.schedule;
   const today = todayYmd();
   return (
@@ -51,7 +53,7 @@ export function ProjectScheduleSection({ view, dev, onOpen }: { view: DemoState;
           </Stack>
         )}
       </Surface>
-      {saved && <WbsSection editable={false} view={view} />}
+      {saved && <WbsSection editable={false} view={view} source={wbs} />}
     </Box>
   );
 }

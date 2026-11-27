@@ -1,6 +1,6 @@
 import { Alert, Button, Dialog, DialogActions, DialogContent, Stack, TextField, Typography } from '@mui/material';
 import { useState } from 'react';
-import { SCHEDULE_NOTE_MAX, validateSchedule, type ScheduleDraft } from '@/data/schedule';
+import { SCHEDULE_NOTE_MAX, validateSchedule, type ScheduleDraft, type ScheduleErrors } from '@/data/schedule';
 
 /**
  * 予定日・メモの入力（2026-11-17 ユーザー指示「カレンダーの表が古いレイアウトなのが嫌だ」）。開発者画面だけ。
@@ -14,12 +14,14 @@ export const SCHEDULE_FIELD_LABEL: Record<keyof ScheduleDraft, { label: string; 
   note: { label: 'メモ（任意）', help: `${SCHEDULE_NOTE_MAX}文字以内` },
 };
 
-export function ScheduleEditDialog({ title, initial, fields, onClose, onSave }: {
+/** validate: 検査（live は年の範囲・文字数も。live/schedule.ts validateScheduleInput）。無ければ demo と同じ validateSchedule */
+export function ScheduleEditDialog({ title, initial, fields, onClose, onSave, validate = validateSchedule }: {
   title: string; initial: ScheduleDraft; fields: (keyof ScheduleDraft)[]; onClose: () => void; onSave: (d: ScheduleDraft) => void;
+  validate?: (d: ScheduleDraft) => ScheduleErrors;
 }) {
   const [draft, setDraft] = useState<ScheduleDraft>(initial);
   const [tried, setTried] = useState(false);
-  const errors = validateSchedule(draft);
+  const errors = validate(draft);
   const hidden = tried ? (Object.keys(errors) as (keyof ScheduleDraft)[]).filter((k) => !fields.includes(k)) : [];
 
   const save = () => {

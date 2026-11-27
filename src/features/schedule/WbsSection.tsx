@@ -3,7 +3,7 @@ import { ChevronDown, GanttChart, RotateCcw, Save } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import type { DemoState, DevTaskStatus, WbsId, WbsItem } from '@/types';
 import { Reveal, SectionTitle, StatusPill, Surface, type PillTone } from '@/components/ui';
-import { useDemo } from '@/store/DemoStore';
+import { useDemoOptional } from '@/store/DemoStore';
 import { useToast } from '@/hooks/useToast';
 import { todayYmd, ymdToIso } from '@/features/projects/projectForm';
 import { DEV_TASK_STATUSES } from '@/data/dev';
@@ -11,6 +11,7 @@ import { WBS_ITEMS, daysBetween, dragWbs, moveMilestone, shiftYmd, validateWbs, 
 import { tokens } from '@/theme/tokens';
 import { WBS_STATUS_LABEL, currentWbs, wbsRows, type WbsRow, type WbsStatus } from './wbsProgress';
 import { WbsEditDialog } from './WbsEditDialog';
+import { sameDone, type WbsDone, type WbsSource } from './scheduleSource';
 
 /**
  * 制作〜公開の WBS（2026-11-17 ユーザー指示「作ってみて」）。作業ごとの開始・終了・担当を横のガントで見せ、
@@ -57,6 +58,15 @@ interface DragState {
   moved?: boolean;
 }
 
+const NO_DONE: WbsDone = {};
+/** 完了印の集合を比べる鍵（付いている行の id を WBS の順に） */
+const doneKeyOf = (d: WbsDone) => WBS_ITEMS.filter((w) => d[w.id]).map((w) => w.id).join(',');
+const doneOfKey = (key: string): WbsDone => Object.fromEntries(key ? key.split(',').map((id) => [id, true]) : []) as WbsDone;
+/** view も DemoStore も無い（live で view を渡し忘れた）ときは分かる形で落とす */
+function noState(): never {
+  throw new Error('WbsSection: live では view（案件の state）を渡してください');
+}
+
 /** ダブルクリック・ダブルタップとみなす間隔と距離（2026-11-17） */
 const DOUBLE_TAP_MS = 400;
 const DOUBLE_TAP_PX = 12;
@@ -67,17 +77,21 @@ const DOUBLE_TAP_PX = 12;
  */
 /** client: お客様ポータル（2026-11-17）。見るだけ・担当と構築タスクを出さない・「遅れ」は「調整中」と出す */
 /** view: 表示する案件のデータ（プロジェクト詳細は選んでいる案件と違うことがある。無ければ選んでいる案件。2026-11-17） */
-export function WbsSection({ editable, devBy, ms, onMsChange, client = false, view }: {
-  editable: boolean; devBy?: string; ms?: MilestoneDates; onMsChange?: (next: MilestoneDates) => void; client?: boolean; view?: DemoState;
+/**
+ * source: live のデータ源（LIVE_SCHEDULE_PLAN L-13・U3-a。WBS の行・実績・検査・保存・完了印）。無ければ従来どおり DemoStore。
+ * live は DemoStore が無いので view も渡す。完了印（demo に無い）は source があるときだけ入力画面に出す
+ */
+export function WbsSection({ editable, devBy, ms, onMsChange, client = false, view, source }: {
+  editable: boolean; devBy?: string; ms?: MilestoneDates; onMsChange?: (next: MilestoneDates) => void; client?: boolean; view?: DemoState; source?: WbsSource;
 }) {
-  const demo = useDemo();
-  const state = view ?? demo.state;
-  const dispatch = demo.dispatch;
+  const demo = useDemoOptional();
+  const state = view ?? demo?.state ?? noState();
+  const dispatch = demo?.dispatch;
   const toast = useToast();
   const theme = useTheme();
   const phone = useMediaQuery(theme.breakpoints.down('sm'));
   const schedule = state.schedule;
-  const items = useMemo(() => currentWbs(state), [state]);
+  const items = useMemo(() => (source ? source.items : currentWbs(state)), [source, state]);
   const today = todayYmd();
   const [draft, setDraft] = useState<WbsItem[]>(items);
   // 予定日を保存し直すと初期値（保存の無い WBS）が変わる。下書きを触っていなければ新しい初期値にそろえる
@@ -90,6 +104,20 @@ export function WbsSection({ editable, devBy, ms, onMsChange, client = false, vi
     prevItems.current = itemsJson;
     setDraft((d) => (JSON.stringify(d) === before ? (JSON.parse(itemsJson) as WbsItem[]) : d));
   }, [itemsJson]);
+  // 完了印の下書き（live だけ。demo は使わない）。保存済みが変わったら、触っていなければそろえる（日付の下書きと同じ）
+  const savedDone = source?.done ?? NO_DONE;
+  const [doneDraft, setDoneDraft] = useState<WbsDone>(savedDone);
+  const doneKey = doneKeyOf(savedDone);
+  const prevDone = useRef(doneKey);
+  useEffect(() => {
+    if (prevDone.current === doneKey) return;
+    const before = prevDone.current;
+    prevDone.current = doneKey;
+    setDoneDraft((d) => (doneKeyOf(d) === before ? doneOfKey(doneKey) : d));
+  }, [doneKey]);
+  // 下書きを始めた時点の版（live の競合の検出。触っていない間は最新に追従する）と、保存中か
+  const [token, setToken] = useState(source?.token ?? '');
+  const [saving, setSaving] = useState(false);
   const [msDrag, setMsDrag] = useState<MsDragState | null>(null);
   const msDragRef = useRef<MsDragState | null>(null);
   msDragRef.current = msDrag;
@@ -122,11 +150,15 @@ export function WbsSection({ editable, devBy, ms, onMsChange, client = false, vi
   };
   const dragRef = useRef<DragState | null>(null);
   dragRef.current = drag;
-  const errors = validateWbs(draft);
+  const errors = source ? source.validate(draft) : validateWbs(draft);
   // 開発者画面では図も下書きを描く（ドラッグ・入力がすぐ図に出る）。日付が読めない作業だけ保存の値で描く
   const chartItems = editable ? draft.map((w, i) => (errors[w.id]?.start || errors[w.id]?.end ? items[i] : w)) : items;
-  const rows = wbsRows(state, chartItems, today);
-  const dirty = editable && JSON.stringify(draft) !== JSON.stringify(items);
+  const rows = source ? source.rows(chartItems, today, doneDraft) : wbsRows(state, chartItems, today);
+  const dirty = editable && (JSON.stringify(draft) !== JSON.stringify(items) || (!!source && !sameDone(doneDraft, savedDone)));
+  const liveToken = source?.token;
+  useEffect(() => {
+    if (liveToken !== undefined && !dirty) setToken(liveToken);
+  }, [liveToken, dirty]);
 
   const setTimes = (id: WbsId, t: { start: string; end: string }) =>
     setDraft((list) => (list.some((w) => w.id === id && (w.start !== t.start || w.end !== t.end))
@@ -388,16 +420,30 @@ export function WbsSection({ editable, devBy, ms, onMsChange, client = false, vi
   const save = () => {
     // 日付はドラッグで変える（開始 ≦ 終了は dragWbs が保つ）。念のため検査に通らなければ保存しない
     if (Object.keys(errors).length > 0) { toast('日付に誤りがあるため保存できません。「元に戻す」で保存済みの日付に戻せます'); return; }
-    dispatch({ type: 'saveWbs', wbs: draft, devBy });
     // 保存と同じ形にそろえる（前後の空白・空の担当）。そろえないと「未保存の変更」が残って見える
-    setDraft((list) => list.map((w) => {
+    const settle = () => setDraft((list) => list.map((w) => {
       const assignee = (w.assignee ?? '').trim();
       return { id: w.id, start: w.start.trim(), end: w.end.trim(), ...(assignee ? { assignee } : {}) };
     }));
+    if (source) {
+      // live: 書き込みの後（失敗・競合の文言は source.save が出す）
+      if (!source.save || saving) return;
+      setSaving(true);
+      void source.save(draft, doneDraft, token).then((ok) => {
+        setSaving(false);
+        if (!ok) return;
+        settle();
+        toast('WBS を保存しました');
+      });
+      return;
+    }
+    dispatch?.({ type: 'saveWbs', wbs: draft, devBy });
+    settle();
     toast('WBS を保存しました');
   };
   const reset = () => {
     setDraft(items);
+    if (source) setDoneDraft(savedDone);
   };
 
   return (
@@ -407,6 +453,7 @@ export function WbsSection({ editable, devBy, ms, onMsChange, client = false, vi
         <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
           作業ごとの予定（バーの長さ）と実績（バーの中の塗り）を並べています。{client ? '' : '終了日を過ぎて終わっていない作業は「遅れ」になります。'}
           {editable && ' バーをドラッグすると移動、両端をドラッグすると開始日・終了日を変えられます（Esc で取り消し）。ダブルクリック（スマホはダブルタップ、キーボードは Enter）で日付・担当を入力できます。'}
+          {editable && source && ' 完了印（全ページの構築を除く）も同じ入力画面で付け外しできます。'}
         </Typography>
 
         {/* 図だけ横にスクロールする（ページは横にスクロールさせない） */}
@@ -560,7 +607,7 @@ export function WbsSection({ editable, devBy, ms, onMsChange, client = false, vi
         {editable && (
           <Box sx={{ mt: 2 }}>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
-              <Button variant="contained" startIcon={<Save size={16} />} onClick={save}>WBS を保存</Button>
+              <Button variant="contained" startIcon={<Save size={16} />} onClick={save} {...(saving ? { disabled: true } : {})}>WBS を保存</Button>
               {dirty ? (
                 <>
                   <Typography variant="body2" role="status" sx={{ color: tokens.color.warningInk, fontWeight: 600 }}>未保存の変更があります</Typography>
@@ -579,10 +626,13 @@ export function WbsSection({ editable, devBy, ms, onMsChange, client = false, vi
             item={draft.find((w) => w.id === editing.id) ?? null}
             label={labelOf(editing.id)}
             onClose={() => setEditing(null)}
-            onApply={(it) => {
+            onApply={(it, done) => {
               setDraft((list) => list.map((w) => (w.id === it.id ? it : w)));
+              if (done !== undefined) setDoneDraft((d) => ({ ...d, [it.id]: done }));
               setEditing(null);
             }}
+            {...(source ? { validate: source.validate } : {})}
+            {...(source && editing.id !== 'build' ? { done: { checked: !!doneDraft[editing.id], note: source.markNote?.[editing.id] } } : {})}
           />
         )}
       </Surface>

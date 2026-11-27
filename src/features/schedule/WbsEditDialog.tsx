@@ -1,26 +1,29 @@
-import { Button, Dialog, DialogActions, DialogContent, Stack, TextField, Typography } from '@mui/material';
+import { Button, Checkbox, Dialog, DialogActions, DialogContent, FormControlLabel, Stack, TextField, Typography } from '@mui/material';
 import { useState } from 'react';
 import type { WbsItem } from '@/types';
-import { WBS_ASSIGNEE_MAX, validateWbs } from '@/data/schedule';
+import { WBS_ASSIGNEE_MAX, validateWbs, type WbsErrors } from '@/data/schedule';
 
 /**
  * WBS の 1 作業の入力（2026-11-17 ユーザー指示「横棒のダブルクリックで入力画面を表示」）。開発者画面だけ。
  * 「反映」は下書きへ入れるだけで保存はしない（保存は図の下の「WBS を保存」）。
- * 開くたびに key で作り直す前提（初期値は開いたときの下書き）
+ * 開くたびに key で作り直す前提（初期値は開いたときの下書き）。
+ * live だけ（LIVE_SCHEDULE_PLAN U3。demo は渡さない）: validate（年の範囲・担当名の文字数も）と done（完了印。付けた／外した人と日時は note）
  */
-export function WbsEditDialog({ item, label, onClose, onApply }: {
-  item: WbsItem | null; label: string; onClose: () => void; onApply: (item: WbsItem) => void;
+export function WbsEditDialog({ item, label, onClose, onApply, validate = validateWbs, done }: {
+  item: WbsItem | null; label: string; onClose: () => void; onApply: (item: WbsItem, done?: boolean) => void;
+  validate?: (items: WbsItem[]) => WbsErrors; done?: { checked: boolean; note?: string };
 }) {
   const [v, setV] = useState({ start: item?.start ?? '', end: item?.end ?? '', assignee: item?.assignee ?? '' });
+  const [checked, setChecked] = useState(!!done?.checked);
   const [tried, setTried] = useState(false);
   if (!item) return null;
-  const e = tried ? validateWbs([{ id: item.id, ...v }])[item.id] : undefined;
+  const e = tried ? validate([{ id: item.id, ...v }])[item.id] : undefined;
 
   const apply = () => {
     setTried(true);
-    if (validateWbs([{ id: item.id, ...v }])[item.id]) return;
+    if (validate([{ id: item.id, ...v }])[item.id]) return;
     const assignee = v.assignee.trim();
-    onApply({ id: item.id, start: v.start.trim(), end: v.end.trim(), ...(assignee ? { assignee } : {}) });
+    onApply({ id: item.id, start: v.start.trim(), end: v.end.trim(), ...(assignee ? { assignee } : {}) }, done ? checked : undefined);
   };
 
   return (
@@ -42,6 +45,17 @@ export function WbsEditDialog({ item, label, onClose, onApply }: {
             onChange={(ev) => setV((x) => ({ ...x, assignee: ev.target.value }))} error={!!e?.assignee}
             helperText={e?.assignee ?? `${WBS_ASSIGNEE_MAX}文字以内`}
           />
+          {done && (
+            <Stack spacing={0.25}>
+              <FormControlLabel
+                control={<Checkbox checked={checked} onChange={(ev) => setChecked(ev.target.checked)} />}
+                label="この作業は完了（完了印）"
+              />
+              <Typography variant="caption" color="text.secondary">
+                {done.note ?? '付けた人と日時が記録されます。外すこともできます。'}
+              </Typography>
+            </Stack>
+          )}
           {/* Enter で反映できるように（ボタンは下の DialogActions） */}
           <button type="submit" hidden aria-hidden tabIndex={-1} />
         </Stack>

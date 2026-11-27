@@ -18,6 +18,7 @@ const HearingGate = lazy(() => import('./pages/HearingGate'));
 const RequirementsPage = lazy(() => import('@/features/requirements/RequirementsPage'));
 const HearingAnswersPage = lazy(() => import('@/features/requirements/HearingAnswersPage'));
 const LiveRequirementsPage = lazy(() => import('./pages/LiveRequirementsPage'));
+const LiveSchedulePage = lazy(() => import('./pages/LiveSchedulePage'));
 
 /** その役割の画面だけを開く（表示の出し分け。権限の実体は Firestore Rules） */
 function RoleRoute({ roles, children }: { roles: LiveRole[]; children: ReactNode }) {
@@ -61,6 +62,8 @@ const router = createBrowserRouter([
       { path: 'ai-studio/hearing', element: <RoleRoute roles={admin}><HearingGate><HearingAnswersPage /></HearingGate></RoleRoute> },
       // 要件定義（0.49.1。ヒアリングの「要件定義へ進む」の行き先。AI 下書き）
       { path: 'ai-studio/requirements', element: <RoleRoute roles={admin}><HearingGate><LiveRequirementsPage /></HearingGate></RoleRoute> },
+      // スケジュール（LIVE_SCHEDULE_PLAN U3-b・L-20。案件詳細から入る。上部のナビ項目は足さない。選んでいる案件は HearingGate）
+      { path: 'schedule', element: <RoleRoute roles={admin}><HearingGate><LiveSchedulePage /></HearingGate></RoleRoute> },
       { path: 'users', element: <RoleRoute roles={admin}><LiveUsersPage /></RoleRoute> },
       { path: 'dev', element: <RoleRoute roles={dev}><LiveDashboardPage /></RoleRoute> },
       { path: 'dev/tasks', element: <RoleRoute roles={dev}><LiveTasksPage /></RoleRoute> },
@@ -71,6 +74,7 @@ const router = createBrowserRouter([
       { path: 'dev/hearing', element: <RoleRoute roles={dev}><HearingGate><RequirementsPage /></HearingGate></RoleRoute> },
       { path: 'dev/hearing/answers', element: <RoleRoute roles={dev}><HearingGate><HearingAnswersPage /></HearingGate></RoleRoute> },
       { path: 'dev/requirements', element: <RoleRoute roles={dev}><HearingGate><LiveRequirementsPage /></HearingGate></RoleRoute> },
+      { path: 'dev/schedule', element: <RoleRoute roles={dev}><HearingGate><LiveSchedulePage /></HearingGate></RoleRoute> },
       { path: 'portal/approvals', element: <RoleRoute roles={client}><PortalApprovalPage /></RoleRoute> },
       { path: 'portal/chat', element: <RoleRoute roles={client}><LiveConsultPage /></RoleRoute> },
       { path: '*', element: <RoleHome /> },

@@ -1,12 +1,9 @@
-import { Button } from '@mui/material';
-import { Send } from 'lucide-react';
 import type { ApprovalKey } from '@/types';
-import { StatusPill } from '@/components/ui';
 import { useDemo } from '@/store/DemoStore';
 import { useToast } from '@/hooks/useToast';
 import { useQualityDevBy } from '@/features/quality/useQualityDevBy';
-import { formatDateTime } from '@/services/time';
 import { approvalSteps, canRequestApproval } from './portalSteps';
+import { ApprovalRequestedPill, RequestApprovalAction } from './RequestApprovalButtonView';
 
 /**
  * お客様へ承認を依頼するボタン（2026-11-17 会議「アフロの準備ができる前にお客様の画面で承認待ちになる」）。
@@ -22,16 +19,14 @@ export function RequestApprovalButton({ approvalKey, blockedReason }: { approval
   const step = approvalSteps(state).find((s) => s.key === approvalKey);
   if (!step) return null;
   if (step.status === 'waiting' && step.requestedAt) {
-    return <StatusPill tone="info" icon={<Send size={13} />}>承認依頼済み（{formatDateTime(step.requestedAt)}）</StatusPill>;
+    return <ApprovalRequestedPill requestedAt={step.requestedAt} />;
   }
   // 依頼できるのは開発者画面だけ（管理者画面は見るだけ。2026-11-17 レビュー）
   if (!devBy || !canRequestApproval(state, approvalKey)) return null;
   return (
-    <Button
-      variant="contained" startIcon={<Send size={16} />} disabled={!!blockedReason} title={blockedReason}
+    <RequestApprovalAction
+      blockedReason={blockedReason}
       onClick={() => { dispatch({ type: 'requestApproval', key: approvalKey, devBy }); toast('お客様へ承認を依頼しました'); }}
-    >
-      承認を依頼する
-    </Button>
+    />
   );
 }

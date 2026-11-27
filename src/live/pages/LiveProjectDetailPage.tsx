@@ -8,7 +8,11 @@ import { ProjectDetailView, ProjectNotFound } from '@/features/projects/ProjectD
 import { ClientStatusPanel } from '@/features/projects/ClientStatusPanel';
 import { devNextWork, useProjectRoutes } from '@/features/projects/projectRoutes';
 import { SitePreviewPendingButton } from '@/features/quality/SitePreviewButton';
-import { useAccountPeople, useLiveProjects } from '../repositories';
+import { useAccountPeople, useLiveProjects, useLiveSchedule } from '../repositories';
+import { liveScheduleState } from '../schedule';
+import { ProjectScheduleSection } from '@/features/schedule/ProjectScheduleSection';
+import { liveDetailNext } from '@/features/schedule/liveScheduleUi';
+import { useLiveWbsSource } from './LiveSchedulePage';
 import { useLiveSession } from '../session';
 import { LoadError } from './shared';
 import { liveProjectView } from '../projectView';
@@ -50,7 +54,13 @@ function Detail({ p, list }: { p: Project; list: Project[] }) {
   const memberUids = doc?.memberUids ?? [];
   // useAccountPeople は uid の並びを文字列の key にして読むので、配列を毎回作ってよい
   const people = useAccountPeople([p.ownerId, ...memberUids]);
-  const state = useMemo(() => liveProjectView(p, req, logs, blankWork(p.id)), [p, req, logs]);
+  // スケジュール（LIVE_SCHEDULE_PLAN U3-b。納品予定日・公開予定日の欄とスケジュールの区画が state.schedule を読む）
+  const sch = useLiveSchedule(p.id);
+  const sched = useMemo(() => liveScheduleState(sch.summary, sch.current, sch.internal), [sch.summary, sch.current, sch.internal]);
+  const state = useMemo(() => liveProjectView(p, req, logs, blankWork(p.id), sched), [p, req, logs, sched]);
+  const { account } = useLiveSession();
+  const canEdit = (account.role === 'admin' || account.role === 'developer') && req.status === 'approved' && !!doc && !doc.archived;
+  const wbs = useLiveWbsSource(p.id, sch, state, false);
 
   if (reqLoading || logsLoading) return <RouteLoader label="プロジェクト" />;
   if (reqError) return <LoadError what="プロジェクト" />;
@@ -59,9 +69,10 @@ function Detail({ p, list }: { p: Project; list: Project[] }) {
 
   const owner = people[p.ownerId] ?? nobody(p.ownerId);
   const devNames = memberUids.map((u) => people[u]?.name).filter((n): n is string => !!n);
-  // 開発者画面の「次に必要な作業」（デモと同じ判定）。承認済みの次（スケジュール）は live に画面が無いので要件定義を開く
+  // 開発者画面の「次に必要な作業」（デモと同じ判定）。要件定義書の承認後はスケジュール（文言は段階の文言。影響分析 3）
   const work = devNextWork(p, state);
-  const next = req.status === 'approved' ? { label: '要件定義書を見る', to: routes.requirements } : { label: work.next, to: work.to };
+  const scheduleTo = routes.approval.schedule ?? (routes.dev ? '/dev/schedule' : '/schedule');
+  const next = liveDetailNext(req.status, p.nextAction, scheduleTo, work);
   const go = (to: string) => {
     projects.select(p.id);
     navigate(to);
@@ -73,6 +84,7 @@ function Detail({ p, list }: { p: Project; list: Project[] }) {
       openProject={(id) => navigate(routes.detail(id))}
       preview={<SitePreviewPendingButton size="small" />}
       clientStatus={<ClientStatusPanel project={p} view={state} />}
+      schedule={<ProjectScheduleSection view={state} dev={canEdit} onOpen={() => go(scheduleTo)} wbs={wbs} />}
     />
   );
 }
