@@ -133,7 +133,7 @@ async function worker() {
 }
 await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 const summary = save();
-writeGallery(out);
+writeGallery(out, baseCases);
 console.table(summary.map(({ model, n, schemaOk, pages, parseFail, forbidden, brandMissing, ctaMissing, japaneseFail, mojibake, contrastFail, contrastUnknown, sizeFail, notDistinct, p90ms, costUsd, machinePass }) =>
   ({ model, n, schemaOk, pages, parseFail, forbidden, brandMissing, ctaMissing, japaneseFail, mojibake, contrastFail, contrastUnknown, sizeFail, notDistinct, p90s: p90ms === null ? null : +(p90ms / 1000).toFixed(0), costUsd, machinePass })));
 console.log(`合格基準（機械。評価前に固定・緩めない）: ${MACHINE_CRITERIA.text}`);

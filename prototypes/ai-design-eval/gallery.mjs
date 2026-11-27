@@ -12,7 +12,7 @@ export const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&am
 
 /** html/ のファイル名 → { source, caseId, run, letter, page, device } */
 export function parseName(f) {
-  const m = f.match(/^(.+?)__(d\d\d-[\w-]+?)__r(\d+)__([ABC])__(top|main)(?:__(phone|pc))?\.html$/);
+  const m = f.match(/^(.+?)__([dr]\d\d-[\w-]+?)__r(\d+)__([ABC])__(top|main)(?:__(phone|pc))?\.html$/);
   return m ? { file: f, source: m[1], caseId: m[2], run: +m[3], letter: m[4], page: m[5], device: m[6] ?? null } : null;
 }
 
@@ -31,12 +31,12 @@ h2{margin-top:40px;border-top:2px solid #888;padding-top:12px}.card{background:#
 .f iframe{border:0;transform-origin:0 0;position:absolute;left:0;top:0}.none{display:flex;align-items:center;justify-content:center;color:#999}
 .pg{margin:8px 0}.pl{font-size:12px;color:#555;margin-bottom:4px}small{color:#555}`;
 
-export function writeGallery(runDir) {
+export function writeGallery(runDir, cases = CASES) {
   const htmlDir = join(runDir, 'html');
   if (!existsSync(htmlDir)) return null;
   const files = readdirSync(htmlDir).map(parseName).filter(Boolean);
   const raw = (src, caseId, run) => { const p = join(runDir, 'raw', `${src}__${caseId}__r${run}.json`); return existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : null; };
-  const sections = CASES.filter((c) => files.some((f) => f.caseId === c.id)).map((c) => {
+  const sections = cases.filter((c) => files.some((f) => f.caseId === c.id)).map((c) => {
     const groups = [...new Set(files.filter((f) => f.caseId === c.id).map((f) => `${f.source}|${f.run}|${f.letter}`))].sort();
     const cards = groups.map((g) => {
       const [source, run, letter] = g.split('|');
