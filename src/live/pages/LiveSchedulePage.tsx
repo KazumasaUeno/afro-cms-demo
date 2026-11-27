@@ -14,7 +14,7 @@ import { changedDone, type WbsSource } from '@/features/schedule/scheduleSource'
 import { wbsStartOf } from '@/features/schedule/wbsProgress';
 import {
   liveWbsDone, liveWbsItems, liveWbsRows, markNotes, scheduleButtons, scheduleOpened, scheduleSaveKind, scheduleTokenOf,
-  SCHEDULE_BLOCKED_TEXT, wbsOpened, wbsTokenOf,
+  SCHEDULE_BLOCKED_TEXT, SCHEDULE_REQUESTED_WBS_NOTE, wbsOpened, wbsTokenOf,
 } from '@/features/schedule/liveScheduleUi';
 import { ApprovalRequestedPill, RequestApprovalAction } from '@/features/portal/RequestApprovalButtonView';
 import { cleanProxyNote, PROXY_NOTE_MAX, proxyNoteLength, validateProxyNote } from '../proxyApproval';
@@ -95,7 +95,10 @@ function LiveSchedule({ doc }: { doc: ProjectDoc }) {
   const project = useMemo(() => toProject(doc), [doc]);
   const st = useMemo(() => liveScheduleState(sch.summary, sch.current, sch.internal), [sch.summary, sch.current, sch.internal]);
   const view = useMemo(() => liveProjectView(project, req.data, [], blankWork(pid), st), [project, req.data, pid, st]);
-  const wbs = useLiveWbsSource(pid, sch, view, canEdit);
+  const wbsBase = useLiveWbsSource(pid, sch, view, canEdit);
+  // 依頼中も WBS は変えられる（2026-11-27 lead 判断）。変えるとお客様は開き直してから承認することになる（L-18）ので、その旨を出す
+  const requested = sch.summary?.status === 'requested';
+  const wbs = useMemo<WbsSource>(() => (canEdit && requested ? { ...wbsBase, notice: SCHEDULE_REQUESTED_WBS_NOTE } : wbsBase), [wbsBase, canEdit, requested]);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [note, setNote] = useState<NoteDialog | null>(null);
@@ -170,10 +173,16 @@ function LiveSchedule({ doc }: { doc: ProjectDoc }) {
   const noteError = proxy ? validateProxyNote(cleaned) : validateScheduleReason(cleaned);
   const submitNote = async () => {
     if (!note || noteError) return;
+    // 開いた時点の版が無い再計画は送らない（-1 で代用しない。internal が無い＝記録が読めていない）
+    if (note.kind === 'reopen' && typeof note.opened !== 'number') {
+      toast('スケジュールの記録を読み込めませんでした。画面を開き直してください', 'error');
+      closeNote(false);
+      return;
+    }
     const ok = note.kind === 'withdraw'
       ? await run(() => actions.withdraw(cleaned), 'お客様への承認の依頼を取り下げました')
-      : note.kind === 'reopen' && note.draft
-        ? await run(() => actions.reopenAndSave(note.draft!, cleaned, note.opened ?? -1), '予定日を変えました（再計画）。もう一度お客様へ承認を依頼してください')
+      : note.kind === 'reopen' && note.draft && typeof note.opened === 'number'
+        ? await run(() => actions.reopenAndSave(note.draft!, cleaned, note.opened as number), '予定日を変えました（再計画）。もう一度お客様へ承認を依頼してください')
         : note.shown
           ? await run(() => actions.proxyApprove({ ...note.shown!, requestedAt: note.requestedAt }, cleaned), 'スケジュールを代理で承認しました')
           : false;

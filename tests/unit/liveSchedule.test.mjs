@@ -4,8 +4,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   clientNeedsApprovedCopy, clientScheduleView, CLIENT_WBS_STATUS_LABEL, jstYmd, liveScheduleState, releaseYmdOf, scheduleApprovedCopyOf, scheduleConflict,
-  scheduleDoc, scheduleForSave, scheduleInternalDoc, scheduleSummaryOf, scheduleYmdOk, validateScheduleInput, validateWbsInput, wbsForSave, wbsProgressLive, wbsWriteChanged,
+  scheduleApprovalIdOf, scheduleApproveReplay, scheduleDoc, scheduleForSave, scheduleInternalDoc, scheduleSummaryOf, scheduleYmdOk, validateScheduleInput, validateWbsInput, wbsForSave, wbsProgressLive, wbsWriteChanged,
 } from '../../src/live/schedule.ts';
+import { statusOf } from '../../src/data/schedule.ts';
 import { toProject } from '../../src/live/model.ts';
 import { liveProjectView } from '../../src/live/projectView.ts';
 
@@ -124,6 +125,52 @@ test('SU-08 wbsProgressLive: 構築は tasks、他は doneAt、状態は demo �
   assert.equal(wbsProgressLive(ws, null, '2027-01-01')[2].tasks, undefined, 'お客様には構築タスクを出さない');
   assert.equal(wbsProgressLive(ws, Array.from({ length: 300 }, () => ({ status: 'done' })), '2027-01-01')[2].tasks.limited, true);
   assert.equal(CLIENT_WBS_STATUS_LABEL.late, '調整中');
+});
+
+test('SU-08 wbsProgressLive（構築タスクが読めない）: 割合を出さない・後の行に完了印があれば構築は完了 100%（CR Major 1 回帰）', () => {
+  const base = scheduleDoc({ revision: 1, editSeq: 0, wbs: wbsMap() }).wbs;
+  // 後の行に完了印なし: 「進行中 0%」にしない（％不明）。状態は日付だけ
+  const unknown = wbsProgressLive(base, null, '2027-01-03')[2];
+  assert.deepEqual([unknown.done, unknown.percent, unknown.percentUnknown, unknown.status, unknown.tasks], [false, 0, true, 'doing', undefined]);
+  assert.equal(wbsProgressLive(base, null, '2027-01-01')[2].status, 'todo');
+  assert.equal(wbsProgressLive(base, null, '2027-01-10')[2].status, 'late');
+  // 後の行（制作の完了の承認・品質・公開）のどれかに完了印 → 構築は完了
+  for (const id of ['buildApproval', 'quality', 'release']) {
+    const ws = scheduleDoc({ revision: 1, editSeq: 0, wbs: wbsMap({ [id]: { doneAt: ts('2027-01-06T00:00:00.000Z') } }) }).wbs;
+    const b = wbsProgressLive(ws, null, '2027-01-10')[2];
+    assert.deepEqual([b.done, b.percent, b.status, b.percentUnknown, b.tasks], [true, 100, 'done', undefined, undefined], id);
+  }
+  // 前の行（サイトマップ・デザイン）の完了印では構築を完了にしない
+  const before = scheduleDoc({ revision: 1, editSeq: 0, wbs: wbsMap({ design: { doneAt: ts('2027-01-02T00:00:00.000Z') } }) }).wbs;
+  assert.equal(wbsProgressLive(before, null, '2027-01-03')[2].percentUnknown, true);
+  // 構築タスクが読める（アフロ側）ときは従来どおり％を出す
+  assert.equal(wbsProgressLive(base, [], '2027-01-03')[2].percentUnknown, undefined);
+});
+
+test('statusOf（@/data/schedule。demo と live で共用。CR Minor 3）: 完了 > 遅れ > 進行中 > 未着手', () => {
+  const w = { start: '2027-01-05', end: '2027-01-10' };
+  assert.equal(statusOf(w, { done: true, percent: 100 }, '2027-02-01'), 'done');
+  assert.equal(statusOf(w, { done: false, percent: 50 }, '2027-01-11'), 'late');
+  assert.equal(statusOf(w, { done: false, percent: 0 }, '2027-01-05'), 'doing');
+  assert.equal(statusOf(w, { done: false, percent: 10 }, '2027-01-01'), 'doing');
+  assert.equal(statusOf(w, { done: false, percent: 0 }, '2027-01-04'), 'todo');
+});
+
+test('scheduleApproveReplay: 承認済みの同じ版への再送は同じ種類なら same、違えば other、それ以外は null（CR Minor 2）', () => {
+  const sum = { status: 'approved', revision: 2, approvalId: scheduleApprovalIdOf(2) };
+  const client = { kind: 'schedule', action: 'approve', revision: 2, side: 'client' };
+  const proxy = { ...client, side: 'afro', proxy: true, note: 'x' };
+  assert.equal(scheduleApprovalIdOf(2), 'schedule-r2-approve');
+  assert.equal(scheduleApproveReplay(sum, 2, client, false), 'same');
+  assert.equal(scheduleApproveReplay(sum, 2, proxy, true), 'same');
+  assert.equal(scheduleApproveReplay(sum, 2, proxy, false), 'other', 'お客様が押したが代理で承認済み');
+  assert.equal(scheduleApproveReplay(sum, 2, client, true), 'other', '代理で押したがお客様が承認済み');
+  assert.equal(scheduleApproveReplay({ ...sum, status: 'requested' }, 2, client, false), null);
+  assert.equal(scheduleApproveReplay({ ...sum, approvalId: 'schedule-r1-approve' }, 2, client, false), null, '承認の ID が版と合わない');
+  assert.equal(scheduleApproveReplay(sum, 1, client, false), null, '押した版が違う');
+  assert.equal(scheduleApproveReplay(sum, 2, null, false), null, '記録が無い');
+  assert.equal(scheduleApproveReplay(sum, 2, { ...client, revision: 1 }, false), null);
+  assert.equal(scheduleApproveReplay(null, 2, client, false), null);
 });
 
 test('SU-09 scheduleConflict: 保存の editSeq・承認の版と editSeq（WBS だけ変わっても承認しない。L-18）', () => {

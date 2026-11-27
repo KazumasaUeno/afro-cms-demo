@@ -27,6 +27,8 @@ export interface WbsSource {
   save?: (items: WbsItem[], done: WbsDone, token: string) => Promise<boolean>;
   /** いまの版（変わったとき、下書きを触っていなければ追従する） */
   token: string;
+  /** live だけ: 説明の下に出す注意（依頼中に WBS を変えるとき等）。demo は持たない */
+  notice?: string;
 }
 
 export interface ScheduleSource {

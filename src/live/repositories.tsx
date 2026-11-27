@@ -24,7 +24,7 @@ import { TASK_LIMIT, newestTasksInOrder, type NewTaskInput } from './tasks';
 import { cleanConsultText, consultBlock, consultSide, seqId, validateConsultText } from './consult';
 import { cleanProxyNote, validateProxyNote, proxyVersionOk } from './proxyApproval';
 import {
-  clientNeedsApprovedCopy, cleanScheduleReason, sameAssignees, sameDates, SCHEDULE_CONFLICT_TEXT, SCHEDULE_REVISION_MAX, scheduleApprovedCopyOf, scheduleConflict,
+  clientNeedsApprovedCopy, cleanScheduleReason, sameAssignees, scheduleApprovalIdOf, scheduleApproveReplay, sameDates, SCHEDULE_CONFLICT_TEXT, SCHEDULE_REVISION_MAX, scheduleApprovedCopyOf, scheduleConflict,
   scheduleDoc, scheduleForSave, scheduleInternalDoc, validateScheduleInput, validateScheduleReason, validateWbsInput, wbsForSave, wbsWriteChanged,
   type ScheduleApprovedCopy, type ScheduleCurrent, type ScheduleDates, type ScheduleInternal, type ScheduleSummary,
 } from './schedule';
@@ -522,11 +522,19 @@ export function useLiveScheduleActions(projectId: string): LiveScheduleActions {
     /** お客様の承認と代理承認の共通部分（L-18: 表示した版で送る。写しは表示した値） */
     const approveAs = async (shown: ScheduleShown, proxy: { note: string; requestedAt: string | undefined } | null) => {
       let rev = -1;
+      const otherText = proxy ? 'お客様がすでに承認しています' : 'アフロがすでに代理で承認しています';
       try {
-        await runTransaction(db, async (tx) => {
+        const replayed = await runTransaction(db, async (tx) => {
           const ps = await tx.get(projRef(pid));
           const cs = await tx.get(schedRef(pid, 'current'));
           const sum = gate(ps).schedule ?? null;
+          if (sum?.status === 'approved' && sum.approvalId === scheduleApprovalIdOf(sum.revision) && shown.revision === sum.revision) {
+            // 別タブで同じ版を先に承認した（二重押し）。記録の種類（お客様・代理）が押した側と同じなら成功として扱う
+            const ex = await tx.get(schedApprRef(pid, sum.revision, 'approve'));
+            const replay = scheduleApproveReplay(sum, shown.revision, ex.exists() ? ex.data() : null, !!proxy);
+            if (replay === 'other') throw new Error(otherText);
+            if (replay === 'same') return ex.id;
+          }
           if (sum?.status !== 'requested') throw new Error('いまは承認できる状態ではありません');
           rev = sum.revision;
           if (proxy && !proxyVersionOk(proxy.requestedAt, sum.requestedAt)) {
@@ -543,15 +551,17 @@ export function useLiveScheduleActions(projectId: string): LiveScheduleActions {
           });
           tx.update(projRef(pid), {
             'schedule.status': 'approved', 'schedule.approvedRevision': rev, 'schedule.approvedAt': serverTimestamp(), 'schedule.approvedBy': uid,
-            'schedule.approvalId': `schedule-r${rev}-approve`, 'schedule.approvedVia': proxy ? 'proxy' : deleteField(), ...stamp(uid),
+            'schedule.approvalId': scheduleApprovalIdOf(rev), 'schedule.approvedVia': proxy ? 'proxy' : deleteField(), ...stamp(uid),
           });
+          return null;
         });
+        if (replayed) console.warn('schedule approval already done (double press)', { projectId: pid, aid: replayed });
       } catch (e) {
         // 二重承認（2 タブ・再送）は Rules が拒否する。同じ種類の記録が既にあれば承認済みとして扱う（無音にしない。§4）
         if (rev >= 0 && isDenied(e)) {
           const existing = await getDoc(schedApprRef(pid, rev, 'approve')).catch(() => null);
           if (existing?.exists()) {
-            if ((existing.data()?.proxy === true) !== !!proxy) throw new Error(proxy ? 'お客様がすでに承認しています' : 'アフロがすでに代理で承認しています');
+            if ((existing.data()?.proxy === true) !== !!proxy) throw new Error(otherText);
             console.warn('schedule approval already exists', { projectId: pid, aid: existing.id });
             return;
           }

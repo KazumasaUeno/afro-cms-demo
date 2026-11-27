@@ -1,6 +1,6 @@
 import type { DocumentData } from 'firebase/firestore';
 import type { ProjectSchedule, WbsId, WbsItem } from '@/types';
-import { validateSchedule, validateWbs, WBS_ASSIGNEE_MAX, WBS_ITEMS, SCHEDULE_NOTE_MAX, type ScheduleDraft, type ScheduleErrors, type WbsErrors } from '@/data/schedule';
+import { statusOf, validateSchedule, validateWbs, WBS_ASSIGNEE_MAX, WBS_ITEMS, SCHEDULE_NOTE_MAX, type ScheduleDraft, type ScheduleErrors, type WbsErrors, type WbsStatus } from '@/data/schedule';
 import { ymdToIso } from '@/features/projects/projectForm';
 import { cleanProxyNote, proxyNoteLength, PROXY_NOTE_MAX } from './proxyApproval';
 import { TASK_LIMIT } from './tasks';
@@ -180,6 +180,21 @@ export function scheduleApprovedCopyOf(d: DocumentData | null | undefined): Sche
   return { revision: d.revision, dates, ...(wbs ? { wbs } : {}) };
 }
 
+/** 承認の記録 schedule-r{rev}-approve の ID */
+export const scheduleApprovalIdOf = (revision: number) => `schedule-r${revision}-approve`;
+
+/**
+ * 承認の送信が、すでに承認済みの同じ版への再送（別タブの二重押し）か。
+ * 'same'＝同じ種類（お客様⇔代理が一致）の承認の記録がある → 成功として扱う ／ 'other'＝別の種類で承認済み ／ null＝再送ではない（通常の判定へ）
+ */
+export function scheduleApproveReplay(
+  sum: Pick<ScheduleSummary, 'status' | 'revision' | 'approvalId'> | null, shownRevision: number, record: DocumentData | null | undefined, proxy: boolean,
+): 'same' | 'other' | null {
+  if (sum?.status !== 'approved' || shownRevision !== sum.revision || sum.approvalId !== scheduleApprovalIdOf(sum.revision)) return null;
+  if (!record || record.action !== 'approve' || record.revision !== sum.revision) return null;
+  return (record.proxy === true) === proxy ? 'same' : 'other';
+}
+
 /* ---------- お客様の表示（§5・要件 §6.2・L-2） ---------- */
 
 export type ClientScheduleView =
@@ -349,7 +364,7 @@ export const SCHEDULE_CONFLICT_TEXT: Record<'save' | 'approve', string> = {
 
 /* ---------- 進捗（SU-08・AC-10） ---------- */
 
-export type LiveWbsStatus = 'done' | 'doing' | 'todo' | 'late';
+export type LiveWbsStatus = WbsStatus;
 
 export interface LiveWbsProgress extends LiveWbsItem {
   done: boolean;
@@ -357,35 +372,36 @@ export interface LiveWbsProgress extends LiveWbsItem {
   status: LiveWbsStatus;
   /** 構築の行だけ（お客様には出さない） */
   tasks?: { done: number; total: number; limited: boolean };
+  /** 構築の行で構築タスクが読めない（お客様・読み取りの失敗）とき: 割合が分からない（％とバーの塗りを出さない） */
+  percentUnknown?: true;
 }
 
-/** 状態（demo の features/schedule/wbsProgress.ts statusOf と同じ規則。あちらは DemoStore 側を import するので単体テストから読めず、同じ式をここに置く） */
-export function liveStatusOf(item: { start: string; end: string }, actual: { done: boolean; percent: number }, today: string): LiveWbsStatus {
-  if (actual.done) return 'done';
-  if (today > item.end) return 'late';
-  if (today >= item.start || actual.percent > 0) return 'doing';
-  return 'todo';
-}
+/** 構築より後の行（どれかに完了印があれば、構築は終わっている） */
+const AFTER_BUILD: readonly WbsId[] = ['buildApproval', 'quality', 'release'];
 
 /**
  * WBS の実績。構築の行は構築タスク（done / 全件。0 件は 0%。上限 TASK_LIMIT 件に達したら limited）、他の行は完了印（doneAt）。
- * tasks が null（お客様は読めない）のときの構築の行は日付だけで状態を出す
+ * tasks が null（お客様は読めない・読み取りの失敗）のときの構築の行: 後の行に完了印があれば完了（100%）、無ければ割合は出さず日付だけで状態を出す
+ * （構築タスクの写しは持たない。2026-11-27 lead 判断）
  */
 export function wbsProgressLive(items: readonly LiveWbsItem[], tasks: readonly Pick<TaskDoc, 'status'>[] | null, today: string): LiveWbsProgress[] {
+  const laterDone = items.some((w) => AFTER_BUILD.includes(w.id) && !!w.doneAt);
   return items.map((w) => {
-    if (w.id === 'build') {
-      const total = tasks?.length ?? 0;
-      const doneCount = tasks?.filter((t) => t.status === 'done').length ?? 0;
+    if (w.id === 'build' && !tasks) {
+      return laterDone
+        ? { ...w, done: true, percent: 100, status: statusOf(w, { done: true, percent: 100 }, today) }
+        : { ...w, done: false, percent: 0, percentUnknown: true as const, status: statusOf(w, { done: false, percent: 0 }, today) };
+    }
+    if (w.id === 'build' && tasks) {
+      const total = tasks.length;
+      const doneCount = tasks.filter((t) => t.status === 'done').length;
       const done = total > 0 && doneCount === total;
       const percent = total === 0 ? 0 : Math.round((doneCount / total) * 100);
-      return {
-        ...w, done, percent, status: liveStatusOf(w, { done, percent }, today),
-        ...(tasks ? { tasks: { done: doneCount, total, limited: total >= TASK_LIMIT } } : {}),
-      };
+      return { ...w, done, percent, status: statusOf(w, { done, percent }, today), tasks: { done: doneCount, total, limited: total >= TASK_LIMIT } };
     }
     const done = !!w.doneAt;
     const percent = done ? 100 : 0;
-    return { ...w, done, percent, status: liveStatusOf(w, { done, percent }, today) };
+    return { ...w, done, percent, status: statusOf(w, { done, percent }, today) };
   });
 }
 

@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  liveDetailNext, liveWbsDone, liveWbsItems, liveWbsRows, markNotes, scheduleButtons, scheduleOpened, scheduleSaveKind, scheduleTokenOf, wbsOpened, wbsTokenOf,
+  liveDetailNext, liveWbsDone, liveWbsItems, liveWbsRows, markNotes, scheduleButtons, scheduleOpened, scheduleSaveKind, scheduleTokenOf, SCHEDULE_REQUESTED_WBS_NOTE, wbsOpened, wbsTokenOf,
 } from '../../src/features/schedule/liveScheduleUi.ts';
 import { changedDone, sameDone } from '../../src/features/schedule/scheduleSource.ts';
 import { validateScheduleInput } from '../../src/live/schedule.ts';
@@ -25,6 +25,20 @@ test('liveWbsItems / liveWbsDone: 保存済みの行は doneAt を外し、無�
   assert.deepEqual(items[0], { id: 'sitemap', start: '2026-12-02', end: '2026-12-05', assignee: '黒田' });
   assert.deepEqual(liveWbsItems(undefined, '2026-12-02'), []);
   assert.deepEqual(liveWbsDone({ wbs: [{ id: 'sitemap', start: 'a', end: 'b', doneAt: 'x' }, { id: 'build', start: 'a', end: 'b', doneAt: 'x' }] }), { sitemap: true });
+});
+
+test('liveWbsRows（構築タスクが読めない）: 構築は％不明、後の行の完了印（下書き）があれば完了 100%（CR Major 1）', () => {
+  const its = liveWbsItems(sched, '2026-12-01');
+  const unknown = liveWbsRows(its, {}, null, '2026-12-01').find((r) => r.id === 'build');
+  assert.equal(unknown.percentUnknown, true);
+  assert.equal(unknown.tasks, undefined);
+  const done = liveWbsRows(its, { quality: true }, null, '2026-12-01').find((r) => r.id === 'build');
+  assert.deepEqual([done.done, done.percent, done.status, done.percentUnknown], [true, 100, 'done', undefined]);
+  assert.equal(liveWbsRows(its, {}, [], '2026-12-01').find((r) => r.id === 'build').percentUnknown, undefined, 'アフロ側（読める）は従来どおり');
+});
+
+test('SCHEDULE_REQUESTED_WBS_NOTE: 依頼中に WBS を変えるときの注意（CR Minor 4。文言は lead 判断）', () => {
+  assert.equal(SCHEDULE_REQUESTED_WBS_NOTE, '依頼中に WBS を変えると、お客様は画面を開き直してから承認することになります');
 });
 
 test('liveWbsRows: 完了印は下書きから、構築は構築タスク（一覧つき）', () => {

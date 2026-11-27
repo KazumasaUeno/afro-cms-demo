@@ -74,6 +74,20 @@ export const WBS_ITEMS: { id: WbsId; label: string; help: string }[] = [
 
 export const WBS_ASSIGNEE_MAX = 30;
 
+/** WBS の行の状態 */
+export type WbsStatus = 'done' | 'doing' | 'todo' | 'late';
+
+/**
+ * 状態: 完了 / 遅れ（今日が終了日より後で未完了）/ 進行中（開始日を過ぎた・実績がある）/ 未着手。
+ * demo（features/schedule/wbsProgress.ts）と live（src/live/schedule.ts）の両方が使う（同じ規則を 2 か所に持たない）
+ */
+export function statusOf(item: { start: string; end: string }, actual: { done: boolean; percent: number }, today: string): WbsStatus {
+  if (actual.done) return 'done';
+  if (today > item.end) return 'late';
+  if (today >= item.start || actual.percent > 0) return 'doing';
+  return 'todo';
+}
+
 const ymdMs = (ymd: string) => new Date(ymdToIso(ymd) ?? ymd).getTime();
 /** a から b までの日数（b が後なら正） */
 export const daysBetween = (a: string, b: string) => Math.round((ymdMs(b) - ymdMs(a)) / DAY);

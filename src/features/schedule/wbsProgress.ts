@@ -4,14 +4,14 @@ import { personById } from '@/data/people';
 import { isoToYmd } from '@/features/projects/projectForm';
 import { stageApprovals } from '@/features/portal/portalSteps';
 import { qualityCompletion } from '@/features/projects/projectHelpers';
-import { shiftYmd, wbsOf } from '@/data/schedule';
+import { shiftYmd, statusOf, wbsOf, type WbsStatus } from '@/data/schedule';
 
 /**
  * WBS の実績（2026-11-17 ユーザー指示「作ってみて」）。実績は保存せず、制作データから毎回導く。
  * 予定（WBS の開始・終了）と並べて、遅れが一目で分かるようにする
  */
 
-export type WbsStatus = 'done' | 'doing' | 'todo' | 'late';
+export type { WbsStatus };
 
 export const WBS_STATUS_LABEL: Record<WbsStatus, string> = { done: '完了', doing: '進行中', todo: '未着手', late: '遅れ' };
 
@@ -22,6 +22,8 @@ export interface WbsRow extends WbsItem {
   status: WbsStatus;
   /** 構築の行だけ: 構築タスクの完了数 / 全数 */
   tasks?: { done: number; total: number; list: DevTask[] };
+  /** live だけ: 割合が分からない（構築タスクが読めない構築の行）。％とバーの塗りを出さない。demo は持たない */
+  percentUnknown?: true;
 }
 
 /** WBS の初期値の開始日: 要件定義書の承認の翌日（無ければ日程を保存した日） */
@@ -67,13 +69,8 @@ function actualOf(state: DemoState, id: WbsId): { done: boolean; percent: number
   }
 }
 
-/** 状態: 完了 / 遅れ（今日が終了日より後で未完了）/ 進行中（開始日を過ぎた・実績がある）/ 未着手 */
-export function statusOf(item: WbsItem, actual: { done: boolean; percent: number }, today: string): WbsStatus {
-  if (actual.done) return 'done';
-  if (today > item.end) return 'late';
-  if (today >= item.start || actual.percent > 0) return 'doing';
-  return 'todo';
-}
+/** 状態の規則は @/data/schedule の statusOf（live と共用） */
+export { statusOf };
 
 export function wbsRows(state: DemoState, items: WbsItem[], today: string): WbsRow[] {
   return items.map((w) => {

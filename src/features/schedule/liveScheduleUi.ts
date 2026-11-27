@@ -35,12 +35,13 @@ const devTask = (t: TaskDoc): DevTask => ({
   id: t.id, page: t.page, title: t.title, assigneeId: t.assigneeUids[0] ?? '', assigneeIds: t.assigneeUids, status: t.status, updatedAt: t.updatedAt,
 });
 
-/** 実績（構築の行は構築タスク、他の行は下書きの完了印）。tasks が null（読めない）なら構築の行は日付だけで状態を出す */
+/** 実績（構築の行は構築タスク、他の行は下書きの完了印）。tasks が null（読めない）なら構築の行は後の行の完了印か日付だけで状態を出し、割合は出さない（wbsProgressLive） */
 export function liveWbsRows(items: readonly WbsItem[], done: WbsDone, tasks: readonly TaskDoc[] | null, today: string): WbsRow[] {
   const marked: LiveWbsItem[] = items.map((w) => (w.id !== 'build' && done[w.id] ? { ...w, doneAt: 'marked' } : { ...w }));
   return wbsProgressLive(marked, tasks, today).map((r) => {
     const row: WbsRow = {
       id: r.id, start: r.start, end: r.end, ...(r.assignee ? { assignee: r.assignee } : {}), percent: r.percent, done: r.done, status: r.status,
+      ...(r.percentUnknown ? { percentUnknown: true as const } : {}),
     };
     if (r.id === 'build' && tasks) row.tasks = { done: r.tasks?.done ?? 0, total: r.tasks?.total ?? 0, list: tasks.map(devTask) };
     return row;
@@ -57,6 +58,9 @@ export function markNotes(internal: ScheduleInternal | null, names: Record<strin
   }
   return out;
 }
+
+/** 依頼中に WBS を変えるときの注意（アフロ側の画面だけ。依頼中も WBS は変えられる＝2026-11-27 lead 判断） */
+export const SCHEDULE_REQUESTED_WBS_NOTE = '依頼中に WBS を変えると、お客様は画面を開き直してから承認することになります';
 
 /* ---------- 版（開いた時点の値。競合の検出。L-4・AC-08） ---------- */
 

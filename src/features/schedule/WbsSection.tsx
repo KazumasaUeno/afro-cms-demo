@@ -329,7 +329,9 @@ export function WbsSection({ editable, devBy, ms, onMsChange, client = false, vi
     setTimes(id, dragWbs(w, mode, e.key === 'ArrowLeft' ? -1 : 1));
   };
 
-  const bar = (r: Pick<WbsRow, 'start' | 'end' | 'percent' | 'status'>, label: string, thin = false, id?: WbsId) => {
+  const bar = (r: Pick<WbsRow, 'start' | 'end' | 'percent' | 'status' | 'percentUnknown'>, label: string, thin = false, id?: WbsId) => {
+    // live で割合が分からない行（構築タスクが読めない構築）は「実績 ○%」を言わない・塗らない（demo は常に数値）
+    const actualText = r.percentUnknown ? '' : `・実績 ${r.percent}%`;
     const c = BAR_COLOR[r.status];
     const edit = editable && !thin && !!id;
     const n = spanDays(r.start, r.end);
@@ -341,7 +343,7 @@ export function WbsSection({ editable, devBy, ms, onMsChange, client = false, vi
         role: 'slider', tabIndex: 0,
         'aria-label': `${label}の予定。←→ で移動、Shift＋←→ で終了日、Alt＋←→ で開始日、Enter で日付・担当を入力`,
         'aria-valuemin': 0, 'aria-valuemax': days - 1, 'aria-valuenow': daysBetween(from, r.start),
-        'aria-valuetext': `${label} ${text}・実績 ${r.percent}%・${client && r.status === 'late' ? '調整中' : WBS_STATUS_LABEL[r.status]}`,
+        'aria-valuetext': `${label} ${text}${actualText}・${client && r.status === 'late' ? '調整中' : WBS_STATUS_LABEL[r.status]}`,
         onPointerDown: (e: ReactPointerEvent<HTMLElement>) => startDrag(id, e),
         onPointerMove: moveDrag,
         onPointerUp: (e: ReactPointerEvent<HTMLElement>) => endDrag(e),
@@ -351,13 +353,13 @@ export function WbsSection({ editable, devBy, ms, onMsChange, client = false, vi
         ref: (el: HTMLElement | null) => { if (el) barRefs.current.set(id, el); else barRefs.current.delete(id); },
       }
       : {
-        role: 'img', 'aria-label': `${label} 予定 ${text}・実績 ${r.percent}%・${client && r.status === 'late' ? '調整中' : WBS_STATUS_LABEL[r.status]}`,
+        role: 'img', 'aria-label': `${label} 予定 ${text}${actualText}・${client && r.status === 'late' ? '調整中' : WBS_STATUS_LABEL[r.status]}`,
         ...(id && !thin ? { onClick: () => setSelected(id) } : {}),
       };
     return (
       <Box
         {...a11y}
-        title={`${label} ${text}（実績 ${r.percent}%）`}
+        title={r.percentUnknown ? `${label} ${text}` : `${label} ${text}（実績 ${r.percent}%）`}
         sx={{
           position: 'absolute', zIndex: dragging ? 3 : isSel ? 2 : 1, top: '50%', transform: 'translateY(-50%)', left: x(r.start),
           width: Math.max(dayPx, n * dayPx), height: thin ? 6 : edit ? 20 : 16,
@@ -378,7 +380,7 @@ export function WbsSection({ editable, devBy, ms, onMsChange, client = false, vi
             outline: r.status === 'late' ? `1px solid ${tokens.color.warning}` : undefined,
           }}
         >
-          <Box sx={{ width: `${r.percent}%`, height: '100%', bgcolor: c.fill }} />
+          {!r.percentUnknown && <Box sx={{ width: `${r.percent}%`, height: '100%', bgcolor: c.fill }} />}
         </Box>
         {edit && (['start', 'end'] as const).map((side) => (
           <Box
@@ -455,6 +457,14 @@ export function WbsSection({ editable, devBy, ms, onMsChange, client = false, vi
           {editable && ' バーをドラッグすると移動、両端をドラッグすると開始日・終了日を変えられます（Esc で取り消し）。ダブルクリック（スマホはダブルタップ、キーボードは Enter）で日付・担当を入力できます。'}
           {editable && source && ' 完了印（全ページの構築を除く）も同じ入力画面で付け外しできます。'}
         </Typography>
+        {source?.notice && (
+          <Typography
+            variant="body2" role="note"
+            sx={{ mb: 2, px: 1.5, py: 1, borderRadius: `${tokens.radius.sm}px`, bgcolor: tokens.color.warningSoft, color: tokens.color.warningInk }}
+          >
+            {source.notice}
+          </Typography>
+        )}
 
         {/* 図だけ横にスクロールする（ページは横にスクロールさせない） */}
         <Box
@@ -540,7 +550,7 @@ export function WbsSection({ editable, devBy, ms, onMsChange, client = false, vi
                       {md(r.start)}〜{md(r.end)}{r.assignee && !client ? `・${r.assignee}` : ''}
                     </Typography>
                     <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 0.5, flexWrap: 'wrap', rowGap: 0.5 }}>
-                      <StatusPill tone={STATUS_TONE[r.status]}>{client && r.status === 'late' ? '調整中' : WBS_STATUS_LABEL[r.status]}{r.id === 'build' || r.id === 'quality' ? ` ${r.percent}%` : ''}</StatusPill>
+                      <StatusPill tone={STATUS_TONE[r.status]}>{client && r.status === 'late' ? '調整中' : WBS_STATUS_LABEL[r.status]}{(r.id === 'build' || r.id === 'quality') && !r.percentUnknown ? ` ${r.percent}%` : ''}</StatusPill>
                       {!client && r.id === 'build' && r.tasks && r.tasks.total > 0 && (
                         <ButtonBase
                           onClick={(ev) => { ev.stopPropagation(); setOpenTasks((v) => !v); }} aria-expanded={openTasks} aria-controls="wbs-build-tasks"
