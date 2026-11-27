@@ -269,3 +269,9 @@
 - main b830d62（品質チェックの「代替テキストが無い画像の割合」の表記）。Rules・Functions の変更なし → **Hosting だけ**（`--only hosting`。dist-live の aiFlag internal）。test:unit 171/171・tsc 0
 - [FACT] 本番: `/` 200、`assets/buildProposal-Y_Aiwxmx.js` に新しい表記がある（curl）。ログインしての画面確認は未実施（ユーザー）
 - 戻し: Hosting を 0.51.0（5e5fa82 のビルド）へ戻すだけ（Rules・Functions は戻さない）
+
+## 0.51.2 リリース 2026-11-27（JST。ユーザー GO「ステータスラベルの修正も本番に出して」）— 表示のみ
+
+- main 4b88e34（要件定義の下書きの表示名「ヒアリング入力中」→「要件定義 作成中」）。Rules・Functions の変更なし → **Hosting だけ**（aiFlag internal）。test:unit 171/171・tsc 0
+- [FACT] 本番: `/` 200、新しい表示名が配信中の chunk にある（curl）。ログインしての画面確認は未実施
+- 戻し: Hosting を 0.51.1（b830d62 のビルド）へ戻すだけ
