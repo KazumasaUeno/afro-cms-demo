@@ -49,6 +49,16 @@
    - functions と hosting を 1 回（`--only functions,hosting`）で出さない。画面が先に替わると招待が失敗する（順番の詳細は `docs/TODO.md`）
 4. `https://<ID>.web.app` を開いてログイン画面が出ること、応答ヘッダ（X-Frame-Options 等）を確認
 
+### 6.1 スケジュール（LIVE_SCHEDULE_PLAN §8。段ごとにユーザーの GO をもらう）
+
+- **段 0 の前**: Firebase Console → Firestore → ルール で、本番の**いまの Rules のリリース ID と日時**を控え、リポジトリの `firestore.rules`（main）と食い違っていないかを確認する（リポジトリ外のドリフト）。控えた値は `docs/TODO.md` の「スケジュールの Rules の床」に書く
+- **段 0**（専用のコミットをチェックアウトした作業ツリーから。段 1 の変更を混ぜない）: ① `npm run deploy:firebase -- --project <ID> --only firestore:rules` → ② 別の実行で `npm run build:live` → `npm run deploy:firebase -- --project <ID> --only hosting`。**`--only hosting,firestore:rules` のようにまとめない**（Rules を先に、別々の CLI 実行で）
+- **段 0 を出した版が Rules の床**。リリース ID を `docs/TODO.md` に記録する。**以後、Rules を段 0 より前へ戻さない**（`schedule` を持つ案件で旧 `validProject` が落ち、基本情報・アーカイブが全件失敗する）
+- **段 1**: ① Rules（全部）→ ② 別の実行で Hosting。Functions は変更なし
+- **戻し方（段 1 から）**: Hosting を段 0 の版へ（Console の Hosting のリリース履歴）→ その後 Rules を段 0 の版へ。重い不具合は Rules を前へ直す（forward fix）。作られた文書・承認の記録は消さない
+- 順番を誤った場合（新 Hosting × 旧 Rules）はスケジュールの書き込みが全件拒否（安全側）、要件定義書は影響なし
+- 公開後 1 週間で Firestore の Read 件数を確認する（データ設計 §10）
+
 ## 7. 初代管理者【ユーザー → 開発が確認】（§2.5）
 
 1. Firestore →「コレクションを開始」→ `invites`、文書 ID = 管理者のメール（**小文字**）

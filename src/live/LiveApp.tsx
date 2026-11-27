@@ -19,6 +19,7 @@ const RequirementsPage = lazy(() => import('@/features/requirements/Requirements
 const HearingAnswersPage = lazy(() => import('@/features/requirements/HearingAnswersPage'));
 const LiveRequirementsPage = lazy(() => import('./pages/LiveRequirementsPage'));
 const LiveSchedulePage = lazy(() => import('./pages/LiveSchedulePage'));
+const LivePortalSchedulePage = lazy(() => import('./pages/LivePortalSchedulePage'));
 
 /** その役割の画面だけを開く（表示の出し分け。権限の実体は Firestore Rules） */
 function RoleRoute({ roles, children }: { roles: LiveRole[]; children: ReactNode }) {
@@ -76,6 +77,7 @@ const router = createBrowserRouter([
       { path: 'dev/requirements', element: <RoleRoute roles={dev}><HearingGate><LiveRequirementsPage /></HearingGate></RoleRoute> },
       { path: 'dev/schedule', element: <RoleRoute roles={dev}><HearingGate><LiveSchedulePage /></HearingGate></RoleRoute> },
       { path: 'portal/approvals', element: <RoleRoute roles={client}><PortalApprovalPage /></RoleRoute> },
+      { path: 'portal/schedule', element: <RoleRoute roles={client}><LivePortalSchedulePage /></RoleRoute> },
       { path: 'portal/chat', element: <RoleRoute roles={client}><LiveConsultPage /></RoleRoute> },
       { path: '*', element: <RoleHome /> },
     ],

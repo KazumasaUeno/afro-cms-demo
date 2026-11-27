@@ -1,4 +1,4 @@
-import { ClipboardCheck, FolderKanban, LayoutDashboard, ListTodo, MessageSquare } from 'lucide-react';
+import { CalendarDays, ClipboardCheck, FolderKanban, LayoutDashboard, ListTodo, MessageSquare } from 'lucide-react';
 import { AREAS, type AreaId, type NavItem } from '@/components/layout/nav';
 import { hasReply, unansweredCount } from './consult';
 import type { ProjectDoc } from './model';
@@ -18,6 +18,7 @@ export const LIVE_DEMO_ITEMS = [
   { area: 'dev', fallback: { to: '/dev/chat', label: '相談', icon: MessageSquare, match: ['/dev/chat'], hint: 'お客様からの相談に返信' } },
   { area: 'admin', fallback: { to: '/projects', label: 'プロジェクト', icon: FolderKanban, match: ['/projects', '/ai-studio'], hint: '制作案件の一覧' } },
   { area: 'portal', fallback: { to: '/portal/approvals', label: '確認・承認', icon: ClipboardCheck, match: ['/portal/approvals'], hint: '要件の確認・承認' } },
+  { area: 'portal', fallback: { to: '/portal/schedule', label: 'スケジュール', icon: CalendarDays, match: ['/portal/schedule'], hint: '制作〜公開の予定' } },
   { area: 'portal', fallback: { to: '/portal/chat', label: '相談', icon: MessageSquare, match: ['/portal/chat'], hint: '担当者に相談' } },
 ] as const satisfies readonly { area: AreaId; fallback: NavItem }[];
 
@@ -43,7 +44,7 @@ function liveItem(area: AreaId, demoTo: string, to: string, match: string[], hin
  * - ヒアリング・要件定義: メニューから外した（demo と同じ。プロジェクト詳細の「ヒアリング」から開く。開いている間は「プロジェクト」を選択中にする。
  *   admin の /ai-studio/requirements は '/ai-studio' の前方一致で入る）
  * - ユーザー管理（admin）: メニューから外した。上部バーのアカウントのメニューから開く（LiveShell）
- * - お客様: 確認・承認の隣に相談（担当者から返信があれば「返信あり」の印）
+ * - お客様: 確認・承認・スケジュール（demo のポータルと同じ並び。LIVE_SCHEDULE_PLAN L-20）・相談（担当者から返信があれば「返信あり」の印）
  * 画面（URL）は消していない（以前の最初の画面 /projects・/dev/projects もそのまま開ける）
  */
 export const LIVE_NAV: Record<LiveRole, NavItem[]> = {
@@ -61,6 +62,7 @@ export const LIVE_NAV: Record<LiveRole, NavItem[]> = {
   ],
   client: [
     liveItem('portal', '/portal/approvals', '/portal/approvals', ['/portal/approvals']),
+    liveItem('portal', '/portal/schedule', '/portal/schedule', ['/portal/schedule']),
     liveItem('portal', '/portal/chat', '/portal/chat', ['/portal/chat']),
   ],
 };

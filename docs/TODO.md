@@ -14,6 +14,12 @@
 - [ ] **表示速度の実測（PageSpeed Insights 等）は v1 で見送り**（ユーザー 2026-11-20・設計 Q-3。新しい外部サービス＝ユーザー判断）。それまでサイト診断は基本チェックだけで、速度の数値を出さない
 - [ ] **AI 下書きのクラウド作業（U5。未実施）**: `docs/operations/RUNBOOK_FIREBASE.md` §9.10 の G-0〜G-7 をユーザーの GO ごとに行い、§9.9 の Release Gate の出力を記録する（段 4 の前）
 
+- [ ] **スケジュールの承認・代理承認が納期の合意に当たるか**（LEGAL REVIEW REQUIRED。`docs/design/LIVE_SCHEDULE_PLAN.md` R-8）: お客様の承認した納品予定日・公開予定日が請負の納期の合意と見なされるか、再計画（承認後の変更）の扱い、管理者の代理承認（上の「代理承認の法的な有効性」がスケジュールにも広がる）。AI は結論を出さない。PM が法務へ持ち込む
+- [ ] **スケジュールの Rules の床（段 0 のリリース ID）**: 段 0 を出す前に本番のいまの Rules のリリース ID を Console で控え、段 0 を出したらそのリリース ID をここに書く（`docs/operations/RUNBOOK_FIREBASE.md` §6.1。以後 Rules を段 0 より前へ戻さない）。未記入
+- [ ] **暦に無い日（2/30 など）は画面だけで止めている**（Rules は形式と年の範囲だけ。LIVE_SCHEDULE_PLAN L-12・R-9）。直接書かれた場合は読み込み時に捨てる。Rules で止めるかは式の上限（G1）の余裕と合わせて再判断
+- [ ] **お客様のスケジュールの「全ページの構築」の行は進み具合が 0% のまま**（お客様は構築タスクを読めないため日付だけで状態を出す。src/live/schedule.ts wbsProgressLive）。demo はタスクの割合を出す。お客様に割合を見せるなら、件数だけを current に写すなどの設計が要る（ui-ux-designer・data-backend-architect）
+- [ ] **完了印の全履歴は残さない**（行ごとの最後の操作だけ。L-9）・**差し戻し後の WBS はお客様が API で読める**（受容。L-15）
+
 ## 段階 C（本番の Firebase プロジェクトを作って公開する）の前に必ず行う
 
 出典: security re-audit 2026-11-12（APPROVED WITH CONDITIONS for B、C は未承認）／ code review 2026-11-12。作業の多くはユーザーの Google アカウントでの Console 操作。

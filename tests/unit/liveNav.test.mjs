@@ -7,8 +7,8 @@ import { isActive } from '@/components/layout/nav';
 import { LIVE_BOTTOM_LABEL, LIVE_DEMO_ITEMS, LIVE_NAV, demoItem, liveNavMarks } from '@/live/liveNav';
 import { ROLE_HOME } from '@/live/session';
 
-test('live が使う demo のメニュー項目 7 件が demo の AREAS にある', () => {
-  assert.equal(LIVE_DEMO_ITEMS.length, 7);
+test('live が使う demo のメニュー項目 8 件が demo の AREAS にある（スケジュールは LIVE_SCHEDULE_PLAN L-20）', () => {
+  assert.equal(LIVE_DEMO_ITEMS.length, 8);
   for (const { area, fallback } of LIVE_DEMO_ITEMS) {
     assert.ok(AREAS[area].items.some((i) => i.to === fallback.to), `${area} のメニューに ${fallback.to} が無い`);
   }
@@ -20,7 +20,7 @@ test('demo に無い項目は例外にせず fallback を返す', () => {
   assert.deepEqual(item.match, ['/no-such-screen']);
 });
 
-test('U4（2026-11-25）: admin と開発者は ダッシュボード / プロジェクト / 構築タスク / 相談 の 4 つ。お客様は 確認・承認 と 相談', () => {
+test('U4（2026-11-25）: admin と開発者は ダッシュボード / プロジェクト / 構築タスク / 相談 の 4 つ。お客様は 確認・承認・スケジュール・相談', () => {
   const labels = ['ダッシュボード', 'プロジェクト', '構築タスク', '相談'];
   assert.deepEqual(LIVE_NAV.admin.map((i) => i.to), ['/dashboard', '/projects', '/tasks', '/chat']);
   assert.deepEqual(LIVE_NAV.developer.map((i) => i.to), ['/dev', '/dev/projects', '/dev/tasks', '/dev/chat']);
@@ -31,7 +31,10 @@ test('U4（2026-11-25）: admin と開発者は ダッシュボード / プロ�
     assert.equal(LIVE_NAV.admin[n].icon, demoItem('dev', to).icon);
     assert.equal(LIVE_NAV.developer[n].icon, demoItem('dev', to).icon);
   }
-  assert.deepEqual(LIVE_NAV.client.map((i) => i.to), ['/portal/approvals', '/portal/chat']);
+  assert.deepEqual(LIVE_NAV.client.map((i) => i.to), ['/portal/approvals', '/portal/schedule', '/portal/chat']);
+  // スケジュールは demo のポータルと同じ名前・アイコン（L-20）
+  assert.equal(LIVE_NAV.client[1].label, 'スケジュール');
+  assert.equal(LIVE_NAV.client[1].icon, demoItem('portal', '/portal/schedule').icon);
   // ヒアリング・ユーザー管理はメニューに無い（プロジェクト詳細・上部バーのアカウントのメニューから開く）
   for (const items of Object.values(LIVE_NAV)) {
     for (const i of items) {

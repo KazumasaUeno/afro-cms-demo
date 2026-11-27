@@ -993,3 +993,13 @@
 ## 0.51.2 — 2026-11-27（表示）
 
 - live: 要件定義の状態「下書き」の表示名を「ヒアリング入力中」から「要件定義 作成中」に変更。AI のたたき台ができて確認中の案件まで「ヒアリング入力中」と出て、止まっているように見えたため（ユーザー 2026-11-27）。状態の値・保存データ・Rules は変えていない
+
+## Unreleased（スケジュール＋WBS とお客様承認。未デプロイ・main へ未マージ）
+
+- live: 要件定義書の承認の後、アフロ側（担当の開発者・管理者）が予定日 3 つと WBS を入れ、お客様へ承認を依頼できる（`/schedule`・`/dev/schedule`。案件詳細の「次に必要な作業」は承認後スケジュールへ）。取り下げ・承認後の予定日の変更（再計画）は理由が必須でお客様にも見える。管理者は代理で承認できる（理由必須）。計画 `docs/design/LIVE_SCHEDULE_PLAN.md`
+- live: お客様ポータルに「スケジュール」（`/portal/schedule`。demo と同じ画面）。お客様に見えるのは依頼した版・承認した版の予定日と WBS だけ（メモ・担当・保存者・構築タスクは出さない。「遅れ」は「調整中」）。再計画中は前回承認した版と「調整中」の案内
+- live: 確認・承認に「スケジュール」の区画（要件定義書の章「スケジュール」とは別。demo の確認・承認と同じ部品）。承認は表示していた版で送り、確認の間に内容が変わっていれば送らず「内容が変わりました」
+- 承認の履歴: スケジュールの記録（「スケジュール（第N版）」）と、取り下げ・再計画の理由を画面と CSV に出す。要件定義書の記録の表示は変更なし
+- demo: 見た目は変更なし（部品の分割のみ: `PortalApprovalParts.tsx`・`PortalScheduleView.tsx`・`ScheduleView.tsx` など）
+- Rules: `projects/{pid}/schedule/{current,internal}` と approvals の kind `schedule`（出す順は段 0 → 段 1。`docs/operations/RUNBOOK_FIREBASE.md` §6.1）
+- seed: `node scripts/seed-emulator-reqdoc.mjs --with-schedule [--with-client]`（架空の要件承認済み案件にスケジュール第 1 版・架空のお客様）

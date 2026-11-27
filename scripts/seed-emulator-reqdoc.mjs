@@ -13,6 +13,10 @@
 // 入れるもの（同じ ID に上書き。何度実行してもよい）:
 //   projects/reqdoc-v3-draft     … 要件 draft。aiDrafts/requirements は ready＋generated v3＋edited v3＋submitReady
 //   projects/reqdoc-v3-analyzed  … 要件 analyzed（提案 v3 を提出済み。requirements/current.proposal と approvals の写し）
+//   --with-schedule … projects/reqdoc-v3-approved も入れる（要件 approved・スケジュール第 1 版をお客様へ承認依頼中。LIVE_SCHEDULE_PLAN U4 の画面確認用）。
+//                     schedule の要約・schedule/current・schedule/internal・approvals の requirements-r1-*／schedule-r1-submit。予定日は今日から 20・30・40 日後
+//   --with-client   … 架空のお客様 client@example.com（架空 顧客）を reqdoc-v3-approved のお客様として置く（--with-schedule と一緒に。
+//                     パスワードは環境変数 SEED_CLIENT_PASSWORD。8 文字以上・表示しない）
 //
 // カタログ・必須章の判定・回答のハッシュは本物（src/shared/ai/*.ts）を使うため、Node の型除去（--experimental-strip-types）で自分を起動し直す。
 import { spawnSync } from 'node:child_process';
@@ -81,6 +85,7 @@ const NOW = new Date();
 const CLIENT = '架空テスト株式会社';
 const SITES = {
   draft: { pid: 'reqdoc-v3-draft', siteName: '架空テスト株式会社 コーポレートサイト', host: 'kakuu-test.example.com', industry: '製造業', accent: '#0D9488' },
+  approved: { pid: 'reqdoc-v3-approved', siteName: '架空テスト株式会社 製品サイト', host: 'products.kakuu-test.example.com', industry: '製造業', accent: '#7C3AED' },
   analyzed: { pid: 'reqdoc-v3-analyzed', siteName: '架空テスト株式会社 採用サイト', host: 'recruit.kakuu-test.example.com', industry: '製造業', accent: '#1D4ED8' },
 };
 
@@ -204,6 +209,59 @@ async function seedDev(adminUidValue) {
   return uid;
 }
 
+/** 架空のお客様（--with-client）。Auth（確認済み）・invites（claimed）・accounts（active・projectId）を置いて uid を返す */
+async function seedClient(adminUidValue, projectId) {
+  const email = 'client@example.com';
+  const name = '架空 顧客';
+  const password = process.env.SEED_CLIENT_PASSWORD ?? '';
+  if (password.length < 8) throw new Error('--with-client には環境変数 SEED_CLIENT_PASSWORD（8 文字以上）が要る');
+  const res = await fetch(`${AUTH}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-api-key`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, returnSecureToken: false }),
+  });
+  const body = await res.json();
+  if (!res.ok && body?.error?.message !== 'EMAIL_EXISTS') throw new Error(`signUp → ${res.status} ${body?.error?.message ?? ''}`);
+  const uid = await adminUid(email);
+  await call(`${AUTH}/identitytoolkit.googleapis.com/v1/projects/${PROJECT}/accounts:update`, {
+    method: 'POST', body: JSON.stringify({ localId: uid, password, emailVerified: true, displayName: name }),
+  });
+  await put(`invites/${email}`, {
+    schemaVersion: 1, role: 'client', status: 'claimed', name, company: CLIENT, projectId,
+    createdAt: NOW, createdBy: adminUidValue, provisionedUid: uid, claimedBy: uid, claimedAt: NOW,
+  });
+  await put(`accounts/${uid}`, { schemaVersion: 1, role: 'client', status: 'active', email, name, company: CLIENT, projectId, activatedAt: NOW, updatedAt: NOW, updatedBy: uid });
+  console.log(`お客様 ${email}（${name}・${projectId}）: Auth・invites（claimed）・accounts（active）を置きました`);
+  return { uid, name, email };
+}
+
+const ymdAfter = (days) => new Date(NOW.getTime() + days * 86_400_000 + 9 * 3_600_000).toISOString().slice(0, 10);
+
+/** 要件 approved の案件にスケジュール第 1 版（承認依頼中）を置く（形は tests/rules/fixtures.mjs の scheduleSeed と同じ） */
+async function seedSchedule(s, { uid, client }) {
+  const dates = { buildDue: ymdAfter(20), deliveryDate: ymdAfter(30), releaseDate: ymdAfter(40) };
+  const wbs = {
+    sitemap: { start: ymdAfter(-3), end: ymdAfter(1), doneAt: NOW },
+    design: { start: ymdAfter(2), end: ymdAfter(8) },
+    build: { start: ymdAfter(9), end: ymdAfter(20) },
+    buildApproval: { start: ymdAfter(21), end: ymdAfter(23) },
+    quality: { start: ymdAfter(24), end: ymdAfter(30) },
+    release: { start: ymdAfter(31), end: ymdAfter(40) },
+  };
+  const actor = { actorUid: uid, actorName: '管理者 太郎', actorEmail: 'admin@example.com', actorRole: 'admin' };
+  await put(`projects/${s.pid}/schedule/current`, { schemaVersion: 1, revision: 1, editSeq: 2, ...dates, wbs, updatedAt: NOW, updatedBy: uid });
+  await put(`projects/${s.pid}/schedule/internal`, {
+    schemaVersion: 1, draft: dates, note: '架空のメモ（社内のみ。お客様には出ない）', assignees: { sitemap: '開発 花子', design: '開発 花子' },
+    marks: { sitemap: { state: 'done', at: NOW, by: uid } }, savedByName: '管理者 太郎', editSeq: 2, updatedAt: NOW, updatedBy: uid,
+  });
+  await put(`projects/${s.pid}/approvals/schedule-r1-submit`, { schemaVersion: 1, kind: 'schedule', action: 'submit', revision: 1, side: 'afro', ...actor, at: NOW, ...dates, wbs });
+  // 要件定義書の承認（お客様がいればお客様、いなければ代理）
+  const approver = client
+    ? { side: 'client', actorUid: client.uid, actorName: client.name, actorEmail: client.email }
+    : { side: 'afro', ...actor, proxy: true, note: '架空の代理承認（シードのため）' };
+  await put(`projects/${s.pid}/approvals/requirements-r1-approve`, { schemaVersion: 1, kind: 'requirements', action: 'approve', revision: 1, ...approver, at: NOW });
+  console.log(`projects/${s.pid}: スケジュール第 1 版（承認依頼中。公開予定 ${dates.releaseDate}）`);
+  return { status: 'requested', revision: 1, requestedAt: NOW, releaseDate: dates.releaseDate };
+}
+
 async function seedProject(s, { uid, state, devUid }) {
   const answers = answersOf(s);
   const answerMeta = Object.fromEntries(Object.keys(answers).map((k) => [k, { by: 'afro', at: NOW }]));
@@ -217,10 +275,13 @@ async function seedProject(s, { uid, state, devUid }) {
     quota: { day: NOW.toISOString().slice(0, 10), dayCount: 1, month: NOW.toISOString().slice(0, 7), monthCount: 1 },
     submitReady, editedAt: NOW, editedBy: uid, updatedAt: NOW, updatedBy: 'server',
   };
-  const analyzed = state === 'analyzed';
+  const analyzed = state === 'analyzed' || state === 'approved';
   await put(`projects/${s.pid}`, {
     schemaVersion: 1, clientName: CLIENT, siteName: s.siteName, siteUrl: `https://${s.host}`, siteUrlKey: s.host, industry: s.industry, accent: s.accent,
-    ownerUid: uid, memberUids: devUid ? [devUid] : [], requirements: analyzed ? { status: 'analyzed', revision: 1, analyzedAt: NOW } : { status: 'draft', revision: 0 },
+    ownerUid: uid, memberUids: devUid ? [devUid] : [], requirements: state === 'approved'
+      ? { status: 'approved', revision: 1, analyzedAt: NOW, approvedAt: NOW, approvedBy: uid, approvalId: 'requirements-r1-approve', ...(s.client ? {} : { approvedVia: 'proxy' }) }
+      : analyzed ? { status: 'analyzed', revision: 1, analyzedAt: NOW } : { status: 'draft', revision: 0 },
+    ...(s.schedule ? { schedule: s.schedule } : {}),
     archived: false, createdAt: NOW, createdBy: uid, updatedAt: NOW, updatedBy: uid,
   });
   await put(`siteKeys/${s.host}`, { projectId: s.pid, createdAt: NOW });
@@ -254,10 +315,21 @@ try {
   const email = (args.find((a) => !a.startsWith('--')) ?? 'admin@example.com').trim().toLowerCase();
   const uid = await adminUid(email);
   const devUid = withDev ? await seedDev(uid) : undefined;
+  const withSchedule = args.includes('--with-schedule');
+  if (args.includes('--with-client') && !withSchedule) throw new Error('--with-client は --with-schedule と一緒に使う');
   const n = await seedProject(SITES.draft, { uid, state: 'draft', devUid });
   if (n !== CATALOG.items.length) throw new Error(`項目数 ${n} がカタログ ${CATALOG.items.length} と一致しません`);
   await seedProject(SITES.analyzed, { uid, state: 'analyzed', devUid });
-  await verify([SITES.draft.pid, SITES.analyzed.pid]);
+  const pids = [SITES.draft.pid, SITES.analyzed.pid];
+  if (withSchedule) {
+    const client = args.includes('--with-client') ? await seedClient(uid, SITES.approved.pid) : null;
+    const s = { ...SITES.approved, client };
+    // 承認の記録とスケジュールの文書を先に置き、要約（schedule）を持つ案件文書を最後に置く
+    const schedule = await seedSchedule(s, { uid, client });
+    await seedProject({ ...s, schedule }, { uid, state: 'approved', devUid });
+    pids.push(s.pid);
+  }
+  await verify(pids);
 } catch (e) {
   console.error(`seed-emulator-reqdoc を中止しました: ${e.message}（npm run emulators を起動しているか確認）`);
   process.exit(1);
