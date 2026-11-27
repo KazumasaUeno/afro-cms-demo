@@ -776,7 +776,9 @@ service cloud.firestore {
       return (d.action == 'submit' && b.status == 'draft' && s.status == 'requested' && s.revision == b.revision + 1
                 && d.revision == s.revision && aid == schedApprId(s.revision, 'submit')
                 && d.keys().hasOnly(schedLogBase().concat(['buildDue','deliveryDate','releaseDate','wbs']))
-                && schedCopyOk(d, getAfter(schedPath(pid, 'current')).data))
+                && schedCopyOk(d, getAfter(schedPath(pid, 'current')).data)
+                // ST-20: 同じ書き込みで current も新しい版へ（差し戻し後に current を更新せず要約と記録だけ進めるのを止める）
+                && getAfter(schedPath(pid, 'current')).data.revision == d.revision)
         || (d.action == 'withdraw' && b.status == 'requested' && s.status == 'draft'
                 && d.revision == b.revision && aid == schedApprId(b.revision, 'withdraw')
                 && d.keys().hasOnly(schedLogBase().concat(['note'])) && schedNoteOk(d.note))

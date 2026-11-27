@@ -16,6 +16,7 @@ import { AI_PATH, EDITED, GENERATED, MAX_EDITED, MAX_GENERATED, aiDraftDoc, prop
 import {
   ANSWERS, PROPOSAL, PROXY_NOTE, T0, USERS, approvalDoc, approveBatch, claimAccount, claimBatch, dbAs, doc, inviteDoc, proxyApproveBatch, seed, serverTimestamp, setDoc, stamp, submitBatch, updateDoc, writeBatch,
 } from './fixtures.mjs';
+import { SCHED_DATES, SCHED_NOTE, SCHED_WBS, scheduleSeed, schedLogDoc, wbsWithDone } from './fixtures.mjs';
 
 const BASE = readRules();
 
@@ -308,4 +309,102 @@ describe('TEST-10: admin の分岐と代理承認の変異テスト（元＝拒�
   pair("開発者が submit の記録で actorRole: 'admin' を名乗る ← d.get('actorRole', acc.role) == acc.role",
     async (env) => { await seed(env); return submitBatch(dbAs(env, 'devA'), { mutate: { log: approvalDoc('devA', 'submit', 1, { answers: ANSWERS, proposal: PROPOSAL, actorRole: 'admin' }) } }); },
     () => mutate(BASE, " && d.get('actorRole', acc.role) == acc.role", ''));
+});
+
+// ================= SR-18・ST-24: スケジュールの変異テスト（LIVE_SCHEDULE_PLAN §10.2 の ①〜⑪＋α。review L-4） =================
+// review M-1: 既存の変異のアンカー文字列・TEST-09 の関数名を再利用しない（ここのアンカーは schedule 側の式だけ。mutate は 1 件ちょうどを確かめる）
+describe('SR-18・ST-24: スケジュールの変異テスト（元＝拒否／1 条件を外した変異＝許可）', () => {
+  const pair = (name, attack, mutant) => test(name, async () => {
+    const rules = mutant();
+    assert.notEqual(rules, BASE);
+    await withRules(BASE, async (env) => { await assertFails(attack(env)); });
+    await withRules(rules, async (env) => { await assertSucceeds(attack(env)); });
+  });
+  const P1 = 'projects/p1';
+  const CUR = `${P1}/schedule/current`;
+  const INT = `${P1}/schedule/internal`;
+  const strip = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+  /** 承認の依頼（draft → requested）。log で記録を 1 か所崩す・aid で ID を変える・summary で要約を崩す */
+  const submitS = (env, { uid = 'devA', fromRev = 0, log = {}, aid, summary = {} } = {}) => {
+    const r = fromRev + 1; const db = dbAs(env, uid); const b = writeBatch(db);
+    b.update(doc(db, P1), { 'schedule.status': 'requested', 'schedule.revision': r, 'schedule.requestedAt': serverTimestamp(), 'schedule.releaseDate': SCHED_DATES.releaseDate, ...stamp(uid), ...summary });
+    b.update(doc(db, CUR), { revision: r, ...SCHED_DATES, editSeq: 1, ...stamp(uid) });
+    b.set(doc(db, `${P1}/approvals/${aid ?? `schedule-r${r}-submit`}`), strip({ ...schedLogDoc(uid, 'submit', r, { ...SCHED_DATES, wbs: wbsWithDone(T0) }), ...log }));
+    return b.commit();
+  };
+  const wbsMoved = () => { const w = wbsWithDone(T0); return { ...w, design: { ...w.design, end: '2026-12-05' } }; };
+  const saveWbsBatch = (env, uid, { archived, editSeq = 1, wbs = wbsMoved() } = {}) => {
+    const db = dbAs(env, uid); const b = writeBatch(db);
+    if (archived !== undefined) b.update(doc(db, P1), { archived, ...stamp(uid) });
+    b.update(doc(db, CUR), { wbs, editSeq, ...stamp(uid) });
+    return b.commit();
+  };
+  const archive = (env) => env.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), P1), { archived: true }));
+
+  pair('① kind の無い記録 ← apprCreateOk の kind の振り分け（不明は false）と schedApprOk の kind == schedule',
+    async (env) => { await scheduleSeed(env, { state: 'draft' }); return submitS(env, { log: { kind: undefined } }); },
+    () => mutate(mutate(BASE, "return k == 'requirements' ? reqApprCreateOk(pid, aid, a)", "return k == 'requirements' ? reqApprCreateOk(pid, aid, a) : k != 'schedule' ? schedApprOk(pid, aid, a)"),
+      "&& d.kind == 'schedule' && d.revision is int", '&& d.revision is int'));
+  pair('② schedule の記録を requirements-r2-submit に書く ← schedApprId の schedule-r 接頭辞',
+    async (env) => { await scheduleSeed(env, { state: 'draft', rev: 1 }); return submitS(env, { fromRev: 1, aid: 'requirements-r2-submit' }); },
+    () => mutate(BASE, "{ return 'schedule-r' + string(rev)", "{ return 'requirements-r' + string(rev)"));
+  pair('③ お客様が rev 0 の current を読む ← current の get の revision >= 1',
+    async (env) => { await scheduleSeed(env, { state: 'draft' }); return getDoc(doc(dbAs(env, 'client1'), CUR)); },
+    () => mutate(BASE, '&& resource.data.revision >= 1)', ')'));
+  pair('④ お客様が internal を読む ← internal の get にお客様の分岐が無い',
+    async (env) => { await scheduleSeed(env, { state: 'requested' }); return getDoc(doc(dbAs(env, 'client1'), INT)); },
+    () => mutate(BASE, "sid == 'internal' && (isAdmin() || assigned(pid))", "sid == 'internal' && (isAdmin() || assigned(pid) || clientOf(pid))"));
+  pair('⑤a 代理承認の記録に proxy が無い ← schedProxyLog と schedProxyMark の proxy == true',
+    async (env) => {
+      await scheduleSeed(env, { state: 'requested' });
+      const db = dbAs(env, 'admin1'); const b = writeBatch(db);
+      b.update(doc(db, P1), { 'schedule.status': 'approved', 'schedule.approvedRevision': 1, 'schedule.approvedAt': serverTimestamp(), 'schedule.approvedBy': 'admin1', 'schedule.approvalId': 'schedule-r1-approve', 'schedule.approvedVia': 'proxy', ...stamp('admin1') });
+      b.set(doc(db, `${P1}/approvals/schedule-r1-approve`), schedLogDoc('admin1', 'approve', 1, { ...SCHED_DATES, wbs: wbsWithDone(T0), note: SCHED_NOTE }));
+      return b.commit();
+    },
+    () => mutate(mutate(BASE, "&& d.get('proxy', false) == true && schedNoteOk(d.note)", '&& schedNoteOk(d.note)'), "return lg.get('proxy', false) == true && ", 'return '));
+  pair("⑤b 開発者が記録で actorRole: 'admin' を名乗る ← schedApprOk の actorRole の強制",
+    async (env) => { await scheduleSeed(env, { state: 'draft' }); return submitS(env, { log: { actorRole: 'admin' } }); },
+    () => mutate(BASE, "(r == 'admin' ? d.get('actorRole', null) == 'admin' : d.get('actorRole', r) == r)", 'true'));
+  pair('⑥ アーカイブ解除と WBS の保存を同じバッチ ← schedGate の事前の archived',
+    async (env) => { await scheduleSeed(env, { state: 'approved' }); await archive(env); return saveWbsBatch(env, 'devA', { archived: false }); },
+    () => mutate(BASE, 'p.archived == false && pa.archived', 'pa.archived'));
+  pair('⑦ アーカイブと WBS の保存を同じバッチ ← schedGate の事後の archived（L-17）',
+    async (env) => { await scheduleSeed(env, { state: 'approved' }); return saveWbsBatch(env, 'devA', { archived: true }); },
+    () => mutate(BASE, '&& pa.archived == false; }', '; }'));
+  pair('⑧ submit の記録の写しが current と違う ← schedCopyOk(d, getAfter(current))',
+    async (env) => { await scheduleSeed(env, { state: 'draft' }); return submitS(env, { log: { releaseDate: '2026-12-31' } }); },
+    () => mutate(BASE, "&& schedCopyOk(d, getAfter(schedPath(pid, 'current')).data)", ''));
+  pair('⑨ 同じ editSeq から 2 回保存（後の方）← schedCurUpdateOk の editSeq +1',
+    async (env) => {
+      await scheduleSeed(env, { state: 'approved' });
+      await assertSucceeds(saveWbsBatch(env, 'devA'));
+      return saveWbsBatch(env, 'devB', { wbs: wbsWithDone(T0) });
+    },
+    () => mutate(BASE, `d.editSeq == b.editSeq + 1${NL}        && ((ch.hasOnly`, `true${NL}        && ((ch.hasOnly`));
+  pair('⑩ current の doneAt だけ付ける（internal.marks なし）← doneOk の marks の照合（current→internal）',
+    async (env) => {
+      await scheduleSeed(env, { state: 'approved', done: false });
+      const w = { ...SCHED_WBS, design: { ...SCHED_WBS.design, doneAt: serverTimestamp() } };
+      return saveWbsBatch(env, 'devA', { wbs: w });
+    },
+    () => mutate(BASE, " && im.get(id, {}) == {'state': 'done', 'at': request.time, 'by': request.auth.uid})", ')'));
+  pair('⑪ internal.marks だけ done にする（current の doneAt なし）← markOk の照合（internal→current）',
+    async (env) => {
+      await scheduleSeed(env, { state: 'approved', done: false });
+      return updateDoc(doc(dbAs(env, 'devA'), INT), { marks: { design: { state: 'done', at: serverTimestamp(), by: 'devA' } }, savedByName: USERS.devA.name, editSeq: 1, ...stamp('devA') });
+    },
+    () => mutate(BASE, " && cw[id].get('doneAt', null) == request.time", ''));
+  pair('⑫ 要約の releaseDate が current と違う ← schedAfroMove の要約の等式',
+    async (env) => { await scheduleSeed(env, { state: 'draft' }); return submitS(env, { summary: { 'schedule.releaseDate': '2027-03-01' } }); },
+    () => mutate(BASE, "&& s.releaseDate == getAfter(schedPath(pid, 'current')).data.releaseDate", ''));
+  pair('⑬ 差し戻し後に current を更新せず要約と記録だけ進める（ST-20）← schedAfroLog の current.revision == d.revision',
+    async (env) => {
+      await scheduleSeed(env, { state: 'draft', rev: 1 });
+      const db = dbAs(env, 'devA'); const b = writeBatch(db);
+      b.update(doc(db, P1), { 'schedule.status': 'requested', 'schedule.revision': 2, 'schedule.requestedAt': serverTimestamp(), 'schedule.releaseDate': SCHED_DATES.releaseDate, ...stamp('devA') });
+      b.set(doc(db, `${P1}/approvals/schedule-r2-submit`), schedLogDoc('devA', 'submit', 2, { ...SCHED_DATES, wbs: wbsWithDone(T0) }));
+      return b.commit();
+    },
+    () => mutate(BASE, "&& getAfter(schedPath(pid, 'current')).data.revision == d.revision)", ')'));
 });

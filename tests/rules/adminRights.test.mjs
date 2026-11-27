@@ -8,7 +8,7 @@ import { deleteDoc, runTransaction } from 'firebase/firestore';
 import { createRulesEnv, readRules } from './guard.mjs';
 import {
   ANSWERS, FULL_ANSWERS, PAST, PROPOSAL, PROXY_NOTE, USERS, approvalDoc, approveBatch, dbAs, doc, proxyApproveBatch, seed, serverTimestamp, setDoc, stamp, submitBatch, updateDoc, withdrawBatch, writeBatch,
-  scheduleSeed, schedApproveBatch, schedInitBatch, schedProxyBatch, schedReopenBatch, schedSaveBatch, schedSubmitBatch,
+  scheduleSeed, schedApproveBatch, schedInitBatch, schedProxyBatch, schedReopenBatch, schedSaveBatch, schedSubmitBatch, schedWithdrawBatch,
 } from './fixtures.mjs';
 import { seedAi } from './aiFixtures.mjs';
 import { MAX_EDITED_V3, MAX_GENERATED_V3, aiDraftDocV3, proposalV3 } from './aiFixturesV3.mjs';
@@ -45,8 +45,15 @@ const OPS = {
   'タスクの作成': { reqState: 'draft', run: (db, uid) => setDoc(doc(db, 'projects/p1/tasks/new1'), taskOf(uid)) },
   'タスクの状態変更': { reqState: 'draft', task: true, run: (db, uid) => updateDoc(doc(db, 'projects/p1/tasks/t1'), { status: 'doing', ...stamp(uid) }) },
   '相談の返信（side afro）': { reqState: 'draft', run: (db, uid) => sendAs(db, uid) },
+  // スケジュール（LIVE_SCHEDULE_PLAN §10.2 SR-16。sched は scheduleSeed の状態。未ログインの uid は devA の形で送る）
+  'スケジュールの初回保存（init）': { sched: { state: 'none' }, run: (db, uid) => schedInitBatch(db, { uid: USERS[uid] ? uid : 'devA' }) },
+  'WBS・完了印・担当の同時保存': { sched: { state: 'approved', done: false }, run: (db, uid) => schedSaveBatch(db, { uid: USERS[uid] ? uid : 'devA' }) },
+  'スケジュールの承認の依頼（submit）': { sched: { state: 'draft' }, run: (db, uid) => schedSubmitBatch(db, { uid: USERS[uid] ? uid : 'devA' }) },
+  'スケジュールの取り下げ（withdraw）': { sched: { state: 'requested' }, run: (db, uid) => schedWithdrawBatch(db, { uid: USERS[uid] ? uid : 'devA' }) },
+  'スケジュールの代理承認': { sched: { state: 'requested' }, run: (db, uid) => schedProxyBatch(db, { uid: USERS[uid] ? uid : 'admin1' }) },
+  'スケジュールの再計画（reopen）': { sched: { state: 'approved' }, run: (db, uid) => schedReopenBatch(db, { uid: USERS[uid] ? uid : 'devA' }) },
 };
-async function prep(op) { await seed(env, { reqState: op.reqState }); if (op.task) await seedTask(); }
+async function prep(op) { if (op.sched) return scheduleSeed(env, op.sched); await seed(env, { reqState: op.reqState }); if (op.task) await seedTask(); }
 
 describe('TEST-01: admin は担当外の案件で開発の全操作ができる', () => {
   for (const [name, op] of Object.entries(OPS)) {
