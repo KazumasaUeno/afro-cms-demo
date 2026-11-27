@@ -41,8 +41,9 @@ const KEY_SHAPE = {
   anthropic: { re: /^sk-ant-[A-Za-z0-9_-]{20,}$/, head: 'sk-ant-', ok: (k) => k.startsWith('sk-ant-') },
   // OpenAI のキー: sk-proj- / sk-svcacct- / sk-（旧）。Anthropic のキーを取り違えて入れたら止める
   openai: { re: /^sk-(?!ant-)[A-Za-z0-9_-]{20,}$/, head: 'sk-（sk-ant- ではない）', ok: (k) => k.startsWith('sk-') && !k.startsWith('sk-ant-') },
-  // Gemini（AI Studio）のキー: AIza で始まる 39 文字が一般的 [INFERENCE: 公式に形の記載を見つけられなかった。少し緩めに見る]
-  gemini: { re: /^AIza[0-9A-Za-z_-]{30,}$/, head: 'AIza', ok: (k) => k.startsWith('AIza') },
+  // Gemini（AI Studio）のキー: 旧形式 AIza…（39 文字前後）と新形式 AQ.…（2026-11-27 に AI Studio で発行したキーが 53 文字の AQ.Ab…。ユーザーが画面で確認）。
+  // 公式に形の記載は見つけていない [INFERENCE]。少し緩めに見る
+  gemini: { re: /^(?:AIza[0-9A-Za-z_-]{30,}|AQ\.[0-9A-Za-z_.-]{30,})$/, head: 'AIza か AQ.', ok: (k) => k.startsWith('AIza') || k.startsWith('AQ.') },
 };
 /** キーの形だけを見る（値は返さない・表示しない）。問題なければ null、あれば理由の文 */
 export function keyShapeProblem(provider, key) {
@@ -61,6 +62,7 @@ export function scrubSecrets(text, keys = []) {
   return t
     .replace(/sk-[A-Za-z0-9_-]{8,}/g, '[REDACTED]')
     .replace(/AIza[0-9A-Za-z_-]{10,}/g, '[REDACTED]')
+    .replace(/AQ\.[0-9A-Za-z_.-]{10,}/g, '[REDACTED]')
     .replace(/(Bearer\s+)[A-Za-z0-9._-]{8,}/gi, '$1[REDACTED]')
     .replace(/([?&]key=)[^&\s"]+/gi, '$1[REDACTED]');
 }

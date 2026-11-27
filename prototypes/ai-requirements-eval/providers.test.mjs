@@ -79,6 +79,15 @@ test('scrubSecrets はキーとキーの形を伏せる', () => {
   assert.ok(!s.includes('abcdefghijkl'));
 });
 
+test('Gemini の新形式キー AQ.… も受け、伏せる（2026-11-27 発行分）', () => {
+  const aq = 'AQ' + '.Ab' + 'Q'.repeat(50);
+  assert.equal(keyShapeProblem('gemini', aq), null);
+  assert.match(keyShapeProblem('gemini', 'AQ.short'), /GEMINI_API_KEY/);
+  assert.match(keyShapeProblem('gemini', 'XX' + 'Q'.repeat(50)), /先頭が AIza か AQ\. でない/);
+  const s = scrubSecrets(`error ${aq} done`);
+  assert.ok(!s.includes('QQQQQQQQ'));
+});
+
 test('OpenAI: Responses API へ strict json_schema・同じプロンプト・同じ Schema で送り、応答を本番の後検証に通す', async () => {
   const f = stubFetch(openaiOk(good()));
   const r = await generateWith(core, inputOf('gpt-6-luna'), oa(f));
