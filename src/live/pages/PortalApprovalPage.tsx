@@ -1,19 +1,30 @@
-import { useState } from 'react';
-import { Box } from '@mui/material';
-import { BadgeCheck } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Box, Button } from '@mui/material';
+import { BadgeCheck, CheckCircle2 } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import { PageHeader } from '@/components/ui';
 import { RouteLoader } from '@/components/layout/RouteLoader';
 import { useCurrentRequirements } from '@/repositories';
+import { useToast } from '@/hooks/useToast';
+import { blankWork } from '@/store/projectWork';
 import { ProposalView } from '@/features/requirements/ProposalView';
 import { HearingAnswersSection, NonFunctionalSection, ReqDocTabs, ScheduleSection, type ReqDocSectionId } from '@/features/requirements/RequirementsDocSections';
 import { ApprovalHistory } from '@/features/projects/ApprovalHistory';
-import { useLiveProjects } from '../repositories';
+import { approvalSteps } from '@/features/portal/portalSteps';
+import { CONFIRM, ConfirmDialog, ScheduleDateCards, StepCard } from '@/features/portal/PortalApprovalParts';
+import type { RequirementSession } from '@/types';
+import { clientScheduleView, type ScheduleCurrent } from '../schedule';
+import { clientApprovalShown, clientScheduleState, isPermissionDenied } from '../portalSchedule';
+import { toProject, type ProjectDoc } from '../model';
+import { useLiveProjects, useLiveSchedule, useLiveScheduleActions } from '../repositories';
+import { liveProjectView } from '../projectView';
 import { EmptyState, LoadError } from './shared';
 
 /**
  * お客様ポータルの確認・承認（live）。担当の 1 案件（accounts.projectId）だけ。
  * 準備中（draft）は内容を見せない。承認待ち・承認済みは保存された要件定義書（承認の対象と同じ写し）を見せる。
- * 要件定義書は開発者の画面と同じ 4 つのタブ（demo の RequirementsDocPage と同じ部品）。「つくり方」は開発者の手順なので出さない（REQDOC_U4_UI.md §3.4）。承認の履歴はタブの下
+ * 要件定義書は開発者の画面と同じ 4 つのタブ（demo の RequirementsDocPage と同じ部品）。「つくり方」は開発者の手順なので出さない（REQDOC_U4_UI.md §3.4）。
+ * スケジュールの承認は要件定義書の章（タブの「スケジュール」）とは別の区画（C-05。demo の確認・承認の「2. スケジュール」と同じ部品）。承認の履歴はその下
  */
 export default function PortalApprovalPage() {
   const { data: list, loading: pLoading, error: pError } = useLiveProjects();
@@ -44,9 +55,92 @@ export default function PortalApprovalPage() {
             {section === 'schedule' && <ScheduleSection />}
             {section === 'nonfunctional' && <NonFunctionalSection />}
           </Box>
+          <ScheduleApproval doc={project} req={req} />
           <ApprovalHistory projectId={project.id} siteName={project.siteName} />
         </Box>
       )}
     </Box>
+  );
+}
+
+/**
+ * スケジュールの承認の区画（LIVE_SCHEDULE_PLAN U4・C-05・L-18）。段階は demo と同じ approvalSteps の schedule（未作成・再計画中は準備中／依頼中は承認待ち／承認済み）。
+ * 承認は「承認する」を押した時点に表示していた版（revision・editSeq・写し）で送る。確認の間に WBS が変わっていれば送らず「内容が変わりました」
+ */
+function ScheduleApproval({ doc, req }: { doc: ProjectDoc; req: RequirementSession }) {
+  const pid = doc.id;
+  const toast = useToast();
+  const { hash } = useLocation();
+  const sch = useLiveSchedule(pid);
+  const actions = useLiveScheduleActions(pid);
+  const denied = isPermissionDenied(sch.error);
+  const cv = useMemo(
+    () => (denied ? { kind: 'none' as const } : clientScheduleView(sch.summary, sch.current, sch.approvedCopy)),
+    [denied, sch.summary, sch.current, sch.approvedCopy],
+  );
+  const project = useMemo(() => toProject(doc), [doc]);
+  const st = useMemo(() => clientScheduleState(cv, sch.summary), [cv, sch.summary]);
+  const view = useMemo(() => liveProjectView(project, req, [], blankWork(pid), st), [project, req, pid, st]);
+  const [shown, setShown] = useState<ScheduleCurrent | null>(null);
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+
+  // /portal/approvals#schedule（スケジュールの画面の「スケジュールを承認する」）で区画へ移る（demo の PortalApprovalsPage と同じ）
+  const ready = !sch.loading;
+  useEffect(() => {
+    if (hash !== '#schedule' || !ready) return undefined;
+    const t = window.setTimeout(() => document.getElementById('schedule')?.scrollIntoView({ block: 'start' }), 60);
+    return () => window.clearTimeout(t);
+  }, [hash, ready]);
+
+  if (sch.loading) return null;
+  if (sch.error && !denied) return <LoadError what="スケジュール" />;
+
+  const step = approvalSteps(view).find((s) => s.key === 'schedule');
+  if (!step) return null;
+  const canApprove = !doc.archived && !!clientApprovalShown(sch.summary, sch.current);
+  const approve = async () => {
+    if (!shown || busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      await actions.approve(shown);
+      toast(CONFIRM.schedule.done);
+      setShown(null);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : '承認できませんでした。接続を確かめてください', 'error');
+      setShown(null);
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  };
+  const dates = view.schedule;
+
+  return (
+    <>
+      <StepCard
+        step={step}
+        approvedLabel={sch.summary?.approvedVia === 'proxy' ? '代理で承認済み' : '承認済み'}
+        action={(
+          <Button
+            variant="contained" startIcon={<CheckCircle2 size={16} />} disabled={!canApprove || busy}
+            onClick={() => setShown(clientApprovalShown(sch.summary, sch.current))}
+            sx={{ flexShrink: 0, alignSelf: { xs: 'stretch', sm: 'auto' } }}
+          >
+            承認する
+          </Button>
+        )}
+      >
+        {dates && <ScheduleDateCards schedule={dates} />}
+      </StepCard>
+      <ConfirmDialog
+        open={!!shown && !busy}
+        title={CONFIRM.schedule.title}
+        body={CONFIRM.schedule.body}
+        onClose={() => setShown(null)}
+        onConfirm={() => { void approve(); }}
+      />
+    </>
   );
 }
