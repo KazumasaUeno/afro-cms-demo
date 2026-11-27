@@ -231,3 +231,131 @@ export const FULL_ANSWERS = {
   'q-infra': 'し'.repeat(120), 'q-schedule': 'す'.repeat(120), 'q-other': 'せ'.repeat(600),
   'q-dns-owner': '不明', 'q-dns-switch': '未定', 'q-dns-note': 'そ'.repeat(600),
 };
+
+// ================= スケジュール（docs/design/LIVE_SCHEDULE_WBS_DATA.md §2・§7.1、LIVE_SCHEDULE_PLAN.md §2・§5） =================
+// 既定は最大の payload（WBS 6 行・完了印 5 行・担当 6 件 30 字・メモ 200 字・buildDue あり）。G1 の計測（adminRights TEST-09）と schedule.test.mjs が使う
+
+export const SCHED_DATES = { buildDue: '2026-12-10', deliveryDate: '2026-12-20', releaseDate: '2026-12-25' };
+export const SCHED_WBS = {
+  sitemap: { start: '2026-11-28', end: '2026-11-30' },
+  design: { start: '2026-12-01', end: '2026-12-04' },
+  build: { start: '2026-12-05', end: '2026-12-10' },
+  buildApproval: { start: '2026-12-11', end: '2026-12-12' },
+  quality: { start: '2026-12-13', end: '2026-12-20' },
+  release: { start: '2026-12-21', end: '2026-12-25' },
+};
+export const SCHED_MARK_IDS = ['sitemap', 'design', 'buildApproval', 'quality', 'release'];
+export const SCHED_NOTE = 'メ'.repeat(200);
+export const SCHED_ASSIGNEES = Object.fromEntries(Object.keys(SCHED_WBS).map((id) => [id, '担'.repeat(30)]));
+/** 完了印つきの WBS（build を除く 5 行に doneAt） */
+export const wbsWithDone = (at) => Object.fromEntries(Object.entries(SCHED_WBS).map(([id, r]) => [id, id === 'build' ? r : { ...r, doneAt: at }]));
+/** 完了印の記録（5 行とも state done） */
+export const marksDone = (at, by) => Object.fromEntries(SCHED_MARK_IDS.map((id) => [id, { state: 'done', at, by }]));
+
+/** スケジュールの承認の記録（kind schedule。admin は actorRole: 'admin'） */
+export function schedLogDoc(uid, action, revision, extra = {}) {
+  return { ...approvalDoc(uid, action, revision), kind: 'schedule', ...extra };
+}
+
+/**
+ * p1（要件定義書は承認済み）にスケジュールを置く。state: 'none'（未作成）| 'draft' | 'requested' | 'approved'。
+ * rev は既定で draft=0・それ以外 1。done: true で WBS 5 行に完了印（T0）と internal.marks
+ */
+export async function scheduleSeed(env, { state = 'draft', rev, done = true, approvedVia } = {}) {
+  await seed(env, { reqState: 'approved' });
+  if (state === 'none') return;
+  const r = rev ?? (state === 'draft' ? 0 : 1);
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    const b = writeBatch(db);
+    const wbs = done ? wbsWithDone(T0) : SCHED_WBS;
+    const summary = {
+      status: state, revision: r,
+      ...(r >= 1 ? { requestedAt: T0, releaseDate: SCHED_DATES.releaseDate } : {}),
+      ...(state === 'approved' ? { approvedRevision: r, approvedAt: T0, approvedBy: approvedVia ? 'admin1' : 'client1', approvalId: `schedule-r${r}-approve`, ...(approvedVia ? { approvedVia } : {}) } : {}),
+    };
+    b.update(doc(db, 'projects/p1'), { schedule: summary });
+    b.set(doc(db, 'projects/p1/schedule/current'), { schemaVersion: 1, revision: r, editSeq: 0, ...(r >= 1 ? SCHED_DATES : {}), wbs, updatedAt: T0, updatedBy: 'devA' });
+    b.set(doc(db, 'projects/p1/schedule/internal'), {
+      schemaVersion: 1, draft: SCHED_DATES, note: SCHED_NOTE, assignees: SCHED_ASSIGNEES, ...(done ? { marks: marksDone(T0, 'devA') } : {}),
+      savedByName: USERS.devA.name, editSeq: 0, updatedAt: T0, updatedBy: 'devA',
+    });
+    if (r >= 1) b.set(doc(db, `projects/p1/approvals/schedule-r${r}-submit`), { ...schedLogDoc('devA', 'submit', r, { ...SCHED_DATES, wbs }), at: T0 });
+    await b.commit();
+  });
+}
+
+/** 初回の保存（init）: 案件の schedule・current・internal を 1 バッチ（最大の payload: 完了印 5 行＋marks・担当 6 件・メモ 200 字） */
+export function schedInitBatch(db, { uid = 'devA', pid = 'p1', wbs, internal = {} } = {}) {
+  const b = writeBatch(db);
+  b.update(doc(db, `projects/${pid}`), { schedule: { status: 'draft', revision: 0 }, ...stamp(uid) });
+  b.set(doc(db, `projects/${pid}/schedule/current`), { schemaVersion: 1, revision: 0, editSeq: 0, wbs: wbs ?? wbsWithDone(serverTimestamp()), ...stamp(uid) });
+  b.set(doc(db, `projects/${pid}/schedule/internal`), {
+    schemaVersion: 1, draft: SCHED_DATES, note: SCHED_NOTE, assignees: SCHED_ASSIGNEES, marks: marksDone(serverTimestamp(), uid),
+    savedByName: USERS[uid].name, editSeq: 0, ...stamp(uid), ...internal,
+  });
+  return b.commit();
+}
+
+/** WBS と internal の同時保存（完了印を付け直す＝5 行とも今の時刻・marks 5 件・担当・メモ。editSeq +1） */
+export function schedSaveBatch(db, { uid = 'devA', pid = 'p1', seq = 0 } = {}) {
+  const b = writeBatch(db);
+  b.update(doc(db, `projects/${pid}/schedule/current`), { wbs: wbsWithDone(serverTimestamp()), editSeq: seq + 1, ...stamp(uid) });
+  b.update(doc(db, `projects/${pid}/schedule/internal`), {
+    marks: marksDone(serverTimestamp(), uid), assignees: SCHED_ASSIGNEES, note: SCHED_NOTE, savedByName: USERS[uid].name, editSeq: seq + 1, ...stamp(uid),
+  });
+  return b.commit();
+}
+
+/** 承認の依頼（draft → requested）: 案件の schedule・current（予定日を draft から写す）・approvals submit */
+export function schedSubmitBatch(db, { uid = 'devA', pid = 'p1', fromRev = 0, seq = 0, wbs = wbsWithDone(T0) } = {}) {
+  const rev = fromRev + 1;
+  const b = writeBatch(db);
+  b.update(doc(db, `projects/${pid}`), {
+    'schedule.status': 'requested', 'schedule.revision': rev, 'schedule.requestedAt': serverTimestamp(), 'schedule.releaseDate': SCHED_DATES.releaseDate, ...stamp(uid),
+  });
+  b.update(doc(db, `projects/${pid}/schedule/current`), { revision: rev, ...SCHED_DATES, editSeq: seq + 1, ...stamp(uid) });
+  b.set(doc(db, `projects/${pid}/approvals/schedule-r${rev}-submit`), schedLogDoc(uid, 'submit', rev, { ...SCHED_DATES, wbs }));
+  return b.commit();
+}
+
+/** 取り下げ（requested → draft。note 必須） */
+export function schedWithdrawBatch(db, { uid = 'devA', pid = 'p1', rev = 1, note = SCHED_NOTE } = {}) {
+  const b = writeBatch(db);
+  b.update(doc(db, `projects/${pid}`), { 'schedule.status': 'draft', ...stamp(uid) });
+  b.set(doc(db, `projects/${pid}/approvals/schedule-r${rev}-withdraw`), schedLogDoc(uid, 'withdraw', rev, { note }));
+  return b.commit();
+}
+
+/** お客様本人の承認（requested → approved。approvedVia は消す） */
+export function schedApproveBatch(db, { uid = 'client1', pid = 'p1', rev = 1, wbs = wbsWithDone(T0) } = {}) {
+  const b = writeBatch(db);
+  b.update(doc(db, `projects/${pid}`), {
+    'schedule.status': 'approved', 'schedule.approvedRevision': rev, 'schedule.approvedAt': serverTimestamp(), 'schedule.approvedBy': uid,
+    'schedule.approvalId': `schedule-r${rev}-approve`, 'schedule.approvedVia': deleteField(), ...stamp(uid),
+  });
+  b.set(doc(db, `projects/${pid}/approvals/schedule-r${rev}-approve`), schedLogDoc(uid, 'approve', rev, { ...SCHED_DATES, wbs }));
+  return b.commit();
+}
+
+/** 管理者の代理承認（requested → approved。approvedVia: 'proxy'＋記録の proxy・note） */
+export function schedProxyBatch(db, { uid = 'admin1', pid = 'p1', rev = 1, wbs = wbsWithDone(T0), note = SCHED_NOTE } = {}) {
+  const b = writeBatch(db);
+  b.update(doc(db, `projects/${pid}`), {
+    'schedule.status': 'approved', 'schedule.approvedRevision': rev, 'schedule.approvedAt': serverTimestamp(), 'schedule.approvedBy': uid,
+    'schedule.approvalId': `schedule-r${rev}-approve`, 'schedule.approvedVia': 'proxy', ...stamp(uid),
+  });
+  b.set(doc(db, `projects/${pid}/approvals/schedule-r${rev}-approve`), schedLogDoc(uid, 'approve', rev, { ...SCHED_DATES, wbs, proxy: true, note }));
+  return b.commit();
+}
+
+/** 再計画（approved → draft）: internal.draft の変更・案件の schedule・approvals reopen（note 必須） */
+export function schedReopenBatch(db, { uid = 'devA', pid = 'p1', rev = 1, seq = 0, note = SCHED_NOTE } = {}) {
+  const b = writeBatch(db);
+  b.update(doc(db, `projects/${pid}`), { 'schedule.status': 'draft', ...stamp(uid) });
+  b.update(doc(db, `projects/${pid}/schedule/internal`), {
+    draft: { ...SCHED_DATES, releaseDate: '2027-01-15' }, savedByName: USERS[uid].name, editSeq: seq + 1, ...stamp(uid),
+  });
+  b.set(doc(db, `projects/${pid}/approvals/schedule-r${rev}-reopen`), schedLogDoc(uid, 'reopen', rev, { note }));
+  return b.commit();
+}

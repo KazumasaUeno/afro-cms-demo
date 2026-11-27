@@ -283,6 +283,26 @@
 | OQ-D3 | 案件の `launchDate` を承認済みの公開予定日に合わせる運用（書き写しはしない＝C-01）。案件の基本情報の画面で両方の日付が食い違って見える | NON-BLOCKING | PM（表示の注記は designer） |
 | LEGAL | 代理承認・お客様の承認が納期の合意と見なされるか（要件 §15） | LEGAL REVIEW REQUIRED | PM → 法務（本設計は結論を出さない） |
 
+### 12.1 G1 の計測結果（2026-11-27・U1-1。エミュレータ firebase-tools 15・`tests/rules/adminRights.test.mjs` TEST-09「G1」）
+
+方法: TEST-09 と同じ（述語の return の直後に pad10 を k 個。trivial は k=19 → 1 個 ≒ 50 式）。参照は存在しない文書の `exists()` を k 個（trivial 10 ＝ 1 文書の書き込みの上限 10 で止まる）。payload は最大（WBS 6 行に完了印 5 行・marks 5 件・担当 6 件 30 字・note 200 字・予定日 3 つ＋buildDue。代理の note 200 字）
+
+| 経路（述語） | pad10 の残り k | 消費 ≒ 式 | 余裕 | exists の残り |
+|---|---|---|---|---|
+| init（projects: schedProjOk） | 9 | 500 | 45% | 8 |
+| **init（current・internal: schedCreateOk）** | **3** | **800** | **15%（合格線 20% を下回る）** | 9 |
+| 同時保存（current: schedCurUpdateOk） | 5 | 700 | 25% | 7 |
+| 同時保存（internal: schedIntUpdateOk） | 4 | 750 | 20%（合格線ちょうど） | 10 |
+| submit（projects / current / approvals） | 8 / 13 / 12 | 550 / 300 / 350 | 40% / 65% / 60% | 8 / 8 / 10 |
+| お客様の承認（projects / approvals） | 8 / 12 | 550 / 350 | 40% / 60% | 8 / 8 |
+| 代理承認（projects / approvals） | 6 / 10 | 650 / 450 | 30% / 50% | 8 / 8 |
+| 再計画（projects / internal / approvals） | 8 / 6 / 13 | 550 / 650 / 300 | 40% / 30% / 65% | 8 / 10 / 9 |
+
+- 結論 [FACT: 上の計測]: **承認記録の wbs の写しを外す必要は無い**（submit・承認・代理承認は全部 30% 以上）。**外れたのは init の schedCreateOk だけ**で、原因は完了印（current.wbs の doneAt 5 行 ⇔ internal.marks 5 件の相互照合）。同じ init を完了印・marks なしで測ると k ≥ 20（上限で打ち切り）[FACT: 一時 probe 2026-11-27]。wbs の写しを外しても init は減らない → L-10 により**ここで止め、lead-architect の判断待ち**（案: init では doneAt・marks を持てない＝初回保存で完了の行は無い、とする）
+- 要件定義書の経路（既存 PATHS）: お客様の承認（approvals: approveOk）が 14 → 13（kind の振り分けの数式分。pad10 1 個の分解能の内）。他は不変。全部 65% 以上
+- 参照（UK-3）: 1 文書の評価で使う get/exists は最大 3（trivial 10 − 残り 7）。1 書き込み（バッチ）の合計は最大 5 文書（accounts・案件・current・internal・承認文書）[INFERENCE: 述語の参照先]。上限 20 の内
+- S-14（2/30）: エミュレータで `timestamp.date(年, 月, 日)` に暦に無い日を渡すと評価エラー＝拒否、正規表現（月末の無い日・うるう年でない 2/29）でも同じ結果 [FACT: tests/rules/schedule.test.mjs S-14]。**firestore.rules には入れていない**（式が増える。init が 20% を割っているため UK-2 を優先＝L-12）。入れるかは init の扱いと合わせて lead-architect が決める。それまで暦日は画面（SU-06）で止める
+
 ## 13. 作り替えの閾値
 
 - WBS の行を可変にする要件が来たら（要件 §13 の範囲外）: マップ 6 キー固定の検査を `schedule/current/rows/{rowId}` のサブコレクションへ移す。承認の写しも行ごとに見直す

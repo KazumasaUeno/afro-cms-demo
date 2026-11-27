@@ -320,7 +320,7 @@ service cloud.firestore {
     function apprCreateOk(pid, aid, a) {
       let k = request.resource.data.get('kind', null);
       return k == 'requirements' ? reqApprCreateOk(pid, aid, a)
-           : k == 'schedule' ? false                                                  // 段 0: スケジュールの記録は誰も作れない（段 1 で schedApprOk）
+           : k == 'schedule' ? schedApprOk(pid, aid, a)                               // 段 1（G1 の計測の述語。拒否側の網羅は U1-3）
            : false;
     }
     function reqApprCreateOk(pid, aid, a) {
@@ -459,7 +459,8 @@ service cloud.firestore {
       allow list: if isAdmin() || assignedHere();
       allow create: if projCreateOk(pid, roleOf(acctOrNull()));
       allow update: if (stamped() && projUpdateOk(pid, acctOrNull(), changed()))
-                    || consultOk(pid, acctOrNull());                                   // 相談の要約（メッセージと同じ書き込みだけ）
+                    || consultOk(pid, acctOrNull())                                    // 相談の要約（メッセージと同じ書き込みだけ）
+                    || (stamped() && schedProjOk(pid, acctOrNull(), changed()));       // スケジュールの要約（既存の分岐の後ろ。L-5）
       allow delete: if false;
 
       // ---------- requirements/current（§28.5） ----------
@@ -497,6 +498,17 @@ service cloud.firestore {
         allow get, list: if isAdmin() || assigned(pid);
         allow create: if taskCreateOk(pid, acctOrNull());
         allow update: if taskUpdateOk(pid, acctOrNull());
+        allow delete: if false;
+      }
+
+      // ---------- schedule/current・internal（スケジュール。上の schedCreateOk / schedCurUpdateOk / schedIntUpdateOk。list なし・delete なし） ----------
+      // current: お客様は revision >= 1 のときだけ（自分自身の値。D-2・L-2）。internal: お客様は一切読めない（AC-09）
+      match /schedule/{sid} {
+        allow get: if sid == 'current' ? (isAdmin() || assigned(pid) || (clientOf(pid) && resource.data.revision >= 1))
+                    : sid == 'internal' && (isAdmin() || assigned(pid));
+        allow create: if sid in ['current','internal'] && schedCreateOk(pid, sid, acctOrNull());
+        allow update: if sid == 'current' ? schedCurUpdateOk(pid, acctOrNull())
+                       : sid == 'internal' && schedIntUpdateOk(pid, acctOrNull());
         allow delete: if false;
       }
 
@@ -575,6 +587,215 @@ service cloud.firestore {
               && d.keys().hasOnly(['schemaVersion','kind','action','revision','side','actorUid','actorName','actorEmail','at','note','actorRole'])
               && optStr(d, 'note', 0, 200))
       ) && d.get('actorRole', acc.role) == acc.role;
+    }
+
+    // ================= schedule（スケジュール＝予定日＋WBS。docs/design/LIVE_SCHEDULE_WBS_DATA.md §2・§3、LIVE_SCHEDULE_PLAN.md §1・§2） =================
+    // G1（UK-2）の計測のための述語。拒否側の網羅テスト（SR-01〜18・ST-01〜24）は U1-2/U1-3（tests/rules/schedule.test.mjs）。
+    // 既存の変異テストのアンカー・TEST-09 の関数名を再利用しない（LIVE_SCHEDULE_PLAN §3 U1・review M-1）
+    function schedPath(pid, sid)   { return /databases/$(db)/documents/projects/$(pid)/schedule/$(sid); }
+    function schedApprId(rev, act) { return 'schedule-r' + string(rev) + '-' + act; }
+    // 暦日 YYYY-MM-DD（2000〜2099 年）。暦に無い日（2/30）は画面だけで止める（S-14・L-12。G1 の結果は DATA §12）
+    function reYmd() { return '20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])'; }
+    function wbsIds()  { return ['sitemap','design','build','buildApproval','quality','release']; }
+    function markIds() { return ['sitemap','design','buildApproval','quality','release']; }
+    function schedLogBase() { return ['schemaVersion','kind','action','revision','side','actorUid','actorName','actorEmail','at','actorRole']; }
+    // 予定日 3 つ（buildDue は任意）。順序は文字列比較（同日可）
+    function validDates(m) {
+      return m.deliveryDate.matches(reYmd()) && m.releaseDate.matches(reYmd()) && m.deliveryDate <= m.releaseDate
+        && (!m.keys().hasAny(['buildDue']) || (m.buildDue.matches(reYmd()) && m.buildDue <= m.deliveryDate));
+    }
+    // 案件の状態が書ける（要件定義書の承認後・アーカイブでない。事後も＝L-17）
+    function schedGate(p, pa) { return p.requirements.status == 'approved' && p.archived == false && pa.archived == false; }
+    // 予定日の写しが current と同じ（buildDue・wbs は任意で、無いことも一致）
+    function schedCopyOk(d, c) {
+      return optEq(d, c, 'buildDue') && d.deliveryDate == c.deliveryDate && d.releaseDate == c.releaseDate && optEq(d, c, 'wbs');
+    }
+    // 取り下げ・再計画・代理承認の理由（trim 後 1〜200 字・改行と制御文字・向きの制御は拒否。代理承認と同じ正規表現。L-8）
+    function schedNoteOk(n) { return n.matches(reProxyNote()) && !n.matches(reNoteControl()); }
+
+    // ---- WBS（current.wbs。6 キー固定のマップ。D-3・L-3）。完了印 doneAt は 前と同じ／今回付けた（request.time）／外した の 3 つだけ。
+    // 付けた・外したときは同じ書き込みの internal.marks[id] が 本人・今の時刻・状態 で一致（L-9。逆向きは markOk）
+    function doneOk(r, bw, id, im) {
+      let had = bw.get(id, {}).get('doneAt', null);
+      let now = r.get('doneAt', null);
+      return now == had
+        || (now == request.time && im.get(id, {}) == {'state': 'done', 'at': request.time, 'by': request.auth.uid})
+        || (now == null && im.get(id, {}) == {'state': 'undone', 'at': request.time, 'by': request.auth.uid});
+    }
+    function wbsRow(w, bw, id, im) {
+      let r = w[id];
+      return r.keys().hasAll(['start','end']) && r.keys().hasOnly(['start','end','doneAt'])
+        && r.start.matches(reYmd()) && r.end.matches(reYmd()) && r.start <= r.end
+        && doneOk(r, bw, id, im);
+    }
+    function validWbs(w, bw, im) {
+      return w is map && w.keys().hasAll(wbsIds()) && w.keys().hasOnly(wbsIds())
+        && wbsRow(w, bw, 'sitemap', im) && wbsRow(w, bw, 'design', im)
+        && w.build.keys().hasAll(['start','end']) && w.build.keys().hasOnly(['start','end'])    // 構築の行は構築タスクから導く（完了印なし）
+        && w.build.start.matches(reYmd()) && w.build.end.matches(reYmd()) && w.build.start <= w.build.end
+        && wbsRow(w, bw, 'buildApproval', im) && wbsRow(w, bw, 'quality', im) && wbsRow(w, bw, 'release', im);
+    }
+
+    // ---- internal（担当名・メモ・保存者・完了印の記録。お客様は読めない）
+    // marks[id]: 変わった行だけ検査（前と同じ／今回付けた＝current の doneAt が今／今回外した＝current に doneAt が無い）
+    function markOk(m, bm, cw, id) {
+      return m.get(id, null) == bm.get(id, null)
+        || (m.get(id, null) == {'state': 'done', 'at': request.time, 'by': request.auth.uid} && cw[id].get('doneAt', null) == request.time)
+        || (m.get(id, null) == {'state': 'undone', 'at': request.time, 'by': request.auth.uid} && !cw[id].keys().hasAny(['doneAt']));
+    }
+    function marksOk(m, bm, cw) {
+      return m is map && m.keys().hasOnly(markIds())
+        && markOk(m, bm, cw, 'sitemap') && markOk(m, bm, cw, 'design') && markOk(m, bm, cw, 'buildApproval')
+        && markOk(m, bm, cw, 'quality') && markOk(m, bm, cw, 'release');
+    }
+    function asgOk(m, id) { return !m.keys().hasAny([id]) || (m[id].matches('(?s).{1,30}') && !m[id].matches(reNoteControl())); }
+    function validAssignees(m) {
+      return m is map && m.keys().hasOnly(wbsIds())
+        && asgOk(m, 'sitemap') && asgOk(m, 'design') && asgOk(m, 'build') && asgOk(m, 'buildApproval') && asgOk(m, 'quality') && asgOk(m, 'release');
+    }
+    function validInternal(d, acc, bm, cw) {
+      return d.schemaVersion == 1
+        && d.keys().hasAll(['schemaVersion','draft','savedByName','editSeq','updatedAt','updatedBy'])
+        && d.keys().hasOnly(['schemaVersion','draft','note','assignees','marks','savedByName','editSeq','updatedAt','updatedBy'])
+        && d.draft is map && d.draft.keys().hasOnly(['buildDue','deliveryDate','releaseDate']) && validDates(d.draft)
+        && d.savedByName == acc.name && d.editSeq is int
+        && (!d.keys().hasAny(['note']) || (d.note.matches('(?s).{0,200}') && !d.note.matches(reChatControl())))
+        && (!d.keys().hasAny(['assignees']) || validAssignees(d.assignees))
+        && (!d.keys().hasAny(['marks']) || marksOk(d.marks, bm, cw));
+    }
+
+    // ---- schedule/current・internal の create（init。案件の schedule の作成と同じ書き込み）
+    function schedCreateOk(pid, sid, acc) {
+      let r = roleOf(acc);
+      let p = proj(pid);
+      let pa = getAfter(projPath(pid)).data;
+      let d = request.resource.data;
+      return (r == 'admin' || (r == 'developer' && request.auth.uid in p.memberUids))
+        && schedGate(p, pa) && !p.keys().hasAny(['schedule'])
+        && pa.get('schedule', null) == {'status': 'draft', 'revision': 0}
+        && d.editSeq == 0 && stamped()
+        && (sid == 'current'
+              ? (d.schemaVersion == 1 && d.revision == 0
+                 && d.keys().hasAll(['schemaVersion','revision','editSeq','updatedAt','updatedBy'])
+                 && d.keys().hasOnly(['schemaVersion','revision','editSeq','wbs','updatedAt','updatedBy'])
+                 && (!d.keys().hasAny(['wbs']) || validWbs(d.wbs, {}, getAfter(schedPath(pid, 'internal')).data.get('marks', {}))))
+              : sid == 'internal' && validInternal(d, acc, {}, getAfter(schedPath(pid, 'current')).data.get('wbs', {})));
+    }
+
+    // ---- schedule/current の update（WBS の保存 ／ submit の予定日の写し）。editSeq は 1 ずつ（L-4）
+    function schedCurUpdateOk(pid, acc) {
+      let r = roleOf(acc);
+      let p = proj(pid);
+      let pa = getAfter(projPath(pid)).data;
+      let d = request.resource.data;
+      let b = resource.data;
+      let ch = d.diff(b).affectedKeys();
+      return (r == 'admin' || (r == 'developer' && request.auth.uid in p.memberUids))
+        && schedGate(p, pa) && stamped() && d.editSeq == b.editSeq + 1
+        && ((ch.hasOnly(['wbs','editSeq','updatedAt','updatedBy'])
+               && validWbs(d.wbs, b.get('wbs', {}), getAfter(schedPath(pid, 'internal')).data.get('marks', {})))
+            || (ch.hasOnly(['revision','buildDue','deliveryDate','releaseDate','editSeq','updatedAt','updatedBy'])
+               && pa.schedule.status == 'requested' && d.revision == pa.schedule.revision
+               && schedDraftCopy(d, getAfter(schedPath(pid, 'internal')).data.draft) && validDates(d)));
+    }
+    function schedDraftCopy(d, dr) { return optEq(d, dr, 'buildDue') && d.deliveryDate == dr.deliveryDate && d.releaseDate == dr.releaseDate; }
+
+    // ---- schedule/internal の update（予定日の下書き・メモ・担当・完了印）。予定日は draft 中、または同じ書き込みの再計画（reopen）だけ
+    function schedIntUpdateOk(pid, acc) {
+      let r = roleOf(acc);
+      let p = proj(pid);
+      let pa = getAfter(projPath(pid)).data;
+      let d = request.resource.data;
+      let b = resource.data;
+      let ch = d.diff(b).affectedKeys();
+      return (r == 'admin' || (r == 'developer' && request.auth.uid in p.memberUids))
+        && schedGate(p, pa) && stamped() && d.editSeq == b.editSeq + 1
+        && ch.hasOnly(['draft','note','assignees','marks','savedByName','editSeq','updatedAt','updatedBy'])
+        && (!ch.hasAny(['draft']) || p.schedule.status == 'draft' || (p.schedule.status == 'approved' && pa.schedule.status == 'draft'))
+        && validInternal(d, acc, b.get('marks', {}), getAfter(schedPath(pid, 'current')).data.get('wbs', {}));
+    }
+
+    // ---- projects/{pid}.schedule（要約。§2.1）。allow update の別の分岐（既存の projUpdateOk の分岐・評価順は変えない＝L-5・review L-5）
+    function schedAfroMove(pid, b, s) {
+      return (b == null && s == {'status': 'draft', 'revision': 0}
+                && existsAfter(schedPath(pid, 'current')) && existsAfter(schedPath(pid, 'internal')))
+        || (b != null && b.status == 'draft' && s.status == 'requested'
+                && s.revision == b.revision + 1 && s.revision <= 50 && s.requestedAt == request.time
+                && s.diff(b).affectedKeys().hasOnly(['status','revision','requestedAt','releaseDate'])
+                && s.releaseDate == getAfter(schedPath(pid, 'current')).data.releaseDate
+                && existsAfter(apprPath(pid, schedApprId(s.revision, 'submit'))))
+        || (b != null && b.status == 'requested' && s.status == 'draft'
+                && s.diff(b).affectedKeys().hasOnly(['status'])
+                && existsAfter(apprPath(pid, schedApprId(b.revision, 'withdraw'))))
+        || (b != null && b.status == 'approved' && s.status == 'draft'
+                && s.diff(b).affectedKeys().hasOnly(['status'])
+                && existsAfter(apprPath(pid, schedApprId(b.revision, 'reopen'))));
+    }
+    // 承認（本人・代理）で変わるのは 6 キーだけ。本人の承認は approvedVia を持たない（前の版の代理の印は消す）
+    function schedApproveMove(b, s) {
+      return b != null && b.status == 'requested' && s.status == 'approved'
+        && s.diff(b).affectedKeys().hasOnly(['status','approvedRevision','approvedAt','approvedBy','approvalId','approvedVia'])
+        && s.approvedRevision == b.revision && s.approvedAt == request.time && s.approvedBy == request.auth.uid
+        && s.approvalId == schedApprId(b.revision, 'approve');
+    }
+    function schedOwnLog(lg)    { return lg.side == 'client' && !('proxy' in lg); }
+    function schedProxyMark(lg) { return lg.get('proxy', false) == true && lg.side == 'afro' && lg.actorUid == request.auth.uid; }
+    function schedProjOk(pid, acc, ch) {
+      let r = roleOf(acc);
+      let p = resource.data;
+      let b = p.get('schedule', null);
+      let s = request.resource.data.schedule;
+      return ch.hasOnly(['schedule','updatedAt','updatedBy']) && s is map
+        && p.requirements.status == 'approved' && p.archived == false
+        && (((r == 'admin' || (r == 'developer' && request.auth.uid in p.memberUids)) && schedAfroMove(pid, b, s))
+            // お客様本人の承認: 同じ書き込みの承認文書が side client・proxy なし
+            || (r == 'client' && acc.projectId == pid && schedApproveMove(b, s) && !s.keys().hasAny(['approvedVia'])
+                && schedOwnLog(getAfter(apprPath(pid, schedApprId(b.revision, 'approve'))).data))
+            // 管理者の代理承認: 同じ書き込みの承認文書が proxy・side afro・本人
+            || (r == 'admin' && schedApproveMove(b, s) && s.get('approvedVia', null) == 'proxy'
+                && schedProxyMark(getAfter(apprPath(pid, schedApprId(b.revision, 'approve'))).data)));
+    }
+
+    // ---- approvals の schedule-r{rev}-{action}（kind schedule）。apprCreateOk が kind で振り分ける（S-6）
+    function schedApprOk(pid, aid, acc) {
+      let r = roleOf(acc);
+      let d = request.resource.data;
+      let p = proj(pid);
+      let pa = getAfter(projPath(pid)).data;
+      let b = p.schedule;
+      let s = pa.schedule;
+      return actorBase(d, acc) && d.kind == 'schedule' && d.revision is int
+        && (r == 'admin' ? d.get('actorRole', null) == 'admin' : d.get('actorRole', r) == r)
+        && schedGate(p, pa)
+        && (((r == 'admin' || (r == 'developer' && request.auth.uid in p.memberUids)) && d.side == 'afro' && schedAfroLog(pid, aid, d, b, s))
+            || (r == 'client' && acc.projectId == pid && schedClientLog(pid, aid, d, b, s))
+            || (r == 'admin' && schedProxyLog(pid, aid, d, b, s)));
+    }
+    function schedAfroLog(pid, aid, d, b, s) {
+      return (d.action == 'submit' && b.status == 'draft' && s.status == 'requested' && s.revision == b.revision + 1
+                && d.revision == s.revision && aid == schedApprId(s.revision, 'submit')
+                && d.keys().hasOnly(schedLogBase().concat(['buildDue','deliveryDate','releaseDate','wbs']))
+                && schedCopyOk(d, getAfter(schedPath(pid, 'current')).data))
+        || (d.action == 'withdraw' && b.status == 'requested' && s.status == 'draft'
+                && d.revision == b.revision && aid == schedApprId(b.revision, 'withdraw')
+                && d.keys().hasOnly(schedLogBase().concat(['note'])) && schedNoteOk(d.note))
+        || (d.action == 'reopen' && b.status == 'approved' && s.status == 'draft'
+                && d.revision == b.revision && aid == schedApprId(b.revision, 'reopen')
+                && d.keys().hasOnly(schedLogBase().concat(['note'])) && schedNoteOk(d.note));
+    }
+    function schedClientLog(pid, aid, d, b, s) {
+      return d.action == 'approve' && d.side == 'client'
+        && b.status == 'requested' && s.status == 'approved' && !s.keys().hasAny(['approvedVia'])
+        && d.revision == b.revision && aid == schedApprId(b.revision, 'approve')
+        && d.keys().hasOnly(schedLogBase().concat(['buildDue','deliveryDate','releaseDate','wbs']))
+        && schedCopyOk(d, get(schedPath(pid, 'current')).data);
+    }
+    function schedProxyLog(pid, aid, d, b, s) {
+      return d.action == 'approve' && d.side == 'afro' && d.get('proxy', false) == true && schedNoteOk(d.note)
+        && b.status == 'requested' && s.status == 'approved' && s.get('approvedVia', null) == 'proxy'
+        && d.revision == b.revision && aid == schedApprId(b.revision, 'approve')
+        && d.keys().hasOnly(schedLogBase().concat(['buildDue','deliveryDate','releaseDate','wbs','proxy','note']))
+        && schedCopyOk(d, get(schedPath(pid, 'current')).data);
     }
 
     // ================= validProposal（§28.7・M-11・R-2） =================

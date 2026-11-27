@@ -8,6 +8,7 @@ import { deleteDoc, runTransaction } from 'firebase/firestore';
 import { createRulesEnv, readRules } from './guard.mjs';
 import {
   ANSWERS, FULL_ANSWERS, PAST, PROPOSAL, PROXY_NOTE, USERS, approvalDoc, approveBatch, dbAs, doc, proxyApproveBatch, seed, serverTimestamp, setDoc, stamp, submitBatch, updateDoc, withdrawBatch, writeBatch,
+  scheduleSeed, schedApproveBatch, schedInitBatch, schedProxyBatch, schedReopenBatch, schedSaveBatch, schedSubmitBatch,
 } from './fixtures.mjs';
 import { seedAi } from './aiFixtures.mjs';
 import { MAX_EDITED_V3, MAX_GENERATED_V3, aiDraftDocV3, proposalV3 } from './aiFixturesV3.mjs';
@@ -302,6 +303,51 @@ describe('TEST-09: 計測（admin の最大の submit・代理承認）', () => 
       if (name === 'trivial') continue;
       assert.ok(k >= 0, `${name} が詰め物なしで通らない`);
       assert.ok(k * per >= 200, `${name} の式の余裕が 20% 未満（pad10 ${k} 個）`);
+    }
+  });
+  // ---- G1（LIVE_SCHEDULE_PLAN §5・UK-2・UK-3）: スケジュールの 6 経路。最大の payload（WBS 6 行に完了印・note 200 字・予定日 3 つ・buildDue・担当 6 件）。
+  // 経路ごとに、同じ書き込みで評価される各述語へ詰め物を入れる（その述語の時点の残り）。参照（get/exists）は存在しない文書の exists() で残りを数える
+  const SCHED_PATHS = {
+    'init（projects: schedProjOk）': { fn: 'schedProjOk', seed: (e) => scheduleSeed(e, { state: 'none' }), run: (e) => schedInitBatch(dbAs(e, 'devA')) },
+    'init（current・internal: schedCreateOk）': { fn: 'schedCreateOk', seed: (e) => scheduleSeed(e, { state: 'none' }), run: (e) => schedInitBatch(dbAs(e, 'devA')) },
+    'admin 同時保存（current: schedCurUpdateOk）': { fn: 'schedCurUpdateOk', seed: (e) => scheduleSeed(e, { state: 'approved' }), run: (e) => schedSaveBatch(dbAs(e, 'admin1'), { uid: 'admin1' }) },
+    'admin 同時保存（internal: schedIntUpdateOk）': { fn: 'schedIntUpdateOk', seed: (e) => scheduleSeed(e, { state: 'approved' }), run: (e) => schedSaveBatch(dbAs(e, 'admin1'), { uid: 'admin1' }) },
+    'admin submit（projects: schedProjOk）': { fn: 'schedProjOk', seed: (e) => scheduleSeed(e, { state: 'draft' }), run: (e) => schedSubmitBatch(dbAs(e, 'admin1'), { uid: 'admin1' }) },
+    'admin submit（current: schedCurUpdateOk）': { fn: 'schedCurUpdateOk', seed: (e) => scheduleSeed(e, { state: 'draft' }), run: (e) => schedSubmitBatch(dbAs(e, 'admin1'), { uid: 'admin1' }) },
+    'admin submit（approvals: schedApprOk）': { fn: 'schedApprOk', seed: (e) => scheduleSeed(e, { state: 'draft' }), run: (e) => schedSubmitBatch(dbAs(e, 'admin1'), { uid: 'admin1' }) },
+    'client approve（projects: schedProjOk）': { fn: 'schedProjOk', seed: (e) => scheduleSeed(e, { state: 'requested' }), run: (e) => schedApproveBatch(dbAs(e, 'client1')) },
+    'client approve（approvals: schedApprOk）': { fn: 'schedApprOk', seed: (e) => scheduleSeed(e, { state: 'requested' }), run: (e) => schedApproveBatch(dbAs(e, 'client1')) },
+    'admin 代理承認（projects: schedProjOk）': { fn: 'schedProjOk', seed: (e) => scheduleSeed(e, { state: 'requested' }), run: (e) => schedProxyBatch(dbAs(e, 'admin1')) },
+    'admin 代理承認（approvals: schedApprOk）': { fn: 'schedApprOk', seed: (e) => scheduleSeed(e, { state: 'requested' }), run: (e) => schedProxyBatch(dbAs(e, 'admin1')) },
+    'admin 再計画（projects: schedProjOk）': { fn: 'schedProjOk', seed: (e) => scheduleSeed(e, { state: 'approved' }), run: (e) => schedReopenBatch(dbAs(e, 'admin1'), { uid: 'admin1' }) },
+    'admin 再計画（internal: schedIntUpdateOk）': { fn: 'schedIntUpdateOk', seed: (e) => scheduleSeed(e, { state: 'approved' }), run: (e) => schedReopenBatch(dbAs(e, 'admin1'), { uid: 'admin1' }) },
+    'admin 再計画（approvals: schedApprOk）': { fn: 'schedApprOk', seed: (e) => scheduleSeed(e, { state: 'approved' }), run: (e) => schedReopenBatch(dbAs(e, 'admin1'), { uid: 'admin1' }) },
+  };
+  const nopes = (k) => Array.from({ length: k }, (_, i) => `!exists(/databases/$(db)/documents/nope/n${i}) && `).join('');
+  async function passesWith(p, inject) {
+    const e = await createRulesEnv({ rules: probeRules(p.fn, inject) });
+    try { await p.seed(e); return await p.run(e).then(() => true, () => false); } finally { await e.cleanup(); }
+  }
+  async function maxKWith(p, make, hi) {
+    if (!(await passesWith(p, make(0)))) return -1;
+    let lo = 0;
+    while (lo < hi) { const mid = Math.ceil((lo + hi) / 2); if (await passesWith(p, make(mid))) lo = mid; else hi = mid - 1; }
+    return lo;
+  }
+  test('G1: スケジュールの 6 経路（最大の payload）は 1000 式の上限に 20% 以上の余裕・参照の上限の内', { timeout: 900_000 }, async () => {
+    const base = await maxK(PATHS.trivial);
+    const per = 1000 / (base + 1);
+    const refBase = await maxKWith(PATHS.trivial, nopes, 20);
+    const res = {};
+    for (const [name, p] of Object.entries(SCHED_PATHS)) res[name] = { k: await maxKWith(p, pads, 20), ref: await maxKWith(p, nopes, 20) };
+    console.log(`[measure] G1 trivial: pad10 ${base} 個（1 個 ≒ ${per.toFixed(0)} 式）・exists ${refBase} 個`);
+    for (const [name, { k, ref }] of Object.entries(res)) {
+      console.log(`[measure] G1 ${name}: pad10 ${k} 個（余裕 ≒ ${(k * per).toFixed(0)} 式・${(k * per / 10).toFixed(0)}%・消費 ≒ ${((base - k) * per).toFixed(0)} 式）／ exists の残り ${ref} 個（trivial ${refBase}）`);
+    }
+    for (const [name, { k, ref }] of Object.entries(res)) {
+      assert.ok(k >= 0, `${name} が詰め物なしで通らない`);
+      assert.ok(k * per >= 200, `${name} の式の余裕が 20% 未満（pad10 ${k} 個）`);
+      assert.ok(ref >= 1, `${name} の参照の余裕が無い（exists ${ref} 個）`);
     }
   });
   after(async () => { const e = await createRulesEnv(); await e.cleanup(); });
