@@ -263,3 +263,9 @@
 - 順番は A-1 どおり **Rules → Functions → Hosting**: Rules test:rules 752/752 → released ／ Functions test:functions 243/243 → 5 本 update（1 回目は functions/src/ai/shared/types.ts の写しが古く deploy の検査で中止 → `gen-ai-shared` で写し直して再実行）／ Hosting dist-live（aiFlag internal）release complete
 - [FACT] 本番: `/` 200・X-Frame-Options DENY・「代理で承認」が ApprovalHistory/model の chunk にある。worker の invoker は `afro-cms-functions@` だけ、`ANTHROPIC_API_KEY` の secretAccessor は worker だけ、saveAiDraftEdits の環境は版 3。ログインしての画面確認は未実施（ユーザー）
 - 戻し: **Hosting を先に** 45ac8c9 以降の直前のリリース（0.50.0）へ戻し、その後 Rules を b5de514 の `firestore.rules` で出し直す（逆順だと確認依頼・承認が全件失敗する。A-1）。Functions は b5de514 で `--only functions`
+
+## 0.51.1 リリース 2026-11-27（JST。ユーザー GO「本番へ反映する」）— 表示のみ
+
+- main b830d62（品質チェックの「代替テキストが無い画像の割合」の表記）。Rules・Functions の変更なし → **Hosting だけ**（`--only hosting`。dist-live の aiFlag internal）。test:unit 171/171・tsc 0
+- [FACT] 本番: `/` 200、`assets/buildProposal-Y_Aiwxmx.js` に新しい表記がある（curl）。ログインしての画面確認は未実施（ユーザー）
+- 戻し: Hosting を 0.51.0（5e5fa82 のビルド）へ戻すだけ（Rules・Functions は戻さない）
