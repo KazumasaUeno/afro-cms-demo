@@ -325,6 +325,13 @@ export interface ApprovalLog {
    * note は代理の理由。sameAsRequester は同じ版の確認の依頼（submit）と同じ人が代理で承認したとき true（依頼が履歴に無ければ false）
    */
   proxy?: { note: string; sameAsRequester: boolean };
+  /**
+   * live だけ: 何の承認の記録か（approvals の kind。LIVE_SCHEDULE_PLAN U2-0・C-04）。kind の無い古い記録は 'requirements'。
+   * demo の記録は持たない（無い＝従来どおり）
+   */
+  kind?: 'requirements' | 'schedule';
+  /** live だけ: スケジュールの取り下げ（withdraw）・再計画（reopen）の理由（お客様にも見える。OQ-D1・L-8） */
+  note?: string;
 }
 
 /* ---------- CMS ---------- */

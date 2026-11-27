@@ -244,31 +244,57 @@ export function approvalLogFrom(projectId: string, id: string, d: DocumentData):
   const action = String(d.action ?? '');
   const actor = String(d.actorName ?? '');
   const proxy = d.proxy === true && action === 'approve';
+  const kind = approvalKindOf(d);
+  const rev = Number(d.revision) || 0;
+  // スケジュールの取り下げ・再計画の理由はお客様にも見せる（OQ-D1・L-8）。要件定義書の withdraw の note は従来どおり出さない（AC-14）
+  const note = kind === 'schedule' && (action === 'withdraw' || action === 'reopen') && typeof d.note === 'string' ? d.note : undefined;
   return {
     id,
     at: toIso(d.at) ?? new Date().toISOString(),
     actor,
     side: proxy ? 'afro' : d.side === 'client' ? 'client' : 'afro',
-    action: proxy ? proxyApprovalText(actor) : ACTION[action] ?? action,
-    target: `要件定義（第${Number(d.revision) || 0}版）`,
+    action: proxy ? proxyApprovalText(actor) : (kind === 'schedule' ? SCHEDULE_ACTION : ACTION)[action] ?? action,
+    target: kind === 'schedule' ? `スケジュール（第${rev}版）` : `要件定義（第${rev}版）`,
     projectId,
+    kind,
+    ...(note !== undefined ? { note } : {}),
     ...(proxy ? { proxy: { note: typeof d.note === 'string' ? d.note : '', sameAsRequester: false } } : {}),
   };
 }
 
+/** スケジュールの承認の記録の操作の文（LIVE_SCHEDULE_PLAN U2-0。demo の「スケジュールを承認」に合わせる） */
+const SCHEDULE_ACTION: Record<string, string> = {
+  submit: 'スケジュールの承認を依頼', approve: 'スケジュールを承認', withdraw: 'スケジュールの承認の依頼を取り下げ', reopen: 'スケジュールを再計画',
+};
+
 /**
- * 承認の記録の一覧 → 履歴（並びはそのまま）。代理承認は、同じ版の確認の依頼（submit）と actorUid が同じなら sameAsRequester を立てる
- * （依頼と代理承認を同じ人がしたことを画面に出す。§7-5）。uid は画面に出さない
+ * お客様の「最後の確認」（clientStatus の lastLog）に数える承認の記録か: お客様側で、要件定義書の記録（kind 無しを含む）だけ。
+ * スケジュールの承認は数えない（既存の表示の意味を変えない。LIVE_SCHEDULE_PLAN L-19）。actor による除外は呼び出し側
+ */
+export function countsAsLastCheck(l: Pick<ApprovalLog, 'side' | 'kind'>): boolean {
+  return l.side === 'client' && (l.kind ?? 'requirements') === 'requirements';
+}
+
+/** 記録の種類。kind の無い古い記録（スケジュール機能より前）は要件定義書（バックフィルしない。LIVE_SCHEDULE_PLAN §4） */
+export function approvalKindOf(d: DocumentData): 'requirements' | 'schedule' {
+  return d.kind === 'schedule' ? 'schedule' : 'requirements';
+}
+
+/**
+ * 承認の記録の一覧 → 履歴（並びはそのまま）。代理承認は、同じ種類・同じ版の確認の依頼（submit）と actorUid が同じなら sameAsRequester を立てる
+ * （依頼と代理承認を同じ人がしたことを画面に出す。§7-5）。突き合わせは kind＋版（要件定義書の第 1 版とスケジュールの第 1 版を混ぜない。C-04・AC-11）。
+ * uid は画面に出さない
  */
 export function approvalLogsFrom(projectId: string, docs: readonly { id: string; data: DocumentData }[]): ApprovalLog[] {
-  const requester = new Map<number, string>();
+  const keyOf = (data: DocumentData) => `${approvalKindOf(data)}:${Number(data.revision) || 0}`;
+  const requester = new Map<string, string>();
   for (const { data } of docs) {
-    if (data.action === 'submit' && typeof data.actorUid === 'string') requester.set(Number(data.revision) || 0, data.actorUid);
+    if (data.action === 'submit' && typeof data.actorUid === 'string') requester.set(keyOf(data), data.actorUid);
   }
   return docs.map(({ id, data }) => {
     const log = approvalLogFrom(projectId, id, data);
     if (!log.proxy) return log;
-    const by = requester.get(Number(data.revision) || 0);
+    const by = requester.get(keyOf(data));
     return { ...log, proxy: { ...log.proxy, sameAsRequester: !!by && by === data.actorUid } };
   });
 }

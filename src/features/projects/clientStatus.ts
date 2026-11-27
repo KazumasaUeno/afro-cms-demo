@@ -1,4 +1,5 @@
 import type { Activity, DemoState, ISODate, Project } from '@/types';
+import { countsAsLastCheck } from '@/live/model';
 import { ACTOR, clientActorOf } from '@/store/reducer';
 import { CLIENT_PROJECT_ID } from '@/components/layout/nav';
 import { workView } from '@/store/projectWork';
@@ -71,7 +72,9 @@ export function clientStatus(state: DemoState, project: Project): ClientStatus {
   const clientActor = clientActorOf(state, pid);
   const byClient = (a: Activity) => a.side === 'client' || (!a.side && (a.actor === clientActor || a.actor === ACTOR.client));
   const lastClient = state.activities.find((a) => ofProject(a.projectId) && byClient(a))?.at;
-  const lastLog = state.approvalLogs.find((l) => ofProject(l.projectId) && l.side === 'client' && l.actor !== ACTOR.afro)?.at;
+  // live のスケジュールの承認（kind 'schedule'）は数えない＝「最後の確認」は要件定義書の記録だけ（LIVE_SCHEDULE_PLAN L-19）。
+  // kind の無い記録（demo・古い live の記録）は従来どおり数える
+  const lastLog = state.approvalLogs.find((l) => ofProject(l.projectId) && countsAsLastCheck(l) && l.actor !== ACTOR.afro)?.at;
   const lastCheck = Object.values(w.qualityChecks).map((c) => c.clientAt).filter((v): v is string => !!v).sort().pop();
   return {
     approvals, waiting, done, next, publishWaiting,

@@ -210,12 +210,14 @@ service cloud.firestore {
                             'ownerUid','memberUids','requirements','archived','createdAt','createdBy','updatedAt','updatedBy'])
         // consult（相談の要約。LIVE_DASHBOARD_TASKS_CONSULT §2.2・§2.3）は任意。書けるのは consultOk の分岐だけ（下の projUpdateOk の
         // どの分岐の changed().hasOnly にも含めない）。ここで許さないと、consult を持つ案件の基本情報の編集が validProject で落ちる
+        // schedule（スケジュールの要約。LIVE_SCHEDULE_WBS_DATA §2.1）も任意で、書けるのは schedule の専用分岐だけ（consult と同じ型。S-16-1）
         && d.keys().hasOnly(['schemaVersion','clientName','siteName','siteUrl','siteUrlKey','industry','accent','launchDate',
-                             'ownerUid','memberUids','requirements','archived','consult','createdAt','createdBy','updatedAt','updatedBy'])
+                             'ownerUid','memberUids','requirements','archived','consult','schedule','createdAt','createdBy','updatedAt','updatedBy'])
         && ansText(d.clientName, reClientName()) && ansText(d.siteName, reSiteName())
         && ansUrl(d.siteUrl, reMaxUrl()) && str(d.siteUrlKey, 1, 253)
         && ansText(d.industry, reIndustry()) && d.accent in accentOptions()
         && (!d.keys().hasAny(['launchDate']) || d.launchDate is timestamp)
+        && (!d.keys().hasAny(['schedule']) || d.schedule is map)
         && d.memberUids is list && d.requirements is map && d.archived is bool;
     }
 
@@ -314,7 +316,14 @@ service cloud.firestore {
 
     // §28.6 の allow create（お客様の承認 ／ 開発者の submit・withdraw ／ admin の submit・withdraw・代理承認）
     // admin の文書は actorRole: 'admin' が必須（R-5。開発者・お客様は 'admin' を名乗れない＝各関数の actorRole の一致）
+    // LIVE_SCHEDULE_PLAN U1-0（S-6）: 本体は reqApprCreateOk へそのまま移した。apprCreateOk は kind の振り分けだけ
     function apprCreateOk(pid, aid, a) {
+      let k = request.resource.data.get('kind', null);
+      return k == 'requirements' ? reqApprCreateOk(pid, aid, a)
+           : k == 'schedule' ? false                                                  // 段 0: スケジュールの記録は誰も作れない（段 1 で schedApprOk）
+           : false;
+    }
+    function reqApprCreateOk(pid, aid, a) {
       let r = roleOf(a);
       return (r == 'client' && a.projectId == pid && approveOk(pid, aid, a))
           || (r == 'developer' && request.auth.uid in proj(pid).memberUids && submitOrWithdrawOk(pid, aid, a))
@@ -349,7 +358,7 @@ service cloud.firestore {
       let d = request.resource.data;
       return (r == 'developer' || r == 'admin')
         && validProject(d)
-        && !d.keys().hasAny(['consult'])                                              // 作成時に偽の相談の要約を持たせない
+        && !d.keys().hasAny(['consult','schedule'])                                   // 作成時に偽の相談・スケジュールの要約を持たせない（SR-02）
         && d.ownerUid == request.auth.uid
         && ((r == 'developer' && d.memberUids == [request.auth.uid])
             || (r == 'admin' && adminMembersOk(d.memberUids)))
@@ -500,10 +509,14 @@ service cloud.firestore {
       }
     }
 
-    function actorOk(d, a) {
-      return d.schemaVersion == 1 && d.kind == 'requirements'
+    // actorOk = actorBase ＋ kind 'requirements'（LIVE_SCHEDULE_PLAN U1-0・S-6。同値の分解。kind を緩めない）
+    function actorBase(d, a) {
+      return d.schemaVersion == 1
         && d.actorUid == request.auth.uid && d.actorEmail == request.auth.token.email
         && d.actorName == a.name && d.at == request.time;
+    }
+    function actorOk(d, a) {
+      return actorBase(d, a) && d.kind == 'requirements';
     }
 
     // お客様の承認（本人のみ。§25-2）。proxy・note は持てない（hasOnly）。actorRole は任意で 'client' だけ（R-5）。
