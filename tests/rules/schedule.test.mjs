@@ -780,3 +780,12 @@ describe('ST-21（追加）: 楽観ロック（editSeq）', () => {
     await assertFails(setDoc(doc(dbAs(env, 'admin1'), P), { ...cur, schedule: rest, ...stamp('admin1') }));
   });
 });
+
+describe('監査 L-A（2026-11-27）: 多層防御（L-B は G1 の余裕のため受容。firestore.rules の schedCurUpdateOk の上のコメント）', () => {
+  test('L-A: 依頼中（requested → requested）に current の予定日を internal.draft の写しへ差し替える → 拒否（internal.draft が依頼中に動いた場合を模擬）', async () => {
+    await scheduleSeed(env, { state: 'requested' });
+    const draft = { ...SCHED_DATES, releaseDate: '2027-01-15' };
+    await env.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), INT), { draft }));
+    await assertFails(updateDoc(doc(dbAs(env, 'devA'), CUR), { releaseDate: draft.releaseDate, editSeq: 1, ...stamp('devA') }));
+  });
+});

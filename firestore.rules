@@ -684,6 +684,9 @@ service cloud.firestore {
     }
 
     // ---- schedule/current の update（WBS の保存 ／ submit の予定日の写し）。editSeq は 1 ずつ（L-4）
+    // 受容（監査 L-B 2026-11-27）: WBS の分岐は状態を問わないので、admin は代理承認と同じバッチで WBS を変えられる（承認の記録の WBS と
+    // 承認直後の current が食い違う）。`&& pa.schedule.status == p.schedule.status` を足すと G1 の WBS 同時保存（current）が pad10 5 → 4 個
+    // ＝余裕 20% に落ちる [FACT: npm run test:rules 2026-11-27] ため入れない。WBS は承認を要しない値・admin は全権限（L-14）で実害は小さい
     function schedCurUpdateOk(pid, acc) {
       let r = roleOf(acc);
       let p = proj(pid);
@@ -696,7 +699,8 @@ service cloud.firestore {
         && ((ch.hasOnly(['wbs','editSeq','updatedAt','updatedBy'])
                && validWbs(d.wbs, b.get('wbs', {}), getAfter(schedPath(pid, 'internal')).data.get('marks', {})))
             || (ch.hasOnly(['revision','buildDue','deliveryDate','releaseDate','editSeq','updatedAt','updatedBy'])
-               && pa.schedule.status == 'requested' && d.revision == pa.schedule.revision
+               // L-A（監査 2026-11-27）: 予定日の写しは submit（draft → requested）の書き込みだけ。依頼中の差し替えを internal 側の条件に頼らない
+               && p.schedule.status == 'draft' && pa.schedule.status == 'requested' && d.revision == pa.schedule.revision
                && schedDraftCopy(d, getAfter(schedPath(pid, 'internal')).data.draft) && validDates(d)));
     }
     function schedDraftCopy(d, dr) { return optEq(d, dr, 'buildDue') && d.deliveryDate == dr.deliveryDate && d.releaseDate == dr.releaseDate; }
