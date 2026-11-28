@@ -29,7 +29,8 @@ function resolve(from, spec) {
 function liveReachable() {
   const seen = new Map();
   const unresolved = [];
-  const queue = [[path.join(src, 'live/main.tsx'), null]];
+  // live の入口に加え、まだルートに載っていない live の画面（LIVE_SITEMAP_IMPL_PLAN U3-b。INT で LiveApp に載せる）も入口にする
+  const queue = [[path.join(src, 'live/main.tsx'), null], [path.join(src, 'live/pages/LiveSitemapPage.tsx'), null]];
   while (queue.length) {
     const [file, parent] = queue.shift();
     if (seen.has(file)) continue;
@@ -51,6 +52,7 @@ test('live から届くモジュールが useDemo() を呼ばない（useDemoOpt
   assert.deepEqual(unresolved, [], `解決できないローカル import がある（resolve() の見直しが要る）`);
   assert.ok(reach.size > 50, `live の import をたどれていない（${reach.size} 件）`);
   assert.ok(reach.has(path.join(src, 'features/projects/ApprovalHistory.tsx')), 'ApprovalHistory が live から届く前提が崩れた（テストの見直しが要る）');
+  assert.ok(reach.has(path.join(src, 'features/sitemap/SitemapView.tsx')), 'LiveSitemapPage から SitemapView をたどれていない（テストの見直しが要る）');
   const bad = [...reach]
     .filter(([f]) => !ALLOWED.has(rel(f)) && /\buseDemo\(/.test(fs.readFileSync(f, 'utf8')))
     .map(([f, parent]) => `${rel(f)}（← ${parent ? rel(parent) : '入口'}）`);
