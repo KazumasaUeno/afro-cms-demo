@@ -157,8 +157,9 @@ export function WbsSection({ editable, devBy, ms, onMsChange, client = false, vi
   const dirty = editable && (JSON.stringify(draft) !== JSON.stringify(items) || (!!source && !sameDone(doneDraft, savedDone)));
   const liveToken = source?.token;
   useEffect(() => {
-    if (liveToken !== undefined && !dirty) setToken(liveToken);
-  }, [liveToken, dirty]);
+    // 編集ダイアログを開いている間も固定する（開いた時点の版で保存し、他の人の変更を競合として検出する。Codex P2 2026-11-28）
+    if (liveToken !== undefined && !dirty && !editing) setToken(liveToken);
+  }, [liveToken, dirty, editing]);
 
   const setTimes = (id: WbsId, t: { start: string; end: string }) =>
     setDraft((list) => (list.some((w) => w.id === id && (w.start !== t.start || w.end !== t.end))

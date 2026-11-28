@@ -661,7 +661,7 @@ service cloud.firestore {
         && d.savedByName == acc.name && d.editSeq is int
         && (!d.keys().hasAny(['note']) || (d.note.matches('(?s).{0,200}') && !d.note.matches(reChatControl())))
         && (!d.keys().hasAny(['assignees']) || validAssignees(d.assignees))
-        && (!d.keys().hasAny(['marks']) || marksOk(d.marks, bm, cw));
+        && marksOk(d.get('marks', {}), bm, cw);    // marks が無い＝空として検査（既存の記録の一括削除を拒否。Codex P1 2026-11-28）
     }
 
     // ---- schedule/current・internal の create（init。案件の schedule の作成と同じ書き込み）

@@ -340,6 +340,16 @@ describe('SR-04・ST-18: WBS（current.wbs）', () => {
     await scheduleSeed(env, { state: 'approved', done: false });
     await assertFails(saveInt(dbAs(env, 'devA'), 'devA', { marks: { design: { state: 'done', at: serverTimestamp(), by: 'devA' } } }));
   });
+  test('完了印の記録 marks 全体を消す（完了印は変えない。Codex P1 2026-11-28）→ 拒否。admin も拒否', async () => {
+    for (const uid of ['devA', 'admin1']) {
+      await scheduleSeed(env, { state: 'approved', done: true });
+      await assertFails(saveInt(dbAs(env, uid), uid, { marks: deleteField() }));
+    }
+  });
+  test('marks の無い internal でメモだけ保存（marks を持たないまま）→ 許可', async () => {
+    await scheduleSeed(env, { state: 'approved', done: false });
+    await assertSucceeds(saveInt(dbAs(env, 'devA'), 'devA', { note: 'メモ' }));
+  });
   test('admin・devB（担当の協力会社）も完了印を付けられる（schedSaveBatch）', async () => {
     for (const uid of ['admin1', 'devB']) {
       await scheduleSeed(env, { state: 'approved', done: false });

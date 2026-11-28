@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import {
-  liveDetailNext, liveWbsDone, liveWbsItems, liveWbsRows, markNotes, scheduleButtons, scheduleOpened, scheduleSaveKind, scheduleTokenOf, SCHEDULE_REQUESTED_WBS_NOTE, wbsOpened, wbsTaskListOf, wbsTokenOf,
+  liveDetailNext, liveWbsDone, liveWbsItems, liveWbsRows, markNotes, scheduleButtons, scheduleOpened, scheduleSaveKind, scheduleTokenOf, SCHEDULE_REQUESTED_WBS_NOTE, wbsOpened, wbsTaskListOf, wbsTokenOf, pendingSaveFailed, SCHEDULE_SAVE_FAILED_BEFORE_SUBMIT,
 } from '../../src/features/schedule/liveScheduleUi.ts';
 import { changedDone, sameDone } from '../../src/features/schedule/scheduleSource.ts';
 import { validateScheduleInput } from '../../src/live/schedule.ts';
@@ -128,4 +128,21 @@ test('画面の日付の検査: 暦に無い日（2/30）・範囲外の年を�
   assert.ok(validateScheduleInput(draft({ deliveryDate: '2027-02-30' })).deliveryDate);
   assert.ok(validateScheduleInput(draft({ buildDue: '1999-12-31' })).buildDue);
   assert.deepEqual(validateScheduleInput(draft()), {});
+});
+
+test('pendingSaveFailed（Codex P2 2026-11-28）: 待った保存が 1 つでも失敗なら承認依頼しない。submit がそれを使う', () => {
+  assert.equal(pendingSaveFailed([]), false);
+  assert.equal(pendingSaveFailed([{ status: 'fulfilled', value: undefined }]), false);
+  assert.equal(pendingSaveFailed([{ status: 'fulfilled', value: undefined }, { status: 'rejected', reason: new Error('conflict') }]), true);
+  assert.match(SCHEDULE_SAVE_FAILED_BEFORE_SUBMIT, /保存してから依頼/);
+  const repo = readFileSync(new URL('../../src/live/repositories.tsx', import.meta.url), 'utf8');
+  const wait = repo.indexOf('const pending = await Promise.allSettled([...(schedInflight.get(pid) ?? [])]);');
+  const guard = repo.indexOf('if (pendingSaveFailed(pending)) throw new Error(SCHEDULE_SAVE_FAILED_BEFORE_SUBMIT);');
+  assert.ok(wait > 0 && guard > wait && guard - wait < 200, 'submit は待った直後に失敗を確かめる');
+});
+
+test('WBS の版（token）は編集ダイアログを開いている間は追従しない（Codex P2 2026-11-28）', () => {
+  const src = readFileSync(new URL('../../src/features/schedule/WbsSection.tsx', import.meta.url), 'utf8');
+  assert.ok(src.includes('if (liveToken !== undefined && !dirty && !editing) setToken(liveToken);'));
+  assert.ok(src.includes('}, [liveToken, dirty, editing]);'));
 });

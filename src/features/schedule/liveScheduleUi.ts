@@ -152,3 +152,9 @@ export function liveDetailNext(
 ): { label: string; to: string } {
   return reqStatus === 'approved' ? { label: nextAction, to: scheduleTo } : { label: work.next, to: work.to };
 }
+
+/** 承認依頼の前に待った保存のどれかが失敗したか（失敗していたら依頼しない＝保存前の内容が承認の対象になる。Codex P2 2026-11-28） */
+export function pendingSaveFailed(results: readonly PromiseSettledResult<unknown>[]): boolean {
+  return results.some((r) => r.status === 'rejected');
+}
+export const SCHEDULE_SAVE_FAILED_BEFORE_SUBMIT = '直前の保存ができませんでした。内容を確かめて保存してから依頼してください';

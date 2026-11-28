@@ -15,6 +15,7 @@ import type { ScheduleDraft } from '@/data/schedule';
 import type { AiDraftDoc, AiEditableV3, StoredProposal } from '@/types/aiDraft';
 import { REQ_DOC_COPY, reqDocSubmitBlock, submitBlockText } from '@/features/requirements/aiDraft/reqDocView';
 import { isJobRunning } from '@/features/requirements/aiDraft/aiDraftState';
+import { pendingSaveFailed, SCHEDULE_SAVE_FAILED_BEFORE_SUBMIT } from '@/features/schedule/liveScheduleUi';
 import { db } from './firebase';
 import {
   clientFromAccount, clientFromInvite, deepIso, devFromAccount, devFromInvite, INVITE_PREFIX, LIST_LIMIT, MAX_MEMBERS, messageDoc, projectDoc, proposalForSave, proposalV2FromDraft, proposalV3FromDraft, reqDoc, toApprovalLogs, toProject,
@@ -455,7 +456,9 @@ export function useLiveScheduleActions(projectId: string): LiveScheduleActions {
 
     const submit: LiveScheduleActions['submit'] = async () => {
       afro();
-      await Promise.allSettled([...(schedInflight.get(pid) ?? [])]);
+      const pending = await Promise.allSettled([...(schedInflight.get(pid) ?? [])]);
+      // 待った保存が失敗していたら依頼しない（保存前の内容が承認の対象になる。Codex P2 2026-11-28）
+      if (pendingSaveFailed(pending)) throw new Error(SCHEDULE_SAVE_FAILED_BEFORE_SUBMIT);
       await runTransaction(db, async (tx) => {
         const ps = await tx.get(projRef(pid));
         const cs = await tx.get(schedRef(pid, 'current'));

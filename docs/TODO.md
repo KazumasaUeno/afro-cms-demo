@@ -18,6 +18,7 @@
 - [ ] **スケジュールの Rules の床（段 0 のリリース ID）**: 段 0 を出す前に本番のいまの Rules のリリース ID を Console で控え、段 0 を出したらそのリリース ID をここに書く（`docs/operations/RUNBOOK_FIREBASE.md` §6.1。以後 Rules を段 0 より前へ戻さない）。未記入
 - [ ] **暦に無い日（2/30 など）は画面だけで止めている**（Rules は形式と年の範囲だけ。LIVE_SCHEDULE_PLAN L-12・R-9）。直接書かれた場合は読み込み時に捨てる。Rules で止めるかは式の上限（G1）の余裕と合わせて再判断
 - [ ] **お客様のスケジュールの「全ページの構築」の行は進み具合が 0% のまま**（お客様は構築タスクを読めないため日付だけで状態を出す。src/live/schedule.ts wbsProgressLive）。demo はタスクの割合を出す。お客様に割合を見せるなら、件数だけを current に写すなどの設計が要る（ui-ux-designer・data-backend-architect）
+- [ ] **スケジュールの完了印の解除の記録（Codex R002・LOW 受容 2026-11-28）**: firestore.rules markOk の undone 分岐は「更新前に完了していた」を確かめない（担当開発者・管理者が未完了の行に解除の記録を作れる。current の完了状態は変わらない）。Rules の式数に余裕ができたら、更新前の current の doneAt を確かめる（`docs/reviews/2026-11-28-live-schedule-cross-model-review.md`）。O-1: お客様の 320 幅で WBS の月ラベルが重なる（WbsSection.tsx の最初の月だけ年つき。main と同じ既存の P3。ui-ux-designer）
 - [ ] **完了印の全履歴は残さない**（行ごとの最後の操作だけ。L-9）・**差し戻し後の WBS はお客様が API で読める**（受容。L-15）
 
 ## 段階 C（本番の Firebase プロジェクトを作って公開する）の前に必ず行う
