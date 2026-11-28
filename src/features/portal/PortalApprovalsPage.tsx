@@ -1,5 +1,5 @@
-import { Box, Button, ButtonBase, Collapse, Stack, Typography } from '@mui/material';
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, ClipboardCheck, Download, ExternalLink, Eye, FileText, Maximize2, Network, Sparkles } from 'lucide-react';
+import { Box, Button, ButtonBase, Stack, Typography } from '@mui/material';
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, ClipboardCheck, Download, ExternalLink, Eye, FileText, Maximize2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useHref, useLocation, useNavigate } from 'react-router-dom';
 import { PageHeader, Reveal, StatusPill, Surface } from '@/components/ui';
@@ -19,12 +19,10 @@ import { personalize, useDesignContext } from '@/features/design/designContext';
 import { PageTabs, screenLabelOf } from '@/features/design/DesignStudioPage';
 import { buildProposal } from '@/features/requirements/buildProposal';
 import { approvalSteps, type ApprovalKey, type ApprovalStep } from './portalSteps';
-import { CONFIRM, ConfirmDialog, ScheduleDateCards, StepCard } from './PortalApprovalParts';
+import { CONFIRM, ConfirmDialog, ScheduleDateCards, SitemapApprovalSection, StepCard } from './PortalApprovalParts';
 import { sitemapCreated } from '@/data/sitemap';
 import { pendingConfirmations } from '@/features/requirements/assignment';
 import { buildRequirementsDocHtml, downloadRequirementsDoc } from '@/features/requirements/requirementsDoc';
-import { SitemapViewer } from '@/features/sitemap/SitemapViewer';
-import { SitemapDevCommentView } from '@/features/sitemap/DevComment';
 import { useProjectRoutes } from '@/features/projects/projectRoutes';
 
 const AREA = AREAS.portal;
@@ -42,8 +40,6 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
   // 見本で表示する画面（0 = トップ、1 = 主要ページ。デザイン作成画面と同じ 2 画面。2026-11-19）
   const [screenNo, setScreen] = useState(0);
   const screen = Math.min(screenNo, designCtx.pages.length);
-  // サイトマップの図（閲覧だけ）を開いているか（0.39.5）
-  const [showSitemap, setShowSitemap] = useState(false);
   // 要件定義書の全文を新しいタブで開く（ダウンロードと同じ HTML。中の文字列は esc 済み。0.39.5）
   const openRequirementsDoc = () => {
     const url = URL.createObjectURL(new Blob([buildRequirementsDocHtml(state)], { type: 'text/html;charset=utf-8' }));
@@ -78,8 +74,6 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
   const byKey = Object.fromEntries(steps.map((s) => [s.key, s])) as Record<ApprovalKey, ApprovalStep>;
   const pending = pendingConfirmations(req);
   const proposal = useMemo(() => buildProposal(req.answers, req.competitors), [req.answers, req.competitors]);
-  const afterPages = state.sitemap.after.nodes;
-  const newPages = afterPages.filter((n) => n.data.kind === 'new');
 
   // ホームの「ご確認をお願いしたいこと」から #sitemap などで来たら、その項目までスクロール
   useEffect(() => {
@@ -197,49 +191,7 @@ export default function PortalApprovalsPage({ preview = false }: { preview?: boo
 
         {/* 3. サイトマップ */}
         <Reveal delay={0.04}>
-          <StepCard step={byKey.sitemap} action={approveBtn('sitemap', !sitemapCreated(state.sitemap))}>
-            {/* サイトマップは要件定義書の承認のときに作る（0.29.4）。承認前はこの欄ごと隠れるが、念のため未作成でも空の一覧を出さない */}
-            {!sitemapCreated(state.sitemap) ? (
-              <Typography variant="body2" color="text.secondary">アフロがサイトマップを作成しています。できあがると、ここでページ構成をご確認いただけます。</Typography>
-            ) : (
-              <>
-                <Typography variant="body2" sx={{ mb: 1.5 }}>
-                  リニューアル後は <b>{afterPages.length}</b> ページの構成です（新しく作るページ <b>{newPages.length}</b>）。
-                </Typography>
-                <Box component="ul" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, listStyle: 'none', m: 0, p: 0 }}>
-                  {afterPages.map((n) => (
-                    <Box
-                      component="li" key={n.id} title={n.data.reason}
-                      sx={{
-                        px: 1.25, py: 0.5, borderRadius: 2, fontSize: 13, fontWeight: 600,
-                        bgcolor: n.data.kind === 'new' ? AREA.soft : tokens.color.bgSubtle, color: n.data.kind === 'new' ? AREA.color : tokens.color.inkSoft,
-                      }}
-                    >
-                      {n.data.kind === 'new' && <Sparkles size={12} style={{ marginRight: 4, verticalAlign: '-1px' }} />}
-                      {n.data.label}
-                    </Box>
-                  ))}
-                </Box>
-                <Button size="small" variant="outlined" startIcon={<Network size={15} />} aria-expanded={showSitemap} onClick={() => setShowSitemap((v) => !v)} sx={{ mt: 2 }}>
-                  {showSitemap ? 'サイトマップの図を閉じる' : 'サイトマップの図を見る'}
-                </Button>
-                <Collapse in={showSitemap} unmountOnExit>
-                  <Box sx={{ mt: 1.5 }}><SitemapViewer sitemap={state.sitemap} /></Box>
-                </Collapse>
-                {newPages.some((n) => n.data.reason) && (
-                  <Stack spacing={0.75} sx={{ mt: 2 }}>
-                    {newPages.filter((n) => n.data.reason).slice(0, 3).map((n) => (
-                      <Typography key={n.id} variant="caption" sx={{ display: 'block' }}>
-                        <b>{n.data.label}</b>: {n.data.reason}
-                      </Typography>
-                    ))}
-                  </Stack>
-                )}
-                {/* 開発担当者からのコメント（読むだけ。2026-11-17 会議。AI の改善理由の後に、開発者の意図を出す） */}
-                {state.sitemap.devComment?.text && <Box sx={{ mt: 2 }}><SitemapDevCommentView comment={state.sitemap.devComment} /></Box>}
-              </>
-            )}
-          </StepCard>
+          <SitemapApprovalSection step={byKey.sitemap} sitemap={state.sitemap} action={approveBtn('sitemap', !sitemapCreated(state.sitemap))} />
         </Reveal>
 
         {/* 4. トップデザイン */}

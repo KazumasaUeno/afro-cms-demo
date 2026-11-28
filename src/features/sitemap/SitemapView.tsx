@@ -1,0 +1,387 @@
+import { Box, Button, IconButton, Stack, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography, ButtonBase } from '@mui/material';
+import {
+  addEdge, Background, BackgroundVariant, Controls, MiniMap, Panel, ReactFlow, ReactFlowProvider,
+  useEdgesState, useNodesState, useReactFlow, type Connection, type Edge, type EdgeChange, type NodeChange,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import { ArrowLeft, ArrowRight, BadgeCheck, CalendarDays, Lightbulb, Lock, Maximize2, Network, Plus, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { AiBadge, PageHeader, Reveal, StatusPill, Surface } from '@/components/ui';
+import { formatDateTime } from '@/services/time';
+import { tokens } from '@/theme/tokens';
+import { useThemeMode } from '@/theme/ThemeMode';
+import { LANDSCAPE_PHONE, TOUCH } from '@/theme/media';
+import type { SitemapEdge, SitemapNode, SitemapState, SitemapVariant } from '@/types';
+import { KIND_META, type PageFlowNode } from './PageNode';
+import { defaultEdgeOptions, nodeTypes, toFlow } from './flowConfig';
+import { AddPageDialog, type NewPageInput } from './AddPageDialog';
+import { sitemapMetrics, validateLabel } from './metrics';
+
+const toStoreNodes = (ns: PageFlowNode[]): SitemapNode[] =>
+  ns.map((n) => ({ id: n.id, position: { x: Math.round(n.position.x), y: Math.round(n.position.y) }, data: n.data }));
+const toStoreEdges = (es: Edge[]): SitemapEdge[] => es.map((e) => ({ id: e.id, source: e.source, target: e.target }));
+const sig = (n: SitemapNode[], e: SitemapEdge[]) => JSON.stringify([n, e]);
+
+/**
+ * キャンバスと右の欄のデータ源（demo は DemoStore、live は Firestore と callable。LIVE_SITEMAP_IMPL_PLAN §3 SitemapSource）。
+ * 見た目は demo と同じ。live だけの違いは値（閲覧だけの理由・AI の印・保存の間隔）と、渡す部品（コメント欄）だけ
+ */
+export interface SitemapEditorSource {
+  /** 表示する中身（live は保存の待ちの間、手元の値を重ねた値） */
+  sitemap: SitemapState;
+  /** 閲覧だけ（demo はお客様の承認後。live は sitemapEditable の否定） */
+  locked: boolean;
+  /** 閲覧だけの理由（既定はお客様の承認後の文言） */
+  lockedNote?: string;
+  /** 編集をまとめて書くまでの時間（demo 300ms。live の 1 秒以上のまとめは保存の側） */
+  saveDelayMs: number;
+  /** 1 つの図の保存（ドラッグ中は呼ばない） */
+  onSave: (variant: SitemapVariant, nodes: SitemapNode[], edges: SitemapEdge[]) => void;
+  /** 改善理由の「AI提案」の印（null＝出さない。live は AI で作った下書きだけ。OQ-S3） */
+  aiBadge: { tooltip?: string } | null;
+  /** 改善後の図の下に出す「開発担当者より」の欄 */
+  devCommentPanel: ReactNode;
+}
+
+function Editor({ variant, onVariant, source }: { variant: SitemapVariant; onVariant: (v: SitemapVariant) => void; source: SitemapEditorSource }) {
+  const { sitemap, onSave, saveDelayMs } = source;
+  const { mode } = useThemeMode();
+  const stored = sitemap[variant];
+  const flow = useReactFlow();
+  const [nodes, setNodes, onNodesChange] = useNodesState<PageFlowNode>(stored.nodes.map(toFlow));
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(stored.edges);
+  const [adding, setAdding] = useState(false);
+  const lastSig = useRef(sig(stored.nodes, stored.edges));
+  // お客様の承認後は閲覧だけ（管理者・開発者とも。選択して内容を読むことはできる）。ストア側（setSitemap）でも止めている
+  const locked = source.locked;
+  // 承認後に届く変更は、選択と大きさの計測だけ通す（移動・削除・追加をキャンバス上でも起こさない）
+  const onNodesChangeGuarded = (cs: NodeChange<PageFlowNode>[]) =>
+    onNodesChange(locked ? cs.filter((c) => c.type === 'select' || c.type === 'dimensions') : cs);
+  const onEdgesChangeGuarded = (cs: EdgeChange<Edge>[]) => onEdgesChange(locked ? cs.filter((c) => c.type === 'select') : cs);
+
+  // 外部（デモ初期化など）でストアが変わったら取り込む
+  useEffect(() => {
+    const s = sig(stored.nodes, stored.edges);
+    if (s === lastSig.current) return;
+    lastSig.current = s;
+    setNodes(stored.nodes.map(toFlow));
+    setEdges(stored.edges);
+  }, [stored, setNodes, setEdges]);
+
+  // 編集をストアへ保存（ドラッグ中は保存しない・まとめて書く）
+  useEffect(() => {
+    if (locked || nodes.some((n) => n.dragging)) return;
+    const t = window.setTimeout(() => {
+      const sn = toStoreNodes(nodes);
+      const se = toStoreEdges(edges);
+      const s = sig(sn, se);
+      if (s === lastSig.current) return;
+      lastSig.current = s;
+      onSave(variant, sn, se);
+    }, saveDelayMs);
+    return () => window.clearTimeout(t);
+  }, [nodes, edges, variant, onSave, locked, saveDelayMs]);
+
+  const selected = nodes.find((n) => n.selected);
+  const storeNodes = useMemo(() => toStoreNodes(nodes), [nodes]);
+  const metrics = useMemo(() => sitemapMetrics(storeNodes, toStoreEdges(edges)), [storeNodes, edges]);
+  const before = useMemo(() => sitemapMetrics(sitemap.before.nodes, sitemap.before.edges), [sitemap.before]);
+  const after = useMemo(() => sitemapMetrics(sitemap.after.nodes, sitemap.after.edges), [sitemap.after]);
+
+  const focusNode = (id: string) => {
+    setNodes((ns) => ns.map((n) => ({ ...n, selected: n.id === id })));
+    const n = nodes.find((x) => x.id === id);
+    if (n) flow.setCenter(n.position.x + 92, n.position.y + 30, { zoom: 1.1, duration: 400 });
+  };
+  const patchSelected = (patch: Partial<PageFlowNode['data']>) =>
+    !locked && setNodes((ns) => ns.map((n) => (n.id === selected?.id ? { ...n, data: { ...n.data, ...patch } } : n)));
+
+  const onConnect = (c: Connection) => !locked && setEdges((es) => addEdge({ ...c, id: `${c.source}-${c.target}` }, es));
+
+  const addPage = (input: NewPageInput) => {
+    if (locked) return;
+    const id = `${variant === 'after' ? 'a' : 'b'}-${Date.now().toString(36)}`;
+    const parent = nodes.find((n) => n.id === input.parentId);
+    const siblings = parent ? edges.filter((e) => e.source === parent.id).length : 0;
+    const position = parent ? { x: parent.position.x + siblings * 60 - 40, y: parent.position.y + 150 } : { x: 0, y: 460 };
+    const node: PageFlowNode = { id, type: 'page', position, selected: true, deletable: true, data: { label: input.label, path: input.path, kind: input.kind, reason: input.reason || undefined } };
+    setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), node]);
+    if (parent) setEdges((es) => addEdge({ id: `${parent.id}-${id}`, source: parent.id, target: id }, es));
+    setAdding(false);
+    window.setTimeout(() => flow.setCenter(position.x + 92, position.y + 30, { zoom: 1.1, duration: 400 }), 50);
+  };
+
+  const reasons = nodes.filter((n) => n.data.reason);
+  const labelErr = selected ? validateLabel(selected.data.label) : null;
+
+  return (
+    <>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', md: 'center' }} sx={{ mb: 2 }}>
+        <ToggleButtonGroup exclusive size="small" value={variant} onChange={(_, v) => v && onVariant(v)} aria-label="表示するサイトマップ">
+          <ToggleButton value="before">現在 Before</ToggleButton>
+          <ToggleButton value="after">改善後 After</ToggleButton>
+        </ToggleButtonGroup>
+        <Stack direction="row" spacing={2} sx={{ flex: 1, flexWrap: 'wrap', rowGap: 0.5, color: tokens.color.muted, fontSize: 13 }}>
+          <span>ページ <b style={{ color: tokens.color.ink }}>{metrics.pages}</b></span>
+          <span>最大階層 <b style={{ color: tokens.color.ink }}>{metrics.maxDepth}</b></span>
+          <span>問い合わせまで <b style={{ color: tokens.color.ink }}>{metrics.contactClicks ?? '—'}</b> クリック</span>
+        </Stack>
+        <Stack direction="row" spacing={1}>
+          {!locked && <Button variant="outlined" size="small" startIcon={<Plus size={16} />} onClick={() => setAdding(true)}>ページを追加</Button>}
+          {!locked && <Tooltip title={selected?.deletable === false ? 'トップページは削除できません' : '選択したページを削除（Delete キー）'}>
+            <span>
+              <IconButton aria-label="選択したページを削除" disabled={!selected || selected.deletable === false}
+                onClick={() => selected && flow.deleteElements({ nodes: [{ id: selected.id }] })}>
+                <Trash2 size={17} />
+              </IconButton>
+            </span>
+          </Tooltip>}
+          <Tooltip title="全体を表示">
+            <IconButton aria-label="全体を表示" onClick={() => flow.fitView({ padding: 0.2, duration: 400 })}><Maximize2 size={17} /></IconButton>
+          </Tooltip>
+        </Stack>
+      </Stack>
+
+      {locked && (
+        <Box role="note" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, px: 1.5, py: 1, borderRadius: 2, bgcolor: tokens.color.surfaceMuted, color: tokens.color.inkSoft, fontSize: 13.5 }}>
+          <Lock size={15} aria-hidden /> {source.lockedNote ?? 'お客様が承認済みのため編集できません'}
+        </Box>
+      )}
+
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0,1fr) 320px' }, gap: 2.5, alignItems: 'start' }}>
+        <Surface padding={0} sx={{ overflow: 'hidden',
+          // タッチではキャンバス上のドラッグが画面のスクロールにならないので、上下に指を置ける余白を必ず残す
+          height: { xs: 'clamp(300px, 58dvh, 560px)', lg: 'calc(100dvh - 320px)' }, minHeight: { lg: 420 },
+          [LANDSCAPE_PHONE]: { height: 'calc(100dvh - 140px)', minHeight: 220 },
+          '& .react-flow__controls-button': { [TOUCH]: { width: 44, height: 44 } },
+          // 接続の点は指で掴める大きさにする（インライン style より優先させる）
+          '& .react-flow__handle': { [TOUCH]: { width: '16px !important', height: '16px !important' } },
+          '& .react-flow__controls': { boxShadow: tokens.shadow.sm, borderRadius: '10px', overflow: 'hidden', border: `1px solid ${tokens.color.border}` },
+          '& .react-flow__minimap': { borderRadius: '12px', overflow: 'hidden', border: `1px solid ${tokens.color.border}`, display: { xs: 'none', md: 'block' } } }}>
+          <ReactFlow
+            colorMode={mode}
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            onNodesChange={onNodesChangeGuarded}
+            onEdgesChange={onEdgesChangeGuarded}
+            onConnect={onConnect}
+            nodesDraggable={!locked}
+            nodesConnectable={!locked}
+            isValidConnection={(c) => c.source !== c.target}
+            defaultEdgeOptions={defaultEdgeOptions}
+            deleteKeyCode={locked ? null : ['Delete', 'Backspace']}
+            fitView
+            // 初期表示はページ名が読める倍率を優先（はみ出す分はパン。全体は右上「全体を表示」で）
+            fitViewOptions={{ padding: 0.08, minZoom: 0.85 }}
+            minZoom={0.3}
+            maxZoom={2}
+            aria-label={`${variant === 'after' ? '改善後' : '現在'}のサイトマップ`}
+          >
+            <Background variant={BackgroundVariant.Dots} gap={20} size={1.4} color={tokens.color.outlineVariant} />
+            <Controls showInteractive={false} position="bottom-left" />
+            <MiniMap pannable zoomable position="bottom-right" nodeBorderRadius={6}
+              nodeColor={(n) => (n.data as PageFlowNode['data']).kind === 'new' ? tokens.color.accent : (n.data as PageFlowNode['data']).kind === 'cta' ? tokens.color.primary : tokens.color.outlineVariant}
+              style={{ width: 140, height: 96 }} />
+            <Panel position="top-left">
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 1.25, py: 0.75, borderRadius: '10px', bgcolor: `color-mix(in srgb, ${tokens.color.surface} 90%, transparent)`, border: `1px solid ${tokens.color.border}`, fontSize: 12, color: tokens.color.muted }}>
+                <StatusPill tone={variant === 'after' ? 'accent' : 'neutral'}>{variant === 'after' ? '改善後' : '現在'}</StatusPill>
+                <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>{locked ? '閲覧のみ · ページを選ぶと内容を確認できます' : 'ドラッグで移動 · 下の点から引っぱって接続'}</Box>
+              </Stack>
+            </Panel>
+          </ReactFlow>
+        </Surface>
+
+        <Stack spacing={2}>
+          {selected ? (
+            <Surface>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                <StatusPill tone={selected.data.kind === 'new' ? 'accent' : selected.data.kind === 'cta' ? 'primary' : 'neutral'}>{KIND_META[selected.data.kind].label}</StatusPill>
+                <Typography variant="caption" sx={{ fontFamily: tokens.font.mono }}>{selected.data.path}</Typography>
+              </Stack>
+              <TextField fullWidth size="small" label="ページ名" value={selected.data.label} error={!!labelErr} helperText={labelErr ?? ' '}
+                inputProps={{ maxLength: 30, readOnly: locked }} onChange={(e) => patchSelected({ label: e.target.value })} />
+              {variant === 'after' ? (
+                <TextField fullWidth size="small" multiline minRows={3} label="改善理由" value={selected.data.reason ?? ''} inputProps={{ maxLength: 140, readOnly: locked }}
+                  helperText={`${(selected.data.reason ?? '').length} / 140`} onChange={(e) => patchSelected({ reason: e.target.value || undefined })} sx={{ mt: 1 }} />
+              ) : selected.data.reason ? (
+                <Box sx={{ mt: 1, p: 1.5, borderRadius: 2, bgcolor: tokens.color.warningSoft, fontSize: 13, color: tokens.color.warningInk }}>課題：{selected.data.reason}</Box>
+              ) : null}
+              <Typography variant="caption" sx={{ display: 'block', mt: 1.5 }}>
+                つながり：親 {edges.filter((e) => e.target === selected.id).length} · 子 {edges.filter((e) => e.source === selected.id).length}
+              </Typography>
+            </Surface>
+          ) : (
+            <Surface>
+              <Typography variant="h5" component="h2" sx={{ mb: 1.5 }}>Before → After</Typography>
+              {[
+                ['ページ数', before.pages, after.pages],
+                ['最大階層', before.maxDepth, after.maxDepth],
+                ['第1階層の入口', before.firstLevel, after.firstLevel],
+                ['問い合わせまで', before.contactClicks ?? '—', after.contactClicks ?? '—'],
+              ].map(([k, b, a]) => (
+                <Stack key={k as string} direction="row" alignItems="center" sx={{ py: 0.9, borderBottom: `1px solid ${tokens.color.border}`, fontSize: 13.5 }}>
+                  <Box sx={{ flex: 1, color: tokens.color.muted }}>{k}</Box>
+                  <Box sx={{ width: 36, textAlign: 'right', color: tokens.color.muted, fontVariantNumeric: 'tabular-nums' }}>{b}</Box>
+                  <ArrowRight size={13} color={tokens.color.faint} style={{ margin: '0 8px' }} />
+                  <Box sx={{ width: 28, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{a}</Box>
+                </Stack>
+              ))}
+              <Typography variant="caption" sx={{ display: 'block', mt: 1.5 }}>{locked ? 'ページを選ぶと詳細と改善理由を確認できます。' : 'ページを選ぶと詳細と改善理由を編集できます。'}</Typography>
+            </Surface>
+          )}
+
+          <Surface>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+              <Lightbulb size={16} color={tokens.color.warning} />
+              <Typography variant="h5" component="h2">{variant === 'after' ? '改善理由' : '現状の課題'}</Typography>
+              {source.aiBadge && <AiBadge label="AI提案" {...(source.aiBadge.tooltip ? { tooltip: source.aiBadge.tooltip } : {})} />}
+            </Stack>
+            <Stack spacing={0.75}>
+              {reasons.length === 0 && <Typography variant="body2" color="text.secondary">まだありません</Typography>}
+              {reasons.map((n) => (
+                <ButtonBase key={n.id} onClick={() => focusNode(n.id)} sx={{ display: 'block', textAlign: 'left', p: 1.25, borderRadius: 2, border: `1px solid ${n.selected ? tokens.color.primary : tokens.color.border}`, '&:hover': { bgcolor: tokens.color.surfaceMuted } }}>
+                  <Typography sx={{ fontSize: 13, fontWeight: 650 }}>{n.data.label}</Typography>
+                  <Typography variant="caption" sx={{ display: 'block' }}>{n.data.reason}</Typography>
+                </ButtonBase>
+              ))}
+            </Stack>
+          </Surface>
+          {/* AI の改善理由の下に、開発担当者の意図（2026-11-17 会議。改善後の図だけ。書けるのは開発者画面だけ） */}
+          {variant === 'after' && source.devCommentPanel}
+        </Stack>
+      </Box>
+
+      <AddPageDialog open={adding && !locked} variant={variant} nodes={storeNodes} defaultParentId={selected?.id} onClose={() => setAdding(false)} onAdd={addPage} />
+    </>
+  );
+}
+
+/** まだサイトマップを作っていない案件（要件定義書の承認前。0.29.4）。キャンバスは出さず、作られる時期と要件定義書への道だけ示す */
+export function NotCreated({ requirementsTo }: { requirementsTo: string }) {
+  const navigate = useNavigate();
+  return (
+    <Surface padding={{ xs: 3, md: 5 }} sx={{ textAlign: 'center' }}>
+      <Stack alignItems="center" spacing={1.5}>
+        <Box aria-hidden sx={{ display: 'grid', placeItems: 'center', width: 56, height: 56, borderRadius: '50%', bgcolor: tokens.color.surfaceMuted, color: tokens.color.inkSoft }}>
+          <Network size={26} />
+        </Box>
+        <Typography variant="h5" component="h2">サイトマップはまだ作成されていません</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 440 }}>
+          要件定義書の承認後に、要件定義から改善後のページ構成を作成します。作成すると、ここで現在のサイトと比べながら組み替えられます。
+        </Typography>
+        <Button variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate(requirementsTo)} sx={{ mt: 1 }}>
+          要件定義書を確認する
+        </Button>
+      </Stack>
+    </Surface>
+  );
+}
+
+/** 画面全体のデータ源（SitemapEditorSource に、見出しの状態と渡す部品を足したもの） */
+export interface SitemapViewSource extends SitemapEditorSource {
+  /** 「プロジェクト詳細」へ戻る先 */
+  backTo: string;
+  /** 制作フローのナビ（demo は BuildFlowNav、live は BuildFlowNavView） */
+  nav: ReactNode;
+  /** 作成済み（false ならキャンバスの代わりに notCreated） */
+  created: boolean;
+  notCreated: ReactNode;
+  reqApproved: boolean;
+  approvedAt?: string;
+  /** 承認済みの表示の文言（既定「承認済み」） */
+  approvedText?: string;
+  /** 承認済みの表示の横（demo「デザインへ進む」、live「下書きに戻す」） */
+  approvedAction?: ReactNode;
+  /** お客様の承認待ち（依頼の日時） */
+  requestedAt?: string;
+  /** 承認待ちの表示の横（live の取り下げ・代理承認。OQ-N4） */
+  requestedAction?: ReactNode;
+  /** 依頼の前（demo RequestApprovalButton、live RequestApprovalAction） */
+  requestAction?: ReactNode;
+  /** 見出しの説明（既定は demo の文言） */
+  description?: string;
+  /** 見出しとキャンバスの間の注記（demo はスケジュール未入力の案内） */
+  banner?: ReactNode;
+}
+
+/**
+ * サイトマップの画面（見た目だけ。DemoStore を読まない。LIVE_SITEMAP_IMPL_PLAN P-13）。
+ * demo は SitemapPage（DemoStore の入れ物）、live は src/live/pages/LiveSitemapPage.tsx がここへ値と操作を渡す。
+ * 構造の編集はお客様の承認前だけ（管理者・開発者とも。承認後は閲覧のみ。2026-11-11 ユーザー判断）。
+ * 承認はお客様ポータルだけ。管理者・開発者画面には承認の操作を出さず、承認待ちの表示だけ出す（2026-11-12 ユーザー判断。live の代理承認は管理者だけの例外）
+ */
+export function SitemapView({ source }: { source: SitemapViewSource }) {
+  const [variant, setVariant] = useState<SitemapVariant>('after');
+  const { approvedAt, created, reqApproved } = source;
+
+  return (
+    <Box>
+      {/* 戻る導線（2026-11-16 ユーザー指示）。制作フローの段階ナビと同じ行に並ばないよう Box で包む */}
+      <Box>
+        <Button component={RouterLink} to={source.backTo} size="small" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2, ml: -1 }}>
+          プロジェクト詳細
+        </Button>
+      </Box>
+      {source.nav}
+      <PageHeader
+        eyebrow="④ 制作"
+        icon={<Network size={14} />}
+        title="サイトの構造を、見ながら組み替える"
+        description={source.description ?? (!created
+          ? '要件定義書の承認のあとに、要件定義から改善後のサイト構造を作成します。'
+          : approvedAt
+          ? '現在のサイトと、要件定義から導いた改善後の構造を切り替えて比較できます。お客様の承認後は閲覧だけできます。'
+          : '現在のサイトと、要件定義から導いた改善後の構造を切り替えて比較できます。ページの追加・移動・接続はそのまま保存されます。')}
+        actions={
+          !created ? undefined : approvedAt ? (
+            <>
+              <Box role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, minHeight: 40, borderRadius: 3, bgcolor: tokens.color.successSoft, color: tokens.color.successInk, fontWeight: 650, fontSize: 14 }}>
+                <BadgeCheck size={18} /> {source.approvedText ?? '承認済み'} {formatDateTime(approvedAt)}
+              </Box>
+              {source.approvedAction}
+            </>
+          ) : (
+            // 承認はお客様ポータルだけ（管理者・開発者は承認しない。2026-11-12 ユーザー判断）。
+            // アフロが承認を依頼してからお客様の承認待ちになる。依頼はスケジュールを入れてから（2026-11-17 会議）
+            <Stack alignItems={{ xs: 'stretch', sm: 'flex-end' }} spacing={0.5}>
+              {source.requestedAt ? (
+                <Box role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, minHeight: 40, borderRadius: 3, bgcolor: tokens.color.warningSoft, color: tokens.color.warningInk, fontWeight: 650, fontSize: 14 , py: 0.75, whiteSpace: { sm: 'nowrap' } }}>
+                  お客様の承認待ち（{formatDateTime(source.requestedAt)} に依頼）
+                </Box>
+              ) : (
+                source.requestAction
+              )}
+              {source.requestedAt && source.requestedAction}
+              {!reqApproved && <Typography variant="caption">要件定義書の承認の後に、お客様が承認できます</Typography>}
+            </Stack>
+          )
+        }
+      />
+      {source.banner}
+      <Reveal>
+        {created ? (
+          <ReactFlowProvider key={variant}>
+            <Editor variant={variant} onVariant={setVariant} source={source} />
+          </ReactFlowProvider>
+        ) : (
+          source.notCreated
+        )}
+      </Reveal>
+    </Box>
+  );
+}
+
+/** スケジュールを入れるまで制作へ進めない（2026-11-17 会議。サイトマップの承認の依頼・承認も止める）。demo の案内 */
+export function ScheduleMissingBanner({ onOpen }: { onOpen: () => void }) {
+  return (
+    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }} role="note" sx={{ mb: 2, px: 2, py: 1.5, borderRadius: 3, bgcolor: tokens.color.warningSoft, color: tokens.color.warningInk }}>
+      <CalendarDays size={18} style={{ flexShrink: 0 }} aria-hidden />
+      <Typography variant="body2" sx={{ flex: 1, color: 'inherit', fontWeight: 600 }}>
+        制作〜公開のスケジュールがまだ入っていません。スケジュールを入れると、サイトマップの承認をお客様へ依頼できます。
+      </Typography>
+      <Button variant="outlined" size="small" onClick={onOpen}>スケジュールを入力</Button>
+    </Stack>
+  );
+}

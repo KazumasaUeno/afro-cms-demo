@@ -8,8 +8,10 @@ import { ProjectDetailView, ProjectNotFound } from '@/features/projects/ProjectD
 import { ClientStatusPanel } from '@/features/projects/ClientStatusPanel';
 import { devNextWork, useProjectRoutes } from '@/features/projects/projectRoutes';
 import { SitePreviewPendingButton } from '@/features/quality/SitePreviewButton';
-import { useAccountPeople, useLiveProjects, useLiveSchedule } from '../repositories';
+import { useAccountPeople, useLiveProjects, useLiveSchedule, useLiveSitemap } from '../repositories';
 import { liveScheduleState } from '../schedule';
+import { liveSitemapProjectState } from '../sitemap';
+import { liveSitemapNext } from '@/features/sitemap/liveSitemapUi';
 import { ProjectScheduleSection } from '@/features/schedule/ProjectScheduleSection';
 import { liveDetailNext } from '@/features/schedule/liveScheduleUi';
 import { useLiveWbsSource } from './LiveSchedulePage';
@@ -57,12 +59,15 @@ function Detail({ p, list }: { p: Project; list: Project[] }) {
   // スケジュール（LIVE_SCHEDULE_PLAN U3-b。納品予定日・公開予定日の欄とスケジュールの区画が state.schedule を読む）
   const sch = useLiveSchedule(p.id);
   const sched = useMemo(() => liveScheduleState(sch.summary, sch.current, sch.internal), [sch.summary, sch.current, sch.internal]);
-  const state = useMemo(() => liveProjectView(p, req, logs, blankWork(p.id), sched), [p, req, logs, sched]);
+  // サイトマップ（LIVE_SITEMAP_IMPL_PLAN U3-b。区画の状態と「次に必要な作業」。AC-28）
+  const site = useLiveSitemap(p.id);
+  const siteState = useMemo(() => liveSitemapProjectState(site.summary, site.internal, site.version), [site.summary, site.internal, site.version]);
+  const state = useMemo(() => liveProjectView(p, req, logs, blankWork(p.id), sched, siteState), [p, req, logs, sched, siteState]);
   const { account } = useLiveSession();
   const canEdit = (account.role === 'admin' || account.role === 'developer') && req.status === 'approved' && !!doc && !doc.archived;
   const wbs = useLiveWbsSource(p.id, sch, state, false);
 
-  if (reqLoading || logsLoading) return <RouteLoader label="プロジェクト" />;
+  if (reqLoading || logsLoading || site.loading) return <RouteLoader label="プロジェクト" />;
   if (reqError) return <LoadError what="プロジェクト" />;
   // 承認の記録が読めないとき「履歴なし」と同じ見た目にしない（review 2026-11-26 Minor）
   if (logsError) return <LoadError what="承認の記録" />;
@@ -72,7 +77,11 @@ function Detail({ p, list }: { p: Project; list: Project[] }) {
   // 開発者画面の「次に必要な作業」（デモと同じ判定）。要件定義書の承認後はスケジュール（文言は段階の文言。影響分析 3）
   const work = devNextWork(p, state);
   const scheduleTo = routes.approval.schedule ?? (routes.dev ? '/dev/schedule' : '/schedule');
-  const next = liveDetailNext(req.status, p.nextAction, scheduleTo, work);
+  // スケジュールの承認後は、サイトマップの段階の作業（それまでは従来どおり）
+  const next = liveSitemapNext(
+    { reqApproved: req.status === 'approved', scheduleApproved: sch.summary?.approvedRevision !== undefined, status: site.summary?.status ?? null, sitemapTo: routes.sitemap },
+    liveDetailNext(req.status, p.nextAction, scheduleTo, work),
+  );
   const go = (to: string) => {
     projects.select(p.id);
     navigate(to);

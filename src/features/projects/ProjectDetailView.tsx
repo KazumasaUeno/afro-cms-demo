@@ -85,9 +85,11 @@ export interface ProjectDetailViewProps {
   clientStatus: ReactNode;
   /** 末尾に置くもの（編集のダイアログ） */
   children?: ReactNode;
+  /** false: デザインの画面がまだ無い（live。LIVE_SITEMAP_IMPL_PLAN P-10）。トップデザインの段を locked のままにする。既定 true（demo） */
+  designAvailable?: boolean;
 }
 
-export function ProjectDetailView({ p, state, routes, owner, devNames, allProjects, next, go, openProject, preview, onEdit, requestApproval, schedule, clientStatus, children }: ProjectDetailViewProps) {
+export function ProjectDetailView({ p, state, routes, owner, devNames, allProjects, next, go, openProject, preview, onEdit, requestApproval, schedule, clientStatus, children, designAvailable = true }: ProjectDetailViewProps) {
   const req = state.requirements;
   const cur = stageIndex(p.stage);
   // 制作の8段階で押した段階（無ければいまの段階）。別の案件を開いたら戻す
@@ -98,7 +100,7 @@ export function ProjectDetailView({ p, state, routes, owner, devNames, allProjec
   const selDone = selIndex < cur;
   const selActive = selIndex === cur;
   const selFuture = selIndex > cur;
-  const steps = approvalSteps(state);
+  const steps = approvalSteps(state, { designAvailable });
   // 段階の最後のお客様の承認（無い段階は undefined）
   const stepOf = (id: Stage) => steps.find((x) => x.key === STAGE_APPROVAL[id]);
   const finalStep = stepOf(sel.id);
