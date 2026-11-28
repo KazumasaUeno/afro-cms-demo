@@ -351,3 +351,14 @@ AI ジョブ（`draft` / `none` のときだけ動く）: `idle` → `running`�
 | OQ-N3 | 上限は提案どおり（1 案件 5 回/日・20 回/月、1 人 10 回/日。全体 200 回/月・Anthropic 20 USD/月は要件定義書の AI と共有） |
 | OQ-N4 | 依頼中は編集不可。理由を書いて取り下げてから直し、依頼し直す |
 | SAFE | S1〜S9 は提案どおり（lead-architect 2026-11-28） |
+
+## lead-architect の判断（2026-11-28。設計 3 本を受けて）
+
+| # | 判断 |
+|---|---|
+| L-1 | データ設計 D-1〜D-5 を採る（中身の書き込みは callable＋Admin SDK、状態だけの遷移は Rules、承認版は不変の `sitemapVersions/r{N}`＋contentHash、お客様が読めるのは版の文書だけ、callable の TX で editSeq） |
+| L-2 | AI 設計 P-4 を採る（現行の構成はナビから規則で組み、AI は改善点と改善後だけ）。validateLabel / validatePath / tree の src/shared/ai への移動は「移すだけ・demo は再 export で挙動不変」を条件に可（demo の画面差分 0 をスクリーンショットで確認） |
+| L-3 | AI 生出力の削除ジョブ（R1）はサイトマップ分だけ今回作る（要件定義書の分は既存 TODO:8 のまま）。保存日数は法務待ち → `AI_SITEMAP_MODE=on` の前提条件（段 2）。今回は internal＋許可リストまで |
+| L-4 | 脅威モデルの条件 S-1〜S-20 を受け入れ条件に追加し、テスト SM-01〜30 を必須にする。特に S-3/S-9（callable の TX で状態・依頼中・アーカイブ・要件承認を検査）、S-6（承認＝版のハッシュ一致）、S-12（callable は ID だけ受け、本文はサーバーで読む）、S-14（1 人あたりの鍵を `sitemap:` で分ける）、S-18（on は `AI-SCOPE: sitemap` 行が必要） |
+| L-5 | AI 評価（架空 20 件×3 回・上限 10 USD）は実装の後、mode を internal で出す前に行う。採点の盲検は 1 人（lead）でよい（ユーザーの採点者が未定のため。結果は報告する） |
+| L-6 | 出す順: 段 0（Rules→Hosting）→ 段 1（Rules→Functions→Hosting）→ 段 2（削除ジョブ。on の前）。段 0 の版が新しい Rules の床（今の床 beb93e7b より前へは戻さない） |
