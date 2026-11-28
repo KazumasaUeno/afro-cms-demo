@@ -10,7 +10,7 @@ import { HttpsError } from 'firebase-functions/https';
 import { assertCanGenerate, resolveCaller, type AuthLike, type ProjectLike } from './authz';
 import { generationAllowed, type AiFlags } from './flags';
 import { AI_LEASE } from './limits';
-import { currentDraftQuota, jstDay, readUsage, refund, reserve, usageDocId } from './quota';
+import { currentDraftQuota, jstDay, readUsage, refund, reserve, usageDocId, type QuotaScope } from './quota';
 import { answersHash } from './shared/answersHash';
 import { missingRequired } from './shared/redact';
 import type { AnswerValue } from './shared/types';
@@ -163,7 +163,7 @@ export async function handleRequestDraft(req: { auth?: AuthLike | null; data: un
 
 /**
  * 返金: job がまだこの requestId で running なら lease を外し（idle）、加算を戻す。違えば何もしない（false）。
- * lastError は呼び出し側が渡したときだけ書く
+ * lastError は呼び出し側が渡したときだけ書く。scope は上限の名前空間（省略は要件定義書。サイトマップは aiRef に aiDrafts/sitemap を渡し scope 'sitemap'）
  */
 export async function releaseReservation(
   db: Firestore,
@@ -172,6 +172,7 @@ export async function releaseReservation(
   now: () => number,
   by: string,
   lastErrorCode?: string,
+  scope?: QuotaScope,
 ): Promise<boolean> {
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(aiRef);
@@ -182,7 +183,7 @@ export async function releaseReservation(
     const uRef = usageRef(db, day);
     const uSnap = await tx.get(uRef);
     const uid = typeof job.by === 'string' ? job.by : by;
-    const r = refund(ai.quota, readUsage(uSnap.data()), day, uid);
+    const r = refund(ai.quota, readUsage(uSnap.data()), day, uid, scope);
     const ts = Timestamp.fromMillis(now());
     const update: Record<string, unknown> = {
       job: { state: 'idle', requestId, by: uid, startedAt: job.startedAt ?? ts },

@@ -15,6 +15,14 @@ const modeParam = defineString('AI_REQUIREMENTS_MODE', { default: AI_MODE_DEFAUL
 const allowlistParam = defineString('AI_REQUIREMENTS_PROJECT_ALLOWLIST', { default: '' });
 
 /**
+ * サイトマップの AI 下書きのフラグ（LIVE_SITEMAP_AI.md §7・IMPL_PLAN §4 U-F2）。意味は要件定義書と同じ（off / internal / on。未設定・不明は off）。
+ * 要件定義書のフラグとは別の値（AI_REQUIREMENTS_MODE の意味と判定は変えない）。'on' は deploy-firebase.mjs が法務の記録の行 'AI-SCOPE: sitemap' を要求する。
+ * 置き場は functions/.env.<projectId>（非対話デプロイで値が要るため off も明示する）
+ */
+const sitemapModeParam = defineString('AI_SITEMAP_MODE', { default: AI_MODE_DEFAULT });
+const sitemapAllowlistParam = defineString('AI_SITEMAP_PROJECT_ALLOWLIST', { default: '' });
+
+/**
  * 生成する提案の版（REQUIREMENTS_DOC_TEMPLATE.md §7 Rollback「プロンプト版を設定で選ぶ」）。
  * - AI_REQUIREMENTS_PROPOSAL_VERSION: '2'（PRM-REQ-001@1.0.0・今の 4 節の形）| '3'（PRM-REQ-001@2.0.0・会社標準ひな型の章立て）
  * - 未設定・それ以外は 2（fail-closed。v3 の表示（U4）と Rules（U3）が揃うまで 3 にしない）。値の置き場は functions/.env.<projectId>
@@ -53,6 +61,11 @@ export function parseAllowlist(raw: unknown): string[] {
 /** 実行時の値（関数の中でだけ呼ぶ。読み込み時に .value() を呼ばない） */
 export function readFlags(): AiFlags {
   return { mode: parseMode(modeParam.value()), allowlist: parseAllowlist(allowlistParam.value()) };
+}
+
+/** サイトマップの AI のフラグ（関数の中でだけ呼ぶ）。判定は generationAllowed をそのまま使う */
+export function readSitemapFlags(): AiFlags {
+  return { mode: parseMode(sitemapModeParam.value()), allowlist: parseAllowlist(sitemapAllowlistParam.value()) };
 }
 
 export type FlagRole = 'admin' | 'developer' | 'client' | 'none';

@@ -59,4 +59,33 @@ export const SITE_CHECK_THRESHOLDS = {
 export const AI_MAX_TOKENS = {
   v2: 12_000,
   v3: 24_000,
+  /** サイトマップの AI 下書き（LIVE_SITEMAP_AI.md §5・IMPL_PLAN P-9。最悪 1 回 約 $0.12。評価（L-5）の p99 で見直す。上げるならユーザー確認） */
+  sitemap: 8_000,
+} as const;
+
+/**
+ * サイトマップの AI 下書きの回数の上限（ユーザー決定 OQ-N3 2026-11-28）: 案件 5/日・20/月・利用者 10/日は要件定義書と**別枠**（値は同じ）。
+ * 全体 200 回/月は AI_QUOTA.globalPerMonth を**共用**（aiUsage.count。ここには持たない）
+ */
+export const AI_QUOTA_SITEMAP = {
+  projectPerDay: 5,
+  projectPerMonth: 20,
+  userPerDay: 10,
+} as const;
+
+/** サイトマップの AI へ送る量と出力の上限（LIVE_SITEMAP_AI.md §1.1・§3.2 [TARGET]。ページ数は SITEMAP_LIMITS.aiPages と同じ 30） */
+export const SITEMAP_AI_LIMITS = {
+  /** 改善後のページ（トップを含む） */
+  afterPages: 30,
+  /** 要件定義書から送る文字の合計 */
+  requirementsChars: 8_000,
+  /** 回答 1 問あたりの文字 */
+  answerChars: 1_000,
+  /** 現行サイトのナビ（件） */
+  navItems: 50,
+  summary: 300,
+  reason: 140,
+  issue: 140,
+  openQuestions: 5,
+  openQuestion: 200,
 } as const;

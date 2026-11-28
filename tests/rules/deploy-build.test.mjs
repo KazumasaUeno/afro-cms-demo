@@ -7,6 +7,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { checkBuiltAiFlag, checkHostingBuild, checkLiveAiFlag, parseTestCounts } from '../../scripts/deploy-firebase.mjs';
+import { checkBuiltAiSitemapFlag, checkLiveAiSitemapFlag } from '../../scripts/deploy-firebase.mjs';
 
 const PROJECT = 'afro-cms-prod';
 const OTHER = 'afro-cms-other';
@@ -162,4 +163,41 @@ test('checkBuiltAiFlag: build-meta.json が無い・壊れているなら拒否'
 test('checkBuiltAiFlag: 焼き込んだ値が違えば拒否、同じなら通す', () => {
   withDist({ 'build-meta.json': JSON.stringify({ mode: 'live', aiFlag: 'off' }) }, (dir) => assert.throws(() => checkBuiltAiFlag('internal', dir), /=off でビルドされています/));
   withDist({ 'build-meta.json': JSON.stringify({ mode: 'live', aiFlag: 'internal' }) }, (dir) => assert.doesNotThrow(() => checkBuiltAiFlag('internal', dir)));
+});
+
+// ---- VITE_FEATURE_AI_SITEMAP（要件定義書の AI 画面と同じ型。LIVE_SITEMAP_IMPL_PLAN U-F2・影響分析 穴 5） ----
+
+test('checkLiveAiSitemapFlag: ファイルが無い・キーが無い・値が空なら拒否（要件定義書のフラグだけでは通さない）', () => {
+  withEnv(null, (f) => assert.throws(() => checkLiveAiSitemapFlag(f), /VITE_FEATURE_AI_SITEMAP がありません/));
+  withEnv('VITE_FEATURE_AI_REQUIREMENTS=internal\n', (f) => assert.throws(() => checkLiveAiSitemapFlag(f), /VITE_FEATURE_AI_SITEMAP がありません/));
+  withEnv('VITE_FEATURE_AI_SITEMAP=\n', (f) => assert.throws(() => checkLiveAiSitemapFlag(f), /がありません/));
+});
+
+test('checkLiveAiSitemapFlag: off / internal / on は通し、それ以外・引用符の中の空白は拒否', () => {
+  withEnv('VITE_FEATURE_AI_SITEMAP=off\n', (f) => assert.equal(checkLiveAiSitemapFlag(f), 'off'));
+  withEnv('A=1\r\nVITE_FEATURE_AI_SITEMAP="internal"\r\n', (f) => assert.equal(checkLiveAiSitemapFlag(f), 'internal'));
+  withEnv("export VITE_FEATURE_AI_SITEMAP='on'\n", (f) => assert.equal(checkLiveAiSitemapFlag(f), 'on'));
+  withEnv('VITE_FEATURE_AI_SITEMAP=on # x\n', (f) => assert.equal(checkLiveAiSitemapFlag(f), 'on'));
+  withEnv('VITE_FEATURE_AI_SITEMAP=Internal\n', (f) => assert.throws(() => checkLiveAiSitemapFlag(f), /VITE_FEATURE_AI_SITEMAP=Internal は不正です/));
+  withEnv('VITE_FEATURE_AI_SITEMAP=" off "\n', (f) => assert.throws(() => checkLiveAiSitemapFlag(f), /不正です/));
+});
+
+test('checkLiveAiSitemapFlag: 要件定義書のフラグの判定と独立（片方だけ書いた .env.live.local）', () => {
+  withEnv('VITE_FEATURE_AI_SITEMAP=off\n', (f) => assert.throws(() => checkLiveAiFlag(f), /VITE_FEATURE_AI_REQUIREMENTS がありません/));
+  withEnv('VITE_FEATURE_AI_REQUIREMENTS=internal\nVITE_FEATURE_AI_SITEMAP=off\n', (f) => {
+    assert.equal(checkLiveAiFlag(f), 'internal');
+    assert.equal(checkLiveAiSitemapFlag(f), 'off');
+  });
+});
+
+test('checkBuiltAiSitemapFlag: build-meta.json が無い・壊れている・aiSitemapFlag が無い／違えば拒否、同じなら通す', () => {
+  withDist({ 'assets/a.js': 'x' }, (dir) => assert.throws(() => checkBuiltAiSitemapFlag('off', dir), /build-meta\.json がありません/));
+  withDist({ 'build-meta.json': '{' }, (dir) => assert.throws(() => checkBuiltAiSitemapFlag('off', dir), /読めません/));
+  // 変更前のビルド（aiSitemapFlag なし）は送らない
+  withDist({ 'build-meta.json': JSON.stringify({ mode: 'live', aiFlag: 'internal' }) }, (dir) => assert.throws(() => checkBuiltAiSitemapFlag('off', dir), /VITE_FEATURE_AI_SITEMAP=undefined でビルドされています/));
+  withDist({ 'build-meta.json': JSON.stringify({ mode: 'live', aiFlag: 'internal', aiSitemapFlag: 'off' }) }, (dir) => {
+    assert.throws(() => checkBuiltAiSitemapFlag('internal', dir), /VITE_FEATURE_AI_SITEMAP=off でビルドされています/);
+    assert.doesNotThrow(() => checkBuiltAiSitemapFlag('off', dir));
+    assert.doesNotThrow(() => checkBuiltAiFlag('internal', dir));
+  });
 });

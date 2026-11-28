@@ -4,9 +4,18 @@
  * - 除く: script / style / noscript / template / コメント / 非表示の要素（hidden 属性・aria-hidden="true"・style の display:none / visibility:hidden）
  * - 本文と見出しにも連絡先の除去（shared/redact.ts）をかける。生 HTML は返さない・保存しない
  * - 基本チェック用の事実（画像の数と alt の欠け・構造化データの有無）もここで数える（script を除く前に）
+ * - navItems（サイトマップの「現在」。LIVE_SITEMAP_AI.md §1.3）: baseUrl を渡したときだけ、ナビの <a> の href を parseRedirect で解釈し、
+ *   取得したトップと同じホストのパスだけを残す（クエリ・フラグメントは捨てる・小文字・末尾 / 除去・validatePath を通るものだけ）。navLinks は不変
  */
 import { SITE_LIMITS } from '../limits';
 import { redactText } from '../shared/redact';
+import { SITEMAP_LIMITS, validatePath } from '../shared/sitemapRules';
+import { parseRedirect } from './url';
+
+export interface NavItem {
+  text: string;
+  path: string;
+}
 
 export interface Extracted {
   title: string;
@@ -15,6 +24,8 @@ export interface Extracted {
   canonical: string;
   headings: { level: 1 | 2 | 3; text: string }[];
   navLinks: string[];
+  /** ナビの文字と同一ホストのパス（baseUrl を渡したときだけ。渡さなければ []） */
+  navItems: NavItem[];
   text: string;
   images: number;
   imagesMissingAlt: number;
@@ -79,7 +90,31 @@ function stripHidden(html: string): string {
   return out + html.slice(pos);
 }
 
-export function extractHtml(html: string, maxChars: number = SITE_LIMITS.maxTextChars): Extracted {
+/** ナビの href → 同一ホストのパス（取れなければ null。例外を投げない） */
+export function navPathOf(href: string | null, base: URL): string | null {
+  if (!href || !href.trim()) return null;
+  let u: URL;
+  try {
+    u = parseRedirect(href.trim(), base);
+  } catch {
+    return null;
+  }
+  if (u.hostname !== base.hostname) return null;
+  let path = u.pathname.toLowerCase();
+  if (path.length > 1) path = path.replace(/\/+$/, '') || '/';
+  return validatePath(path, []) === null ? path : null;
+}
+
+function toBase(baseUrl: URL | string | undefined): URL | null {
+  if (baseUrl === undefined) return null;
+  try {
+    return baseUrl instanceof URL ? baseUrl : new URL(baseUrl);
+  } catch {
+    return null;
+  }
+}
+
+export function extractHtml(html: string, maxChars: number = SITE_LIMITS.maxTextChars, baseUrl?: URL | string): Extracted {
   const hasStructuredData = /<script\b[^>]*type\s*=\s*["']?application\/ld\+json/i.test(html) || /\sitemscope(?=[\s>=])/i.test(html);
   let h = html
     .replace(/<!--[\s\S]*?(-->|$)/g, ' ')
@@ -103,10 +138,16 @@ export function extractHtml(html: string, maxChars: number = SITE_LIMITS.maxText
     if (text) headings.push({ level: Number(m[1]) as 1 | 2 | 3, text: text.slice(0, 200) });
   }
   const navLinks: string[] = [];
+  const navItems: NavItem[] = [];
+  const base = toBase(baseUrl);
   for (const nav of h.matchAll(/<nav\b[^>]*>([\s\S]*?)<\/nav\s*>/gi)) {
     for (const a of nav[1].matchAll(/<a\b[^>]*>([\s\S]*?)<\/a\s*>/gi)) {
       const t = redactText(squash(a[1]));
       if (t && navLinks.length < SITE_LIMITS.maxNavLinks) navLinks.push(t.slice(0, 100));
+      if (!base || !t || navItems.length >= SITE_LIMITS.maxNavLinks) continue;
+      const openTag = /^<a\b[^>]*>/i.exec(a[0])?.[0] ?? '';
+      const path = navPathOf(attr(openTag, 'href'), base);
+      if (path) navItems.push({ text: t.slice(0, 100), path: path.slice(0, SITEMAP_LIMITS.path) });
     }
   }
   const body = /<body\b[^>]*>([\s\S]*)/i.exec(h)?.[1] ?? h;
@@ -118,6 +159,7 @@ export function extractHtml(html: string, maxChars: number = SITE_LIMITS.maxText
     canonical,
     headings,
     navLinks,
+    navItems,
     text,
     images: imgs.length,
     imagesMissingAlt,

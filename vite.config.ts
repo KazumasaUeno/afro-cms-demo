@@ -68,7 +68,10 @@ function buildMeta(mode: string): Plugin {
     generateBundle() {
       const raw = loadEnv(mode, process.cwd(), 'VITE_').VITE_FEATURE_AI_REQUIREMENTS;
       const aiFlag = raw === 'internal' || raw === 'on' ? raw : 'off';
-      this.emitFile({ type: 'asset', fileName: 'build-meta.json', source: JSON.stringify({ mode, aiFlag }) });
+      // サイトマップの AI 画面（LIVE_SITEMAP_IMPL_PLAN U-F2。同じ判定）
+      const rawSitemap = loadEnv(mode, process.cwd(), 'VITE_').VITE_FEATURE_AI_SITEMAP;
+      const aiSitemapFlag = rawSitemap === 'internal' || rawSitemap === 'on' ? rawSitemap : 'off';
+      this.emitFile({ type: 'asset', fileName: 'build-meta.json', source: JSON.stringify({ mode, aiFlag, aiSitemapFlag }) });
     },
   };
 }

@@ -7,8 +7,10 @@
 // - --dry-run は実行するコマンドを表示するだけ（何も送らない。下の事前確認は --dry-run でも行う）
 // - hosting: dist-live が同じ --project 向けにビルドされていること（ビルドに焼き込まれた projectId を見る。security M3）
 // - hosting: .env.live.local に VITE_FEATURE_AI_REQUIREMENTS（off / internal / on）が明示されていること（書き忘れで黙って off にしない）
+// - hosting: VITE_FEATURE_AI_SITEMAP も同じ（明示・dist-live の build-meta.json と一致。LIVE_SITEMAP_IMPL_PLAN U-F2）
 // - firestore:rules: 送る前に rules:check（質問の定義と Rules の一致）と test:rules（エミュレータ。1 件以上・失敗 0）を通す
 // - functions: AI_REQUIREMENTS_MODE=on（functions/.env・.env.<project>）なら docs/legal/AI_REQUIREMENTS_LEGAL_CLEARANCE.md が無いと止める（AI 計画 §4 U5・§5 L-c・T-11）
+// - functions: AI_SITEMAP_MODE=on なら同じ記録に行「AI-SCOPE: sitemap」が無いと止める（LIVE_SITEMAP_AI.md §7・sec M-3）
 // - functions: 送る前に functions をビルドし、test:functions（エミュレータ。1 件以上・失敗 0）を通す。Blaze でなければ firebase CLI が失敗する（課金の変更はユーザーが Console で行う）
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -97,12 +99,21 @@ export const LIVE_ENV_FILE = join(root, '.env.live.local');
  * off を出したいときも off と書く。値は src/features/requirements/aiDraft/aiDraftState.ts の parseAiFlagMode と同じ 3 つだけ
  */
 export function checkLiveAiFlag(envFile = LIVE_ENV_FILE) {
-  const raw = readEnvValue('VITE_FEATURE_AI_REQUIREMENTS', [envFile]);
+  return checkLiveFlag('VITE_FEATURE_AI_REQUIREMENTS', envFile, '今の本番は internal');
+}
+
+/** サイトマップの AI 画面のフラグ（VITE_FEATURE_AI_SITEMAP）。checkLiveAiFlag と同じ型（LIVE_SITEMAP_IMPL_PLAN U-F2・影響分析 穴 5） */
+export function checkLiveAiSitemapFlag(envFile = LIVE_ENV_FILE) {
+  return checkLiveFlag('VITE_FEATURE_AI_SITEMAP', envFile, '法務の記録までは off か internal');
+}
+
+function checkLiveFlag(key, envFile, hint) {
+  const raw = readEnvValue(key, [envFile]);
   if (raw === undefined || raw === '') {
-    throw new Error('.env.live.local に VITE_FEATURE_AI_REQUIREMENTS がありません（off / internal / on のどれかを明示して build:live し直す。今の本番は internal）');
+    throw new Error(`.env.live.local に ${key} がありません（off / internal / on のどれかを明示して build:live し直す。${hint}）`);
   }
   // 前後の空白も含めて完全一致（dotenv は引用符の中の空白を残し、画面側は off と解釈するため）
-  if (!['off', 'internal', 'on'].includes(raw)) throw new Error(`VITE_FEATURE_AI_REQUIREMENTS=${raw} は不正です（off / internal / on）`);
+  if (!['off', 'internal', 'on'].includes(raw)) throw new Error(`${key}=${raw} は不正です（off / internal / on）`);
   return raw;
 }
 
@@ -111,6 +122,15 @@ export function checkLiveAiFlag(envFile = LIVE_ENV_FILE) {
  * .env.live.local をビルド後に書き換えた・シェルの環境変数で上書きされた、を送る前に止める（code review 2026-11-26 Major）
  */
 export function checkBuiltAiFlag(expected, dir = join(root, 'dist-live')) {
+  checkBuiltFlag('VITE_FEATURE_AI_REQUIREMENTS', 'aiFlag', expected, dir);
+}
+
+/** dist-live に焼き込まれたサイトマップの AI フラグ（build-meta.json の aiSitemapFlag）が期待する値と同じか（checkBuiltAiFlag と同じ型） */
+export function checkBuiltAiSitemapFlag(expected, dir = join(root, 'dist-live')) {
+  checkBuiltFlag('VITE_FEATURE_AI_SITEMAP', 'aiSitemapFlag', expected, dir);
+}
+
+function checkBuiltFlag(key, metaKey, expected, dir) {
   const file = join(dir, 'build-meta.json');
   if (!existsSync(file)) throw new Error('dist-live/build-meta.json がありません（npm run build:live し直す）');
   let meta;
@@ -119,8 +139,8 @@ export function checkBuiltAiFlag(expected, dir = join(root, 'dist-live')) {
   } catch {
     throw new Error('dist-live/build-meta.json が読めません（npm run build:live し直す）');
   }
-  if (meta?.aiFlag !== expected) {
-    throw new Error(`dist-live は VITE_FEATURE_AI_REQUIREMENTS=${meta?.aiFlag} でビルドされています（.env.live.local は ${expected}。シェルの環境変数・他の .env を確かめて build:live し直す）`);
+  if (meta?.[metaKey] !== expected) {
+    throw new Error(`dist-live は ${key}=${meta?.[metaKey]} でビルドされています（.env.live.local は ${expected}。シェルの環境変数・他の .env を確かめて build:live し直す）`);
   }
 }
 
@@ -134,6 +154,32 @@ export function checkAiLegalClearance(project, { functionsDir = join(root, 'func
   const mode = String(readFunctionsEnvValue('AI_REQUIREMENTS_MODE', project, functionsDir) ?? '').trim().toLowerCase();
   if (mode === 'on' && !existsSync(legalFile)) {
     throw new Error('AI_REQUIREMENTS_MODE=on ですが docs/legal/AI_REQUIREMENTS_LEGAL_CLEARANCE.md（法務の結論の記録）がありません。internal までにするか、ユーザーの承認後に記録を作ってから出す');
+  }
+  checkAiSitemapLegalClearance(project, { functionsDir, legalFile });
+  return mode;
+}
+
+/**
+ * 法務の記録に、対象 scope の行があるか（sec M-3）。行の先頭から `AI-SCOPE:` で始まり、カンマ区切りの対象のどれかが scope と完全一致するときだけ true。
+ * 散文の中の言及・行頭の飾り（- や `）・`sitemap-draft` のような別の語は数えない
+ */
+export function hasAiScopeLine(text, scope) {
+  for (const m of String(text).matchAll(/^AI-SCOPE:[ \t]*(.*?)[ \t]*$/gm)) {
+    if (m[1].split(',').map((s) => s.trim()).includes(scope)) return true;
+  }
+  return false;
+}
+
+/**
+ * サイトマップの AI 下書きの公開（AI_SITEMAP_MODE=on）は、法務の記録に行 `AI-SCOPE: sitemap` が無ければ送らない（LIVE_SITEMAP_AI.md §7・IMPL_PLAN sec M-3）。
+ * ファイルの有無だけだと、要件定義書の法務が先に済んだ時点でサイトマップも通ってしまうため行を要求する。値の解釈は parseMode と同じ。internal・off・未設定は通す
+ */
+export function checkAiSitemapLegalClearance(project, { functionsDir = join(root, 'functions'), legalFile = AI_LEGAL_CLEARANCE_FILE } = {}) {
+  const mode = String(readFunctionsEnvValue('AI_SITEMAP_MODE', project, functionsDir) ?? '').trim().toLowerCase();
+  if (mode !== 'on') return mode;
+  const text = existsSync(legalFile) ? readFileSync(legalFile, 'utf8') : null;
+  if (text === null || !hasAiScopeLine(text, 'sitemap')) {
+    throw new Error('AI_SITEMAP_MODE=on ですが docs/legal/AI_REQUIREMENTS_LEGAL_CLEARANCE.md に行「AI-SCOPE: sitemap」（サイトマップの法務の結論）がありません。internal までにするか、ユーザーの承認後に記録してから出す');
   }
   return mode;
 }
@@ -181,6 +227,9 @@ function main() {
     checkHostingBuild(project);
     checkBuiltAiFlag(aiFlag);
     console.log(`[deploy] VITE_FEATURE_AI_REQUIREMENTS=${aiFlag}（dist-live と一致）`);
+    const sitemapFlag = checkLiveAiSitemapFlag();
+    checkBuiltAiSitemapFlag(sitemapFlag);
+    console.log(`[deploy] VITE_FEATURE_AI_SITEMAP=${sitemapFlag}（dist-live と一致）`);
   }
   if (targets.includes('firestore:rules')) checkRulesBeforeDeploy();
   if (targets.includes('functions')) {

@@ -8,4 +8,6 @@ interface ImportMetaEnv {
   readonly VITE_FIREBASE_APP_ID?: string;
   /** AI 下書きの画面（off | internal | on。既定 off。docs/design/AI_REQUIREMENTS_UI.md §1） */
   readonly VITE_FEATURE_AI_REQUIREMENTS?: string;
+  /** サイトマップの AI 下書きの画面（off | internal | on。既定 off。表示だけ・サーバーの AI_SITEMAP_MODE が正。docs/design/LIVE_SITEMAP_AI.md §7） */
+  readonly VITE_FEATURE_AI_SITEMAP?: string;
 }

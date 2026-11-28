@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { checkAiLegalClearance, checkDeploy, parseDeployArgs } from '../../scripts/deploy-firebase.mjs';
+import { checkAiSitemapLegalClearance, hasAiScopeLine } from '../../scripts/deploy-firebase.mjs';
 import { PRODUCTION_PROJECT_IDS } from '../../scripts/firebase-projects.mjs';
 
 test('--project が無ければ拒否', () => {
@@ -76,4 +77,58 @@ test('AI 法務: MODE=on でも記録があれば通す', () => {
   try {
     assert.equal(checkAiLegalClearance('p1', { functionsDir: dir, legalFile: join(dir, 'clearance.md') }), 'on');
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// ---------- サイトマップの AI_SITEMAP_MODE=on は法務の記録に行「AI-SCOPE: sitemap」が要る（LIVE_SITEMAP_AI.md §7・IMPL_PLAN sec M-3・SM-28） ----------
+const SCOPE_CASES = [
+  ['行として在る', '# 法務\nAI-SCOPE: sitemap\n', true],
+  ['カンマ区切りの対象の 1 つ', '# 法務\nAI-SCOPE: requirements, sitemap\n', true],
+  ['CRLF・前後の空白', '# 法務\r\nAI-SCOPE:   sitemap  \r\n', true],
+  ['散文中の言及だけ', '# 法務\n本文では AI-SCOPE: sitemap を書く予定（未決）\n', false],
+  ['sitemap-draft', 'AI-SCOPE: sitemap-draft\n', false],
+  ['sitemaps', 'AI-SCOPE: sitemaps\n', false],
+  ['要件定義書の記録だけ', 'AI-SCOPE: requirements\n', false],
+  ['行頭の飾り（箇条書き）', '- AI-SCOPE: sitemap\n', false],
+  ['行頭のバッククォート', '`AI-SCOPE: sitemap`\n', false],
+  ['大文字の対象', 'AI-SCOPE: Sitemap\n', false],
+  ['空のファイル', '', false],
+];
+for (const [name, body, ok] of SCOPE_CASES) {
+  test(`AI 法務（サイトマップ）: ${name} → ${ok ? '許可' : '拒否'}`, () => {
+    assert.equal(hasAiScopeLine(body, 'sitemap'), ok);
+    const dir = aiEnvDir({ '.env.p1': 'AI_REQUIREMENTS_MODE=internal\nAI_SITEMAP_MODE=on\n', 'clearance.md': body });
+    const legalFile = join(dir, 'clearance.md');
+    try {
+      if (ok) {
+        assert.equal(checkAiSitemapLegalClearance('p1', { functionsDir: dir, legalFile }), 'on');
+        assert.equal(checkAiLegalClearance('p1', { functionsDir: dir, legalFile }), 'internal');
+      } else {
+        assert.throws(() => checkAiSitemapLegalClearance('p1', { functionsDir: dir, legalFile }), /AI-SCOPE: sitemap/);
+        assert.throws(() => checkAiLegalClearance('p1', { functionsDir: dir, legalFile }), /AI_SITEMAP_MODE=on/);
+      }
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+}
+test('AI 法務（サイトマップ）: AI_SITEMAP_MODE=on で記録ファイルが無ければ拒否（.env.<project> が優先・大文字・引用符も on）', () => {
+  const dir = aiEnvDir({ '.env': 'AI_SITEMAP_MODE=off\n', '.env.p1': 'AI_SITEMAP_MODE=" ON "\r\n' });
+  try {
+    assert.throws(() => checkAiLegalClearance('p1', { functionsDir: dir, legalFile: join(dir, 'missing.md') }), /AI-SCOPE: sitemap/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+test('AI 法務（サイトマップ）: off・internal・未設定なら記録が無くても通す（要件定義書の判定は変わらない）', () => {
+  const dir = aiEnvDir({ '.env.p1': 'AI_SITEMAP_MODE=off\n' });
+  const legalFile = join(dir, 'missing.md');
+  try {
+    assert.equal(checkAiSitemapLegalClearance('p1', { functionsDir: dir, legalFile }), 'off');
+    writeFileSync(join(dir, '.env.p1'), 'AI_SITEMAP_MODE=internal\n');
+    assert.equal(checkAiSitemapLegalClearance('p1', { functionsDir: dir, legalFile }), 'internal');
+    assert.equal(checkAiSitemapLegalClearance('p2', { functionsDir: dir, legalFile }), '');
+    // 要件定義書が on で記録ファイルだけある（AI-SCOPE 行なし）でも、サイトマップが off なら通す
+    writeFileSync(join(dir, '.env.p1'), 'AI_REQUIREMENTS_MODE=on\nAI_SITEMAP_MODE=off\n');
+    writeFileSync(legalFile, '# 要件定義書の法務\n');
+    assert.equal(checkAiLegalClearance('p1', { functionsDir: dir, legalFile }), 'on');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+test('本番の functions/.env.afro-cms-4a6ff は AI_SITEMAP_MODE=off（U-F2。internal へ変えるのはユーザー GO 後）', () => {
+  assert.equal(checkAiSitemapLegalClearance('afro-cms-4a6ff'), 'off');
 });
