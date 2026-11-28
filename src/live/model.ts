@@ -2,6 +2,7 @@ import type { DocumentData, DocumentSnapshot, QueryDocumentSnapshot } from 'fire
 import type { AnswerMeta, AnswerValue, ApprovalLog, ClientAccount, DevUser, Project, Proposal, ProposalPoint, RequirementSession, Stage } from '@/types';
 import { isProposalV2, isProposalV3, type ProposalV2, type ProposalV3, type StoredProposal } from '@/types/aiDraft';
 import { releaseYmdOf, scheduleSummaryOf, type ScheduleStatus, type ScheduleSummary } from './schedule';
+import { sitemapSummaryOf, type SitemapStatus, type SitemapSummary } from './sitemap';
 
 /**
  * Firestore の文書（BACKEND_FIREBASE §5）⇔ 画面の型（types/index.ts）。日時は Timestamp → ISO 文字列。
@@ -54,6 +55,8 @@ export interface ProjectDoc {
    * 単体テストの古い固定値は持たないことがある（undefined も未作成として扱う）
    */
   schedule?: ScheduleSummary | null;
+  /** サイトマップの要約（状態の正。無い・壊れた値は未作成＝null。LIVE_SITEMAP_DATA §2.1） */
+  sitemap?: SitemapSummary | null;
 }
 
 /** projects/{pid}.consult（messages の最後の 1 件の写し。firestore.rules consultOk がメッセージと同じ書き込みでだけ許す） */
@@ -107,6 +110,7 @@ export function projectDoc(s: Snap): ProjectDoc {
     updatedAt,
     consult: consultOf(d.consult, updatedAt),
     schedule: scheduleSummaryOf(d.schedule),
+    sitemap: sitemapSummaryOf(d.sitemap),
   };
 }
 
@@ -129,12 +133,25 @@ const SCHEDULE_STAGE: Record<ScheduleStatus | 'none', { stage: Stage; progress: 
 };
 
 /**
+ * スケジュールの承認後はサイトマップの段階（LIVE_SITEMAP_IMPL_PLAN U2・AC-28）。文言・進捗は demo の derivedDemoProject（demoProject.ts:31）に合わせる。
+ * 承認済みの先（デザイン）は live にまだ無いので段階は制作のまま「サイトマップ 承認済み」
+ */
+const SITEMAP_STAGE: Record<SitemapStatus | 'none', { stage: Stage; progress: number; next: string; pending: number }> = {
+  none: { stage: 'build', progress: 25, next: 'サイトマップを作成する', pending: 0 },
+  draft: { stage: 'build', progress: 25, next: 'サイトマップの承認を依頼する', pending: 0 },
+  requested: { stage: 'build', progress: 25, next: 'お客様のサイトマップ承認を待つ', pending: 1 },
+  approved: { stage: 'build', progress: 30, next: 'サイトマップ 承認済み', pending: 0 },
+};
+
+/**
  * 案件の文書 → 画面の Project。launchDate は保存値のまま（スケジュールの公開予定日で上書きしない。基本情報の編集フォームが
  * launchDate をそのまま戻すため。L-21・C-01）。一覧の公開予定日は releaseYmd（submit 済みのスケジュール → 無ければ launchDate の日本時間の暦日）
  */
 export function toProject(p: ProjectDoc): Project {
   const sched = p.schedule ?? null;
-  const s = p.requirements.status === 'approved' ? SCHEDULE_STAGE[sched?.status ?? 'none'] : STAGE[p.requirements.status];
+  const s = p.requirements.status !== 'approved' ? STAGE[p.requirements.status]
+    : sched?.approvedRevision !== undefined ? SITEMAP_STAGE[p.sitemap?.status ?? 'none']
+      : SCHEDULE_STAGE[sched?.status ?? 'none'];
   const releaseYmd = releaseYmdOf(sched, p.launchDate);
   return {
     id: p.id, clientName: p.clientName, siteName: p.siteName, siteUrl: p.siteUrl, industry: p.industry,
