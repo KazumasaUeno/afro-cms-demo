@@ -156,7 +156,7 @@ test('P-5 metrics.ts と data/sitemap.ts は本体を持たない（re-export／
     ['../../src/features/present/PresentPage.tsx', /from '@\/data\/sitemap'/],
     ['../../src/store/reducer.ts', /from '@\/data\/sitemap'/],
     ['../../src/store/projectWork.ts', /from '@\/data\/sitemap'/],
-    ['../../src/features/sitemap/SitemapPage.tsx', /from '\.\/metrics'/],
+    ['../../src/features/sitemap/SitemapView.tsx', /from '\.\/metrics'/],
     ['../../src/features/sitemap/AddPageDialog.tsx', /from '\.\/metrics'/],
     ['../../src/features/sitemap/SitemapViewer.tsx', /from '\.\/metrics'/],
   ]) assert.match(readFileSync(new URL(f, import.meta.url), 'utf8'), re, f);
