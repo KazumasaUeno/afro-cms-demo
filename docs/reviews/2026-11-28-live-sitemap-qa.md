@@ -78,3 +78,42 @@
 ## 6. 後片付け
 
 Vite（5180）・preview 2 本（4173/4174）・エミュレータ（java・node）・ヘッドレス Chrome（9333）を停止し、上記ポートの LISTEN 0 件・java 0 件・使い捨てプロファイルの chrome 0 件を確認した。`.env.emulator.local` は削除（`git status` クリーン）。emulator のデータは保存していない。
+
+## 再確認 (d97a9db)
+
+- 対象: `feat/live-sitemap` @ d97a9db。エミュレータ `demo-afro-cms` のみ（本番・デプロイ・gcloud なし）。担当: qa-engineer（プロダクションコードは変更していない）
+- 環境・手順: §1 と同じ（Windows 11 / Node v22.14.0 / JDK 21.0.12 / Vite `--mode emulator` 5180 / ヘッドレス Chrome 158・CDP 9333）。起動前に該当ポートの LISTEN 0 件を確認。seed は `--with-sitemap` 付き、`qa-sm-new`・`qa-sm-schedreq` を同じ手順で作成。`functions/.env.local` は `AI_SITEMAP_MODE=off`。今回は `.env.emulator.local` を作っていない（AI ボタンは出ない設定）
+- 自動テストは今回再実行していない
+
+| # | 確認 | 結果 | 根拠 |
+|---|---|---|---|
+| R1 | D-1 改善後 After: 理由なしでページを追加／選んだページの改善理由を空にする → 再読み込み | **PASS** | `qa-sm-new`（手で作成）で editSeq 0→1→3、REST の after に `QA理由なし`・`QA理由あり`（reason なし）。再読み込み後も 3 ページ |
+| R2 | D-1 現在 Before（トップがある図）: ページを追加（理由欄なし）・ページ名を編集 → 再読み込み | **PASS** | `reqdoc-v3-approved` を取り下げてから。editSeq 1→2→3、REST before `トップ,製品一覧改,QA現在追加`。再読み込み後も同じ |
+| R3 | D-1 現在 Before（**手で作った直後の空の図**）: ページを追加 | **FAIL** | 下記 D-1b。保存 3 回とも拒否、再読み込みで消える |
+| R4 | Major: 保存要求 1 件を CDP `Fetch.failRequest` で失敗させ、そのまま編集を続ける | **PASS（文言に軽微あり）** | 失敗時は注記「もう一度保存」。続けて 2 ページ追加 → editSeq 3→5（ログ saved 4・5）、REST・画面・再読み込み後とも失敗時のページを含む 6 ページ。「ほかの人」の表示なし。失敗時の文言は下記 O-4 |
+| R5 | O-1 手で作った直後 | **PASS** | 「要件定義書の案から作成しました」が出ない |
+| R6 | 同じタブで admin 編集 → ログアウト → 開発者でログイン（再読み込みなし・同じ document）→ 編集 → ログアウト → admin で再ログイン → 編集 | **PASS** | editSeq 5→7（admin）→9（dev）→10（admin）。競合の表示なし、REST に全員の追加が残る |
+| R7 | 回帰: 2 タブ競合（s9b と同じ手順） | **PASS** | A 保存 10→11、B は「ほかの人が先に保存しました。最新を読み込みました」、REST は 11 のまま・B の画面は A の内容。ログの rejected は `aborted/conflict` 1 件 |
+| R8 | 回帰: 開発者が依頼 → お客様が承認（`reqdoc-v3-approved`） | **PASS** | 「お客様へサイトマップの承認を依頼しました」revision 2・requested → お客様の現在の図に `製品一覧改,QA現在追加` → 「サイトマップを承認しました」approved・approvedRevision 2・`sitemap-r2-approve` |
+| R9 | コンソール error / warning・例外 | **PASS** | 全 context 0 件。emulator ログの rejected は R3 の `home_count` 3 件と R7 の conflict 1 件だけ（permission-denied なし） |
+
+### D-1b（High・要修正）手で作ったサイトマップの現在 Before の図にページを追加できない
+
+- 再現: サイトマップ未作成の案件で「手で作る」→「現在 Before」→「ページを追加」（例: 「現トップ」`/`）→ 追加。注記「内容を確認してください（1件）」＋「もう一度保存」、押しても同じ。再読み込みで消える
+- [FACT] emulator ログ: `sitemap.edits op:save status:rejected errorCode:invalid-argument field:before.nodes code:home_count count:1`
+- [FACT] 原因: 手で作ると before は空（`functions/src/sitemap/edits.ts:27` は after にだけトップを置く）。サーバーは空でない図にトップ（kind home）がちょうど 1 件あることを求める（`src/shared/ai/sitemapRules.ts:183`）。追加ダイアログの種類は `['page','section','new','cta']` で home を選べない（`src/features/sitemap/AddPageDialog.tsx:25`）。したがって空の Before にはどう追加しても通らない
+- 初回 D-1 の「現在の図には一切追加できない」のうち、reason の null 化は直ったが、この経路が残っていた（初回は原因を reason だけと書いていた）
+- 差し戻し先: frontend / backend（手で作るときに before にもトップを置く、空の Before の最初のページを home にする、等。どれにするかは実装側と ui の判断）。回帰テストは「createManual 直後の doc に Before のページを 1 件足して `validateSitemapDoc` が ok」
+
+### O-4（P3）保存の通信失敗時に内部の文言が出る
+
+- R4 の失敗時、通知と注記が「internal [0]」（Firebase のエラーコードがそのまま）。次の保存が成功すると消える。利用者向けの文言（例: 保存できませんでした）にするかは ui / frontend の判断
+
+### 未検証
+
+- Major の失敗は CDP でネットワーク失敗にしたもの 1 種類だけ（サーバーの 500・タイムアウトは未実施）
+- ライトテーマ・幅別の見た目・AI 経路は今回見ていない
+
+### 後片付け
+
+Vite・エミュレータ・ヘッドレス Chrome を停止し、5180/9333/8080/9099/5001/4400/4500/9150/4000 の LISTEN 0 件・java 0 件を確認。emulator のデータは保存していない。`git status` は本ファイルのみ。
