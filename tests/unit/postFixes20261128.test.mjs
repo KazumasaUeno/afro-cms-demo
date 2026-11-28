@@ -130,3 +130,10 @@ test('SEED: seed-emulator-reqdoc の edited（draft・analyzed・approved）が�
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(JSON.parse(r.stdout.trim().split('\n').pop()), { 'reqdoc-v3-draft': 'ok', 'reqdoc-v3-approved': 'ok', 'reqdoc-v3-analyzed': 'ok' });
 });
+
+test('競合で最新へ戻すとき編集ダイアログも閉じる（code review 2026-11-28 Minor）', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../../src/features/schedule/WbsSection.tsx', import.meta.url), 'utf8');
+  const i = src.indexOf('const resetToLatest = () => {');
+  assert.ok(i > 0 && src.slice(i, i + 400).includes('setEditing(null);'));
+});

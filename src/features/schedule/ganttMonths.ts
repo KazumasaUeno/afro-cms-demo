@@ -32,6 +32,7 @@ export function monthLabels(from: string, days: number, dayPx: number): MonthLab
     const [y, m, d] = shiftYmd(from, i).split('-').map(Number);
     if (i === 0 || d === 1) out.push({ at: i * dayPx, y, m, label: i === 0 || m === 1 ? `${y}年${m}月` : `${m}月` });
   }
+  // 最初の 2 つだけ見れば足りる: dayPx は 4 以上（WbsSection）なので 2 つ目以降の見出しは約 112px 離れる
   const [first, next] = out;
   if (first && next && !fits(first.label, first.at, next.at)) {
     // 年は次の見出しへ（1 月は元から年つき）

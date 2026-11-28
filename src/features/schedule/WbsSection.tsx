@@ -457,6 +457,8 @@ export function WbsSection({ editable, devBy, ms, onMsChange, client = false, vi
   const resetToLatest = () => {
     setDraft(latest.current.items);
     setDoneDraft(latest.current.done);
+    // 開いている編集ダイアログも閉じる（古い行と止めた版のまま保存して競合を繰り返さない。code review 2026-11-28 Minor）
+    setEditing(null);
   };
 
   return (
