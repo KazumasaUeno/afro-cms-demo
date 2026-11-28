@@ -86,6 +86,7 @@
 - プロジェクトの一覧は更新の新しい順に最大 500 件（`src/live/repositories.tsx` の `LIST_LIMIT`）。超えると古い案件が一覧に出ない。件数が近づいたらページングを入れる
 - 開発者の一覧の並び（`memberUids` array-contains ＋ `updatedAt` desc）は `firestore.indexes.json` の複合 Index が要る（定義済み。エミュレータは Index を要求しないため、本番で `firestore:indexes` を先にデプロイして確かめる）
 - ログアウトの前の書き込み待ちの送信（0.47.4 で対応。`src/live/pendingWrites.ts`）: 画面の確認（ダイアログの 6 枚のスクショ）は未実施。ヘッダーのログアウト以外から signOut する経路（LiveLoginPage の未確認・招待なし）は LiveDataProvider の外なので対象外。保存に失敗した回答は PendingAnswers から外れる（settle）ため、ダイアログの「ログアウトしない」の後に「保存」を押しても同じ値は再送されない（0.47.4 より前からの挙動）
+- demo の部品の多くが `useDemo()`（DemoStore）を直接呼ぶため、**live から import すると落ちる**（例: `src/components/layout/BuildFlowNav.tsx:15`・`src/features/sitemap/DevComment.tsx:37`・`SitemapPage.tsx:33`・`src/features/portal/PortalApprovalsPage.tsx:39`。0.47.4 と同じ型）。live で使う部品は View（props だけ）＋demo の入れ物に分けてから使う（サイトマップは `docs/design/LIVE_SITEMAP_IMPL_PLAN.md` P-13 で対応予定）。入口は `tests/unit/liveNoDemoStore.test.mjs` で検査する。他の demo 部品（デザイン・品質・リリース等）は未対応（2026-11-28 影響分析）
 - オフラインでログインすると読み込み中のまま止まり、案内が出ない（`src/live/auth.tsx` の fromCache 待ち。live は接続が前提）
 - 自動テストが無い: 「別の画面で予約した書き込みも saveNow が待つ」（エミュレータで手動確認のみ）
   - ~~`scripts/deploy-firebase.mjs` の `checkHostingBuild`・`parseTestCounts`~~ → 2026-11-24 `tests/rules/deploy-build.test.mjs`（14 件。`npm run test:rules` で実行。一時ディレクトリの偽 dist）で対応済み
