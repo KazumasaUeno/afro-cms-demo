@@ -1003,3 +1003,4 @@
 - demo: 見た目は変更なし（部品の分割のみ: `PortalApprovalParts.tsx`・`PortalScheduleView.tsx`・`ScheduleView.tsx` など）
 - Rules: `projects/{pid}/schedule/{current,internal}` と approvals の kind `schedule`（出す順は段 0 → 段 1。`docs/operations/RUNBOOK_FIREBASE.md` §6.1）
 - seed: `node scripts/seed-emulator-reqdoc.mjs --with-schedule [--with-client]`（架空の要件承認済み案件にスケジュール第 1 版・架空のお客様）
+- live: 要件定義書（AI 下書き v3・会社標準ひな型）の「編集」で、1 文字入力するたびに全項目（約 126 の入力欄）を描き直していたのを、入力した欄だけ描き直すようにした（見た目・保存の動きは変更なし）。headless Chrome の計測で 1 文字あたり中央値 248ms → 48ms（CPU 4 倍遅延では 2,913ms → 279ms）。詳細は `docs/reviews/2026-11-28-reqdoc-edit-freeze.md`
