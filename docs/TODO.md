@@ -2,6 +2,8 @@
 
 > 未完了の作業と、既知の制限。終わったら行を消す（経緯は `docs/CHANGELOG.md`）。
 
+- [ ] **サイトマップの保存: 応答消失の照合後の再書き込みも応答が消えると誤競合**（Codex R003 not_fixed・LOW 受容 2026-11-28。src/live/sitemap.ts:414。データは壊れない・まれ）。uncertain を再書き込みの失敗時にも記録する
+- [ ] **AddPageDialog の MUI out-of-range 警告 9 件**（QA O-5・P3。AddPageDialog.tsx:30/35）
 - [ ] **エミュレータの seed `reqdoc-v3-draft` の edited がサーバーの検証に通らない**（2026-11-28 reqdoc 修正の確認で判明。`points[1].evidence`）: 編集の保存がエミュレータで必ず拒否されるので、保存→再読み込みの確認ができない。seed を検証に合わせて直す（qa-engineer）。あわせて「?project= の URL で白い画面」（2026-11-27 本番）は再現せず UNVERIFIED（docs/reviews/2026-11-28-reqdoc-edit-freeze.md）
 - [ ] **AI による改善提案＋現行サイト診断の設計案**（2026-11-20、未承認）: `docs/design/AI_REQUIREMENTS.md`。レビュー反映済み（改訂 1）→ ユーザー判断（同 §9 Q-1〜Q-7）→ 実装計画。それまで live の「サイトスコア（AI 推定）」は実測ではない（同 §0・Q-6）。`aiDrafts` の生出力を期限で消す仕組みは未実装（同 §7・Q-7。LEGAL REVIEW REQUIRED）
 - [ ] **AI 下書きの「AI 設定が変わった」注記（画面設計 `docs/design/AI_REQUIREMENTS_UI.md` §2 状態 8・Q-U1）**: クライアントが今の `configHash` を知る手段（callable の返り値・公開の設定文書・ビルド時定数）が無いため、`aiDraftState.ts` は `configChanged` を常に false にしている（DEC lead 2026-11-24）。手段を決めたら `deriveAiDraftState` の `configHashNow` を使う
