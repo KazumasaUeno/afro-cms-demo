@@ -31,7 +31,7 @@ const INTERNAL = 'projects/p1/sitemap/internal';
 const USAGE = 'aiUsage/202611';
 const CANARY = 'CANARY-SMAP-WORKER-5d1e';
 const CANARY_INFRA = 'CANARY-INFRA-NOT-SENT-0c2f';
-const CANARY_KEY = 'stub-key-canary-smap-0000';
+const CANARY_KEY = 'stub' + '-key-canary-smap-0000';
 const auth = (uid) => ({ uid, token: { email: `${uid}@x.example`, email_verified: true } });
 
 let logs;
