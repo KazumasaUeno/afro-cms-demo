@@ -32,7 +32,7 @@ test('SU-01 approvalLogFrom: kind の無い古い記録・kind requirements は�
   assert.equal(old.action, '要件定義書の確認を依頼');
   assert.equal(old.target, '要件定義（第2版）');
   assert.equal(approvalKindOf({}), 'requirements');
-  assert.equal(approvalKindOf({ kind: 'unknown' }), 'requirements');
+  assert.equal(approvalKindOf({ kind: 'unknown' }), 'unknown');
   assert.equal(approvalKindOf({ kind: 'schedule' }), 'schedule');
   // 要件定義書の withdraw の note は従来どおり履歴に出さない（AC-14。出すのはスケジュールの withdraw / reopen だけ）
   const reqW = approvalLogFrom('p1', 'requirements-r2-withdraw', { kind: 'requirements', action: 'withdraw', revision: 2, side: 'afro', actorName: 'x', note: '内部メモ' });
