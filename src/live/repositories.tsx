@@ -21,7 +21,7 @@ import { app, db, EMULATOR } from './firebase';
 import { FUNCTIONS_REGION } from './functionsRegion';
 import {
   clientVersionToRead, createSitemapSaver, sitemapAiDraftOf, sitemapApprovalIdOf, sitemapApproveRecord, sitemapApproveReplay, sitemapCallableError, SitemapConflictError,
-  sitemapConflict, sitemapDraftRequestInput, sitemapInternalDoc, sitemapVersionDoc, SITEMAP_CONFLICT_TEXT,
+  sitemapConflict, sitemapDraftRequestInput, sitemapSaveInput, createSaverRegistry, sitemapInternalDoc, sitemapVersionDoc, SITEMAP_CONFLICT_TEXT,
   type SitemapAiDraft, type SitemapDraftOptions, type SitemapEdits, type SitemapInternal, type SitemapSaveStatus, type SitemapShown, type SitemapSummary, type SitemapVersion,
 } from './sitemap';
 import {
@@ -116,6 +116,8 @@ export function LiveDataProvider({ session, children }: { session: LiveSession; 
     return () => {
       const n = cancelScheduledWrites(writes.timers, (t) => window.clearTimeout(t));
       if (n) console.warn('pending answer writes cancelled on unmount', n);
+      // サイトマップの保存のまとめも捨てる（次にログインした人へ前の人の基準・失敗を残さない）
+      siteSavers.clear();
     };
   }, []);
   const select = useCallback((id: string) => {
@@ -665,24 +667,15 @@ export function useLiveSitemap(projectId: string | null): LiveSitemapQuery {
 }
 
 /** 案件ごとの保存のまとめ（部品をまたいで 1 つ。依頼は同じ案件の待ちを書き切ってから） */
-const siteSavers = new Map<string, ReturnType<typeof createSitemapSaver>>();
-function siteSaver(pid: string) {
-  let s = siteSavers.get(pid);
-  if (!s) {
-    s = createSitemapSaver({
-      delayMs: SITEMAP_SAVE_DELAY_MS,
-      write: async (v, baseEditSeq) => {
-        const out = await siteCall<{ editSeq?: unknown }>('saveSitemapEdits', {
-          projectId: pid, op: 'save', baseEditSeq, before: v.before, after: v.after, ...(v.devComment ? { devComment: { text: v.devComment.text } } : {}),
-        });
-        if (!out || typeof out.editSeq !== 'number') throw new Error('saveSitemapEdits: unexpected result');
-        return out.editSeq;
-      },
-    });
-    siteSavers.set(pid, s);
-  }
-  return s;
-}
+const siteSavers = createSaverRegistry((pid) => createSitemapSaver({
+  delayMs: SITEMAP_SAVE_DELAY_MS,
+  write: async (v, baseEditSeq) => {
+    const out = await siteCall<{ editSeq?: unknown }>('saveSitemapEdits', sitemapSaveInput(pid, baseEditSeq, v));
+    if (!out || typeof out.editSeq !== 'number') throw new Error('saveSitemapEdits: unexpected result');
+    return out.editSeq;
+  },
+}));
+const siteSaver = (uid: string, pid: string) => siteSavers.get(uid, pid);
 
 const IDLE_SAVE: SitemapSaveStatus = { idle: true, error: null };
 const noopSubscribe = () => () => {};
@@ -690,7 +683,8 @@ const idleSave = () => IDLE_SAVE;
 
 /** 保存の状態（idle でない間、編集画面は internal ではなく手元の値を出す） */
 export function useLiveSitemapSaveStatus(projectId: string | null): SitemapSaveStatus {
-  const s = projectId ? siteSaver(projectId) : null;
+  const uid = useLiveData().session.uid;
+  const s = projectId ? siteSaver(uid, projectId) : null;
   return useSyncExternalStore(s ? s.subscribe : noopSubscribe, s ? s.status : idleSave, s ? s.status : idleSave);
 }
 
@@ -744,7 +738,7 @@ export function useLiveSitemapActions(projectId: string): LiveSitemapActions {
       if (err) throw new Error(err);
       return note;
     };
-    const saver = siteSaver(pid);
+    const saver = siteSaver(session.uid, pid);
 
     /** 取り下げ（requested → draft）・再計画（approved → draft）。要約の差分は status だけ */
     const back = async (action: 'withdraw' | 'reopen', raw: string) => {

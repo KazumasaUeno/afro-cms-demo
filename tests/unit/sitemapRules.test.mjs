@@ -217,6 +217,8 @@ test('validateSitemapDoc AC-15: 制御文字・向きの制御・理由 140 字�
   assert.deepEqual(one(node('a-x', '/x', 'x', 'page', 'あ'.repeat(141))), ['after.reason:reason_too_long@a-x']);
   assert.deepEqual(one(node('a-x', '/x', 'x', 'page', 'a⁦b')), ['after.reason:reason_control@a-x']);
   assert.deepEqual(one(node('a-x', '/x', 'x', 'page', 3)), ['after.reason:shape@a-x']);
+  // QA D-1: callable の SDK は reason: undefined を null で送る。null は「理由なし」と同じ（形の誤りにしない）
+  assert.deepEqual(one(node('a-x', '/x', 'x', 'page', null)), []);
   assert.deepEqual(one(node('a-x', '/x', 'x', 'top')), ['after.kind:kind@a-x']);
   assert.deepEqual(one({ ...node('a-x', '/x'), position: { x: 100001, y: 0 } }), ['after.position:position@a-x']);
   assert.deepEqual(one({ ...node('a-x', '/x'), position: { x: -100000, y: 100000 } }), []);

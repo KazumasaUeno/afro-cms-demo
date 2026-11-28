@@ -20,7 +20,7 @@ import { RequestApprovalAction } from '@/features/portal/RequestApprovalButtonVi
 import { cleanProxyNote, PROXY_NOTE_MAX, proxyNoteLength, validateProxyNote } from '../proxyApproval';
 import { cleanScheduleReason, validateScheduleReason } from '../schedule';
 import {
-  liveSitemapState, sitemapEditable, sitemapSubmitBlock, SitemapConflictError, SITEMAP_CONFLICT_TEXT, type SitemapEdits, type SitemapShown,
+  liveSitemapState, sitemapEditable, sitemapFromRequirements, sitemapSubmitBlock, SitemapConflictError, SITEMAP_CONFLICT_TEXT, type SitemapEdits, type SitemapShown,
 } from '../sitemap';
 import type { ProjectDoc } from '../model';
 import { useLiveProjects, useLiveSitemap, useLiveSitemapActions, useLiveSitemapSaveStatus } from '../repositories';
@@ -190,7 +190,7 @@ function LiveSitemap({ doc }: { doc: ProjectDoc }) {
   const created = status !== null;
   const block = sitemapSubmitBlock({ before: shown.before, after: shown.after }, scheduleApproved);
   const origin = internal?.origin ?? sm.version?.origin;
-  const fromReq = internal?.sourceReqRevision !== undefined;
+  const fromReq = sitemapFromRequirements(internal);
 
   const aiStart = () => { void run(() => actions.requestDraft({}), 'AI がサイトマップの下書きを作成しています'); };
   const regenerate = async () => {
@@ -251,6 +251,9 @@ function LiveSitemap({ doc }: { doc: ProjectDoc }) {
       {created && aiPhase === 'running' && <AiRunningNote />}
       {created && status === 'draft' && aiPhase === 'failed' && (
         <Alert severity="warning" sx={{ mb: 2 }}>{SITEMAP_AI_TEXT.failed}</Alert>
+      )}
+      {created && status === 'draft' && aiPhase === 'idle' && sm.aiDraft?.kept && (
+        <Alert severity="info" sx={{ mb: 2 }}>{SITEMAP_AI_TEXT.kept}</Alert>
       )}
       {created && status === 'draft' && saveSt.error && !(saveSt.error instanceof SitemapConflictError) && local && (
         <Alert

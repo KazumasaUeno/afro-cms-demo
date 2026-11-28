@@ -5,28 +5,15 @@
  * - contentHashOf: sha256(canonicalSitemapJson)。版文書のお客様に見える項目を全部覆う（sec L-3。正規化は src/shared/ai/sitemapRules.ts）
  */
 import { createHash } from 'node:crypto';
-import { canonicalSitemapJson } from '../ai/shared/sitemapRules';
+import { canonicalSitemapJson, cleanSitemapDiagram } from '../ai/shared/sitemapRules';
 import type { SitemapEdge, SitemapNode } from '../ai/shared/types';
 
 export interface Diagram { nodes: SitemapNode[]; edges: SitemapEdge[] }
 export interface StoredDevComment { text: string; at: unknown; byUid?: string; byName: string }
 
-/** 検査済みの図を決めた項目だけで組み直す（reason は文字列があるときだけ） */
+/** 検査済みの図を決めた項目だけで組み直す（reason は文字列があるときだけ。正は共有の cleanSitemapDiagram＝画面が送る前と同じ形） */
 export function cleanDiagram(d: unknown): Diagram {
-  const g = (d ?? {}) as { nodes?: SitemapNode[]; edges?: SitemapEdge[] };
-  return {
-    nodes: (g.nodes ?? []).map((n) => ({
-      id: n.id,
-      position: { x: n.position.x, y: n.position.y },
-      data: {
-        label: n.data.label,
-        path: n.data.path,
-        kind: n.data.kind,
-        ...(typeof n.data.reason === 'string' ? { reason: n.data.reason } : {}),
-      },
-    })),
-    edges: (g.edges ?? []).map((e) => ({ id: e.id, source: e.source, target: e.target })),
-  };
+  return cleanSitemapDiagram(d);
 }
 
 /** お客様に出すコメント（byUid を写さない。F-6） */

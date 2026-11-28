@@ -161,11 +161,20 @@ export function checkAiLegalClearance(project, { functionsDir = join(root, 'func
 
 /**
  * 法務の記録に、対象 scope の行があるか（sec M-3）。行の先頭から `AI-SCOPE:` で始まり、カンマ区切りの対象のどれかが scope と完全一致するときだけ true。
- * 散文の中の言及・行頭の飾り（- や `）・`sitemap-draft` のような別の語は数えない
+ * 散文の中の言及・行頭の飾り（- や `）・`sitemap-draft` のような別の語・コードブロック（``` / ~~~ の中＝書き方の例）は数えない（sec L-3）
  */
 export function hasAiScopeLine(text, scope) {
-  for (const m of String(text).matchAll(/^AI-SCOPE:[ \t]*(.*?)[ \t]*$/gm)) {
-    if (m[1].split(',').map((s) => s.trim()).includes(scope)) return true;
+  let fence = null;
+  for (const line of String(text).split(/\r?\n/)) {
+    const f = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+    if (f) {
+      if (fence === null) fence = f[1];
+      else if (f[1][0] === fence[0] && f[1].length >= fence.length && line.trim() === f[1]) fence = null;
+      continue;
+    }
+    if (fence !== null) continue;
+    const m = /^AI-SCOPE:[ \t]*(.*?)[ \t]*$/.exec(line);
+    if (m && m[1].split(',').map((s) => s.trim()).includes(scope)) return true;
   }
   return false;
 }

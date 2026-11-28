@@ -1,6 +1,6 @@
 import type { DocumentData } from 'firebase/firestore';
 import type { SitemapEdge, SitemapNode, SitemapState } from '@/types';
-import { validateSitemapDoc, type SitemapIssue } from '@/shared/ai/sitemapRules';
+import { cleanSitemapDiagram, validateSitemapDoc, type SitemapIssue } from '@/shared/ai/sitemapRules';
 import { toIso } from './model';
 
 /**
@@ -53,7 +53,10 @@ export interface SitemapVersion {
 /** aiDrafts/sitemap のうち画面が使う値（DATA §7。generated の中身は読まない＝internal に写った後の値を使う） */
 export interface SitemapAiDraft {
   running: boolean;
+  /** 最後の依頼が失敗した（state failed、または前の成功の後の失敗＝state ready のまま lastError がある） */
   failed: boolean;
+  /** 最後の依頼は成功したが、作成中に編集・手で作成されたため internal へ反映しなかった（generated.applied=false） */
+  kept: boolean;
   errorCode?: string;
 }
 
@@ -126,8 +129,15 @@ export function sitemapAiDraftOf(d: DocumentData | null | undefined): SitemapAiD
   if (!d) return null;
   const job = obj(d.job);
   const err = obj(d.lastError);
-  return { running: job?.state === 'running', failed: d.state === 'failed', ...(typeof err?.code === 'string' ? { errorCode: err.code } : {}) };
+  const running = job?.state === 'running';
+  // 作り直しの失敗は前の結果を残すため state は ready のまま（sitemapTask.ts）。失敗は lastError でも見る（成功は lastError を消す）
+  const failed = !running && (d.state === 'failed' || typeof err?.code === 'string');
+  const kept = !running && !failed && d.state === 'ready' && obj(d.generated)?.applied === false;
+  return { running, failed, kept, ...(typeof err?.code === 'string' ? { errorCode: err.code } : {}) };
 }
+
+/** 「要件定義書の案から作成しました」を出すか。AI が作った版だけ（手で作った版も sourceReqRevision を持つため origin で見る。QA O-1） */
+export const sitemapFromRequirements = (internal: Pick<SitemapInternal, 'origin'> | null | undefined) => internal?.origin === 'ai';
 
 /** 承認の記録の ID（DATA §2.4。ID が冪等キー） */
 export const sitemapApprovalIdOf = (revision: number, action: 'approve' | 'withdraw' | 'reopen' = 'approve') => `sitemap-r${revision}-${action}`;
@@ -262,7 +272,8 @@ export function createSaveQueue<T>(o: {
     if (base === null) { o.onError(new Error('サイトマップの記録が読めません')); return Promise.resolve(); }
     inflight = o.write(v, base).then(
       (next) => { seq = next; },
-      (e) => { seq = null; pending = null; o.onError(e); },
+      // 失敗しても seq（最後に書けた editSeq）は残す。書けていない以上サーバーの editSeq は変わらない。競合の後は呼び出し側が reset で戻す（code review Major）
+      (e) => { pending = null; o.onError(e); },
     ).finally(() => {
       inflight = null;
       if (pending && handle === null) handle = timer.set(() => { void run(); }, o.delayMs);
@@ -302,6 +313,17 @@ export function sitemapDraftRequestInput(projectId: string, requestId: string, o
 /** 保存する中身（saveSitemapEdits op:'save' の before・after・devComment） */
 export interface SitemapEdits { before: SitemapDiagram; after: SitemapDiagram; devComment?: { text: string } }
 
+/**
+ * saveSitemapEdits op:'save' の入力。図はサーバーの保存の形（cleanDiagram）と同じ項目だけで組み直す。
+ * callable の SDK は undefined を null にして送るため、reason: undefined（理由なしのページ）をそのまま渡さない（QA D-1）
+ */
+export function sitemapSaveInput(projectId: string, baseEditSeq: number, v: SitemapEdits) {
+  return {
+    projectId, op: 'save' as const, baseEditSeq, before: cleanSitemapDiagram(v.before), after: cleanSitemapDiagram(v.after),
+    ...(v.devComment ? { devComment: { text: v.devComment.text } } : {}),
+  };
+}
+
 /** idle: 待ち・送信中が無い（false の間、画面は手元の値を重ねて出す）。error: 最後の保存の失敗（書ければ消える） */
 export interface SitemapSaveStatus { idle: boolean; error: Error | null }
 
@@ -321,7 +343,9 @@ export function createSitemapSaver(o: { delayMs: number; write: (v: SitemapEdits
   const listeners = new Set<() => void>();
   const emit = () => { listeners.forEach((l) => l()); };
   const q = createSaveQueue<SitemapEdits>({
-    delayMs: o.delayMs, timer: o.timer, base: () => opened,
+    delayMs: o.delayMs, timer: o.timer,
+    // 開いた時点と最後に書けた値の大きい方（手元の値がある間 opened は固定のため、自分の保存の後に古い値へ戻らない）
+    base: () => (opened === null ? saved : Math.max(opened, saved ?? -1)),
     write: async (v, base) => {
       try {
         const next = await o.write(v, base);
@@ -358,6 +382,24 @@ export function createSitemapSaver(o: { delayMs: number; write: (v: SitemapEdits
     },
     /** 競合の後・依頼の後など、基準を開き直した値に戻す */
     reset() { q.reset(); saved = null; error = null; blocking = false; emit(); },
+  };
+}
+
+/**
+ * 保存のまとめの置き場（部品をまたいで案件ごとに 1 つ）。鍵は利用者＋案件（別の人でログインし直したとき、前の人の基準・失敗・待ちを使わない）。
+ * clear はログアウト（LiveDataProvider が外れる）で呼ぶ: 待ちと予約を捨てて空にする（code review Minor）
+ */
+export function createSaverRegistry<S extends { reset: () => void }>(make: (pid: string) => S) {
+  const m = new Map<string, S>();
+  return {
+    get(uid: string, pid: string): S {
+      const k = `${uid}\u0000${pid}`;
+      let s = m.get(k);
+      if (!s) { s = make(pid); m.set(k, s); }
+      return s;
+    },
+    clear() { m.forEach((s) => s.reset()); m.clear(); },
+    size: () => m.size,
   };
 }
 

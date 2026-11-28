@@ -169,8 +169,9 @@ function checkDiagram(v: 'before' | 'after', d: unknown, maxPages: number, out: 
     const pe = validatePath(n.data.path, nodes, n.id);
     if (pe) push('path', PATH_CODE[pe]);
     else if (n.data.path !== n.data.path.trim()) push('path', 'path_chars');
+    // null は「理由なし」と同じ（callable の SDK は undefined を null で送る。古い画面からの保存も通す。保存する形は cleanSitemapDiagram が null を落とす）
     const r = n.data.reason;
-    if (r !== undefined) {
+    if (r !== undefined && r !== null) {
       if (typeof r !== 'string') push('reason', 'shape');
       else if (r.length > SITEMAP_LIMITS.reason) push('reason', 'reason_too_long');
       else if (TEXT_CONTROL.test(r)) push('reason', 'reason_control');
@@ -221,6 +222,27 @@ export function validateSitemapDoc(doc: unknown, opts: { maxPages?: number } = {
     else if (TEXT_CONTROL.test(c.text)) errors.push({ field: 'devComment', code: 'devComment_control' });
   }
   return { ok: errors.length === 0, errors };
+}
+
+/**
+ * 図を決めた項目だけで組み直す（reason は文字列があるときだけ。undefined・null のキーを持たない）。
+ * サーバーは保存する形（functions/src/sitemap/version.ts cleanDiagram）、画面は callable へ送る前（undefined を null にされないように）に使う
+ */
+export function cleanSitemapDiagram(d: unknown): { nodes: SitemapNode[]; edges: SitemapEdge[] } {
+  const g = (d ?? {}) as { nodes?: readonly SitemapNode[]; edges?: readonly SitemapEdge[] };
+  return {
+    nodes: (g.nodes ?? []).map((n) => ({
+      id: n.id,
+      position: { x: n.position.x, y: n.position.y },
+      data: {
+        label: n.data.label,
+        path: n.data.path,
+        kind: n.data.kind,
+        ...(typeof n.data.reason === 'string' ? { reason: n.data.reason } : {}),
+      },
+    })),
+    edges: (g.edges ?? []).map((e) => ({ id: e.id, source: e.source, target: e.target })),
+  };
 }
 
 /* ---------- contentHash の正規化（DATA §2.3） ---------- */

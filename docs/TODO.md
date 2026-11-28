@@ -102,8 +102,10 @@
 - [ ] **AI のサイトマップ下書きの国外送信の範囲・保持日数・承認の効力**（LEGAL REVIEW REQUIRED・AI-SCOPE。計画 R-10）: `AI_SITEMAP_MODE=on` と段 2 は法務の結論まで出さない（AI は結論を出さない）
 - [ ] **`aiDrafts/sitemap` の削除ジョブ（U5・段 2）**: mode を `internal` 以上にする前に実装する（対象は `['sitemap']` だけ。P-8）
 - [ ] **Anthropic の利用上限（USD）**（S-15。UNKNOWN）: Console の spend limit の値を platform-engineer が確認して記録する（mode を変える前）
-- [ ] **worker `generateSitemapDraftTask` の invoker が既定で非公開か**（UNKNOWN）: リリースの前に `gcloud functions get-iam-policy` 等で確かめる（allUsers が無いこと）。要件定義書の worker と同じ確認
-- [ ] **`functions/src/ai/request.ts` の reservedDay の二重 enqueue（LOW。要件定義書の経路）**: `reservedDay` は TX の外の変数で、TX の各試行の先頭で空に戻していない（request.ts:80・130）。1 回目の試行が予約して競合で再試行し、2 回目が予約せずに返る（running など）と、予約していないのに enqueue が走る。タスク ID が requestId なので重複は `task-already-exists` で止まる [INFERENCE]。試行の先頭で `reservedDay = ''` にする
+- [ ] **worker `generatesitemapdrafttask` へ invoker を付ける（sec L-1・R-1。platform-engineer）**: 段 1 の functions デプロイ後に `afro-cms-functions@afro-cms-4a6ff.iam.gserviceaccount.com` へ `roles/run.invoker` を付ける（**`allUsers`・`allAuthenticatedUsers` には付けない**）。`gcloud run services get-iam-policy generatesitemapdrafttask --region asia-northeast1 --project afro-cms-4a6ff` で、members が OIDC の SA だけであることを確かめて記録する（手順は `docs/operations/RUNBOOK_FIREBASE.md` §6.2。要件定義書の worker も同じだった `IAM_INVENTORY_2026-11-24.md:230`）
+- [ ] **`functions/src/ai/request.ts` の reservedDay の二重 enqueue（LOW。要件定義書の経路）**: `reservedDay` は TX の外の変数で、TX の各試行の先頭で空に戻していない（request.ts:80・130）。1 回目の試行が予約して競合で再試行し、2 回目が予約せずに返る（running など）と、予約していないのに enqueue が走る。タスク ID が requestId なので重複は `task-already-exists` で止まる [INFERENCE]。試行の先頭で `reservedDay = ''` にする。**今回は変えない（Do Not Change。2026-11-28 サイトマップのコードレビューで再指摘・要件定義書の経路のため別の単位で）**
+- [ ] **サイトマップの worker が開始時に既に別の依頼へ置き換わっていると、前の依頼の予約が戻らない（LOW）**: タスクの payload は projectId・requestId だけで、予約した日・利用者は job にしか無く、置き換わった時点で上書きされている（`functions/src/ai/sitemapTask.ts` 最初の読み取り）。2026-11-28 に warn ログ `stale`・`ai-replaced-unrefunded` で数えられるようにした（開始の TX で検出した場合は返金済み）。直すなら payload に quotaDay・by を入れるか、置き換える依頼の側で前の予約を戻す（書き込み時の fenced の返金と二重にならない設計が要る）
+- [ ] **お客様 `/portal/approvals` の幅 320 で「改善提案書」がはみ出す（QA O-2 2026-11-28・P3・既存）**: `src/features/requirements/ProposalView.tsx` のタブ等が約 136px はみ出す。サイトマップのブランチでは未変更。origin/main でも同じかは未確認。frontend-engineer
 - [ ] **ページのパスに大文字が通る（LOW）**: `validatePath` は大文字を受け付ける（`src/shared/ai/sitemapRules.ts:53` の `PATH_RE` が `/i`）（`/About` と `/about` が別のページになりうる）。小文字にそろえるか、受容を決める
 
 ## reqdoc（2026-11-26 セキュリティ確認 U3 より）

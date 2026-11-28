@@ -143,7 +143,10 @@ export async function handleSitemapTask(data: unknown, deps: SitemapTaskDeps): P
     const pre = (await aiRef.get()).data();
     const job0 = (isObj(pre?.job) ? pre.job : {}) as Record<string, unknown>;
     if (!pre || !mine(job0, requestId)) {
-      log('info', 'stale');
+      // 閉じた job（同じ requestId）は返金済みの経路。別の依頼に置き換わっていたら自分の予約は戻っていないが、
+      // 予約した日・利用者は job にしか無く既に上書きされているため戻せない（docs/TODO.md。warn で数えられるようにする）
+      const replaced = !!pre && isObj(pre.job) && pre.job.requestId !== requestId;
+      log(replaced ? 'warn' : 'info', 'stale', replaced ? { errorCode: 'ai-replaced-unrefunded' } : {});
       return 'stale';
     }
     if (!jobRunning(job0, deps.now())) return await refundWith('ai-lease-expired', 'warn');
@@ -160,7 +163,16 @@ export async function handleSitemapTask(data: unknown, deps: SitemapTaskDeps): P
     const start = await db.runTransaction(async (tx) => {
       const [aSnap, pSnap, rSnap] = await Promise.all([tx.get(aiRef), tx.get(pRef), tx.get(db.doc(`projects/${projectId}/approvals/${approvalId}`))]);
       const job = (isObj(aSnap.data()?.job) ? aSnap.data()?.job : {}) as Record<string, unknown>;
-      if (!mine(job, requestId)) return { kind: 'stale' as const };
+      if (!mine(job, requestId)) {
+        // 開始の直前に別の依頼へ置き換わった: 書き込み時（fenced）と同じく job に触らず、自分の予約だけ戻す（code review Minor）
+        if (aSnap.exists && job.requestId !== requestId && myDay) {
+          const uSnap = await tx.get(usageRef(db, myDay));
+          const w = writeUsage(tx, uSnap, { refundQuota: aSnap.data()?.quota, cost: 0 });
+          if (w.quota) tx.update(aiRef, { quota: w.quota });
+          return { kind: 'replaced' as const };
+        }
+        return { kind: 'stale' as const };
+      }
       if (!jobRunning(job, deps.now())) return { kind: 'expired' as const };
       const apr = rSnap.data();
       if (!preconditionOk(pSnap.data() as SitemapProject | undefined, job)
@@ -173,6 +185,10 @@ export async function handleSitemapTask(data: unknown, deps: SitemapTaskDeps): P
     if (start.kind === 'stale') {
       log('info', 'stale');
       return 'stale';
+    }
+    if (start.kind === 'replaced') {
+      log('warn', 'fenced', { errorCode: 'ai-replaced' });
+      return 'fenced';
     }
     if (start.kind === 'expired') return await refundWith('ai-lease-expired', 'warn');
     if (start.kind === 'precondition') return await refundWith('ai-precondition-changed', 'info');

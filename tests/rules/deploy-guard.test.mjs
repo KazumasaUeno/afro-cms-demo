@@ -92,6 +92,11 @@ const SCOPE_CASES = [
   ['行頭のバッククォート', '`AI-SCOPE: sitemap`\n', false],
   ['大文字の対象', 'AI-SCOPE: Sitemap\n', false],
   ['空のファイル', '', false],
+  // sec L-3: コードブロックの中（書き方の例）は数えない。閉じた後の行は数える。閉じないブロックの中も数えない
+  ['コードブロックの中', '# 法務\n書き方:\n```\nAI-SCOPE: sitemap\n```\n', false],
+  ['~~~ のコードブロックの中', '~~~md\r\nAI-SCOPE: sitemap\r\n~~~\r\n', false],
+  ['閉じないコードブロックの中', '```\nAI-SCOPE: sitemap\n', false],
+  ['コードブロックの後の行', '```\nAI-SCOPE: sitemap\n```\nAI-SCOPE: sitemap\n', true],
 ];
 for (const [name, body, ok] of SCOPE_CASES) {
   test(`AI 法務（サイトマップ）: ${name} → ${ok ? '許可' : '拒否'}`, () => {

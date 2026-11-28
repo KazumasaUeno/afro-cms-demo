@@ -175,6 +175,22 @@ test('保存1: 丸ごと置換・editSeq+1・origin と sourceReqRevision は変
   // 保存は要約を変えない（Write 1）
   assert.deepEqual((await project()).sitemap, { status: 'draft', revision: 0 });
 });
+test('保存1b（QA D-1）: 理由なしのページ（SDK が undefined を null にした reason: null）・現在の図のページを保存できる。保存の形に null を残さない', async () => {
+  await create('devA');
+  const nul = (n) => ({ ...n, data: { ...n.data, reason: null } });
+  const doc = validDoc();
+  // callable の encode（@firebase/functions encode: undefined → null）を通った後と同じ形
+  const wire = JSON.parse(JSON.stringify({ before: { ...doc.before, nodes: doc.before.nodes.map(nul) }, after: { ...doc.after, nodes: doc.after.nodes.map((n, i) => (i === 0 ? n : nul(n))) } }));
+  assert.deepEqual(await edit('devA', wire, 0), { editSeq: 1 });
+  const d = await internal();
+  assert.deepEqual(d.before, doc.before);
+  assert.deepEqual(d.after, doc.after);
+  assert.equal(JSON.stringify([d.before, d.after]).includes('null'), false);
+  // 型の誤り（数値）は引き続き拒否（null だけを「なし」と扱う）
+  const bad = validDoc();
+  bad.after.nodes[1].data.reason = 3;
+  await assert.rejects(edit('devA', bad, 1), rejects('invalid-argument'));
+});
 test('保存2（AC-16・SM-16）: 同じ editSeq から 2 回保存 → 2 回目は aborted（conflict）・中身は 1 回目のまま', async () => {
   await create('devA');
   await edit('devA', validDoc(), 0);

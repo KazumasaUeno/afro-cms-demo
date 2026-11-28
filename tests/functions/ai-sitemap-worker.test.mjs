@@ -351,6 +351,36 @@ test('開始時に lease が切れていた・閉じた job・不正な payload:
   assert.equal(seen.params.length, 0);
 });
 
+test('開始の直前に別の依頼へ置き換わった（開始の TX で検出）: job に触らず、自分の予約だけ戻す（fenced・AI を呼ばない）', async () => {
+  const task = await request();
+  const OTHER = '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d';
+  // 最初の runTransaction（開始の前提の見直し）の直前に置き換える
+  const db2 = Object.create(db);
+  let swapped = false;
+  db2.runTransaction = async (fn, o) => {
+    if (!swapped) { swapped = true; await db.doc(AI).update({ 'job.requestId': OTHER }); }
+    return db.runTransaction(fn, o);
+  };
+  const { deps, seen } = wdeps({ db: db2 });
+  assert.equal(await handleSitemapTask(task, deps), 'fenced');
+  assert.equal(seen.params.length, 0);
+  const ai = await get(AI);
+  assert.equal(ai.job.requestId, OTHER);
+  assert.equal(ai.job.state, 'running', '他人の job は閉じない');
+  const u = await refunded();
+  assert.equal(u.costMicroUsd ?? 0, 0);
+  assert.equal(logs.some(([lv, , f]) => lv === 'warn' && f.status === 'fenced' && f.errorCode === 'ai-replaced'), true);
+});
+
+test('開始時（最初の読み取り）に既に別の依頼へ置き換わっていた: AI を呼ばず stale を warn で残す（予約の日・利用者が上書き済みで戻せない＝TODO）', async () => {
+  const task = await request();
+  await db.doc(AI).update({ 'job.requestId': '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d' });
+  const { deps, seen } = wdeps();
+  assert.equal(await handleSitemapTask(task, deps), 'stale');
+  assert.equal(seen.params.length, 0);
+  assert.equal(logs.some(([lv, , f]) => lv === 'warn' && f.status === 'stale' && f.errorCode === 'ai-replaced-unrefunded'), true);
+});
+
 // ---------- 返金と費用 ----------
 test('書く時に前提が変わった（アーカイブ・要件の版）: 結果を捨て、上限を戻し、費用を足す（dropped）', async () => {
   for (const change of [{ archived: true }, { 'requirements.revision': 3, 'requirements.approvalId': 'requirements-r3-approve' }]) {
