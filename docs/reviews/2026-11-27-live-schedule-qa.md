@@ -114,3 +114,36 @@ emulator / dev サーバーのログに error・denied は 0 件。
 ### 後片付け
 
 Vite（5180）・エミュレータ（java・node）・ヘッドレス Chrome を停止し、上記のポートに LISTEN が無いことを確認した。emulator のデータは保存していない（次回起動で消える）。
+
+## 6. Codex 修正の画面確認 (2026-11-28)
+
+- 対象: `feat/live-schedule` @ 7c2d832（別系統レビュー R003・R004 の修正。`docs/reviews/2026-11-28-live-schedule-cross-model-review.md`）。エミュレータ `demo-afro-cms` のみ（本番・デプロイ・gcloud なし）。担当: qa-engineer（プロダクションコードは変更していない）
+- 環境・手順は §5 と同じ（Windows 11 Pro 10.0.26200 / Node v22.14.0 / JDK 21.0.12 / Vite 8.3.5 `--mode emulator`・5180 / ヘッドレス Chrome CDP・ロールごとに別の browser context）。起動前にポートの LISTEN 0 件を確認 → `npm run emulators` → seed 3 本（パスワードは乱数をスクラッチのファイルに置き表示していない）→ §5 と同じく `qa-init-approved` を作り admin が初回の予定日を保存
+- 確認値はすべて emulator REST（owner・127.0.0.1）で読み戻した（`schedule/current` の `editSeq`・`wbs.design.end`、`approvals` の文書 ID、`projects/{id}.schedule.status`）
+
+| # | 確認 | 結果 | 根拠 |
+|---|---|---|---|
+| C1 | R003: A（admin）が WBS の行の編集ダイアログを開いている間に B（開発者）が同じ行を変えて保存 → A がダイアログで値を変えて「反映」→「WBS を保存」 | **PASS** | `reqdoc-v3-approved`。A・B とも「デザイン」の行で Enter → ダイアログ。B が終了日 12/7 で保存「WBS を保存しました」（REST: editSeq 2→3・design.end 2026-12-07）。A はダイアログを開いたまま（終了日は 12/6 のまま）→ 12/9 に変えて反映 → 保存 →「ほかの人が先に保存しました。最新を読み込みました」。REST は editSeq 3・design.end 2026-12-07 のまま（B の値は上書きされていない）。スクショ `r003_A_conflict` |
+| C2 | R003: B も admin（admin 2 人・別 context）で同じ操作 | **PASS** | B が 12/8 で保存（editSeq 3→4）→ A が 12/10 で保存 → 競合の文言。REST は editSeq 4・design.end 2026-12-08 のまま |
+| C3 | R003: 同時の変更が無いときは保存できる（通常の経路） | **PASS** | 新しい context C（admin）で開き直し、デザインの終了日 12/11 → 反映 → 保存「WBS を保存しました」。REST editSeq 4→5・design.end 2026-12-11。画面のバーも「11/30〜12/11・12日」。スクショ `r003_normal_save`。別の案件（`qa-init-approved`）でも競合の無い保存＋依頼が通ることを確認（下の C5） |
+| C4 | R004: 保存が競合で失敗している最中に「承認を依頼する」→ 依頼しない | **PASS** | `qa-init-approved` を取り下げで下書きに戻し（`schedule-r2-withdraw`）、C1 と同じ手順で競合を作る（B が 12/6 で保存・editSeq 4→5）。A に CDP で遅延 2500ms をかけ「WBS を保存」→ 150ms 後（保存ボタンは disabled＝送信中）に「承認を依頼する」→ 約 7.9 秒後「直前の保存ができませんでした。内容を確かめて保存してから依頼してください」。REST: approvals に `schedule-r3-submit` は無い（終了時 requirements-r1-approve, requirements-r1-submit, schedule-r1-submit, schedule-r1-withdraw, schedule-r2-submit, schedule-r2-withdraw）、status は draft・revision 2 のまま、design.end は B の 2026-12-06 のまま。スクショ `r004_A_submit_blocked` |
+| C5 | R004: 保存が成功する場合は、待ってから依頼が通る（通常の経路） | **PASS** | B の保存が変更なし（同じ値）で競合が起きなかった回: 同じ遅延の下で A の保存「WBS を保存しました」（10.4 秒）→「お客様へ承認を依頼しました」（20.7 秒）。REST: `schedule-r2-submit` ができ、design.end は A の 2026-12-12（保存の後の内容で依頼された） |
+
+ブラウザのコンソール error / warning・例外は全 context で 0 件。
+
+### 見つけたこと（R003・R004 の修正の不具合ではない）
+
+- **O-2（P3・修正前から）** 競合の後も A の下書き（12/9・12/10）は画面に残り、文言は「最新を読み込みました」だが、表示のバーは自分の下書きのまま。もう一度「WBS を保存」を押すとまた競合になる（C2 で 2 回目も競合・REST は変わらず）。データは守られている。抜けるには「元に戻す」。token は「下書きが dirty の間は追従しない」（`src/features/schedule/WbsSection.tsx:161`）ので、反映後は修正前から同じ挙動。文言と挙動のずれを直すか（競合時に下書きを最新へ戻す、または文言を「元に戻すで最新を表示できます」にする）は frontend / ui の判断
+- C4 では保存の競合の文言（「ほかの人が先に…」）は見えず、依頼を止めた文言だけが残った（通知が 1 つずつのため後の文言に置き換わったと推定。[INFERENCE]）。利用者には「直前の保存ができませんでした」が出るので致命的ではない
+
+### 残る未検証（UNVERIFIED）
+
+- 修正前（93b9836）のコードで C1・C4 が実際に上書き・依頼されることの画面での再現（修正の前後比較）は未実施（単体テストでの確認のみ）
+- 開発者が A 側（ダイアログを開いている側）の場合は未確認（A は admin のみ）
+- iOS 実機・キーボードだけの操作は §5 のまま
+
+スクリーンショット（コミットしていない）: スクラッチの `shots2/`（r003_A_conflict・r003_normal_save・r004_A_submit_blocked）。
+
+### 後片付け
+
+Vite（5180）・エミュレータ・ヘッドレス Chrome を停止し、5180/8080/9099/5001/9150/4400/4500/9333 に LISTEN が無いこと、使い捨てプロファイルの chrome・java のプロセスが無いことを確認した。emulator のデータは保存していない。
