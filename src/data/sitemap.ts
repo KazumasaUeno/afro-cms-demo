@@ -1,9 +1,8 @@
-import type { SitemapEdge, SitemapNode, SitemapState } from '@/types';
+import type { SitemapNode, SitemapState } from '@/types';
+// 配置（tree）とノード・接続の組み立ては live のサーバーと共有するため src/shared/ai/sitemapLayout.ts へ移した（LIVE_SITEMAP_IMPL_PLAN P-5。配置は同じ）
+import { sitemapEdge as e, sitemapNode as n, tree, type SitemapSpec } from '@/shared/ai/sitemapLayout';
 
-const n = (id: string, x: number, y: number, label: string, path: string, kind: SitemapNode['data']['kind'], reason?: string): SitemapNode => ({
-  id, position: { x, y }, data: { label, path, kind, reason },
-});
-const e = (source: string, target: string): SitemapEdge => ({ id: `${source}-${target}`, source, target });
+export type { SitemapSpec };
 
 /** 現行サイト（課題: 階層が深い・メニュー過多・問い合わせが奥） */
 const beforeNodes: SitemapNode[] = [
@@ -51,32 +50,7 @@ export const seedSitemap = (): SitemapState => ({
 
 /* ---------- 案件ごとのサイトマップ（0.29.5。2026-11-12 ユーザー決定「デザイン案は案件ごと」） ---------- */
 
-/** [キー, ページ名, パス, 種類, AI の理由, 親のキー（省略 = トップの直下）]。先頭はトップ */
-export type SitemapSpec = [string, string, string, SitemapNode['data']['kind'], string?, string?];
 type Spec = SitemapSpec;
-
-/** 仕様の並びから、トップ → 第1階層 → 第2階層の木に配置する（第1階層は 220px 間隔、子は親の下に 160px 間隔） */
-function tree(prefix: 'b' | 'a', specs: Spec[]): { nodes: SitemapNode[]; edges: SitemapEdge[] } {
-  const [home, ...rest] = specs;
-  const id = (key: string) => `${prefix}-${key}`;
-  const first = rest.filter((s) => !s[5]);
-  const pos = new Map<string, number>();
-  first.forEach((s, i) => pos.set(s[0], i * 220));
-  const nodes: SitemapNode[] = [n(id(home[0]), ((first.length - 1) * 220) / 2, 0, home[1], home[2], home[3], home[4])];
-  const edges: SitemapEdge[] = [];
-  first.forEach((s) => {
-    nodes.push(n(id(s[0]), pos.get(s[0]) ?? 0, 150, s[1], s[2], s[3], s[4]));
-    edges.push(e(id(home[0]), id(s[0])));
-  });
-  first.forEach((parent) => {
-    const kids = rest.filter((s) => s[5] === parent[0]);
-    kids.forEach((s, j) => {
-      nodes.push(n(id(s[0]), (pos.get(parent[0]) ?? 0) + (j - (kids.length - 1) / 2) * 160, 300, s[1], s[2], s[3], s[4]));
-      edges.push(e(id(parent[0]), id(s[0])));
-    });
-  });
-  return { nodes, edges };
-}
 
 const plan = (before: Spec[], after: Spec[]): SitemapState => ({ before: tree('b', before), after: tree('a', after) });
 
