@@ -70,8 +70,25 @@ export function normalizePath(p: string): string {
   return s;
 }
 
-/** パス → key（'/' は home。英数字以外はハイフン。重複は -2, -3…） */
-function keyFromPath(path: string, used: Set<string>): string {
+/** 個人情報らしいパスの段（電話・郵便番号・会員番号など数字 7 桁以上、または redactText が反応するもの）の置き換え */
+export const REDACTED_SEGMENT = 'redacted';
+const PII_DIGITS = 7;
+
+/**
+ * AI へ送るパス（codex P2 PII）: 段ごとに、数字が 7 桁以上ある段・redactText が反応する段を 'redacted' にする（階層は残す）。
+ * 例: /customers/090-1234-5678 → /customers/redacted。保存する「現在」の図のパスは変えない（チームが見る値）
+ */
+export function redactPathForAi(path: string): string {
+  return path.split('/').map((seg) => {
+    if (!seg) return seg;
+    const digits = (seg.match(/[0-9]/g) ?? []).length;
+    return digits >= PII_DIGITS || redactText(seg) !== seg ? REDACTED_SEGMENT : seg;
+  }).join('/');
+}
+
+/** パス → key（'/' は home。英数字以外はハイフン。重複は -2, -3…）。key も AI へ送るので、個人情報らしい段を除いたパスから作る */
+function keyFromPath(rawPath: string, used: Set<string>): string {
+  const path = redactPathForAi(rawPath);
   const baseRaw = path === '/' ? 'home' : path.slice(1).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 36);
   const base = baseRaw || 'p';
   let k = base;
@@ -210,7 +227,8 @@ export function buildSitemapPayload(input: { proposal: unknown; answers: unknown
     currentSite: {
       hostname: hostnameOf(url),
       beforeSource: input.before.source,
-      pages: input.before.pages.map((p) => ({ key: p.key, label: p.label, path: p.path, parentKey: p.parentKey })),
+      // パスは個人情報らしい段を除いて送る（key は beforeTreeFromNav が除いた後のパスから作っている）
+      pages: input.before.pages.map((p) => ({ key: p.key, label: p.label, path: redactPathForAi(p.path), parentKey: p.parentKey })),
     },
   };
 }

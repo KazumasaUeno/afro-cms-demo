@@ -44,3 +44,19 @@
 | QA O-2 お客様 320px のはみ出し（既存・ProposalView） | 変えていない。`docs/TODO.md` に記録 | — | — |
 
 再レビュー: 上の修正の差分だけを code-reviewer が確認する（Major を直したため）。
+
+## 3. 再レビュー・Codex 対応（2026-11-28 修正 2）
+
+| # | 指摘 | 対応 | 変えた所 | 回帰テスト |
+|---|---|---|---|---|
+| 1 | [High] QA D-1b 手で作った現在の図（空）に追加すると `home_count` で拒否 | 直した。規則は「空の図は可・ページを置くならトップがちょうど 1 件」（サーバーは変えない）。トップの無い図では「ページを追加」の種類はトップだけ（最初の 1 件はトップ・左上・削除不可）。`createManual` の初期値（現在は空）は変えない。demo の図は必ずトップがあるため従来どおり | `src/features/sitemap/addPageRules.ts`（新）・`AddPageDialog.tsx`・`SitemapView.tsx`（addPage） | unit: 空の図の選択肢はトップだけ・SDK の encode を通して検査に通る・従来の既定（ページ）は home_count。functions: createManual → トップ 1 件の現在の図を保存 editSeq 1 → 2 件目 editSeq 2・トップ以外の 1 件目は home_count |
+| 2 | [P1 codex] キャンバスの 300ms の待ちが切り替え・依頼で失われる | 直した。待ちを `createPendingSave` に置き、live（`flushRef` を渡す）は外れるとき（切り替え・離れる）に書き、依頼とログアウトの前にも書く。demo は `flushRef` を渡さない＝従来どおり捨てる | `src/features/sitemap/pendingSave.ts`（新）・`SitemapView.tsx`・`src/live/pages/LiveSitemapPage.tsx`・`src/live/repositories.tsx`（`registerSitemapEditorFlush`） | unit: flush はすぐ書く・cancel は書かない。sitemapDemoSame（demo の出力は同じ）。**画面の配線（外れるときの flush）は UI で未確認** |
+| 3 | [Major rereview・P2 codex] 基準が `seq ?? base()` でほかの人の保存（7）を無視 | 直した。`max(seq, base())` | `src/live/sitemap.ts`（`createSaveQueue`） | unit: 自分 4→5、ほかの人 7 を読み込み後の編集は基準 7・競合なし（修正前は失敗を確認） |
+| 4 | [P2 codex] 応答だけ失われた保存 → 再保存が自分と競合し編集が消える | 直した。競合以外の失敗の書き込み（基準と中身）を覚え、次の競合でサーバーの internal（`getDocFromServer`）が editSeq＝基準＋1 かつ中身が同じ（`sitemapSig`）なら、自分の書き込みが届いていたとして届いた editSeq で 1 回書き直す。中身が違えば本当の競合（上書きしない） | `src/live/sitemap.ts`（`createSitemapSaver` の `readServer`、`sitemapSig` を移した）・`src/live/repositories.tsx` | unit: 書けたが応答が失われた → もう一度保存は基準 [5,5,6]・競合なし（修正前は失敗を確認）／ほかの人の保存があれば競合のまま |
+| 5 | [P2 codex] AI 実行中を `job.state` だけで判定 | 直した。`leaseUntil` が無い・過ぎた running は失敗（`lease-expired`。もう一度試せる。サーバーの `jobRunning` と同じ判定）。読んだ後に切れる分は `sitemapAiPhase(ai, now)` と画面のタイマーで見直す | `src/live/sitemap.ts`（`sitemapAiDraftOf`）・`src/features/sitemap/liveSitemapUi.ts`・`LiveSitemapPage.tsx` | unit: 切れた → failed、lease 内 → running、読んだ後に切れた → failed（修正前は失敗を確認） |
+| 6 | [P2 codex PII] AI へ送るナビのパス・key が未除去 | 直した。段ごとに数字 7 桁以上・`redactText` が反応する段を `redacted` に（階層は残す）。key も除いた後のパスから作る。保存する現在の図のパスは変えない | `functions/src/ai/sitemapPayload.ts`（`redactPathForAi`） | functions: `/customers/090-1234-5678` → `/customers/redacted`・親は同じ・`/news/2024` は残す・payload に番号が無い |
+| 7a | [Minor] ログアウトでサイトマップの保存の待ちを書き切らない | 直した。ログアウトの前に回答と同じく書き切り（キャンバスの待ち → 全案件の `saveNow`）、書けなければログアウトを止める | `src/live/LiveShell.tsx`・`src/live/repositories.tsx`（`flushSitemapSaves`）・`src/live/sitemap.ts`（`saveNow`・registry `all`） | unit: saveNow は書き切って true・失敗が残れば false |
+| 7b | [Minor] QA O-4 通信の失敗で「internal [0]」 | 直した。internal・unavailable・deadline-exceeded・unknown・cancelled は「保存できませんでした。接続を確かめて、もう一度お試しください」 | `src/live/sitemap.ts`（`sitemapCallableError`） | unit（修正前は失敗を確認） |
+
+未確認: 2 の画面の配線（切り替え・離れる・依頼の直前の編集が保存される）と 1 の画面操作は emulator の UI で見ていない（unit・functions のみ）。QA の UI 再確認の対象。
+

@@ -15,7 +15,7 @@ import { tokens } from '@/theme/tokens';
 import { useLiveAuth } from './auth';
 import { LIVE_BOTTOM_LABEL, LIVE_NAV, ROLE_AREA, liveNavMarks } from './liveNav';
 import { flushBeforeSignOut, type FlushResult } from './pendingWrites';
-import { LiveDataProvider, useLiveProjects } from './repositories';
+import { flushSitemapSaves, LiveDataProvider, useLiveProjects } from './repositories';
 import { LiveSessionContext, ROLE_HOME, type LiveAccount, type LiveRole, type LiveSession } from './session';
 
 const ROLE_LABEL: Record<LiveRole, string> = { admin: '管理者', developer: '開発者', client: 'お客様' };
@@ -59,7 +59,8 @@ function LiveLogoutButton({ signOut }: { signOut: () => Promise<void> }) {
     setBusy(true);
     let r: FlushResult;
     try {
-      r = await flushBeforeSignOut(() => requirements.saveNow());
+      // 回答とサイトマップの保存の待ちを両方書き切る（どちらかが書けなければログアウトを止める）
+      r = await flushBeforeSignOut(async () => (await requirements.saveNow()) && (await flushSitemapSaves()));
     } catch {
       r = 'failed';
     } finally {

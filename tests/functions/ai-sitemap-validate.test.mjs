@@ -147,6 +147,31 @@ test('buildSitemapPayload: 許可リストの回答 9 問・要件の許可項�
   }
 });
 
+test('codex P2 PII: ナビのパスの個人情報らしい段（電話・郵便番号・7 桁以上の番号）は AI へ送るパスと key から除く。階層と保存する図のパスは残す', () => {
+  const before = P.beforeTreeFromNav([
+    { text: 'お客様', path: '/customers' },
+    { text: '山田様', path: '/customers/090-1234-5678' },
+    { text: '会員', path: '/member/1234567' },
+    { text: '郵便', path: '/zip/150-0001' },
+    { text: '2024年', path: '/news/2024' },
+  ]);
+  const p = P.buildSitemapPayload({ proposal: V3, answers: ANSWERS, before });
+  const json = JSON.stringify(p.currentSite);
+  for (const bad of ['090', '1234-5678', '5678', '1234567', '150-0001', '0001']) assert.ok(!json.includes(bad), bad);
+  const byLabel = Object.fromEntries(p.currentSite.pages.map((x) => [x.label, x]));
+  assert.equal(byLabel['山田様'].path, '/customers/redacted');
+  assert.equal(byLabel['山田様'].parentKey, byLabel['お客様'].key, '階層は残す');
+  assert.match(byLabel['山田様'].key, P.KEY_RE);
+  assert.equal(byLabel['会員'].path, '/member/redacted');
+  assert.equal(byLabel['郵便'].path, '/zip/redacted');
+  assert.equal(byLabel['2024年'].path, '/news/2024', '短い数字（年）は残す');
+  assert.equal(new Set(p.currentSite.pages.map((x) => x.key)).size, p.currentSite.pages.length, 'key は重ならない');
+  // 保存する「現在」の図（チームが見る）は元のパスのまま
+  assert.ok(before.pages.some((x) => x.path === '/customers/090-1234-5678'));
+  assert.equal(P.redactPathForAi('/'), '/');
+  assert.equal(P.redactPathForAi('/a/b-c'), '/a/b-c');
+});
+
 test('requirementsForSitemap: v2 は要約・論点・4 項目／v1・不明は null／合計 8,000 字で切る', () => {
   const v2 = P.requirementsForSitemap({ version: 2, summary: 's', points: [{ title: 't1' }, 'x', { title: '' }], draft: { goal: 'g', target: 't', contents: 'c', features: 'f', operation: 'secret-op' } });
   assert.deepEqual(v2, { version: 2, summary: 's', points: ['t1'], goal: 'g', target: 't', contents: 'c', features: 'f' });

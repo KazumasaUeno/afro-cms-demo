@@ -23,7 +23,7 @@ import {
   liveSitemapState, sitemapEditable, sitemapFromRequirements, sitemapSubmitBlock, SitemapConflictError, SITEMAP_CONFLICT_TEXT, type SitemapEdits, type SitemapShown,
 } from '../sitemap';
 import type { ProjectDoc } from '../model';
-import { useLiveProjects, useLiveSitemap, useLiveSitemapActions, useLiveSitemapSaveStatus } from '../repositories';
+import { registerSitemapEditorFlush, useLiveProjects, useLiveSitemap, useLiveSitemapActions, useLiveSitemapSaveStatus } from '../repositories';
 import { useLiveSession } from '../session';
 import { LoadError } from './shared';
 
@@ -81,6 +81,16 @@ function LiveSitemap({ doc }: { doc: ProjectDoc }) {
   const scheduleApproved = doc.schedule?.approvedRevision !== undefined;
   const aiPhase = sitemapAiPhase(sm.aiDraft);
   const aiRunning = aiPhase === 'running';
+  // 実行中のまま lease が切れたら（worker が止まった）、文書が変わらなくても失敗の表示へ切り替える（codex P2）
+  const [, setLeaseTick] = useState(0);
+  const leaseAt = sm.aiDraft?.running ? sm.aiDraft.leaseUntilMs : undefined;
+  useEffect(() => {
+    if (leaseAt === undefined) return undefined;
+    const wait = leaseAt - Date.now();
+    if (wait <= 0) return undefined;
+    const t = window.setTimeout(() => setLeaseTick((n) => n + 1), Math.min(wait + 50, 2_147_000_000));
+    return () => window.clearTimeout(t);
+  }, [leaseAt]);
 
   /* ---------- 手元の値の重ね（保存の echo で編集が巻き戻らないように） ---------- */
   const [local, setLocal] = useState<SitemapEdits | null>(null);
@@ -132,6 +142,9 @@ function LiveSitemap({ doc }: { doc: ProjectDoc }) {
   }, [base, local, account.name]);
   const shownRef = useRef(shown);
   shownRef.current = shown;
+  // キャンバスの待ち（300ms）をすぐ書く関数（SitemapView が入れる）。依頼の前・ログアウトの前に呼ぶ（codex P1）
+  const editorFlush = useRef<(() => void) | null>(null);
+  useEffect(() => registerSitemapEditorFlush(() => editorFlush.current?.()), []);
 
   const editable = sitemapEditable({ afro, archived: doc.archived, reqApproved, status, aiRunning }) && !!internal;
   const push = useCallback((edits: SitemapEdits) => {
@@ -201,6 +214,8 @@ function LiveSitemap({ doc }: { doc: ProjectDoc }) {
   const createManual = () => { void run(() => actions.createManual(), 'サイトマップを作成しました。ページを追加して組み立ててください'); };
   const submit = () => {
     if (!summary || opened.current === null) return;
+    // キャンバスで待っている編集を先に保存のまとめへ渡す（依頼の前の flush が書き切る）
+    editorFlush.current?.();
     const seq = opened.current;
     void run(async () => {
       await actions.submit(seq, summary.revision);
@@ -303,6 +318,7 @@ function LiveSitemap({ doc }: { doc: ProjectDoc }) {
           ...(lockedNote ? { lockedNote } : {}),
           saveDelayMs: 300,
           onSave,
+          flushRef: editorFlush,
           // 「AI提案」は AI で作った下書きだけ（OQ-S3）
           aiBadge: origin === 'ai' ? { tooltip: SITEMAP_AI_TEXT.badgeTooltip } : null,
           devCommentPanel: <SitemapDevCommentPanelView saved={shown.devComment} writable={editable} onSave={onSaveComment} />,

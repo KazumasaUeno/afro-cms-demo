@@ -84,6 +84,18 @@ test('作成1: 担当の開発者が手で作る → editSeq 0・改善後はト
   assert.equal(p.updatedBy, 'devA');
   assert.deepEqual(logs.map(([l, m, f]) => [l, m, f.status, f.op]), [['info', 'sitemap.edits', 'saved', 'createManual']]);
 });
+test('QA D-1b: 手で作った現在の図（空）は、最初にトップを置けば保存できる（画面の「ページを追加」の既定。トップ以外の 1 件目は home_count）', async () => {
+  await create('devA');
+  const start = manualSitemapStart();
+  // callable の SDK の encode と同じ形（reason: undefined は送らない。sitemapSaveInput）
+  const homeFirst = { nodes: [node('b-mf0a1', 0, 0, 'トップ', '/', 'home')], edges: [] };
+  await assert.rejects(edit('devA', { before: { nodes: [node('b-mf0a1', 0, 460, '会社案内', '/about', 'page')], edges: [] }, after: start.after }, 0),
+    rejects('invalid-argument', { code: 'home_count' }));
+  assert.deepEqual(await edit('devA', { before: homeFirst, after: start.after }, 0), { editSeq: 1 });
+  const two = { nodes: [...homeFirst.nodes, node('b-mf0a2', -40, 150, '会社案内', '/about', 'page')], edges: [edge('b-mf0a1', 'b-mf0a2')] };
+  assert.deepEqual(await edit('devA', { before: two, after: start.after }, 1), { editSeq: 2 });
+  assert.equal((await internal()).before.nodes.length, 2);
+});
 test('作成2: 担当外の案件でも admin は作れる（AC-01）', async () => {
   assert.deepEqual(await create('adm'), { editSeq: 0 });
   assert.equal((await project()).sitemap.status, 'draft');

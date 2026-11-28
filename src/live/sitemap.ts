@@ -58,6 +58,8 @@ export interface SitemapAiDraft {
   /** 最後の依頼は成功したが、作成中に編集・手で作成されたため internal へ反映しなかった（generated.applied=false） */
   kept: boolean;
   errorCode?: string;
+  /** 実行中のときの job.leaseUntil（ミリ秒）。過ぎたら止まった扱い（sitemapAiPhase が now で見直す） */
+  leaseUntilMs?: number;
 }
 
 const obj = (v: unknown): DocumentData | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as DocumentData) : null);
@@ -125,11 +127,27 @@ export function sitemapVersionDoc(d: DocumentData | null | undefined): SitemapVe
   };
 }
 
-export function sitemapAiDraftOf(d: DocumentData | null | undefined): SitemapAiDraft | null {
+const leaseMs = (v: unknown): number => {
+  const iso = toIso(v) ?? (typeof v === 'string' ? v : undefined);
+  return iso ? Date.parse(iso) : NaN;
+};
+
+/** 止まった実行（lease 切れ）の印。サーバーは次の依頼で奪える（request.ts jobRunning と同じ判定） */
+export const SITEMAP_AI_LEASE_EXPIRED = 'lease-expired';
+
+/**
+ * aiDrafts/sitemap → 画面の値。running は state だけでなく leaseUntil も見る（過ぎていれば失敗＝もう一度試せる。codex P2）。
+ * now は読んだ時点。読んだ後に lease が切れる分は sitemapAiPhase が now で見直す
+ */
+export function sitemapAiDraftOf(d: DocumentData | null | undefined, now: number = Date.now()): SitemapAiDraft | null {
   if (!d) return null;
   const job = obj(d.job);
   const err = obj(d.lastError);
+  const until = leaseMs(job?.leaseUntil);
+  const stale = job?.state === 'running' && !(Number.isFinite(until) && until > now);
+  if (stale) return { running: false, failed: true, kept: false, errorCode: SITEMAP_AI_LEASE_EXPIRED };
   const running = job?.state === 'running';
+  if (running) return { running, failed: false, kept: false, ...(typeof err?.code === 'string' ? { errorCode: err.code } : {}), leaseUntilMs: until };
   // 作り直しの失敗は前の結果を残すため state は ready のまま（sitemapTask.ts）。失敗は lastError でも見る（成功は lastError を消す）
   const failed = !running && (d.state === 'failed' || typeof err?.code === 'string');
   const kept = !running && !failed && d.state === 'ready' && obj(d.generated)?.applied === false;
@@ -226,7 +244,12 @@ export function sitemapSubmitBlock(doc: { before: SitemapDiagram; after: Sitemap
 
 export class SitemapConflictError extends Error {}
 
+/** 通信・サーバーの失敗の文言（Firebase のコード「internal」などをそのまま出さない。QA O-4） */
+export const SITEMAP_NETWORK_ERROR_TEXT = '保存できませんでした。接続を確かめて、もう一度お試しください';
+const NETWORK_CODES = new Set(['internal', 'unavailable', 'deadline-exceeded', 'unknown', 'cancelled']);
+
 export function sitemapCallableError(e: unknown): Error {
+  if (e instanceof SitemapConflictError) return e;
   const code = String((e as { code?: string })?.code ?? '').replace(/^functions\//, '');
   const details = (e as { details?: unknown })?.details;
   const d = obj(details);
@@ -243,7 +266,17 @@ export function sitemapCallableError(e: unknown): Error {
     };
     return new Error(T[reason] ?? 'いまの状態では操作できません。画面を開き直してください');
   }
-  return e instanceof Error ? e : new Error('保存できませんでした。接続を確かめてください');
+  if (NETWORK_CODES.has(code)) return new Error(SITEMAP_NETWORK_ERROR_TEXT);
+  return e instanceof Error ? e : new Error(SITEMAP_NETWORK_ERROR_TEXT);
+}
+
+/** 図の比較用の署名（ノードの順・座標・名前・パス・種類・理由・接続。キーの順や undefined の有無に左右されない） */
+export function sitemapSig(d: { before: SitemapDiagram; after: SitemapDiagram; devText?: string }): string {
+  const g = (x: SitemapDiagram) => [
+    x.nodes.map((n) => [n.id, Math.round(n.position.x), Math.round(n.position.y), n.data.label, n.data.path, n.data.kind, n.data.reason ?? '']),
+    x.edges.map((e) => [e.id, e.source, e.target]),
+  ];
+  return JSON.stringify([g(d.before), g(d.after), (d.devText ?? '').trim()]);
 }
 
 /* ---------- 保存のまとめ（AC-17: 1 秒以上まとめる。書き込みは同時に 1 本・最後の値だけ） ---------- */
@@ -268,7 +301,10 @@ export function createSaveQueue<T>(o: {
     if (!pending || inflight) return inflight ?? Promise.resolve();
     const { v } = pending;
     pending = null;
-    const base = seq ?? o.base();
+    // 最後に自分が書けた editSeq と、呼び出し側の基準（開いた時点・届いた internal）の大きい方。
+    // ほかの人の保存（7）を読み込んだ後の編集は 7 を基準にする（自分の前の 5 に戻らない。rereview Major・codex P2）
+    const known = o.base();
+    const base = seq === null ? known : known === null ? seq : Math.max(seq, known);
     if (base === null) { o.onError(new Error('サイトマップの記録が読めません')); return Promise.resolve(); }
     inflight = o.write(v, base).then(
       (next) => { seq = next; },
@@ -334,11 +370,26 @@ export const SITEMAP_SAVE_FAILED_BEFORE_SUBMIT = '直前の保存ができませ
  * 1 案件の保存のまとめ（createSaveQueue）＋状態の購読（useSyncExternalStore 向け）。
  * 競合（SitemapConflictError）は基準を戻し、依頼は止めない（画面は最新を読み直す）。それ以外の失敗は、次に書けるまで依頼を止める（pendingSaveFailed と同じ考え）
  */
-export function createSitemapSaver(o: { delayMs: number; write: (v: SitemapEdits, baseEditSeq: number) => Promise<number>; timer?: SaveQueueTimer }) {
+export function createSitemapSaver(o: {
+  delayMs: number; write: (v: SitemapEdits, baseEditSeq: number) => Promise<number>; timer?: SaveQueueTimer;
+  /** サーバーの internal（editSeq と中身）を読む。通信の失敗の後の競合が「自分の書き込みが届いていた」だけかを確かめる（codex P2） */
+  readServer?: () => Promise<{ editSeq: number; edits: SitemapEdits } | null>;
+}) {
   let opened: number | null = null;
   let saved: number | null = null;
   let error: Error | null = null;
   let blocking = false;
+  // 通信の失敗（競合以外）で、届いたか分からない書き込み（基準と中身）。応答だけ失われてサーバーは書けていることがある
+  let uncertain: { base: number; v: SitemapEdits } | null = null;
+  const sameEdits = (a: SitemapEdits, b: SitemapEdits) =>
+    sitemapSig({ before: a.before, after: a.after, devText: a.devComment?.text }) === sitemapSig({ before: b.before, after: b.after, devText: b.devComment?.text });
+  /** 競合が「前の届いたか分からない書き込みがサーバーで書けていた（editSeq が基準＋1・中身が同じ）」なら、その editSeq を返す */
+  const committedBefore = async (base: number): Promise<number | null> => {
+    const u = uncertain;
+    if (!u || !o.readServer || u.base !== base) return null;
+    const s = await o.readServer().catch(() => null);
+    return s && s.editSeq === u.base + 1 && sameEdits(s.edits, u.v) ? s.editSeq : null;
+  };
   let snap: SitemapSaveStatus = { idle: true, error: null };
   const listeners = new Set<() => void>();
   const emit = () => { listeners.forEach((l) => l()); };
@@ -348,8 +399,20 @@ export function createSitemapSaver(o: { delayMs: number; write: (v: SitemapEdits
     base: () => (opened === null ? saved : Math.max(opened, saved ?? -1)),
     write: async (v, base) => {
       try {
-        const next = await o.write(v, base);
-        saved = next; error = null; blocking = false;
+        let next: number;
+        try {
+          next = await o.write(v, base);
+        } catch (e0) {
+          const e = sitemapCallableError(e0);
+          if (!(e instanceof SitemapConflictError)) { uncertain = { base, v }; throw e; }
+          // 自分の前の書き込みが届いていただけなら、その editSeq を基準に 1 回だけ書き直す（自分と競合して編集を捨てない）
+          const committed = await committedBefore(base);
+          if (committed === null) throw e;
+          uncertain = null;
+          saved = committed;
+          next = await o.write(v, committed);
+        }
+        saved = next; error = null; blocking = false; uncertain = null;
         return next;
       } catch (e) {
         throw sitemapCallableError(e);
@@ -359,7 +422,7 @@ export function createSitemapSaver(o: { delayMs: number; write: (v: SitemapEdits
     },
     onError: (e) => {
       error = e instanceof Error ? e : new Error(String(e));
-      if (e instanceof SitemapConflictError) { q.reset(); saved = null; blocking = false; } else blocking = true;
+      if (e instanceof SitemapConflictError) { q.reset(); saved = null; blocking = false; uncertain = null; } else blocking = true;
       setTimeout(emit, 0);
     },
   });
@@ -380,8 +443,14 @@ export function createSitemapSaver(o: { delayMs: number; write: (v: SitemapEdits
       if (blocking) throw new Error(SITEMAP_SAVE_FAILED_BEFORE_SUBMIT);
       return Math.max(openedEditSeq, saved ?? -1);
     },
+    /** ログアウトの前: 待ちを書き切る（true＝失敗が残っていない。requirements.saveNow と同じ形） */
+    async saveNow(): Promise<boolean> {
+      await q.flush();
+      emit();
+      return !blocking;
+    },
     /** 競合の後・依頼の後など、基準を開き直した値に戻す */
-    reset() { q.reset(); saved = null; error = null; blocking = false; emit(); },
+    reset() { q.reset(); saved = null; error = null; blocking = false; uncertain = null; emit(); },
   };
 }
 
@@ -399,6 +468,8 @@ export function createSaverRegistry<S extends { reset: () => void }>(make: (pid:
       return s;
     },
     clear() { m.forEach((s) => s.reset()); m.clear(); },
+    /** いまある全部（ログアウトの前に書き切る） */
+    all: (): S[] => [...m.values()],
     size: () => m.size,
   };
 }

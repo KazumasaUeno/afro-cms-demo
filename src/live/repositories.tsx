@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import {
-  arrayRemove, arrayUnion, collection, deleteField, doc, getDoc, limit, limitToLast, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc,
+  arrayRemove, arrayUnion, collection, deleteField, doc, getDoc, getDocFromServer, limit, limitToLast, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc,
   Timestamp, updateDoc, where, writeBatch, type DocumentData,
 } from 'firebase/firestore';
 import { REQUIREMENT_QUESTIONS } from '@/data/requirements';
@@ -674,8 +674,28 @@ const siteSavers = createSaverRegistry((pid) => createSitemapSaver({
     if (!out || typeof out.editSeq !== 'number') throw new Error('saveSitemapEdits: unexpected result');
     return out.editSeq;
   },
+  // 応答が失われた書き込みの確かめ（サーバーから読む。キャッシュの値で「書けていた」と決めない）
+  readServer: async () => {
+    const s = await getDocFromServer(siteInternalRef(pid));
+    const i = s.exists() ? sitemapInternalDoc(s.data()) : null;
+    return i ? { editSeq: i.editSeq, edits: { before: i.before, after: i.after, ...(i.devComment ? { devComment: { text: i.devComment.text } } : {}) } } : null;
+  },
 }));
 const siteSaver = (uid: string, pid: string) => siteSavers.get(uid, pid);
+
+/** 画面のキャンバスが待っている編集（SitemapView の saveDelayMs の間）を保存のまとめへ渡す関数（ログアウトの前に呼ぶ） */
+const siteEditorFlushers = new Set<() => void>();
+export function registerSitemapEditorFlush(fn: () => void): () => void {
+  siteEditorFlushers.add(fn);
+  return () => { siteEditorFlushers.delete(fn); };
+}
+
+/** ログアウトの前: キャンバスの待ち → 全案件の保存のまとめを書き切る（true＝失敗が残っていない。requirements.saveNow と同じ形） */
+export async function flushSitemapSaves(): Promise<boolean> {
+  siteEditorFlushers.forEach((f) => f());
+  const results = await Promise.all(siteSavers.all().map((s) => s.saveNow()));
+  return results.every(Boolean);
+}
 
 const IDLE_SAVE: SitemapSaveStatus = { idle: true, error: null };
 const noopSubscribe = () => () => {};

@@ -4,6 +4,7 @@ import type { SitemapNode, SitemapNodeData, SitemapVariant } from '@/types';
 import { validateLabel, validatePath } from './metrics';
 import { KIND_META } from './PageNode';
 import { useFullScreenDialog } from '@/hooks/useMediaQueries';
+import { addPageKindOptions } from './addPageRules';
 
 export interface NewPageInput {
   label: string;
@@ -22,20 +23,19 @@ interface Props {
   onAdd: (input: NewPageInput) => void;
 }
 
-const KINDS: SitemapNodeData['kind'][] = ['page', 'section', 'new', 'cta'];
-
 export function AddPageDialog({ open, variant, nodes, defaultParentId, onClose, onAdd }: Props) {
   const fullScreen = useFullScreenDialog();
   const home = nodes.find((n) => n.data.kind === 'home');
+  const { kinds, kind: defaultKind } = addPageKindOptions(variant, nodes);
   const [form, setForm] = useState<NewPageInput>({ label: '', path: '/', kind: 'new', parentId: '', reason: '' });
   const [touched, setTouched] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setForm({ label: '', path: '/', kind: variant === 'after' ? 'new' : 'page', parentId: defaultParentId ?? home?.id ?? '', reason: '' });
+      setForm({ label: '', path: '/', kind: defaultKind, parentId: defaultParentId ?? home?.id ?? '', reason: '' });
       setTouched(false);
     }
-  }, [open, variant, defaultParentId, home?.id]);
+  }, [open, variant, defaultParentId, home?.id, defaultKind]);
 
   const labelErr = validateLabel(form.label);
   const pathErr = validatePath(form.path, nodes);
@@ -62,8 +62,9 @@ export function AddPageDialog({ open, variant, nodes, defaultParentId, onClose, 
             error={touched && !!labelErr} helperText={touched && labelErr ? labelErr : '例：採用情報'} inputProps={{ maxLength: 30 }} />
           <TextField label="URLパス" value={form.path} onChange={(e) => setForm({ ...form, path: e.target.value })}
             error={touched && !!pathErr} helperText={touched && pathErr ? pathErr : '例：/recruit'} inputProps={{ maxLength: 70, spellCheck: false }} />
-          <TextField select label="種類" value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as SitemapNodeData['kind'] })}>
-            {KINDS.map((k) => <MenuItem key={k} value={k}>{KIND_META[k].label}</MenuItem>)}
+          <TextField select label="種類" value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as SitemapNodeData['kind'] })}
+            {...(kinds.length === 1 && kinds[0] === 'home' ? { helperText: '最初のページはトップになります（トップは図に 1 件）' } : {})}>
+            {kinds.map((k) => <MenuItem key={k} value={k}>{KIND_META[k].label}</MenuItem>)}
           </TextField>
           <TextField select label="親ページ（つなぐ先）" value={form.parentId} onChange={(e) => setForm({ ...form, parentId: e.target.value })}>
             <MenuItem value="">つながない</MenuItem>

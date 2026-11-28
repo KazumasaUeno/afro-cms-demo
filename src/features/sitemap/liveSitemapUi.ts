@@ -1,5 +1,5 @@
 import type { SitemapEdge, SitemapNode, SitemapState, SitemapVariant } from '@/types';
-import type { SitemapDiagram, SitemapStatus } from '@/live/sitemap';
+import type { SitemapStatus } from '@/live/sitemap';
 import { aiCanGenerate, type AiFlagMode } from '@/features/requirements/aiDraft/aiDraftState';
 
 /**
@@ -11,14 +11,8 @@ export type SitemapViewerRole = 'admin' | 'developer' | 'client';
 
 /* ---------- 手元の値の重ね（保存の echo で編集が巻き戻らないように） ---------- */
 
-/** 図の比較用の署名（ノードの順・座標・名前・パス・種類・理由・接続。キーの順や undefined の有無に左右されない） */
-export function sitemapSig(d: { before: SitemapDiagram; after: SitemapDiagram; devText?: string }): string {
-  const g = (x: SitemapDiagram) => [
-    x.nodes.map((n) => [n.id, Math.round(n.position.x), Math.round(n.position.y), n.data.label, n.data.path, n.data.kind, n.data.reason ?? '']),
-    x.edges.map((e) => [e.id, e.source, e.target]),
-  ];
-  return JSON.stringify([g(d.before), g(d.after), (d.devText ?? '').trim()]);
-}
+/** 図の比較用の署名（正は src/live/sitemap.ts。保存のまとめも同じ判定を使う） */
+export { sitemapSig } from '@/live/sitemap';
 
 /**
  * 手元の値（overlay）をどうするか。
@@ -110,8 +104,9 @@ export function sitemapLiveDescription(status: SitemapStatus | null, created: bo
 /* ---------- AI の下書き ---------- */
 
 /** AI の状態（生成中は工程だけ・秒数は出さない。失敗は再試行と手で作る） */
-export function sitemapAiPhase(ai: { running: boolean; failed: boolean } | null): 'idle' | 'running' | 'failed' {
-  if (ai?.running) return 'running';
+export function sitemapAiPhase(ai: { running: boolean; failed: boolean; leaseUntilMs?: number } | null, now: number = Date.now()): 'idle' | 'running' | 'failed' {
+  // 読んだ後に lease が切れた（worker が止まった）実行は失敗として扱い、もう一度試せるようにする（codex P2。サーバーも lease 切れは奪える）
+  if (ai?.running) return ai.leaseUntilMs !== undefined && ai.leaseUntilMs <= now ? 'failed' : 'running';
   if (ai?.failed) return 'failed';
   return 'idle';
 }

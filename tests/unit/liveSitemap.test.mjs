@@ -38,7 +38,11 @@ test('internal・版文書: editSeq・revision・contentHash が読めなけれ�
 
 test('AI ジョブ: running・failed・エラーのコードだけ（本文は読まない）', () => {
   assert.equal(sitemapAiDraftOf(null), null);
-  assert.deepEqual(sitemapAiDraftOf({ job: { state: 'running' } }), { running: true, failed: false, kept: false });
+  // running は lease 内だけ（修正バッチ 2。lease の無い・切れた running は失敗＝もう一度試せる）
+  const lease = { toDate: () => new Date(Date.parse('2026-11-28T03:01:00Z')) };
+  const T0 = Date.parse('2026-11-28T03:00:00Z');
+  const LMS = Date.parse('2026-11-28T03:01:00Z');
+  assert.deepEqual(sitemapAiDraftOf({ job: { state: 'running', leaseUntil: lease } }, T0), { running: true, failed: false, kept: false, leaseUntilMs: LMS });
   assert.deepEqual(sitemapAiDraftOf({ state: 'failed', lastError: { code: 'timeout', message: 'x' } }), { running: false, failed: true, kept: false, errorCode: 'timeout' });
   // code review Minor: 成功の後の作り直しが失敗 → state は ready のまま lastError。失敗として出す
   assert.deepEqual(sitemapAiDraftOf({ state: 'ready', generated: { applied: true }, lastError: { code: 'ai-timeout' }, job: { state: 'idle' } }),
@@ -47,7 +51,7 @@ test('AI ジョブ: running・failed・エラーのコードだけ（本文は�
   assert.deepEqual(sitemapAiDraftOf({ state: 'ready', generated: { applied: false }, job: { state: 'idle' } }), { running: false, failed: false, kept: true });
   assert.deepEqual(sitemapAiDraftOf({ state: 'ready', generated: { applied: true }, job: { state: 'idle' } }), { running: false, failed: false, kept: false });
   // 作り直しの依頼中は前の失敗・kept を出さない
-  assert.deepEqual(sitemapAiDraftOf({ state: 'ready', generated: { applied: false }, lastError: { code: 'x' }, job: { state: 'running' } }), { running: true, failed: false, kept: false, errorCode: 'x' });
+  assert.deepEqual(sitemapAiDraftOf({ state: 'ready', generated: { applied: false }, lastError: { code: 'x' }, job: { state: 'running', leaseUntil: lease } }, T0), { running: true, failed: false, kept: false, errorCode: 'x', leaseUntilMs: LMS });
 });
 
 test('お客様: 読む版は依頼中・承認済み → revision、下書き → 前回承認版、承認歴なし → null（準備中）', () => {
@@ -319,4 +323,150 @@ test('code review Minor: 保存のまとめは利用者＋案件ごと。ログ�
   assert.equal(timer.q.length, 0, '予約を止める');
   assert.deepEqual(writes, []);
   assert.notEqual(reg.get('uA', 'p1'), a, 'ログインし直したら新しいまとめ');
+});
+
+/* ---------- 修正バッチ 2（2026-11-28 QA D-1b・再レビュー・Codex） ---------- */
+import { createPendingSave } from '../../src/features/sitemap/pendingSave.ts';
+import { addPageKindOptions } from '../../src/features/sitemap/addPageRules.ts';
+import { sitemapAiPhase } from '../../src/features/sitemap/liveSitemapUi.ts';
+import { SITEMAP_AI_LEASE_EXPIRED, SITEMAP_NETWORK_ERROR_TEXT } from '../../src/live/sitemap.ts';
+
+test('rereview Major / codex P2: ほかの人の保存（7）を読み込んだ後の編集は 7 を基準にする（自分の前の 5 に戻らない・競合にしない）', async () => {
+  const timer = fakeTimer();
+  const bases = [];
+  let server = 4;
+  const s = createSitemapSaver({ delayMs: 1200, timer, write: async (_v, base) => { bases.push(base); if (base !== server) throw { code: 'functions/aborted' }; return ++server; } });
+  s.push(edits(1), 4);
+  await s.flush(); // 自分の保存 4 → 5
+  server = 7; // ほかの人が 6・7 を保存し、画面はそれを読み込んだ（手元の値が無いので開いた時点は 7）
+  s.push(edits(2), 7);
+  await s.flush();
+  assert.deepEqual(bases, [4, 7]);
+  assert.equal(s.status().error, null);
+});
+
+test('codex P2: 応答だけ失われた保存（サーバーは書けていた）→ もう一度保存は自分と競合せず、届いた editSeq で書き直す', async () => {
+  const timer = fakeTimer();
+  const bases = [];
+  let server = { editSeq: 5, edits: null };
+  let call = 0;
+  const s = createSitemapSaver({
+    delayMs: 1200, timer,
+    write: async (v, base) => {
+      bases.push(base); call++;
+      if (base !== server.editSeq) throw { code: 'functions/aborted' };
+      server = { editSeq: base + 1, edits: v };
+      if (call === 1) throw Object.assign(new Error('internal'), { code: 'functions/internal' }); // 書けたが応答が失われた
+      return server.editSeq;
+    },
+    readServer: async () => server,
+  });
+  s.push(edits(1), 5);
+  await s.flush();
+  assert.equal(s.status().error?.message, SITEMAP_NETWORK_ERROR_TEXT, '内部の文言（internal）を出さない（QA O-4）');
+  s.push(edits(2), 5); // 「もう一度保存」（手元の値は edits(1) の後に edits(2)）
+  await s.flush();
+  assert.equal(s.status().error, null, '自分の書き込みと競合しない（手元の編集を捨てない）');
+  assert.deepEqual(bases, [5, 5, 6]);
+  assert.equal(server.editSeq, 7);
+  assert.equal(server.edits.devComment.text, 'c2');
+});
+
+test('codex P2: 応答が失われた後の競合でも、サーバーの中身が自分の書き込みと違えば本当の競合（ほかの人の保存を上書きしない）', async () => {
+  const timer = fakeTimer();
+  const bases = [];
+  let server = { editSeq: 5, edits: null };
+  let call = 0;
+  const s = createSitemapSaver({
+    delayMs: 1200, timer,
+    write: async (v, base) => {
+      bases.push(base); call++;
+      if (base !== server.editSeq) throw { code: 'functions/aborted' };
+      if (call === 1) throw { code: 'functions/unavailable' }; // 届かなかった
+      server = { editSeq: base + 1, edits: v };
+      return server.editSeq;
+    },
+    readServer: async () => server,
+  });
+  s.push(edits(1), 5);
+  await s.flush();
+  server = { editSeq: 6, edits: edits(9) }; // その間にほかの人が保存
+  s.push(edits(2), 5);
+  await s.flush();
+  assert.equal(s.status().error instanceof SitemapConflictError, true);
+  assert.deepEqual(bases, [5, 5]);
+});
+
+test('codex P2: AI 実行中は leaseUntil も見る（切れていれば失敗＝もう一度試せる。読んだ後に切れた分は sitemapAiPhase が now で見直す）', () => {
+  const now = Date.parse('2026-11-28T03:00:00Z');
+  const ts = (ms) => ({ toDate: () => new Date(ms) });
+  const expired = sitemapAiDraftOf({ state: 'ready', job: { state: 'running', leaseUntil: ts(now - 1) } }, now);
+  assert.deepEqual([expired.running, expired.failed, expired.errorCode], [false, true, SITEMAP_AI_LEASE_EXPIRED]);
+  assert.equal(sitemapAiPhase(expired, now), 'failed');
+  assert.equal(sitemapAiDraftOf({ job: { state: 'running' } }, now).running, false, 'lease が無い running はサーバーも実行中とみなさない');
+  const live = sitemapAiDraftOf({ job: { state: 'running', leaseUntil: ts(now + 60_000) } }, now);
+  assert.equal(live.running, true);
+  assert.equal(sitemapAiPhase(live, now), 'running');
+  assert.equal(sitemapAiPhase(live, now + 60_000), 'failed', '読んだ後に lease が切れた');
+});
+
+test('QA O-4: 通信・サーバーの失敗（internal・unavailable・deadline-exceeded）は利用者向けの文言にする', () => {
+  for (const code of ['functions/internal', 'functions/unavailable', 'functions/deadline-exceeded']) {
+    assert.equal(sitemapCallableError(Object.assign(new Error('internal'), { code })).message, SITEMAP_NETWORK_ERROR_TEXT, code);
+  }
+  assert.equal(sitemapCallableError({ code: 'functions/aborted' }) instanceof SitemapConflictError, true);
+});
+
+test('Minor: ログアウトの前の saveNow は待ちを書き切り、失敗が残れば false（registry.all で全案件）', async () => {
+  const { createSaverRegistry } = await import('../../src/live/sitemap.ts');
+  const timer = fakeTimer();
+  let fail = false;
+  const writes = [];
+  const reg = createSaverRegistry(() => createSitemapSaver({ delayMs: 1200, timer, write: async (_v, base) => { if (fail) throw { code: 'functions/unavailable' }; writes.push(base); return base + 1; } }));
+  reg.get('u', 'p1').push(edits(1), 2);
+  reg.get('u', 'p2').push(edits(1), 0);
+  const ok = await Promise.all(reg.all().map((s) => s.saveNow()));
+  assert.deepEqual(ok, [true, true]);
+  assert.deepEqual(writes.sort(), [0, 2]);
+  fail = true;
+  reg.get('u', 'p1').push(edits(2), 3);
+  assert.equal(await reg.get('u', 'p1').saveNow(), false);
+});
+
+test('codex P1: キャンバスの待ち（300ms）は flush ですぐ書き、cancel では書かない（demo の離れたとき）', () => {
+  const timer = fakeTimer();
+  const p = createPendingSave(timer);
+  const out = [];
+  p.schedule(() => out.push(1), 300);
+  p.schedule(() => out.push(2), 300);
+  assert.equal(timer.q.length, 1, '前の予約は取り消す');
+  p.flush();
+  assert.deepEqual(out, [2]);
+  assert.equal(timer.q.length, 0);
+  p.flush();
+  assert.deepEqual(out, [2], '2 回目は何もしない');
+  p.schedule(() => out.push(3), 300);
+  p.cancel();
+  timer.fire();
+  assert.deepEqual(out, [2]);
+  p.schedule(() => out.push(4), 300);
+  timer.fire();
+  assert.deepEqual(out, [2, 4]);
+  assert.equal(p.pending(), false);
+});
+
+test('QA D-1b: 手で作った現在の図（空）に最初に追加するページはトップ → callable の encode を通しても検査に通る', () => {
+  const emptyBefore = { nodes: [], edges: [] };
+  const o = addPageKindOptions('before', emptyBefore.nodes);
+  assert.deepEqual(o, { kinds: ['home'], kind: 'home' });
+  const first = { id: 'b-1', position: { x: 0, y: 0 }, data: { label: 'トップ', path: '/', kind: o.kind, reason: undefined } };
+  const v = { before: { nodes: [first], edges: [] }, after };
+  const wire = sdkEncode(sitemapSaveInput('p1', 0, v));
+  assert.deepEqual(validateSitemapDoc({ before: wire.before, after: wire.after }).errors, []);
+  // 従来の既定（ページ）のままだと home_count で拒否される（直す前の不具合）
+  const old = { ...first, data: { ...first.data, kind: 'page' } };
+  assert.deepEqual(validateSitemapDoc({ before: { nodes: [old], edges: [] }, after }).errors.map((e) => e.code), ['home_count']);
+  // トップがある図は従来どおり（demo・改善後）
+  assert.deepEqual(addPageKindOptions('after', after.nodes), { kinds: ['page', 'section', 'new', 'cta'], kind: 'new' });
+  assert.equal(addPageKindOptions('before', [node('b-home', 'home', '/')]).kind, 'page');
 });

@@ -17,6 +17,7 @@ import { KIND_META, type PageFlowNode } from './PageNode';
 import { defaultEdgeOptions, nodeTypes, toFlow } from './flowConfig';
 import { AddPageDialog, type NewPageInput } from './AddPageDialog';
 import { sitemapMetrics, validateLabel } from './metrics';
+import { createPendingSave } from './pendingSave';
 
 const toStoreNodes = (ns: PageFlowNode[]): SitemapNode[] =>
   ns.map((n) => ({ id: n.id, position: { x: Math.round(n.position.x), y: Math.round(n.position.y) }, data: n.data }));
@@ -42,6 +43,11 @@ export interface SitemapEditorSource {
   aiBadge: { tooltip?: string } | null;
   /** 改善後の図の下に出す「開発担当者より」の欄 */
   devCommentPanel: ReactNode;
+  /**
+   * live だけ: 待っている編集（saveDelayMs の間）をすぐ書く関数を受け取る置き場（依頼の前に呼ぶ）。
+   * 渡すと、図の切り替え・画面を離れたときも待ちを書く（codex P1）。demo は渡さない＝従来どおり捨てる
+   */
+  flushRef?: { current: (() => void) | null };
 }
 
 function Editor({ variant, onVariant, source }: { variant: SitemapVariant; onVariant: (v: SitemapVariant) => void; source: SitemapEditorSource }) {
@@ -70,9 +76,12 @@ function Editor({ variant, onVariant, source }: { variant: SitemapVariant; onVar
   }, [stored, setNodes, setEdges]);
 
   // 編集をストアへ保存（ドラッグ中は保存しない・まとめて書く）
+  const pendingSave = useRef<ReturnType<typeof createPendingSave> | null>(null);
+  pendingSave.current ??= createPendingSave();
   useEffect(() => {
-    if (locked || nodes.some((n) => n.dragging)) return;
-    const t = window.setTimeout(() => {
+    const ps = pendingSave.current!;
+    if (locked || nodes.some((n) => n.dragging)) { ps.cancel(); return; }
+    ps.schedule(() => {
       const sn = toStoreNodes(nodes);
       const se = toStoreEdges(edges);
       const s = sig(sn, se);
@@ -80,8 +89,18 @@ function Editor({ variant, onVariant, source }: { variant: SitemapVariant; onVar
       lastSig.current = s;
       onSave(variant, sn, se);
     }, saveDelayMs);
-    return () => window.clearTimeout(t);
   }, [nodes, edges, variant, onSave, locked, saveDelayMs]);
+  // 離れるとき（図の切り替えは key が変わって外れる）: live（flushRef あり）は待ちを書く、demo は従来どおり捨てる
+  const flushRef = source.flushRef;
+  useEffect(() => {
+    const ps = pendingSave.current!;
+    if (flushRef) flushRef.current = ps.flush;
+    return () => {
+      if (!flushRef) { ps.cancel(); return; }
+      if (flushRef.current === ps.flush) flushRef.current = null;
+      ps.flush();
+    };
+  }, [flushRef]);
 
   const selected = nodes.find((n) => n.selected);
   const storeNodes = useMemo(() => toStoreNodes(nodes), [nodes]);
@@ -104,8 +123,10 @@ function Editor({ variant, onVariant, source }: { variant: SitemapVariant; onVar
     const id = `${variant === 'after' ? 'a' : 'b'}-${Date.now().toString(36)}`;
     const parent = nodes.find((n) => n.id === input.parentId);
     const siblings = parent ? edges.filter((e) => e.source === parent.id).length : 0;
-    const position = parent ? { x: parent.position.x + siblings * 60 - 40, y: parent.position.y + 150 } : { x: 0, y: 460 };
-    const node: PageFlowNode = { id, type: 'page', position, selected: true, deletable: true, data: { label: input.label, path: input.path, kind: input.kind, reason: input.reason || undefined } };
+    // トップ（空の図の最初の 1 件。addPageKindOptions）は左上に置き、読み込み後と同じく削除できない（toFlow）
+    const home = input.kind === 'home';
+    const position = parent ? { x: parent.position.x + siblings * 60 - 40, y: parent.position.y + 150 } : home ? { x: 0, y: 0 } : { x: 0, y: 460 };
+    const node: PageFlowNode = { id, type: 'page', position, selected: true, deletable: !home, data: { label: input.label, path: input.path, kind: input.kind, reason: input.reason || undefined } };
     setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), node]);
     if (parent) setEdges((es) => addEdge({ id: `${parent.id}-${id}`, source: parent.id, target: id }, es));
     setAdding(false);
