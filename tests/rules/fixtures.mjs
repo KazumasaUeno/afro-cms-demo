@@ -359,3 +359,102 @@ export function schedReopenBatch(db, { uid = 'devA', pid = 'p1', rev = 1, seq = 
   b.set(doc(db, `projects/${pid}/approvals/schedule-r${rev}-reopen`), schedLogDoc(uid, 'reopen', rev, { note }));
   return b.commit();
 }
+
+// ================= サイトマップ（docs/design/LIVE_SITEMAP_DATA.md §2・§3.3、LIVE_SITEMAP_IMPL_PLAN.md §4 U1-0・U1・§5 G1） =================
+// 中身（internal・版文書・submit の記録）は callable（Admin SDK）だけが書く。ここでは Rules を通さずに置き、
+// クライアントが書く 4 つ（取り下げ・本人承認・代理承認・再計画）を本人の権限で流す。既定は最大の payload（note 200 字）
+
+export const SITE_NOTE = 'サ'.repeat(200);
+/** 版 N の contentHash（hex 64。版ごとに違う値） */
+export const siteHash = (n) => n.toString(16).padStart(2, '0').repeat(32);
+const SITE_GRAPH = {
+  nodes: [
+    { id: 'a-home', position: { x: 0, y: 0 }, data: { label: 'トップ', path: '/', kind: 'home' } },
+    { id: 'a-contact', position: { x: 200, y: 120 }, data: { label: 'お問い合わせ', path: '/contact', kind: 'form', reason: '問い合わせ導線を短くする' } },
+  ],
+  edges: [{ id: 'a-e1', source: 'a-home', target: 'a-contact' }],
+};
+/** 版文書 sitemapVersions/r{N}（submitSitemap の toSitemapVersion と同じ項目） */
+export function siteVersionDoc(n, over = {}) {
+  return {
+    schemaVersion: 1, revision: n, before: SITE_GRAPH, after: SITE_GRAPH, origin: 'manual', sourceReqRevision: 1,
+    devComment: { text: '改善後はお問い合わせを上位に置きました', at: T0, byName: USERS.devA.name },
+    contentHash: siteHash(n), submittedAt: T0, submittedBy: 'devA', ...over,
+  };
+}
+/** 作業中の版 sitemap/internal */
+export function siteInternalDoc(over = {}) {
+  return {
+    schemaVersion: 1, before: SITE_GRAPH, after: SITE_GRAPH, origin: 'manual', sourceReqRevision: 1, editSeq: 3,
+    updatedAt: T0, updatedBy: 'devA', savedByName: USERS.devA.name, ...over,
+  };
+}
+/** サイトマップの承認の記録（kind sitemap。admin は actorRole: 'admin'） */
+export function siteLogDoc(uid, action, revision, extra = {}) {
+  return { ...approvalDoc(uid, action, revision), kind: 'sitemap', ...extra };
+}
+/** 案件の要約 projects/{pid}.sitemap（state: draft | requested | approved。rev は既定で draft=0・それ以外 1） */
+export function siteSummary({ state = 'draft', rev, approvedVia } = {}) {
+  const r = rev ?? (state === 'draft' ? 0 : 1);
+  return {
+    status: state, revision: r,
+    ...(r >= 1 ? { requestedAt: T0, contentHash: siteHash(r) } : {}),
+    ...(state === 'approved' ? { approvedRevision: r, approvedAt: T0, approvedBy: approvedVia ? 'admin1' : 'client1', approvalId: `sitemap-r${r}-approve`, ...(approvedVia ? { approvedVia } : {}) } : {}),
+  };
+}
+
+/**
+ * p1（要件定義書は承認済み・スケジュールは sched の状態）にサイトマップを置く。state: 'none'（未作成）| 'draft' | 'requested' | 'approved'。
+ * internal・版文書 r1〜r{rev}・submit の記録（callable が書くもの）も置く
+ */
+export async function sitemapSeed(env, { state = 'draft', rev, approvedVia, sched = 'approved' } = {}) {
+  await scheduleSeed(env, { state: sched });
+  if (state === 'none') return;
+  const s = siteSummary({ state, rev, approvedVia });
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    const b = writeBatch(db);
+    b.update(doc(db, 'projects/p1'), { sitemap: s });
+    b.set(doc(db, 'projects/p1/sitemap/internal'), siteInternalDoc());
+    for (let n = 1; n <= s.revision; n += 1) {
+      b.set(doc(db, `projects/p1/sitemapVersions/r${n}`), siteVersionDoc(n));
+      b.set(doc(db, `projects/p1/approvals/sitemap-r${n}-submit`), { ...siteLogDoc('devA', 'submit', n, { contentHash: siteHash(n), pageCount: { before: 2, after: 2 } }), at: T0 });
+    }
+    await b.commit();
+  });
+}
+
+/** 取り下げ（requested → draft。note 必須） */
+export function siteWithdrawBatch(db, { uid = 'devA', pid = 'p1', rev = 1, note = SITE_NOTE } = {}) {
+  const b = writeBatch(db);
+  b.update(doc(db, `projects/${pid}`), { 'sitemap.status': 'draft', ...stamp(uid) });
+  b.set(doc(db, `projects/${pid}/approvals/sitemap-r${rev}-withdraw`), siteLogDoc(uid, 'withdraw', rev, { note }));
+  return b.commit();
+}
+/** お客様本人の承認（requested → approved。表示した版の contentHash を送る。approvedVia は消す） */
+export function siteApproveBatch(db, { uid = 'client1', pid = 'p1', rev = 1, hash = siteHash(rev) } = {}) {
+  const b = writeBatch(db);
+  b.update(doc(db, `projects/${pid}`), {
+    'sitemap.status': 'approved', 'sitemap.approvedRevision': rev, 'sitemap.approvedAt': serverTimestamp(), 'sitemap.approvedBy': uid,
+    'sitemap.approvalId': `sitemap-r${rev}-approve`, 'sitemap.approvedVia': deleteField(), ...stamp(uid),
+  });
+  b.set(doc(db, `projects/${pid}/approvals/sitemap-r${rev}-approve`), siteLogDoc(uid, 'approve', rev, { contentHash: hash }));
+  return b.commit();
+}
+/** 管理者の代理承認（requested → approved。approvedVia: 'proxy'＋記録の proxy・note） */
+export function siteProxyBatch(db, { uid = 'admin1', pid = 'p1', rev = 1, hash = siteHash(rev), note = SITE_NOTE } = {}) {
+  const b = writeBatch(db);
+  b.update(doc(db, `projects/${pid}`), {
+    'sitemap.status': 'approved', 'sitemap.approvedRevision': rev, 'sitemap.approvedAt': serverTimestamp(), 'sitemap.approvedBy': uid,
+    'sitemap.approvalId': `sitemap-r${rev}-approve`, 'sitemap.approvedVia': 'proxy', ...stamp(uid),
+  });
+  b.set(doc(db, `projects/${pid}/approvals/sitemap-r${rev}-approve`), siteLogDoc(uid, 'approve', rev, { contentHash: hash, proxy: true, note }));
+  return b.commit();
+}
+/** 再計画（approved → draft。note 必須。internal は callable が書くので触らない） */
+export function siteReopenBatch(db, { uid = 'devA', pid = 'p1', rev = 1, note = SITE_NOTE } = {}) {
+  const b = writeBatch(db);
+  b.update(doc(db, `projects/${pid}`), { 'sitemap.status': 'draft', ...stamp(uid) });
+  b.set(doc(db, `projects/${pid}/approvals/sitemap-r${rev}-reopen`), siteLogDoc(uid, 'reopen', rev, { note }));
+  return b.commit();
+}

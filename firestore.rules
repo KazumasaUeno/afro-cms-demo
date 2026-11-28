@@ -211,13 +211,15 @@ service cloud.firestore {
         // consult（相談の要約。LIVE_DASHBOARD_TASKS_CONSULT §2.2・§2.3）は任意。書けるのは consultOk の分岐だけ（下の projUpdateOk の
         // どの分岐の changed().hasOnly にも含めない）。ここで許さないと、consult を持つ案件の基本情報の編集が validProject で落ちる
         // schedule（スケジュールの要約。LIVE_SCHEDULE_WBS_DATA §2.1）も任意で、書けるのは schedule の専用分岐だけ（consult と同じ型。S-16-1）
+        // sitemap（サイトマップの要約。LIVE_SITEMAP_DATA §2.1）も同じ型。段 0（LIVE_SITEMAP_IMPL_PLAN U1-0）は許すだけで、書ける分岐は無い
         && d.keys().hasOnly(['schemaVersion','clientName','siteName','siteUrl','siteUrlKey','industry','accent','launchDate',
-                             'ownerUid','memberUids','requirements','archived','consult','schedule','createdAt','createdBy','updatedAt','updatedBy'])
+                             'ownerUid','memberUids','requirements','archived','consult','schedule','sitemap','createdAt','createdBy','updatedAt','updatedBy'])
         && ansText(d.clientName, reClientName()) && ansText(d.siteName, reSiteName())
         && ansUrl(d.siteUrl, reMaxUrl()) && str(d.siteUrlKey, 1, 253)
         && ansText(d.industry, reIndustry()) && d.accent in accentOptions()
         && (!d.keys().hasAny(['launchDate']) || d.launchDate is timestamp)
         && (!d.keys().hasAny(['schedule']) || d.schedule is map)
+        && (!d.keys().hasAny(['sitemap']) || d.sitemap is map)
         && d.memberUids is list && d.requirements is map && d.archived is bool;
     }
 
@@ -321,6 +323,7 @@ service cloud.firestore {
       let k = request.resource.data.get('kind', null);
       return k == 'requirements' ? reqApprCreateOk(pid, aid, a)
            : k == 'schedule' ? schedApprOk(pid, aid, a)                               // 段 1（G1 の計測の述語。拒否側の網羅は U1-3）
+           : k == 'sitemap' ? false                                                   // サイトマップ段 0（LIVE_SITEMAP_IMPL_PLAN U1-0・S-4）: 全拒否
            : false;
     }
     function reqApprCreateOk(pid, aid, a) {
@@ -358,7 +361,7 @@ service cloud.firestore {
       let d = request.resource.data;
       return (r == 'developer' || r == 'admin')
         && validProject(d)
-        && !d.keys().hasAny(['consult','schedule'])                                   // 作成時に偽の相談・スケジュールの要約を持たせない（SR-02）
+        && !d.keys().hasAny(['consult','schedule','sitemap'])                         // 作成時に偽の相談・スケジュール・サイトマップの要約を持たせない（SR-02・S-10）
         && d.ownerUid == request.auth.uid
         && ((r == 'developer' && d.memberUids == [request.auth.uid])
             || (r == 'admin' && adminMembersOk(d.memberUids)))
@@ -510,6 +513,17 @@ service cloud.firestore {
         allow update: if sid == 'current' ? schedCurUpdateOk(pid, acctOrNull())
                        : sid == 'internal' && schedIntUpdateOk(pid, acctOrNull());
         allow delete: if false;
+      }
+
+      // ---------- sitemap/{sid}・sitemapVersions/{vid}（サイトマップ。LIVE_SITEMAP_DATA §2.2・§2.3・§3.3） ----------
+      // 中身（作業中の版・お客様に出した版）を書くのは callable（Admin SDK）だけ（P-1・D-1）。段 0（U1-0）は読み取りも全拒否
+      match /sitemap/{sid} {
+        allow read: if false;
+        allow create, update, delete: if false;                                       // 作業中の版は saveSitemapEdits・worker だけ（P-1）
+      }
+      match /sitemapVersions/{vid} {
+        allow read: if false;
+        allow create, update, delete: if false;                                       // 版文書は submitSitemap の create() だけ・以後不変（D-3）
       }
 
       // ---------- messages（相談。上の msgCreateOk / consultOk。追記のみ） ----------
