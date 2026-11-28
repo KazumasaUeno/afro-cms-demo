@@ -117,3 +117,37 @@ Vite（5180）・preview 2 本（4173/4174）・エミュレータ（java・node
 ### 後片付け
 
 Vite・エミュレータ・ヘッドレス Chrome を停止し、5180/9333/8080/9099/5001/4400/4500/9150/4000 の LISTEN 0 件・java 0 件を確認。emulator のデータは保存していない。`git status` は本ファイルのみ。
+
+## 再確認 2 (3dbf2ce)
+
+- 対象: `feat/live-sitemap` @ 3dbf2ce。エミュレータ `demo-afro-cms` のみ（本番・デプロイ・gcloud なし）。担当: qa-engineer（プロダクションコードは変更していない）
+- 環境・手順: §1 と同じ（Windows 11 / Node v22.14.0 / Vite `--mode emulator` 5180 / ヘッドレス Chrome 158・CDP 9333・使い捨てプロファイル）。起動前に該当ポートの LISTEN 0 件を確認。functions の読み込み（`saveSitemapEdits` 等 9 本）をログで確認。seed は `--with-sitemap` 付き、`qa-sm-new`・`qa-sm-schedreq` を同じ手順で作成。`functions/.env.local` は `AI_SITEMAP_MODE=off`。`.env.emulator.local` は作っていない
+- 自動テストは今回再実行していない
+
+| # | 確認 | 結果 | 根拠 |
+|---|---|---|---|
+| R2-1 | D-1b: `qa-sm-new` で「手で作る」→「現在 Before」（空）→ ページを追加 → もう 1 件 → 再読み込み | **PASS** | Before は 0 件。1 件目の「種類」はトップだけ＋「最初のページはトップになります（トップは図に 1 件）」。「現トップ」`/` を追加 → editSeq 2・REST before `現トップ:home`。2 件目は種類 4 つ（ページ・セクション・新設・CTA）、「現会社案内」→ editSeq 3・before `現トップ:home,現会社案内:page`。再読み込み後も 2 件 |
+| R2-2 | P1: 選んだページの名前を変えて同じタスク内（17.6ms）で Before/After を切り替える | **PASS** | editSeq 3→4、REST after `改会社案内A` |
+| R2-3 | P1: 名前を変えて同じタスク内（13.4ms）で画面を離れる（`/projects` へ SPA 遷移） | **PASS** | editSeq 4→5、REST before `改現会社B`。開き直すと Before・After とも変更が残る |
+| R2-4 | P1: 名前を変えて同じタスク内（27.8ms）で「承認を依頼する」（開発者） | **PASS** | 「お客様へサイトマップの承認を依頼しました」。editSeq 11→12、requested・revision 1、`sitemapVersions/r1` の after に `QA依頼直前`（変更前の名前は無い） |
+| R2-5 | 他の人が保存した後に自分が編集（admin と開発者が別タブで交互に 4 回追加。再読み込みなし） | **PASS** | editSeq 5→6→7→8→9、両タブとも REST と同じ 6 ページ。「ほかの人」の表示・通知なし |
+| R2-6 | O-4: 保存要求 1 件を CDP `Fetch.failRequest` で失敗させる → 続けて編集 | **PASS** | 通知・注記「保存できませんでした。接続を確かめて、もう一度お試しください」＋「もう一度保存」。「internal」の文言なし。次の追加で editSeq 9→10、失敗時のページも含めて保存。競合の表示なし |
+| R2-7 | 回帰: 2 タブ競合（s9b と同じ手順） | **PASS** | A 保存 10→11、B は「ほかの人が先に保存しました。最新を読み込みました」、REST は 11 のまま・B の画面は A の内容 |
+| R2-8 | 回帰: `reqdoc-v3-approved` を admin が取り下げ → ページ追加 → 開発者が依頼 → お客様が承認 | **PASS** | 取り下げ → editSeq 2 → revision 2・requested → お客様「サイトマップを承認しました」approved・approvedRevision 2。approvals `sitemap-r1-submit,r1-withdraw,r2-submit,r2-approve` |
+| R2-9 | コンソール error・例外 / emulator の拒否 | **PASS（error 0）／warning あり** | error・例外は全 context 0 件。warning は R2-1 の 9 件（下記 O-5）だけ。ログは saved 14・submitted 2・rejected 1（R2-7 の `aborted`）、permission-denied 0 |
+
+### O-5（P3）ページの追加ダイアログで MUI の warning（種類の値が選択肢に無い）
+
+- R2-1 で `MUI: You have provided an out-of-range value \`new\` … available values are \`home\``（3 件）と、トップを追加した後の `out-of-range value \`home\` … \`page\`, \`section\`, \`new\`, \`cta\``（6 件）
+- [INFERENCE] `AddPageDialog.tsx:30` の初期値 `kind: 'new'` と、開いたときに effect で入れる既定（同 :35）のあいだの描画で、選択肢（同 :67、`addPageKindOptions`）と値が食い違っている。保存される値は正しい（REST で home / page）。描画中に既定を合わせるかは frontend の判断
+
+### 未検証
+
+- 通信失敗は CDP のネットワーク失敗 1 種類だけ（500・タイムアウト・応答の消失は未実施。「応答の消失後の確認」の経路は画面では見ていない）
+- 失敗の通知が次の保存の成功後に消えるかは数えていない（次の追加の直後もしばらく通知が残っていた）
+- ログアウト時の flush、AI の lease 切れ、AI へ送るパスの伏せ字は画面で未確認（単体テストのみ）
+- ライトテーマ・幅別の見た目は今回見ていない
+
+### 後片付け
+
+Vite・エミュレータ・ヘッドレス Chrome を停止し、5180/9333/8080/9099/5001/4400/4500/9150/4000 の LISTEN 0 件・java 0 件・使い捨てプロファイルの chrome 0 件を確認。emulator のデータは保存していない。
