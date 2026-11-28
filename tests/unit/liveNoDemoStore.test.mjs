@@ -53,6 +53,11 @@ test('live から届くモジュールが useDemo() を呼ばない（useDemoOpt
   assert.ok(reach.size > 50, `live の import をたどれていない（${reach.size} 件）`);
   assert.ok(reach.has(path.join(src, 'features/projects/ApprovalHistory.tsx')), 'ApprovalHistory が live から届く前提が崩れた（テストの見直しが要る）');
   assert.ok(reach.has(path.join(src, 'features/sitemap/SitemapView.tsx')), 'LiveSitemapPage から SitemapView をたどれていない（テストの見直しが要る）');
+  // お客様ポータルの確認・承認（live）からサイトマップの区画（SitemapApprovalSection）へ届く（LIVE_SITEMAP_IMPL_PLAN U4・P-13）
+  assert.ok(reach.has(path.join(src, 'live/pages/PortalApprovalPage.tsx')), 'PortalApprovalPage が live から届く前提が崩れた（テストの見直しが要る）');
+  assert.ok(reach.has(path.join(src, 'features/portal/PortalApprovalParts.tsx')), 'PortalApprovalPage から PortalApprovalParts をたどれていない（テストの見直しが要る）');
+  assert.ok(reach.has(path.join(src, 'features/sitemap/SitemapViewer.tsx')), 'PortalApprovalParts から SitemapViewer をたどれていない（テストの見直しが要る）');
+  assert.ok(!reach.has(path.join(src, 'features/portal/PortalApprovalsPage.tsx')), 'live から demo の PortalApprovalsPage（useDemo）へ届いている');
   const bad = [...reach]
     .filter(([f]) => !ALLOWED.has(rel(f)) && /\buseDemo\(/.test(fs.readFileSync(f, 'utf8')))
     .map(([f, parent]) => `${rel(f)}（← ${parent ? rel(parent) : '入口'}）`);

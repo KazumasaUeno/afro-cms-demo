@@ -1,11 +1,15 @@
-import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography } from '@mui/material';
-import { BadgeCheck, Lock } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { Box, Button, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography } from '@mui/material';
+import { BadgeCheck, Lock, Network, Sparkles } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
 import { StatusPill, Surface } from '@/components/ui';
 import { formatDate, formatDateTime } from '@/services/time';
 import { ymdToIso } from '@/features/projects/projectForm';
 import { tokens } from '@/theme/tokens';
 import { AREAS } from '@/components/layout/nav';
+import { sitemapCreated } from '@/data/sitemap';
+import { SitemapViewer } from '@/features/sitemap/SitemapViewer';
+import { SitemapDevCommentView } from '@/features/sitemap/DevCommentView';
+import type { SitemapState } from '@/types';
 import type { ApprovalKey, ApprovalStep } from './portalSteps';
 
 /**
@@ -84,5 +88,64 @@ export function ScheduleDateCards({ schedule }: { schedule: { buildDue?: string;
         </Box>
       ))}
     </Box>
+  );
+}
+
+/**
+ * サイトマップの節目（一覧・図・理由最大 3 件・開発担当者より）。PortalApprovalsPage.tsx の「3. サイトマップ」の区画をそのまま分けた
+ * （LIVE_SITEMAP_IMPL_PLAN P-13・U4: live のお客様ポータルが同じ部品を使う。props だけ・DemoStore を読まない）。
+ * sitemap: お客様に見せる版（demo は state.sitemap、live は版文書 sitemapVersions/r{N} から作った値）。action は「承認する」のボタン。
+ * keepWhenLocked・approvedLabel は live だけ（調整中に前回承認の版を見せる・代理承認の表記）。渡さなければ demo と同じ。
+ * 文字列（ページ名・理由・コメント）はテキストとして描画する（HTML として解釈しない。SM-26）
+ */
+export function SitemapApprovalSection({ step, sitemap, action, keepWhenLocked, approvedLabel }: { step: ApprovalStep; sitemap: SitemapState; action?: ReactNode; keepWhenLocked?: boolean; approvedLabel?: string }) {
+  // サイトマップの図（閲覧だけ）を開いているか（0.39.5）
+  const [showSitemap, setShowSitemap] = useState(false);
+  const afterPages = sitemap.after.nodes;
+  const newPages = afterPages.filter((n) => n.data.kind === 'new');
+  return (
+    <StepCard step={step} action={action} {...(keepWhenLocked !== undefined ? { keepWhenLocked } : {})} {...(approvedLabel !== undefined ? { approvedLabel } : {})}>
+      {/* サイトマップは要件定義書の承認のときに作る（0.29.4）。承認前はこの欄ごと隠れるが、念のため未作成でも空の一覧を出さない */}
+      {!sitemapCreated(sitemap) ? (
+        <Typography variant="body2" color="text.secondary">アフロがサイトマップを作成しています。できあがると、ここでページ構成をご確認いただけます。</Typography>
+      ) : (
+        <>
+          <Typography variant="body2" sx={{ mb: 1.5 }}>
+            リニューアル後は <b>{afterPages.length}</b> ページの構成です（新しく作るページ <b>{newPages.length}</b>）。
+          </Typography>
+          <Box component="ul" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, listStyle: 'none', m: 0, p: 0 }}>
+            {afterPages.map((n) => (
+              <Box
+                component="li" key={n.id} title={n.data.reason}
+                sx={{
+                  px: 1.25, py: 0.5, borderRadius: 2, fontSize: 13, fontWeight: 600,
+                  bgcolor: n.data.kind === 'new' ? AREA.soft : tokens.color.bgSubtle, color: n.data.kind === 'new' ? AREA.color : tokens.color.inkSoft,
+                }}
+              >
+                {n.data.kind === 'new' && <Sparkles size={12} style={{ marginRight: 4, verticalAlign: '-1px' }} />}
+                {n.data.label}
+              </Box>
+            ))}
+          </Box>
+          <Button size="small" variant="outlined" startIcon={<Network size={15} />} aria-expanded={showSitemap} onClick={() => setShowSitemap((v) => !v)} sx={{ mt: 2 }}>
+            {showSitemap ? 'サイトマップの図を閉じる' : 'サイトマップの図を見る'}
+          </Button>
+          <Collapse in={showSitemap} unmountOnExit>
+            <Box sx={{ mt: 1.5 }}><SitemapViewer sitemap={sitemap} /></Box>
+          </Collapse>
+          {newPages.some((n) => n.data.reason) && (
+            <Stack spacing={0.75} sx={{ mt: 2 }}>
+              {newPages.filter((n) => n.data.reason).slice(0, 3).map((n) => (
+                <Typography key={n.id} variant="caption" sx={{ display: 'block' }}>
+                  <b>{n.data.label}</b>: {n.data.reason}
+                </Typography>
+              ))}
+            </Stack>
+          )}
+          {/* 開発担当者からのコメント（読むだけ。2026-11-17 会議。AI の改善理由の後に、開発者の意図を出す） */}
+          {sitemap.devComment?.text && <Box sx={{ mt: 2 }}><SitemapDevCommentView comment={sitemap.devComment} /></Box>}
+        </>
+      )}
+    </StepCard>
   );
 }

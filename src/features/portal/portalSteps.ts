@@ -31,9 +31,11 @@ export const PREPARING = 'アフロが準備中です。準備ができると承
  * 状態は store の既存の値から導く（ポータル専用の状態は持たない）。
  * ウォーターフォールなので、前の節目が終わるまで次は locked（お客様の確認待ちにしない）。
  * 前の節目が終わっても、アフロが承認を依頼するまでは locked（2026-11-17 会議「アフロの準備ができる前に承認待ちになる」。
- * 以前は要件定義書の承認と同時にサイトマップが承認待ちになっていた）。理由は PREPARING の文言
+ * 以前は要件定義書の承認と同時にサイトマップが承認待ちになっていた）。理由は PREPARING の文言。
+ * designAvailable: false（live。デザインの画面がまだ無い。LIVE_SITEMAP_IMPL_PLAN P-10）のとき、トップデザインの段は承認済みでなければ
+ * locked のまま（承認の依頼を待つ状態にもしない＝依頼のボタンを出さない）。段は隠さない（番号と並びを demo と同じに保つ）。既定 true（demo は不変）
  */
-export function approvalSteps(state: DemoState): ApprovalStep[] {
+export function approvalSteps(state: DemoState, { designAvailable = true }: { designAvailable?: boolean } = {}): ApprovalStep[] {
   const req = state.requirements;
   const appr = stageApprovals(state);
   const clientDone = QUALITY_ITEMS.filter((i) => !!state.qualityChecks[i.id]?.clientAt).length;
@@ -87,7 +89,11 @@ export function approvalSteps(state: DemoState): ApprovalStep[] {
       lockedReason: '品質チェック（納品検収）の完了のあとに、公開の承認をお願いします。',
     },
   ];
-  return steps.map(gate);
+  const out = steps.map(gate);
+  if (designAvailable) return out;
+  return out.map((s) => (s.key === 'design' && s.status !== 'approved'
+    ? { key: s.key, no: s.no, title: s.title, ask: s.ask, status: 'locked' as const, lockedReason: 'サイトマップの承認のあとに、アフロがデザイン案を作成します。' }
+    : s));
 }
 
 /**
