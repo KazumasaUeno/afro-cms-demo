@@ -16,7 +16,7 @@
 - [ ] **AI 下書きのクラウド作業（U5。未実施）**: `docs/operations/RUNBOOK_FIREBASE.md` §9.10 の G-0〜G-7 をユーザーの GO ごとに行い、§9.9 の Release Gate の出力を記録する（段 4 の前）
 
 - [ ] **スケジュールの承認・代理承認が納期の合意に当たるか**（LEGAL REVIEW REQUIRED。`docs/design/LIVE_SCHEDULE_PLAN.md` R-8）: お客様の承認した納品予定日・公開予定日が請負の納期の合意と見なされるか、再計画（承認後の変更）の扱い、管理者の代理承認（上の「代理承認の法的な有効性」がスケジュールにも広がる）。AI は結論を出さない。PM が法務へ持ち込む
-- [ ] **スケジュールの Rules の床（段 0 のリリース ID）**: 段 0 を出す前に本番のいまの Rules のリリース ID を Console で控え、段 0 を出したらそのリリース ID をここに書く（`docs/operations/RUNBOOK_FIREBASE.md` §6.1。以後 Rules を段 0 より前へ戻さない）。未記入
+- [x] **スケジュールの Rules の床（段 0 のリリース ID）**: 段 0 の前の本番 = ruleset `e114b0ca-1b79-4deb-9157-78247081c4ce`（2026-11-26T08:12:52Z。main の firestore.rules と一致＝ドリフトなし、API で確認）。**床 = 段 0 ruleset `beb93e7b-0abd-4d29-9555-18bb03686c0a`（2026-11-28T07:44:31Z、eb7cbfd）**。段 1 = `d0649c16-3b5c-4791-8b31-dac2af4f25fc`（2026-11-28T08:21:50Z）。以後 Rules を beb93e7b より前へ戻さない
 - [ ] **暦に無い日（2/30 など）は画面だけで止めている**（Rules は形式と年の範囲だけ。LIVE_SCHEDULE_PLAN L-12・R-9）。直接書かれた場合は読み込み時に捨てる。Rules で止めるかは式の上限（G1）の余裕と合わせて再判断
 - [ ] **お客様のスケジュールの「全ページの構築」の行は進み具合が 0% のまま**（お客様は構築タスクを読めないため日付だけで状態を出す。src/live/schedule.ts wbsProgressLive）。demo はタスクの割合を出す。お客様に割合を見せるなら、件数だけを current に写すなどの設計が要る（ui-ux-designer・data-backend-architect）
 - [ ] **WBS の保存が競合したあと、画面の下書きが古いまま残る**（QA O-2 2026-11-28・P3・修正前から）: 文言は「最新を読み込みました」だが、未保存の変更がある間は token が追従しない（src/features/schedule/WbsSection.tsx:161）ため、もう一度保存しても競合になる。データは安全（Rules と editSeq で拒否）。抜けるには「元に戻す」。競合時に下書きを最新へ置き換えるか、文言を「元に戻してからやり直してください」にするかは ui-ux-designer・frontend-engineer

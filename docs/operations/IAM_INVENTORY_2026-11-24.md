@@ -270,6 +270,13 @@
 - [FACT] 本番: `/` 200、`assets/buildProposal-Y_Aiwxmx.js` に新しい表記がある（curl）。ログインしての画面確認は未実施（ユーザー）
 - 戻し: Hosting を 0.51.0（5e5fa82 のビルド）へ戻すだけ（Rules・Functions は戻さない）
 
+## 0.52.0 リリース 2026-11-28（JST。ユーザー GO）— スケジュール（段 0 → 段 1）＋要件定義書の編集の重さ
+
+- 段 0: eb7cbfd。Rules（test:rules 763/763）→ ruleset beb93e7b（07:44:31Z）。Hosting（822 files）。[FACT] Hosting が Rules より先に出た（Rules のテスト中に実行）。段 0 の画面の変更は読み取りだけ（kind の読み分け）で書き込みは同じ＝影響なしと判断（eb7cbfd の src 差分で確認）
+- 段 1: release/2026-11-28 c8f5f99（feat/live-schedule 52cb849 ＋ fix/reqdoc-edit-freeze 47776a7）。Rules（test:rules 1057/1057）→ ruleset d0649c16（08:21:50Z。本番から読み戻して一致）→ Hosting（829 files・aiFlag internal）。Functions の変更なし
+- [FACT] 本番: `/` 200・`/portal/schedule` 200、X-Frame-Options DENY・CSP frame-ancestors 'none'・HSTS。配信中の index chunk がリリースのビルドとバイト一致（curl）。ログインしての画面確認は未実施
+- 戻し: Hosting を段 0 の版（Console のリリース履歴）→ Rules を beb93e7b。**beb93e7b より前へ Rules を戻さない**。公開後 1 週間で Firestore の Read 件数を確認（データ設計 §10）
+
 ## 0.51.2 リリース 2026-11-27（JST。ユーザー GO「ステータスラベルの修正も本番に出して」）— 表示のみ
 
 - main 4b88e34（要件定義の下書きの表示名「ヒアリング入力中」→「要件定義 作成中」）。Rules・Functions の変更なし → **Hosting だけ**（aiFlag internal）。test:unit 171/171・tsc 0
