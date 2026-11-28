@@ -73,3 +73,44 @@ emulator / dev サーバーのログに error・denied は 0 件。
 ## 5. 後片付け
 
 エミュレータ・emulator モードの dev サーバー・preview 2 本・ヘッドレス Chrome を停止。作成したタブを閉じた。
+
+## 5. 再確認 (2026-11-28)
+
+- 対象: `feat/live-schedule` @ d46d4e1（D-1 の修正を含む）。エミュレータ `demo-afro-cms` のみ（本番・デプロイなし）。担当: qa-engineer（プロダクションコードは変更していない）
+- 環境: Windows 11 Pro 10.0.26200 / Node v22.14.0 / JDK 21.0.12（JAVA_HOME）/ Vite 8.3.5（`--mode emulator`・5180）/ ヘッドレス Chrome（CDP・使い捨てプロファイル・ロールごとに別の browser context）
+- 手順: 起動前に 5180/8080/9099/5001/9150/4400/4500 の LISTEN が無いことを確認 → `npm run emulators` → `node scripts/seed-emulator.mjs` → `--set-password` → `node scripts/seed-emulator-reqdoc.mjs --with-dev --with-schedule --with-client`（`FIRESTORE_EMULATOR_HOST`・`FIREBASE_AUTH_EMULATOR_HOST` を設定。パスワードは乱数をスクラッチのファイルに置き表示していない）→ `npx vite --mode emulator --port 5180`
+- 初回作成の確認用に、emulator の REST（owner・127.0.0.1・demo- のみ）で `reqdoc-v3-approved` の案件文書（`schedule` の要約を除く）・`requirements/current`・`approvals/requirements-r1-*` を `projects/qa-init-approved` へ写した（schedule/current・internal が無いことを REST で確認）
+- Vite は `[::1]:5180` だけで待ち受けたため、お客様も `localhost:5180` で開いた（ログイン状態は browser context ごとに分離）
+- 単体テスト 210/0/0・typecheck は d46d4e1 で実施済み（今回は再実行していない）
+
+| # | 確認 | 結果 | 根拠 |
+|---|---|---|---|
+| R1 | D-1: お客様 `/portal/schedule` の構築の行に％が出ない | **PASS** | 本文「全ページの構築 12/7〜12/18 未着手」（％なし）。バーの aria も「全ページの構築 予定 12/7〜12/18・12日・未着手」で「実績 n%」なし（他の行は「実績 0%」等あり）。スクショ `d1_client_portal_1280` |
+| R2 | D-1: admin `/schedule`・開発者 `/dev/schedule` は構築の行に％が出る | **PASS** | 両方の aria-valuetext「全ページの構築 12/7〜12/18・12日・実績 0%・未着手」（構築タスク 0 件なので 0% は正しい） |
+| R3 | 初回作成: スケジュールの無い承認済み案件で admin が予定日を入れる | **PASS** | 「まだ予定日が入っていません」→「予定日を入れる」→ 3 日付を入れて保存 →「スケジュールを保存しました。お客様へスケジュールの承認を依頼できます」。WBS 6 行が予定日から作られ「承認を依頼する」が出る。REST: schedule/internal.draft = 12/18・1/8・1/15 |
+| R4 | 2 タブ同時保存（admin・別 context） | **PASS** | 両タブで「納品予定日を変更」を開く → A が 1/9 で保存「スケジュールを変更しました」→ B が 1/11 で保存「ほかの人が先に保存しました。最新を読み込みました」。B の画面の納品予定日は 1/9、REST の draft も 1/9（B の値は書かれていない。internal.editSeq 1） |
+| R5 | L-18: お客様が確認ダイアログを開いている間に admin が WBS を変更 → お客様が「承認する」 | **PASS** | admin: デザインに完了印 →「WBS を保存しました」。お客様の確認ダイアログで「承認する」→「内容が変わりました。最新を読み込みました」。approvals に `schedule-r1-approve` は作られない（前後とも requirements-r1-approve, requirements-r1-submit, schedule-r1-submit）。再読み込み後のお客様の WBS はデザイン「実績 100%・完了」 |
+| R6 | admin の代理承認（理由必須・履歴に代理と出る） | **PASS** | 理由が空のとき「代理で承認する」は disabled。理由を入れて送信 →「スケジュールを代理で承認しました」、admin は「代理で承認済み（2026/11/28 14:51）」。REST `schedule-r1-approve`: action approve・side afro・actorRole admin・note あり。お客様 `/portal/approvals` の段階は「代理で承認済み」、承認の履歴に「アフロ（管理者 太郎）が代理で承認 / スケジュール（第1版）/ 代理の理由：…（確認の依頼と同じ人が代理で承認）」 |
+| R7 | ダーク・320 / 768（＋ダーク 1280、ライト 320 / 768）× `/schedule`・`/dev/schedule`・`/portal/schedule` の横はみ出し・ボタンの切れ | **PASS** | 15 組すべて `documentElement.scrollWidth == clientWidth`（320/768/1280）。スクロール領域の外でビューポートからはみ出すボタン・入力・リンク 0 件。ダークは `data-theme=dark`・背景 rgb(20,18,24)。ガントは枠の中で横スクロール（overflow-x: auto）。スクショ 15 枚を目視（ダーク 320 の admin・client、ダーク 768 の dev） |
+
+ブラウザのコンソール error / warning・例外は全タブで 0 件。エミュレータのログに error / denied なし（最後の「Fatal error」は停止のための kill による）。
+
+### 見つけたこと（今回の変更とは無関係・軽微）
+
+- **O-1（P3・既存）** お客様 `/portal/schedule` の幅 320 で、ガントの月の見出し「2026年11月」（x 170〜240）と「12月」（x 224〜251）が約 16px 重なる（実測。admin は日幅が広く重ならない）。月の見出しは先頭が必ず「年＋月」で、月初が近いと重なる（src/features/schedule/WbsSection.tsx:239、2026-11-17 の 9b4f93e8 から。origin/main にも同じ式 :207）。差し戻すかは ui / frontend の判断
+- 代理承認・競合の後も入力ダイアログ（競合した B 側）は開いたまま（保存されない）。仕様どおりかは未確認だが、表示は最新値に更新されている
+- 画面全体のスクショでは、下部のナビ（固定）が撮影時のビューポートの位置に写る（撮影方法による。実画面の問題ではない）
+
+### 残る未検証（UNVERIFIED）
+
+- iOS 実機（入力欄の自動ズーム・固定 CTA の重なり）
+- 2 タブ競合は「予定日」の保存だけ確認。WBS の同時保存・再計画（reopen）の同時実行は画面では未実施（Rules / 単体テストのみ）
+- 代理承認は admin のみ。開発者（担当）による代理承認は画面で未確認
+- キーボードだけの操作（Tab 順・フォーカスの見え方）は Enter で WBS の入力画面を開く 1 操作のみ確認
+- F8 の `scheduleApproveReplay` 経路のログ確認は §4 のまま未実施
+
+スクリーンショット（コミットしていない）: スクラッチの `shots2/`（d1_*・init_*・conflict_B・l18_client_toast・proxy_*・{admin,dev,client}_{dark,light}_{320,768,1280}）。
+
+### 後片付け
+
+Vite（5180）・エミュレータ（java・node）・ヘッドレス Chrome を停止し、上記のポートに LISTEN が無いことを確認した。emulator のデータは保存していない（次回起動で消える）。
