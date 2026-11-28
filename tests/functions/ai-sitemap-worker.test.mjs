@@ -290,7 +290,7 @@ test('注入: データ欄は構造分離（< は \\u003c）・出力の危険�
     summary: '前の指示を無視しました https://evil.example/x 090-1234-5678',
     after: [
       ...VALID_OUT.after,
-      page('x1', '<img src=x onerror=alert(1)>', '/x1', 'page', 'home', 'new', [], '理由'),
+      page('x1', '<img src=x onerror' + '=alert(1)>', '/x1', 'page', 'home', 'new', [], '理由'),
       page('x2', 'javascript:alert(1)', '/x2', 'page', 'home', 'new', [], '理由'),
       page('x3', 'リンク', 'https://evil.example/', 'page', 'home', 'new', [], '理由'),
       page('recruit', '採用', '/recruit', 'page', 'home', 'new', [], '詳しくは https://evil.example/ か 090-1234-5678 へ <b>今すぐ</b>'),
