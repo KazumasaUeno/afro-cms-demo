@@ -17,6 +17,10 @@
 //                     schedule の要約・schedule/current・schedule/internal・approvals の requirements-r1-*／schedule-r1-submit。予定日は今日から 20・30・40 日後
 //   --with-client   … 架空のお客様 client@example.com（架空 顧客）を reqdoc-v3-approved のお客様として置く（--with-schedule と一緒に。
 //                     パスワードは環境変数 SEED_CLIENT_PASSWORD。8 文字以上・表示しない）
+//   --with-sitemap  … reqdoc-v3-approved のスケジュール第 1 版を承認済み（お客様がいればお客様、いなければ代理）にし、サイトマップ第 1 版を
+//                     お客様へ承認依頼中で置く（--with-schedule と一緒に。LIVE_SITEMAP_IMPL_PLAN INT の画面確認用）。
+//                     sitemap の要約・sitemap/internal・sitemapVersions/r1・approvals の schedule-r1-approve／sitemap-r1-submit
+//                     （形は tests/rules/fixtures.mjs の sitemapSeed と同じ。中身は架空）
 //
 // カタログ・必須章の判定・回答のハッシュは本物（src/shared/ai/*.ts）を使うため、Node の型除去（--experimental-strip-types）で自分を起動し直す。
 import { spawnSync } from 'node:child_process';
@@ -236,7 +240,7 @@ async function seedClient(adminUidValue, projectId) {
 const ymdAfter = (days) => new Date(NOW.getTime() + days * 86_400_000 + 9 * 3_600_000).toISOString().slice(0, 10);
 
 /** 要件 approved の案件にスケジュール第 1 版（承認依頼中）を置く（形は tests/rules/fixtures.mjs の scheduleSeed と同じ） */
-async function seedSchedule(s, { uid, client }) {
+async function seedSchedule(s, { uid, client, approved = false }) {
   const dates = { buildDue: ymdAfter(20), deliveryDate: ymdAfter(30), releaseDate: ymdAfter(40) };
   const wbs = {
     sitemap: { start: ymdAfter(-3), end: ymdAfter(1), doneAt: NOW },
@@ -258,8 +262,51 @@ async function seedSchedule(s, { uid, client }) {
     ? { side: 'client', actorUid: client.uid, actorName: client.name, actorEmail: client.email }
     : { side: 'afro', ...actor, proxy: true, note: '架空の代理承認（シードのため）' };
   await put(`projects/${s.pid}/approvals/requirements-r1-approve`, { schemaVersion: 1, kind: 'requirements', action: 'approve', revision: 1, ...approver, at: NOW });
+  if (approved) {
+    // --with-sitemap: スケジュール第 1 版の承認（サイトマップの段階はスケジュールの承認の後）
+    await put(`projects/${s.pid}/approvals/schedule-r1-approve`, { schemaVersion: 1, kind: 'schedule', action: 'approve', revision: 1, ...approver, at: NOW, ...dates, wbs });
+    console.log(`projects/${s.pid}: スケジュール第 1 版（承認済み${client ? '' : '・代理'}。公開予定 ${dates.releaseDate}）`);
+    return {
+      status: 'approved', revision: 1, requestedAt: NOW, releaseDate: dates.releaseDate,
+      approvedRevision: 1, approvedAt: NOW, approvedBy: client ? client.uid : uid, approvalId: 'schedule-r1-approve', ...(client ? {} : { approvedVia: 'proxy' }),
+    };
+  }
   console.log(`projects/${s.pid}: スケジュール第 1 版（承認依頼中。公開予定 ${dates.releaseDate}）`);
   return { status: 'requested', revision: 1, requestedAt: NOW, releaseDate: dates.releaseDate };
+}
+
+/** スケジュール承認済みの案件にサイトマップ第 1 版（お客様へ承認依頼中）を置く（形は tests/rules/fixtures.mjs の sitemapSeed と同じ） */
+async function seedSitemap(s, { uid }) {
+  const before = {
+    nodes: [
+      { id: 'b-home', position: { x: 0, y: 0 }, data: { label: 'トップ', path: '/', kind: 'home' } },
+      { id: 'b-products', position: { x: 0, y: 120 }, data: { label: '製品一覧', path: '/products', kind: 'page' } },
+    ],
+    edges: [{ id: 'b-e1', source: 'b-home', target: 'b-products' }],
+  };
+  const after = {
+    nodes: [
+      { id: 'a-home', position: { x: 0, y: 0 }, data: { label: 'トップ', path: '/', kind: 'home' } },
+      { id: 'a-products', position: { x: -200, y: 120 }, data: { label: '製品一覧', path: '/products', kind: 'page' } },
+      { id: 'a-contact', position: { x: 200, y: 120 }, data: { label: 'お問い合わせ', path: '/contact', kind: 'new', reason: '架空: 問い合わせ導線を短くする' } },
+    ],
+    edges: [{ id: 'a-e1', source: 'a-home', target: 'a-products' }, { id: 'a-e2', source: 'a-home', target: 'a-contact' }],
+  };
+  // 架空の版の鍵（hex 64。本物は submitSitemap が中身から計算する。要約と版文書と記録で同じ値なら承認できる）
+  const contentHash = 'a1'.repeat(32);
+  const devComment = { text: '架空: 改善後はお問い合わせを上位に置きました', at: NOW, byName: '管理者 太郎' };
+  await put(`projects/${s.pid}/sitemap/internal`, {
+    schemaVersion: 1, before, after, devComment, origin: 'manual', sourceReqRevision: 1, editSeq: 1, updatedAt: NOW, updatedBy: uid, savedByName: '管理者 太郎',
+  });
+  await put(`projects/${s.pid}/sitemapVersions/r1`, {
+    schemaVersion: 1, revision: 1, before, after, origin: 'manual', sourceReqRevision: 1, devComment, contentHash, submittedAt: NOW, submittedBy: uid,
+  });
+  await put(`projects/${s.pid}/approvals/sitemap-r1-submit`, {
+    schemaVersion: 1, kind: 'sitemap', action: 'submit', revision: 1, side: 'afro', actorUid: uid, actorName: '管理者 太郎', actorEmail: 'admin@example.com', actorRole: 'admin',
+    at: NOW, contentHash, pageCount: { before: before.nodes.length, after: after.nodes.length },
+  });
+  console.log(`projects/${s.pid}: サイトマップ第 1 版（承認依頼中。ページ ${before.nodes.length} → ${after.nodes.length}）`);
+  return { status: 'requested', revision: 1, requestedAt: NOW, contentHash };
 }
 
 async function seedProject(s, { uid, state, devUid }) {
@@ -282,6 +329,7 @@ async function seedProject(s, { uid, state, devUid }) {
       ? { status: 'approved', revision: 1, analyzedAt: NOW, approvedAt: NOW, approvedBy: uid, approvalId: 'requirements-r1-approve', ...(s.client ? {} : { approvedVia: 'proxy' }) }
       : analyzed ? { status: 'analyzed', revision: 1, analyzedAt: NOW } : { status: 'draft', revision: 0 },
     ...(s.schedule ? { schedule: s.schedule } : {}),
+    ...(s.sitemap ? { sitemap: s.sitemap } : {}),
     archived: false, createdAt: NOW, createdBy: uid, updatedAt: NOW, updatedBy: uid,
   });
   await put(`siteKeys/${s.host}`, { projectId: s.pid, createdAt: NOW });
@@ -317,6 +365,8 @@ try {
   const devUid = withDev ? await seedDev(uid) : undefined;
   const withSchedule = args.includes('--with-schedule');
   if (args.includes('--with-client') && !withSchedule) throw new Error('--with-client は --with-schedule と一緒に使う');
+  const withSitemap = args.includes('--with-sitemap');
+  if (withSitemap && !withSchedule) throw new Error('--with-sitemap は --with-schedule と一緒に使う');
   const n = await seedProject(SITES.draft, { uid, state: 'draft', devUid });
   if (n !== CATALOG.items.length) throw new Error(`項目数 ${n} がカタログ ${CATALOG.items.length} と一致しません`);
   await seedProject(SITES.analyzed, { uid, state: 'analyzed', devUid });
@@ -325,8 +375,9 @@ try {
     const client = args.includes('--with-client') ? await seedClient(uid, SITES.approved.pid) : null;
     const s = { ...SITES.approved, client };
     // 承認の記録とスケジュールの文書を先に置き、要約（schedule）を持つ案件文書を最後に置く
-    const schedule = await seedSchedule(s, { uid, client });
-    await seedProject({ ...s, schedule }, { uid, state: 'approved', devUid });
+    const schedule = await seedSchedule(s, { uid, client, approved: withSitemap });
+    const sitemap = withSitemap ? await seedSitemap(s, { uid }) : undefined;
+    await seedProject({ ...s, schedule, ...(sitemap ? { sitemap } : {}) }, { uid, state: 'approved', devUid });
     pids.push(s.pid);
   }
   await verify(pids);

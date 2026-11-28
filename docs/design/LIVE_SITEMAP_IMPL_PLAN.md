@@ -26,6 +26,7 @@
 | P-13 | live から届く部品は `useDemo()` を直接呼ばない。`BuildFlowNav`・`DevComment`・`SitemapPage`・`PortalApprovalsPage` のサイトマップ区画は **View（props だけ）＋demo の入れ物（useDemo）**に分ける（`RequestApprovalButtonView.tsx` と同じ型）。live は View だけを import し、`liveNoDemoStore.test.mjs` の対象に `LiveSitemapPage`・`PortalApprovalPage` を足す | 影響分析 穴 3。0.47.4 の再発防止 |
 | P-11 | 案件詳細の「次に必要な作業」: スケジュール承認後（`schedule.approvedRevision` あり）はサイトマップ（AC-28）。お客様の `clientStatus` の lastLog は要件定義だけのまま（スケジュール L-19） | 既存表示の意味を変えない |
 | P-12 | `main` への merge は release GO まで（スケジュール L-22。`pages.yml` が demo を公開） | 未承認の差分を demo に出さない |
+| G1 | **G1 合格（2026-11-28 U1-1。DATA §12.1）**: 4 経路とも ≦ 800 式・余裕 20% 以上・参照に余裕。最も重いのは代理承認（projects 側 pad10 残り k=5 ≒ 700 式・余裕 25%、approvals 側 k=11）。fallback ①（版文書の get をやめる）は使わない。スケジュールの G1 14 経路は前後で同じ k（INT で記録） | P-2 の確定条件。`npm run test:rules` の TEST-09 |
 
 ## 2. 正誤表（計画が上位資料を読み替えた箇所。qa と実装はこの列を正とする）
 

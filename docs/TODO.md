@@ -96,6 +96,16 @@
 
 - [ ] test:functions の不安定（2026-11-25）: エミュレータが関数の定義を 60 秒で読み込めず（`User code failed to load ... Timeout after 60000`）、provisionInvitee 系 16 件が「Function a... is not valid JSON」で落ちることがある。デプロイ用スクリプトが止めるので本番には出ない（安全側）。再実行で通る。恒久対応の候補: test-functions.mjs で FUNCTIONS_DISCOVERY_TIMEOUT を延ばす／読み込み完了を待ってからテストを始める
 
+## サイトマップ（docs/design/LIVE_SITEMAP_IMPL_PLAN.md INT 2026-11-28）
+
+- [ ] **サイトマップの Rules の床**: 段 0（`a1dc725`）を出したら ruleset のリリース ID をここに記録する。以後 Rules を段 0 より前へ戻さない（`docs/operations/RUNBOOK_FIREBASE.md` §6.2）。段 0 の戻し先は `d0649c16-3b5c-4791-8b31-dac2af4f25fc`
+- [ ] **AI のサイトマップ下書きの国外送信の範囲・保持日数・承認の効力**（LEGAL REVIEW REQUIRED・AI-SCOPE。計画 R-10）: `AI_SITEMAP_MODE=on` と段 2 は法務の結論まで出さない（AI は結論を出さない）
+- [ ] **`aiDrafts/sitemap` の削除ジョブ（U5・段 2）**: mode を `internal` 以上にする前に実装する（対象は `['sitemap']` だけ。P-8）
+- [ ] **Anthropic の利用上限（USD）**（S-15。UNKNOWN）: Console の spend limit の値を platform-engineer が確認して記録する（mode を変える前）
+- [ ] **worker `generateSitemapDraftTask` の invoker が既定で非公開か**（UNKNOWN）: リリースの前に `gcloud functions get-iam-policy` 等で確かめる（allUsers が無いこと）。要件定義書の worker と同じ確認
+- [ ] **`functions/src/ai/request.ts` の reservedDay の二重 enqueue（LOW。要件定義書の経路）**: `reservedDay` は TX の外の変数で、TX の各試行の先頭で空に戻していない（request.ts:80・130）。1 回目の試行が予約して競合で再試行し、2 回目が予約せずに返る（running など）と、予約していないのに enqueue が走る。タスク ID が requestId なので重複は `task-already-exists` で止まる [INFERENCE]。試行の先頭で `reservedDay = ''` にする
+- [ ] **ページのパスに大文字が通る（LOW）**: `validatePath` は大文字を受け付ける（`src/shared/ai/sitemapRules.ts:53` の `PATH_RE` が `/i`）（`/About` と `/about` が別のページになりうる）。小文字にそろえるか、受容を決める
+
 ## reqdoc（2026-11-26 セキュリティ確認 U3 より）
 
 - [ ] T-02 aiDrafts の 90 日削除の実行者を作る（v3 は約 2〜3 倍の大きさ）。担当: backend-engineer。リリースの判断（機能フラグを開く）までに

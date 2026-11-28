@@ -4,7 +4,8 @@
 // 実行: npm run test:unit
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clientSitemapShown, clientSitemapState, clientSitemapStep, sitemapApproveBlock, sitemapGateSchedule, SITEMAP_ADJUSTING_TEXT } from '../../src/live/portalSitemap.ts';
+import { clientSitemapShown, clientSitemapState, clientSitemapStep, sitemapApproveBlock, sitemapGateSchedule, SITEMAP_ADJUSTING_TEXT, LIVE_SITEMAP_CONFIRM_BODY } from '../../src/live/portalSitemap.ts';
+import { readFileSync } from 'node:fs';
 import { clientSitemapView, SITEMAP_CONFLICT_TEXT } from '../../src/live/sitemap.ts';
 import { liveProjectView } from '../../src/live/projectView.ts';
 import { approvalSteps } from '../../src/features/portal/portalSteps.ts';
@@ -159,4 +160,13 @@ export const render = (props) => renderToStaticMarkup(<ThemeModeProvider><Sitema
     console.error = origError;
     delete globalThis.window;
   }
+});
+
+test('S6: live の承認確認の文言はデザインに触れない（live にデザインの段階が無い）。live の画面はこの文言を使い、demo の CONFIRM.sitemap.body は不変', () => {
+  assert.doesNotMatch(LIVE_SITEMAP_CONFIRM_BODY, /デザイン/);
+  const page = readFileSync(new URL('../../src/live/pages/PortalApprovalPage.tsx', import.meta.url), 'utf8');
+  assert.match(page, /body=\{LIVE_SITEMAP_CONFIRM_BODY\}/);
+  assert.doesNotMatch(page, /CONFIRM\.sitemap\.body/);
+  const parts = readFileSync(new URL('../../src/features/portal/PortalApprovalParts.tsx', import.meta.url), 'utf8');
+  assert.match(parts, /sitemap: \{ title: 'サイトマップを承認しますか？', body: '承認すると、このページ構成でデザインを進めます。/);
 });

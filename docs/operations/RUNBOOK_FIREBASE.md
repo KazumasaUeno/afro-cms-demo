@@ -59,6 +59,17 @@
 - 順番を誤った場合（新 Hosting × 旧 Rules）はスケジュールの書き込みが全件拒否（安全側）、要件定義書は影響なし
 - 公開後 1 週間で Firestore の Read 件数を確認する（データ設計 §10）
 
+### 6.2 サイトマップ（LIVE_SITEMAP_IMPL_PLAN §8。段ごとにユーザーの GO をもらう。デプロイは未実施）
+
+- **段 0 の前**: Console（または API）で本番のいまの Rules のリリース ID を控え、`docs/TODO.md` の床（スケジュール段 1 = `d0649c16-3b5c-4791-8b31-dac2af4f25fc`）と一致するかを確認する（ドリフト）
+- **段 0**（Rules `a1dc725`＋Hosting に U2-0 `430ec7f`。**Hosting は main ＋ `430ec7f` だけの作業ツリー**から出す。段 1 の画面・Functions を混ぜない）: ① `a1dc725` の `firestore.rules` で `npm run deploy:firebase -- --project <ID> --only firestore:rules` → ② 別の実行で `npm run build:live` → `npm run deploy:firebase -- --project <ID> --only hosting`
+- **段 0 を出した ruleset が新しい床**。リリース ID を `docs/TODO.md` に記録する。**以後、Rules を段 0 より前へ戻さない**（段 1 で `sitemap` を持つ案件が出来ると、それより前の Rules では基本情報の編集・アーカイブが落ちる）
+- **段 1**（このブランチ）: ① Rules → ② 別の実行で `--only functions`（`npm --prefix functions ci` の後。`functions/.env.<ID>` は **`AI_SITEMAP_MODE=off` のまま先に出す**。`internal`＋allowlist へ変えるのはユーザー GO の後に platform-engineer）→ ③ 別の実行で Hosting。**`--only functions,hosting` のようにまとめない**
+- `.env.live.local` に `VITE_FEATURE_AI_SITEMAP` が要る（`off` / `internal`。`scripts/deploy-firebase.mjs` が `dist-live/build-meta.json` と突き合わせる。無いと Hosting のデプロイが止まる）
+- **戻し方**: 段 0 から → Hosting を前の版へ（Console のリリース履歴）→ Rules を `d0649c16`（スケジュール段 1）へ（段 0 では sitemap を持つ案件がまだ無い）。段 1 から → Hosting を段 0 の版へ → Functions の 4 関数を削除（または `AI_SITEMAP_MODE=off`）→ Rules を段 0 の ruleset へ。**段 0 より前へは戻さない**。重い不具合は forward fix。作られた文書・承認の記録は消さない
+- Smoke（段 1 の後。エミュレータでは `node scripts/seed-emulator-reqdoc.mjs --with-dev --with-schedule --with-client --with-sitemap` で同じ状態を作れる）: 開発者 `/dev/sitemap` で作成→保存→提出、お客様 `/portal/approvals` でサイトマップの区画が出て承認できる、管理者 `/site` で代理承認・再計画、案件詳細の「次に必要な作業」がサイトマップになる
+- リリース前に確認（`docs/TODO.md`）: worker `generateSitemapDraftTask` の呼び出し元（invoker）が既定で非公開か、Cloud Tasks のキューの登録、Anthropic の利用上限（USD）
+
 ## 7. 初代管理者【ユーザー → 開発が確認】（§2.5）
 
 1. Firestore →「コレクションを開始」→ `invites`、文書 ID = 管理者のメール（**小文字**）

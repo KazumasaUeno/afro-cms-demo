@@ -22,8 +22,9 @@ import { logger } from 'firebase-functions';
 import { onDocumentUpdated } from 'firebase-functions/firestore';
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/https';
 import { setGlobalOptions } from 'firebase-functions/options';
-import { makeAiFunctions } from './ai';
+import { makeAiFunctions, makeSitemapAiFunctions } from './ai';
 import { callableCors } from './cors';
+import { makeSitemapFunctions } from './sitemap';
 
 // エミュレータで動くときは、Auth・Firestore もエミュレータでなければ起動しない（本番へ書き込まない。BACKEND_FIREBASE §16.1）
 if (process.env.FUNCTIONS_EMULATOR === 'true'
@@ -239,3 +240,9 @@ export const onInviteRevoked = onDocumentUpdated({ document: 'invites/{email}', 
 // AI 下書き（docs/design/AI_REQUIREMENTS_PLAN.md §4 U2。既定は機能フラグ off）
 const ai = makeAiFunctions({ region: REGION, enforceAppCheck: ENFORCE_APP_CHECK, cors: callableCors(process.env) });
 export const { requestRequirementsDraft, saveAiDraftEdits, generateRequirementsDraftTask } = ai;
+
+// サイトマップ（docs/design/LIVE_SITEMAP_IMPL_PLAN.md §4 INT）。編集・提出は AI のフラグに依存しない。AI 下書きは AI_SITEMAP_MODE で止まる
+const sitemap = makeSitemapFunctions({ enforceAppCheck: ENFORCE_APP_CHECK, cors: callableCors(process.env) });
+export const { saveSitemapEdits, submitSitemap } = sitemap;
+const sitemapAi = makeSitemapAiFunctions({ region: REGION, enforceAppCheck: ENFORCE_APP_CHECK, cors: callableCors(process.env) });
+export const { requestSitemapDraft, generateSitemapDraftTask } = sitemapAi;

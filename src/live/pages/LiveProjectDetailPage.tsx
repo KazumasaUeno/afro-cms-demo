@@ -94,6 +94,8 @@ function Detail({ p, list }: { p: Project; list: Project[] }) {
       preview={<SitePreviewPendingButton size="small" />}
       clientStatus={<ClientStatusPanel project={p} view={state} />}
       schedule={<ProjectScheduleSection view={state} dev={canEdit} onOpen={() => go(scheduleTo)} wbs={wbs} />}
+      // live にはデザインの画面がまだ無い（LIVE_SITEMAP_IMPL_PLAN P-10・S6）
+      designAvailable={false}
     />
   );
 }

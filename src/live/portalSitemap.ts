@@ -24,6 +24,12 @@ export function sitemapGateSchedule(summary: ScheduleSummary | null | undefined)
 }
 
 /** 調整中（承認の後に下書きへ戻った）の案内。前回承認の版を見せる */
+/**
+ * 承認の確認（live だけの文言。LIVE_SITEMAP_IMPL_PLAN S6）。live にはデザインの段階がまだ無いので「デザインを進めます」と書かない。
+ * demo の CONFIRM.sitemap.body（PortalApprovalParts）は変えない
+ */
+export const LIVE_SITEMAP_CONFIRM_BODY = '承認すると、このページ構成で制作を進めます。承認した日時が記録されます。';
+
 export const SITEMAP_ADJUSTING_TEXT = 'アフロがサイトマップを調整しています。調整が終わると、もう一度承認のお願いが届きます。下は前回ご承認いただいた構成です。';
 
 /** 調整中は locked のまま前回承認の版を見せる（keepWhenLocked）。それ以外は approvalSteps の段階のまま */

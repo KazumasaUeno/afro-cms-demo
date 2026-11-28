@@ -20,6 +20,7 @@ const HearingAnswersPage = lazy(() => import('@/features/requirements/HearingAns
 const LiveRequirementsPage = lazy(() => import('./pages/LiveRequirementsPage'));
 const LiveSchedulePage = lazy(() => import('./pages/LiveSchedulePage'));
 const LivePortalSchedulePage = lazy(() => import('./pages/LivePortalSchedulePage'));
+const LiveSitemapPage = lazy(() => import('./pages/LiveSitemapPage'));
 
 /** その役割の画面だけを開く（表示の出し分け。権限の実体は Firestore Rules） */
 function RoleRoute({ roles, children }: { roles: LiveRole[]; children: ReactNode }) {
@@ -37,7 +38,7 @@ const dev: LiveRole[] = ['developer'];
 const client: LiveRole[] = ['client'];
 
 /**
- * live のルーティング（BACKEND_FIREBASE §14: 範囲内の画面だけ。サイトマップ・デザイン・品質・CMS・分析・設定・営業プレゼン等は出さない）。
+ * live のルーティング（BACKEND_FIREBASE §14: 範囲内の画面だけ。サイトマップは /site・/dev/sitemap（LIVE_SITEMAP_IMPL_PLAN）。デザイン・品質・CMS・分析・設定・営業プレゼン等は出さない）。
  * ヒアリングは管理者（/ai-studio。2026-11-26 から開発者と同じ操作）と開発者（/dev/hearing）。要件定義（AI 下書き）は /ai-studio/requirements・/dev/requirements（0.49.1）
  */
 const router = createBrowserRouter([
@@ -65,6 +66,8 @@ const router = createBrowserRouter([
       { path: 'ai-studio/requirements', element: <RoleRoute roles={admin}><HearingGate><LiveRequirementsPage /></HearingGate></RoleRoute> },
       // スケジュール（LIVE_SCHEDULE_PLAN U3-b・L-20。案件詳細から入る。上部のナビ項目は足さない。選んでいる案件は HearingGate）
       { path: 'schedule', element: <RoleRoute roles={admin}><HearingGate><LiveSchedulePage /></HearingGate></RoleRoute> },
+      // サイトマップ（LIVE_SITEMAP_IMPL_PLAN INT。案件詳細・制作フローのナビから入る。上部のナビ項目は足さない。選んでいる案件は HearingGate）
+      { path: 'site', element: <RoleRoute roles={admin}><HearingGate><LiveSitemapPage /></HearingGate></RoleRoute> },
       { path: 'users', element: <RoleRoute roles={admin}><LiveUsersPage /></RoleRoute> },
       { path: 'dev', element: <RoleRoute roles={dev}><LiveDashboardPage /></RoleRoute> },
       { path: 'dev/tasks', element: <RoleRoute roles={dev}><LiveTasksPage /></RoleRoute> },
@@ -76,6 +79,7 @@ const router = createBrowserRouter([
       { path: 'dev/hearing/answers', element: <RoleRoute roles={dev}><HearingGate><HearingAnswersPage /></HearingGate></RoleRoute> },
       { path: 'dev/requirements', element: <RoleRoute roles={dev}><HearingGate><LiveRequirementsPage /></HearingGate></RoleRoute> },
       { path: 'dev/schedule', element: <RoleRoute roles={dev}><HearingGate><LiveSchedulePage /></HearingGate></RoleRoute> },
+      { path: 'dev/sitemap', element: <RoleRoute roles={dev}><HearingGate><LiveSitemapPage /></HearingGate></RoleRoute> },
       { path: 'portal/approvals', element: <RoleRoute roles={client}><PortalApprovalPage /></RoleRoute> },
       { path: 'portal/schedule', element: <RoleRoute roles={client}><LivePortalSchedulePage /></RoleRoute> },
       { path: 'portal/chat', element: <RoleRoute roles={client}><LiveConsultPage /></RoleRoute> },

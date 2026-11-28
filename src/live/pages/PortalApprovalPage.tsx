@@ -18,7 +18,7 @@ import { clientApprovalShown, clientScheduleState, isPermissionDenied } from '..
 import { toProject, type ProjectDoc } from '../model';
 import { useLiveProjects, useLiveSchedule, useLiveScheduleActions, useLiveSitemap, useLiveSitemapActions } from '../repositories';
 import { clientSitemapView, type SitemapShown } from '../sitemap';
-import { clientSitemapShown, clientSitemapState, clientSitemapStep, sitemapApproveBlock, sitemapGateSchedule } from '../portalSitemap';
+import { clientSitemapShown, clientSitemapState, clientSitemapStep, LIVE_SITEMAP_CONFIRM_BODY, sitemapApproveBlock, sitemapGateSchedule } from '../portalSitemap';
 import { liveProjectView } from '../projectView';
 import { EmptyState, LoadError } from './shared';
 
@@ -230,7 +230,7 @@ function SitemapApproval({ doc, req }: { doc: ProjectDoc; req: RequirementSessio
       <ConfirmDialog
         open={!!shown && !busy}
         title={CONFIRM.sitemap.title}
-        body={CONFIRM.sitemap.body}
+        body={LIVE_SITEMAP_CONFIRM_BODY}
         onClose={() => setShown(null)}
         onConfirm={() => { void approve(); }}
       />
