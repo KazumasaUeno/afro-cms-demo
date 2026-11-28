@@ -12,7 +12,7 @@ import { tokens } from '@/theme/tokens';
 import { ScheduleEditDialog } from './ScheduleEditDialog';
 import { WbsSection } from './WbsSection';
 import { MILESTONES, jpDate, untilText } from './scheduleParts';
-import type { ScheduleSource } from './scheduleSource';
+import { closesAfterSave, type ScheduleSource } from './scheduleSource';
 
 /**
  * 制作〜公開のスケジュール（2026-11-17 会議「要件定義のあと、開発担当者がスケジュールを入れる。入れるまで制作へ進めない」）の表示。
@@ -50,9 +50,9 @@ export function ScheduleView({ source }: { source: ScheduleSource }) {
       setMsDraft(null);
     };
     const r = source.save(draft, token);
-    // demo は同期（従来どおりその場で閉じる）、live は書き込みの後
+    // demo は同期（従来どおりその場で閉じる）、live は書き込みの後。競合も閉じて最新を出す（文言「最新を読み込みました」。QA O-2）
     if (r === true) done();
-    else if (r !== false) void r.then((ok) => { if (ok) done(); });
+    else if (r !== false) void r.then((res) => { if (closesAfterSave(res)) done(); });
   };
   const saveMilestones = () => {
     const d = draftOf();

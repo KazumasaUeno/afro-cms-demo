@@ -12,6 +12,12 @@ import type { WbsRow } from './wbsProgress';
 /** 完了印（行ごと。true＝付いている）。build の行は持たない */
 export type WbsDone = Partial<Record<WbsId, boolean>>;
 
+/**
+ * 保存の結果。true＝保存した・false＝失敗（文言は source が出す）・'conflict'＝ほかの人が先に保存した（QA O-2 2026-11-28）。
+ * 'conflict' のとき画面は「最新を読み込みました」の文言どおり、下書き・入力画面を捨てて保存済みの最新を出す（demo は返さない）
+ */
+export type SaveResult = boolean | 'conflict';
+
 export interface WbsSource {
   /** 保存済みの WBS（担当つき・完了印の日時は持たない）。保存が無ければ予定日から導いた初期値 */
   items: WbsItem[];
@@ -24,7 +30,7 @@ export interface WbsSource {
   /** 完了印の最後の操作（行ごとの説明。入力画面に出す） */
   markNote?: Partial<Record<WbsId, string>>;
   /** 保存（成功で true）。token は下書きを始めた時点の版（競合の検出） */
-  save?: (items: WbsItem[], done: WbsDone, token: string) => Promise<boolean>;
+  save?: (items: WbsItem[], done: WbsDone, token: string) => Promise<SaveResult>;
   /** いまの版（変わったとき、下書きを触っていなければ追従する） */
   token: string;
   /** live だけ: 説明の下に出す注意（依頼中に WBS を変えるとき等）。demo は持たない */
@@ -43,8 +49,8 @@ export interface ScheduleSource {
   readOnlyNote?: string;
   /** 予定日の検査 */
   validate: (d: ScheduleDraft) => ScheduleErrors;
-  /** 保存（true で入力画面を閉じる）。token は入力を始めた時点の版 */
-  save: (draft: ScheduleDraft, token: string) => boolean | Promise<boolean>;
+  /** 保存（true で入力画面を閉じる。'conflict' も閉じて最新を出す）。token は入力を始めた時点の版 */
+  save: (draft: ScheduleDraft, token: string) => boolean | Promise<SaveResult>;
   /** いまの版（入力画面を開いた・◆ を動かし始めた時点の値を save に渡す） */
   token: string;
   /** 「保存済み」の行の右（承認の依頼・取り下げ・代理承認） */
@@ -63,6 +69,9 @@ export function changedDone(draft: WbsDone, saved: WbsDone): WbsDone {
   for (const id of ids) if (!!draft[id] !== !!saved[id]) out[id] = !!draft[id];
   return out;
 }
+
+/** 保存の後に入力画面・下書きを閉じるか（保存できた・競合で最新を読み込んだ。QA O-2） */
+export const closesAfterSave = (r: SaveResult): boolean => r === true || r === 'conflict';
 
 /** 完了印が同じか（付いている行の集合で比べる） */
 export const sameDone = (a: WbsDone, b: WbsDone): boolean => Object.keys(changedDone(a, b)).length === 0;

@@ -10,7 +10,7 @@ import { formatDateTime } from '@/services/time';
 import { blankWork } from '@/store/projectWork';
 import type { ScheduleDraft } from '@/data/schedule';
 import { ScheduleView } from '@/features/schedule/ScheduleView';
-import { changedDone, type WbsSource } from '@/features/schedule/scheduleSource';
+import { changedDone, type SaveResult, type WbsSource } from '@/features/schedule/scheduleSource';
 import { wbsStartOf } from '@/features/schedule/wbsProgress';
 import {
   liveWbsDone, liveWbsItems, liveWbsRows, markNotes, scheduleButtons, scheduleOpened, scheduleSaveKind, scheduleTokenOf,
@@ -22,7 +22,7 @@ import {
   cleanScheduleReason, liveScheduleState, validateScheduleInput, validateScheduleReason, validateWbsInput, type ScheduleCurrent,
 } from '../schedule';
 import { toProject, type ProjectDoc } from '../model';
-import { useAccountPeople, useLiveProjects, useLiveSchedule, useLiveScheduleActions, useLiveTasks, type LiveScheduleQuery } from '../repositories';
+import { ScheduleConflictError, useAccountPeople, useLiveProjects, useLiveSchedule, useLiveScheduleActions, useLiveTasks, type LiveScheduleQuery } from '../repositories';
 import { liveProjectView } from '../projectView';
 import { useLiveSession } from '../session';
 import { LoadError } from './shared';
@@ -74,14 +74,15 @@ export function useLiveWbsSource(pid: string, sch: LiveScheduleQuery, view: Demo
           return true;
         } catch (e) {
           toast(errText(e), 'error');
-          return false;
+          // 競合は画面が最新へ置き換える（QA O-2）
+          return e instanceof ScheduleConflictError ? 'conflict' : false;
         }
       },
     } : {}),
   }), [items, done, taskList, sch.internal, sch.current, people, canEdit, actions, toast]);
 }
 
-type NoteDialog = { kind: 'withdraw' | 'reopen' | 'proxy'; shown?: ScheduleCurrent; requestedAt?: string; draft?: ScheduleDraft; opened?: number | null; resolve?: (ok: boolean) => void };
+type NoteDialog = { kind: 'withdraw' | 'reopen' | 'proxy'; shown?: ScheduleCurrent; requestedAt?: string; draft?: ScheduleDraft; opened?: number | null; resolve?: (r: SaveResult) => void };
 
 function LiveSchedule({ doc }: { doc: ProjectDoc }) {
   const { account } = useLiveSession();
@@ -104,8 +105,8 @@ function LiveSchedule({ doc }: { doc: ProjectDoc }) {
   const [note, setNote] = useState<NoteDialog | null>(null);
   const [noteText, setNoteText] = useState('');
 
-  /** 1 操作ずつ（二重送信しない）。失敗は文言を出して false */
-  const run = async (fn: () => Promise<void>, done: string): Promise<boolean> => {
+  /** 1 操作ずつ（二重送信しない）。失敗は文言を出して false、競合（ScheduleConflictError）は 'conflict'（QA O-2） */
+  const run = async (fn: () => Promise<void>, done: string): Promise<SaveResult> => {
     if (busyRef.current) return false;
     busyRef.current = true;
     setBusy(true);
@@ -115,7 +116,7 @@ function LiveSchedule({ doc }: { doc: ProjectDoc }) {
       return true;
     } catch (e) {
       toast(errText(e), 'error');
-      return false;
+      return e instanceof ScheduleConflictError ? 'conflict' : false;
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -127,13 +128,13 @@ function LiveSchedule({ doc }: { doc: ProjectDoc }) {
 
   const status = sch.summary?.status;
   const saved = st?.schedule;
-  const save = (draft: ScheduleDraft, token: string): Promise<boolean> | boolean => {
+  const save = (draft: ScheduleDraft, token: string): Promise<SaveResult> | boolean => {
     const kind = scheduleSaveKind(status, sch.internal, draft);
     if (kind === 'blocked') { toast(SCHEDULE_BLOCKED_TEXT, 'error'); return false; }
     const opened = scheduleOpened(token, sch.internal);
     if (kind === 'reopen') {
       // 承認済みの予定日を変える＝再計画（理由が要る）。理由の入力が終わるまで入力画面は開いたまま
-      return new Promise<boolean>((resolve) => { setNoteText(''); setNote({ kind: 'reopen', draft, opened, resolve }); });
+      return new Promise<SaveResult>((resolve) => { setNoteText(''); setNote({ kind: 'reopen', draft, opened, resolve }); });
     }
     return run(() => actions.save(draft, opened), saved ? 'スケジュールを変更しました' : 'スケジュールを保存しました。お客様へスケジュールの承認を依頼できます');
   };
@@ -164,8 +165,8 @@ function LiveSchedule({ doc }: { doc: ProjectDoc }) {
     </Stack>
   );
 
-  const closeNote = (ok: boolean) => {
-    note?.resolve?.(ok);
+  const closeNote = (r: SaveResult) => {
+    note?.resolve?.(r);
     setNote(null);
   };
   const proxy = note?.kind === 'proxy';
@@ -186,7 +187,9 @@ function LiveSchedule({ doc }: { doc: ProjectDoc }) {
         : note.shown
           ? await run(() => actions.proxyApprove({ ...note.shown!, requestedAt: note.requestedAt }, cleaned), 'スケジュールを代理で承認しました')
           : false;
-    if (ok) closeNote(true);
+    if (ok === true) closeNote(true);
+    // 再計画の競合: 予定日の保存と同じく、理由と入力画面を閉じて最新を出す（QA O-2。取り下げ・代理承認は今までどおり開いたまま）
+    else if (ok === 'conflict' && note.kind === 'reopen') closeNote('conflict');
   };
   const TEXT = {
     withdraw: { title: '承認の依頼を取り下げますか？', body: 'お客様の承認待ちを取り下げ、下書きに戻します。直した後にもう一度依頼してください。', label: '取り下げる理由', go: '取り下げる' },

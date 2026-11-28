@@ -11,6 +11,7 @@ import { WBS_ITEMS, daysBetween, dragWbs, moveMilestone, shiftYmd, validateWbs, 
 import { tokens } from '@/theme/tokens';
 import { WBS_STATUS_LABEL, currentWbs, wbsRows, type WbsRow, type WbsStatus } from './wbsProgress';
 import { WbsEditDialog } from './WbsEditDialog';
+import { monthLabels } from './ganttMonths';
 import { sameDone, type WbsDone, type WbsSource } from './scheduleSource';
 
 /**
@@ -155,6 +156,8 @@ export function WbsSection({ editable, devBy, ms, onMsChange, client = false, vi
   const chartItems = editable ? draft.map((w, i) => (errors[w.id]?.start || errors[w.id]?.end ? items[i] : w)) : items;
   const rows = source ? source.rows(chartItems, today, doneDraft) : wbsRows(state, chartItems, today);
   const dirty = editable && (JSON.stringify(draft) !== JSON.stringify(items) || (!!source && !sameDone(doneDraft, savedDone)));
+  const latest = useRef({ items, done: savedDone });
+  latest.current = { items, done: savedDone };
   const liveToken = source?.token;
   useEffect(() => {
     // 編集ダイアログを開いている間も固定する（開いた時点の版で保存し、他の人の変更を競合として検出する。Codex P2 2026-11-28）
@@ -232,12 +235,11 @@ export function WbsSection({ editable, devBy, ms, onMsChange, client = false, vi
   const showToday = today >= from && today < shiftYmd(from, days);
 
   // 月の見出しと週の目盛り（月曜）
-  const months: { at: number; label: string }[] = [];
+  // 月の見出しは重ならないように先頭を縮める（QA O-1。ganttMonths.ts）
+  const months = monthLabels(from, days, dayPx);
   const weeks: { at: number; label: string }[] = [];
   for (let i = 0; i < days; i++) {
     const ymd = shiftYmd(from, i);
-    const [y, m, d] = ymd.split('-').map(Number);
-    if (i === 0 || d === 1) months.push({ at: i * dayPx, label: i === 0 || m === 1 ? `${y}年${m}月` : `${m}月` });
     if (weekday(ymd) === 1) weeks.push({ at: i * dayPx, label: md(ymd) });
   }
   const firstMonday = weeks[0]?.at ?? 0;
@@ -434,6 +436,9 @@ export function WbsSection({ editable, devBy, ms, onMsChange, client = false, vi
       setSaving(true);
       void source.save(draft, doneDraft, token).then((ok) => {
         setSaving(false);
+        // 競合（ほかの人が先に保存した）: 文言「最新を読み込みました」のとおり、下書きを捨てて保存済みの最新を出す（QA O-2 2026-11-28）。
+        // 下書きが保存済みと同じになるので、token と後から届く最新の値は上の effect で追従する
+        if (ok === 'conflict') { resetToLatest(); return; }
         if (!ok) return;
         settle();
         toast('WBS を保存しました');
@@ -447,6 +452,11 @@ export function WbsSection({ editable, devBy, ms, onMsChange, client = false, vi
   const reset = () => {
     setDraft(items);
     if (source) setDoneDraft(savedDone);
+  };
+  /** 保存の応答の時点の最新（保存中に届いた値も含む）へ下書きをそろえる。保存を押した時点の items では古いことがある */
+  const resetToLatest = () => {
+    setDraft(latest.current.items);
+    setDoneDraft(latest.current.done);
   };
 
   return (
