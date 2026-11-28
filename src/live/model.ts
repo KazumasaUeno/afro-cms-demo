@@ -272,15 +272,15 @@ export function approvalLogFrom(projectId: string, id: string, d: DocumentData):
   const proxy = d.proxy === true && action === 'approve';
   const kind = approvalKindOf(d);
   const rev = Number(d.revision) || 0;
-  // スケジュールの取り下げ・再計画の理由はお客様にも見せる（OQ-D1・L-8）。要件定義書の withdraw の note は従来どおり出さない（AC-14）
-  const note = kind === 'schedule' && (action === 'withdraw' || action === 'reopen') && typeof d.note === 'string' ? d.note : undefined;
+  // スケジュール・サイトマップの取り下げ・再計画の理由はお客様にも見せる（OQ-D1・L-8・サイトマップ AC-08）。要件定義書の withdraw の note は従来どおり出さない（AC-14）
+  const note = (kind === 'schedule' || kind === 'sitemap') && (action === 'withdraw' || action === 'reopen') && typeof d.note === 'string' ? d.note : undefined;
   return {
     id,
     at: toIso(d.at) ?? new Date().toISOString(),
     actor,
     side: proxy ? 'afro' : d.side === 'client' ? 'client' : 'afro',
-    action: proxy ? proxyApprovalText(actor) : (kind === 'schedule' ? SCHEDULE_ACTION : ACTION)[action] ?? action,
-    target: kind === 'schedule' ? `スケジュール（第${rev}版）` : `要件定義（第${rev}版）`,
+    action: proxy ? proxyApprovalText(actor) : kind === 'unknown' ? UNKNOWN_LOG : (KIND_ACTION[kind][action] ?? action),
+    target: kind === 'unknown' ? UNKNOWN_LOG : `${KIND_TARGET[kind]}（第${rev}版）`,
     projectId,
     kind,
     ...(note !== undefined ? { note } : {}),
@@ -293,6 +293,16 @@ const SCHEDULE_ACTION: Record<string, string> = {
   submit: 'スケジュールの承認を依頼', approve: 'スケジュールを承認', withdraw: 'スケジュールの承認の依頼を取り下げ', reopen: 'スケジュールを再計画',
 };
 
+/** サイトマップの承認の記録の操作の文（LIVE_SITEMAP_IMPL_PLAN U2-0。demo の「サイトマップを承認」に合わせる） */
+const SITEMAP_ACTION: Record<string, string> = {
+  submit: 'サイトマップの承認を依頼', approve: 'サイトマップを承認', withdraw: 'サイトマップの承認の依頼を取り下げ', reopen: 'サイトマップをやり直し',
+};
+
+const KIND_ACTION: Record<KnownApprovalKind, Record<string, string>> = { requirements: ACTION, schedule: SCHEDULE_ACTION, sitemap: SITEMAP_ACTION };
+const KIND_TARGET: Record<KnownApprovalKind, string> = { requirements: '要件定義', schedule: 'スケジュール', sitemap: 'サイトマップ' };
+/** 知らない kind の記録の表示（要件定義と誤表示しない。LIVE_SITEMAP_IMPL_PLAN U2-0） */
+const UNKNOWN_LOG = '不明な記録';
+
 /**
  * お客様の「最後の確認」（clientStatus の lastLog）に数える承認の記録か: お客様側で、要件定義書の記録（kind 無しを含む）だけ。
  * スケジュールの承認は数えない（既存の表示の意味を変えない。LIVE_SCHEDULE_PLAN L-19）。actor による除外は呼び出し側
@@ -301,9 +311,15 @@ export function countsAsLastCheck(l: Pick<ApprovalLog, 'side' | 'kind'>): boolea
   return l.side === 'client' && (l.kind ?? 'requirements') === 'requirements';
 }
 
-/** 記録の種類。kind の無い古い記録（スケジュール機能より前）は要件定義書（バックフィルしない。LIVE_SCHEDULE_PLAN §4） */
-export function approvalKindOf(d: DocumentData): 'requirements' | 'schedule' {
-  return d.kind === 'schedule' ? 'schedule' : 'requirements';
+type KnownApprovalKind = 'requirements' | 'schedule' | 'sitemap';
+
+/**
+ * 記録の種類。kind の無い古い記録（スケジュール機能より前）は要件定義書（バックフィルしない。LIVE_SCHEDULE_PLAN §4）。
+ * 知らない kind は 'unknown'（要件定義に数えない・要件定義と表示しない。LIVE_SITEMAP_IMPL_PLAN U2-0）
+ */
+export function approvalKindOf(d: DocumentData): KnownApprovalKind | 'unknown' {
+  if (d.kind === undefined || d.kind === null) return 'requirements';
+  return d.kind === 'requirements' || d.kind === 'schedule' || d.kind === 'sitemap' ? d.kind : 'unknown';
 }
 
 /**
@@ -312,7 +328,11 @@ export function approvalKindOf(d: DocumentData): 'requirements' | 'schedule' {
  * uid は画面に出さない
  */
 export function approvalLogsFrom(projectId: string, docs: readonly { id: string; data: DocumentData }[]): ApprovalLog[] {
-  const keyOf = (data: DocumentData) => `${approvalKindOf(data)}:${Number(data.revision) || 0}`;
+  // 知らない kind は元の値ごと鍵にする（違う kind の依頼と突き合わせない）
+  const keyOf = (data: DocumentData) => {
+    const k = approvalKindOf(data);
+    return `${k === 'unknown' ? `unknown(${String(data.kind)})` : k}:${Number(data.revision) || 0}`;
+  };
   const requester = new Map<string, string>();
   for (const { data } of docs) {
     if (data.action === 'submit' && typeof data.actorUid === 'string') requester.set(keyOf(data), data.actorUid);

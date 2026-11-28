@@ -330,10 +330,10 @@ export interface ApprovalLog {
    */
   proxy?: { note: string; sameAsRequester: boolean };
   /**
-   * live だけ: 何の承認の記録か（approvals の kind。LIVE_SCHEDULE_PLAN U2-0・C-04）。kind の無い古い記録は 'requirements'。
-   * demo の記録は持たない（無い＝従来どおり）
+   * live だけ: 何の承認の記録か（approvals の kind。LIVE_SCHEDULE_PLAN U2-0・C-04・LIVE_SITEMAP_IMPL_PLAN U2-0）。kind の無い古い記録は 'requirements'。
+   * 知らない kind は 'unknown'（要件定義に数えない）。demo の記録は持たない（無い＝従来どおり）
    */
-  kind?: 'requirements' | 'schedule';
+  kind?: 'requirements' | 'schedule' | 'sitemap' | 'unknown';
   /** live だけ: スケジュールの取り下げ（withdraw）・再計画（reopen）の理由（お客様にも見える。OQ-D1・L-8） */
   note?: string;
 }
