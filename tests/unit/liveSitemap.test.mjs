@@ -160,3 +160,77 @@ test('AC-28: スケジュールの承認後はサイトマップの段階（demo
   assert.equal(toProject({ ...doc, sitemap: { status: 'requested', revision: 1 } }).nextAction, 'お客様のサイトマップ承認を待つ');
   assert.equal(toProject({ ...doc, schedule: { status: 'requested', revision: 1 } }).stage, 'schedule');
 });
+
+/* ---------- U2 後半: callable の入力・保存のまとめの状態・案件の state ---------- */
+import { createSitemapSaver, liveSitemapProjectState, SITEMAP_SAVE_FAILED_BEFORE_SUBMIT, sitemapDraftRequestInput } from '../../src/live/sitemap.ts';
+import { liveProjectView } from '../../src/live/projectView.ts';
+
+test('requestSitemapDraft の入力: 真の印だけ送る（S-12。偽はキーを入れない）', () => {
+  const id = '3f1c2b8e-1d2a-4c3b-9e8f-0a1b2c3d4e5f';
+  assert.deepEqual(sitemapDraftRequestInput('p1', id, {}), { projectId: 'p1', requestId: id });
+  assert.deepEqual(sitemapDraftRequestInput('p1', id, { regenerate: true, discardEdits: false, confirmDiscard: true }),
+    { projectId: 'p1', requestId: id, regenerate: true, confirmDiscard: true });
+});
+
+const edits = (n) => ({ before: empty, after, devComment: { text: `c${n}` } });
+
+test('保存のまとめ: 待ちがある間は idle でない。書けたら idle・失敗なし。依頼の基準は返った editSeq', async () => {
+  const timer = fakeTimer();
+  const writes = [];
+  const s = createSitemapSaver({ delayMs: 1200, timer, write: async (v, base) => { writes.push([v.devComment.text, base]); return base + 1; } });
+  const seen = [];
+  const un = s.subscribe(() => seen.push(s.status()));
+  s.push(edits(1), 4);
+  s.push(edits(2), 4);
+  assert.equal(s.status().idle, false);
+  assert.equal(timer.q[0].ms >= 1000, true);
+  assert.equal(await s.beforeSubmit(4), 5, '依頼の前に書き切り、基準は書いた後の editSeq');
+  assert.deepEqual(writes, [['c2', 4]]);
+  assert.deepEqual(s.status(), { idle: true, error: null });
+  assert.equal(s.status(), s.status(), '同じ状態なら同じオブジェクト（useSyncExternalStore）');
+  assert.equal(seen.length > 0, true);
+  un();
+});
+
+test('保存のまとめ: 通信の失敗は依頼を止める（保存前の内容を承認の対象にしない）。次に書ければ解ける', async () => {
+  const timer = fakeTimer();
+  let fail = true;
+  const s = createSitemapSaver({ delayMs: 1200, timer, write: async (_v, base) => { if (fail) throw Object.assign(new Error('x'), { code: 'functions/unavailable' }); return base + 1; } });
+  s.push(edits(1), 0);
+  await assert.rejects(s.beforeSubmit(0), (e) => e.message === SITEMAP_SAVE_FAILED_BEFORE_SUBMIT);
+  assert.equal(s.status().error instanceof Error, true);
+  fail = false;
+  s.push(edits(2), 0);
+  assert.equal(await s.beforeSubmit(0), 1);
+  assert.equal(s.status().error, null);
+});
+
+test('保存のまとめ: 競合は SitemapConflictError を出し基準を戻す。最新を読み直した後の依頼は止めない', async () => {
+  const timer = fakeTimer();
+  const bases = [];
+  let conflict = true;
+  const s = createSitemapSaver({ delayMs: 1200, timer, write: async (_v, base) => { bases.push(base); if (conflict) throw { code: 'functions/aborted' }; return base + 1; } });
+  s.push(edits(1), 2);
+  await s.flush();
+  assert.equal(s.status().error instanceof SitemapConflictError, true);
+  assert.equal(await s.beforeSubmit(7), 7, '競合の後は開き直した editSeq が基準');
+  conflict = false;
+  s.push(edits(2), 7);
+  await s.flush();
+  assert.deepEqual(bases, [2, 7]);
+});
+
+test('案件の state: 要約が無ければ null。依頼中だけ依頼の日時。internal が無ければ版の中身', () => {
+  const v = sitemapVersionDoc({ revision: 1, contentHash: 'h', before: empty, after });
+  assert.equal(liveSitemapProjectState(null, null, v), null);
+  const r = liveSitemapProjectState({ status: 'requested', revision: 1, requestedAt: '2026-11-28T01:00:00.000Z' }, null, v);
+  assert.equal(r.requestedAt, '2026-11-28T01:00:00.000Z');
+  assert.equal(r.sitemap.after.nodes.length, 2);
+  assert.equal(liveSitemapProjectState({ status: 'draft', revision: 1, requestedAt: 'x' }, null, null).requestedAt, undefined);
+  const work = { sitemap: { before: empty, after: empty }, design: {}, qualityChecks: {}, pages: [], diagnoses: [], signage: {} };
+  const req = { projectId: 'p1', answers: {}, competitors: [], status: 'approved' };
+  const st = liveProjectView({ id: 'p1' }, req, [], work, null, r);
+  assert.equal(st.sitemap.after.nodes.length, 2);
+  assert.deepEqual(st.approvalRequests, { sitemap: '2026-11-28T01:00:00.000Z' });
+  assert.equal(liveProjectView({ id: 'p1' }, req, [], work).sitemap, work.sitemap, 'サイトマップが無ければ従来どおり空の値');
+});

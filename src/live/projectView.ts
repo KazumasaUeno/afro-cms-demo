@@ -1,6 +1,7 @@
 import type { ApprovalLog, DemoState, Project, RequirementSession } from '@/types';
 import type { FullWork } from '@/store/projectWork';
 import type { LiveScheduleState } from './schedule';
+import type { LiveSitemapProjectState } from './sitemap';
 
 /**
  * live の案件の state（プロジェクト詳細の見た目の部品 ProjectDetailView・ClientStatusPanel が読む形）。
@@ -10,8 +11,9 @@ import type { LiveScheduleState } from './schedule';
  * work は呼び出し側が blankWork(p.id) を渡す（projectWork はデモの画像データまで読み、単体テストから import できないため）。
  * sched は live のスケジュール（schedule.ts liveScheduleState。ProjectDetailView の納品予定日・公開予定日が state.schedule を読む。
  * LIVE_SCHEDULE_PLAN U2-1）。依頼中なら承認の依頼の日時（approvalRequests.schedule）も立てる
+ * site は live のサイトマップ（sitemap.ts liveSitemapProjectState。LIVE_SITEMAP_IMPL_PLAN U2）。無ければ work.sitemap。依頼中なら approvalRequests.sitemap
  */
-export function liveProjectView(p: Project, req: RequirementSession, logs: readonly ApprovalLog[], work: FullWork, sched?: LiveScheduleState | null): DemoState {
+export function liveProjectView(p: Project, req: RequirementSession, logs: readonly ApprovalLog[], work: FullWork, sched?: LiveScheduleState | null, site?: LiveSitemapProjectState | null): DemoState {
   const reqAsked = req.status !== 'draft' && req.analyzedAt ? { requirements: req.analyzedAt } : {};
   return {
     version: 0,
@@ -19,14 +21,14 @@ export function liveProjectView(p: Project, req: RequirementSession, logs: reado
     currentProjectId: p.id,
     projects: [p],
     requirements: req,
-    sitemap: work.sitemap,
+    sitemap: site?.sitemap ?? work.sitemap,
     design: work.design,
     qualityChecks: work.qualityChecks,
     pages: work.pages,
     diagnoses: work.diagnoses,
     signage: work.signage,
     ...(sched ? { schedule: sched.schedule } : {}),
-    approvalRequests: { ...reqAsked, ...(sched?.requestedAt ? { schedule: sched.requestedAt } : {}) },
+    approvalRequests: { ...reqAsked, ...(sched?.requestedAt ? { schedule: sched.requestedAt } : {}), ...(site?.requestedAt ? { sitemap: site.requestedAt } : {}) },
     approvalLogs: logs.map((l) => ({ ...l, projectId: l.projectId ?? p.id })),
     activities: [],
     settings: { reducedMotion: 'system', companyName: '' },

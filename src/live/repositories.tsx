@@ -16,7 +16,14 @@ import type { AiDraftDoc, AiEditableV3, StoredProposal } from '@/types/aiDraft';
 import { REQ_DOC_COPY, reqDocSubmitBlock, submitBlockText } from '@/features/requirements/aiDraft/reqDocView';
 import { isJobRunning } from '@/features/requirements/aiDraft/aiDraftState';
 import { pendingSaveFailed, SCHEDULE_SAVE_FAILED_BEFORE_SUBMIT } from '@/features/schedule/liveScheduleUi';
-import { db } from './firebase';
+import { connectFunctionsEmulator, getFunctions, httpsCallable, type Functions } from 'firebase/functions';
+import { app, db, EMULATOR } from './firebase';
+import { FUNCTIONS_REGION } from './functionsRegion';
+import {
+  clientVersionToRead, createSitemapSaver, sitemapAiDraftOf, sitemapApprovalIdOf, sitemapApproveRecord, sitemapApproveReplay, sitemapCallableError, SitemapConflictError,
+  sitemapConflict, sitemapDraftRequestInput, sitemapInternalDoc, sitemapVersionDoc, SITEMAP_CONFLICT_TEXT,
+  type SitemapAiDraft, type SitemapDraftOptions, type SitemapEdits, type SitemapInternal, type SitemapSaveStatus, type SitemapShown, type SitemapSummary, type SitemapVersion,
+} from './sitemap';
 import {
   clientFromAccount, clientFromInvite, deepIso, devFromAccount, devFromInvite, INVITE_PREFIX, LIST_LIMIT, MAX_MEMBERS, messageDoc, projectDoc, proposalForSave, proposalV2FromDraft, proposalV3FromDraft, reqDoc, toApprovalLogs, toProject,
   taskDoc, toSession, type MessageDoc, type ProjectDoc, type ReqDoc, type TaskDoc, type TaskStatus,
@@ -585,6 +592,257 @@ export function useLiveScheduleActions(projectId: string): LiveScheduleActions {
         const err = validateProxyNote(note);
         if (err) throw new Error(err);
         await approveAs(shown, { note, requestedAt: shown.requestedAt });
+      },
+    };
+  }, [session, projectId]);
+}
+
+/* ---------- サイトマップ（projects/{pid}.sitemap・sitemap/internal・sitemapVersions/r{N}・aiDrafts/sitemap・approvals sitemap-r{N}-*。LIVE_SITEMAP_IMPL_PLAN §3・U2） ---------- */
+
+const siteInternalRef = (pid: string) => doc(db, 'projects', pid, 'sitemap', 'internal');
+const siteVersionRef = (pid: string, rev: number) => doc(db, 'projects', pid, 'sitemapVersions', `r${rev}`);
+const siteAiRef = (pid: string) => doc(db, 'projects', pid, 'aiDrafts', 'sitemap');
+const siteApprRef = (pid: string, rev: number, action: 'approve' | 'withdraw' | 'reopen') => doc(db, 'projects', pid, 'approvals', sitemapApprovalIdOf(rev, action));
+
+/** callable の待ち時間（aiDraftPort.ts と同じ理由で関数の timeout より長く） */
+const SITE_CALL_TIMEOUT_MS = 60_000;
+/** 保存をまとめる時間（AC-17: 1 秒以上） */
+const SITEMAP_SAVE_DELAY_MS = 1200;
+
+let siteFunctions: Functions | null = null;
+function siteFns(): Functions {
+  if (!siteFunctions) {
+    siteFunctions = getFunctions(app, FUNCTIONS_REGION);
+    if (EMULATOR) connectFunctionsEmulator(siteFunctions, '127.0.0.1', 5001);
+  }
+  return siteFunctions;
+}
+async function siteCall<O>(name: 'saveSitemapEdits' | 'submitSitemap' | 'requestSitemapDraft', input: Record<string, unknown>): Promise<O> {
+  try {
+    const { data } = await httpsCallable<Record<string, unknown>, O>(siteFns(), name, { timeout: SITE_CALL_TIMEOUT_MS })(input);
+    return data;
+  } catch (e) {
+    throw sitemapCallableError(e);
+  }
+}
+
+export interface LiveSitemapQuery {
+  summary: SitemapSummary | null;
+  /** 管理者・担当だけ（お客様は購読しない＝常に null） */
+  internal: SitemapInternal | null;
+  /** clientVersionToRead の版（依頼中・承認済み → revision、下書きで承認歴あり → approvedRevision）。お客様が読むのはこれだけ（D-4） */
+  version: SitemapVersion | null;
+  /** version が最後に承認された版なら同じ値（下書きに戻った後の表示） */
+  approvedVersion: SitemapVersion | null;
+  /** 管理者・担当だけ */
+  aiDraft: SitemapAiDraft | null;
+  loading: boolean;
+  error: Error | null;
+}
+
+/**
+ * 1 案件のサイトマップ（リアルタイム）。要約は案件文書。
+ * お客様: 版文書 1 つだけ（internal・aiDrafts を購読しない。S-1）。管理者・開発者: internal（要約があるとき）・aiDrafts/sitemap・同じ版文書
+ */
+export function useLiveSitemap(projectId: string | null): LiveSitemapQuery {
+  const client = useLiveData().session.account.role === 'client';
+  const p = useSnapshot<ProjectDoc | null>(projectId ? `p:${projectId}` : null, (next, fail) =>
+    onSnapshot(projRef(projectId!), (s) => next(s.exists() ? projectDoc(s) : null), fail), null);
+  const summary = p.data?.sitemap ?? null;
+  const rev = projectId ? clientVersionToRead(summary) : null;
+  const v = useSnapshot<SitemapVersion | null>(rev !== null ? `smv:${projectId}:${rev}` : null, (next, fail) =>
+    onSnapshot(siteVersionRef(projectId!, rev!), (s) => next(s.exists() ? sitemapVersionDoc(s.data({ serverTimestamps: 'estimate' })) : null), fail), null);
+  const i = useSnapshot<SitemapInternal | null>(projectId && summary && !client ? `smi:${projectId}` : null, (next, fail) =>
+    onSnapshot(siteInternalRef(projectId!), (s) => next(s.exists() ? sitemapInternalDoc(s.data({ serverTimestamps: 'estimate' })) : null), fail), null);
+  const a = useSnapshot<SitemapAiDraft | null>(projectId && !client ? `sma:${projectId}` : null, (next, fail) =>
+    onSnapshot(siteAiRef(projectId!), (s) => next(s.exists() ? sitemapAiDraftOf(s.data()) : null), fail), null);
+  const approvedVersion = v.data && summary?.approvedRevision === v.data.revision ? v.data : null;
+  return useMemo(() => ({
+    summary, internal: i.data, version: v.data, approvedVersion, aiDraft: a.data,
+    loading: p.loading || v.loading || i.loading || a.loading,
+    error: p.error ?? v.error ?? i.error ?? a.error,
+  }), [summary, i.data, v.data, approvedVersion, a.data, p.loading, v.loading, i.loading, a.loading, p.error, v.error, i.error, a.error]);
+}
+
+/** 案件ごとの保存のまとめ（部品をまたいで 1 つ。依頼は同じ案件の待ちを書き切ってから） */
+const siteSavers = new Map<string, ReturnType<typeof createSitemapSaver>>();
+function siteSaver(pid: string) {
+  let s = siteSavers.get(pid);
+  if (!s) {
+    s = createSitemapSaver({
+      delayMs: SITEMAP_SAVE_DELAY_MS,
+      write: async (v, baseEditSeq) => {
+        const out = await siteCall<{ editSeq?: unknown }>('saveSitemapEdits', {
+          projectId: pid, op: 'save', baseEditSeq, before: v.before, after: v.after, ...(v.devComment ? { devComment: { text: v.devComment.text } } : {}),
+        });
+        if (!out || typeof out.editSeq !== 'number') throw new Error('saveSitemapEdits: unexpected result');
+        return out.editSeq;
+      },
+    });
+    siteSavers.set(pid, s);
+  }
+  return s;
+}
+
+const IDLE_SAVE: SitemapSaveStatus = { idle: true, error: null };
+const noopSubscribe = () => () => {};
+const idleSave = () => IDLE_SAVE;
+
+/** 保存の状態（idle でない間、編集画面は internal ではなく手元の値を出す） */
+export function useLiveSitemapSaveStatus(projectId: string | null): SitemapSaveStatus {
+  const s = projectId ? siteSaver(projectId) : null;
+  return useSyncExternalStore(s ? s.subscribe : noopSubscribe, s ? s.status : idleSave, s ? s.status : idleSave);
+}
+
+export interface LiveSitemapActions {
+  /** 手で作成（none → draft。internal は editSeq 0） */
+  createManual: () => Promise<void>;
+  /** 編集の保存（まとめて 1 秒以上後に 1 回。失敗は useLiveSitemapSaveStatus の error）。openedEditSeq は開いた時点の internal.editSeq */
+  save: (edits: SitemapEdits, openedEditSeq: number) => void;
+  /** 待っている保存をすぐ書く */
+  flush: () => Promise<void>;
+  /** お客様へ承認を依頼（待っている保存を書き切り、失敗が残れば止める）。revision は表示中の要約の revision */
+  submit: (openedEditSeq: number, revision: number) => Promise<void>;
+  withdraw: (note: string) => Promise<void>;
+  /** 承認済みを下書きに戻す（理由は必須でお客様にも見える） */
+  reopen: (note: string) => Promise<void>;
+  approve: (shown: SitemapShown) => Promise<void>;
+  proxyApprove: (shown: SitemapShown & { requestedAt: string | undefined }, note: string) => Promise<void>;
+  requestDraft: (o: SitemapDraftOptions) => Promise<{ state: string; requestId: string }>;
+}
+
+/**
+ * サイトマップの操作。中身（作成・保存・依頼・AI）は callable、状態だけの遷移（取り下げ・再計画・承認・代理）は 1 操作＝1 runTransaction（Rules siteProjOk・siteApprOk）。
+ * 失敗の形はスケジュールと同じ（permission-denied → 権限がありません・SitemapConflictError・二重承認は WARN で成功扱い）
+ */
+export function useLiveSitemapActions(projectId: string): LiveSitemapActions {
+  const { session } = useLiveData();
+  return useMemo<LiveSitemapActions>(() => {
+    const { uid, account } = session;
+    const pid = projectId;
+    const afro = () => {
+      if (account.role !== 'admin' && account.role !== 'developer') throw new Error('サイトマップを変更できるのは、担当の開発者と管理者だけです');
+    };
+    const denied = (e: unknown): never => {
+      if (e instanceof SitemapConflictError) throw e;
+      if (isDenied(e)) {
+        console.warn('sitemap write denied', { projectId: pid });
+        throw new Error('権限がありません（担当が変わった・アーカイブされた・ほかの人が先に操作した可能性があります）');
+      }
+      throw e;
+    };
+    const gate = (ps: { exists: () => boolean }): ProjectDoc => {
+      if (!ps.exists()) throw new Error('案件が見つかりません');
+      const p = projectDoc(ps as Parameters<typeof projectDoc>[0]);
+      if (p.archived) throw new Error('アーカイブ中の案件は変更できません');
+      if (p.requirements.status !== 'approved') throw new Error('要件定義書の承認の後にサイトマップを作成できます');
+      return p;
+    };
+    const reason = (raw: string) => {
+      const note = cleanScheduleReason(raw);
+      const err = validateScheduleReason(note);
+      if (err) throw new Error(err);
+      return note;
+    };
+    const saver = siteSaver(pid);
+
+    /** 取り下げ（requested → draft）・再計画（approved → draft）。要約の差分は status だけ */
+    const back = async (action: 'withdraw' | 'reopen', raw: string) => {
+      afro();
+      const note = reason(raw);
+      await runTransaction(db, async (tx) => {
+        const sum = gate(await tx.get(projRef(pid))).sitemap ?? null;
+        if (action === 'withdraw' && sum?.status !== 'requested') throw new Error('取り下げられるのは、お客様の承認待ちの間だけです');
+        if (action === 'reopen' && sum?.status !== 'approved') throw new Error('下書きに戻せるのは、お客様の承認の後だけです');
+        tx.set(siteApprRef(pid, sum!.revision, action), {
+          schemaVersion: 1, kind: 'sitemap', action, revision: sum!.revision, side: 'afro', ...actor(session), at: serverTimestamp(), note,
+        });
+        tx.update(projRef(pid), { 'sitemap.status': 'draft', ...stamp(uid) });
+      }).catch(denied);
+    };
+
+    /** お客様の承認と代理承認の共通部分（P-3: 表示した revision・contentHash で送る） */
+    const approveAs = async (shown: SitemapShown, proxy: { note: string; requestedAt: string | undefined } | null) => {
+      let rev = -1;
+      const otherText = proxy ? 'お客様がすでに承認しています' : 'アフロがすでに代理で承認しています';
+      try {
+        const replayed = await runTransaction(db, async (tx) => {
+          const sum = gate(await tx.get(projRef(pid))).sitemap ?? null;
+          if (sum?.status === 'approved' && sum.approvalId === sitemapApprovalIdOf(sum.revision) && shown.revision === sum.revision) {
+            // 別タブで同じ版を先に承認した（二重押し）。記録の種類が押した側と同じなら成功として扱う
+            const ex = await tx.get(siteApprRef(pid, sum.revision, 'approve'));
+            const replay = sitemapApproveReplay(sum, shown.revision, ex.exists() ? ex.data() : null, !!proxy);
+            if (replay === 'other') throw new Error(otherText);
+            if (replay === 'same') return ex.id;
+          }
+          if (sum?.status !== 'requested') throw new Error('いまは承認できる状態ではありません');
+          rev = sum.revision;
+          if (proxy && !proxyVersionOk(proxy.requestedAt, sum.requestedAt)) {
+            throw new SitemapConflictError('サイトマップが更新されました。内容を確認し直してから代理で承認してください');
+          }
+          if (sitemapConflict(shown, sum)) throw new SitemapConflictError(SITEMAP_CONFLICT_TEXT.approve);
+          tx.set(siteApprRef(pid, rev, 'approve'), { ...sitemapApproveRecord(shown, proxy ? { note: proxy.note } : null), ...actor(session), at: serverTimestamp() });
+          tx.update(projRef(pid), {
+            'sitemap.status': 'approved', 'sitemap.approvedRevision': rev, 'sitemap.approvedAt': serverTimestamp(), 'sitemap.approvedBy': uid,
+            'sitemap.approvalId': sitemapApprovalIdOf(rev), 'sitemap.approvedVia': proxy ? 'proxy' : deleteField(), ...stamp(uid),
+          });
+          return null;
+        });
+        if (replayed) console.warn('sitemap approval already done (double press)', { projectId: pid, aid: replayed });
+      } catch (e) {
+        // 二重承認（2 タブ・再送）は Rules が拒否する。同じ種類の記録が既にあれば承認済みとして扱う（無音にしない）
+        if (rev >= 0 && isDenied(e)) {
+          const existing = await getDoc(siteApprRef(pid, rev, 'approve')).catch(() => null);
+          if (existing?.exists()) {
+            if ((existing.data()?.proxy === true) !== !!proxy) throw new Error(otherText);
+            console.warn('sitemap approval already exists', { projectId: pid, aid: existing.id });
+            return;
+          }
+        }
+        denied(e);
+      }
+    };
+
+    return {
+      createManual: async () => {
+        afro();
+        await siteCall('saveSitemapEdits', { projectId: pid, op: 'createManual' });
+        saver.reset();
+      },
+      save: (edits, openedEditSeq) => {
+        afro();
+        saver.push(edits, openedEditSeq);
+      },
+      flush: () => saver.flush(),
+      submit: async (openedEditSeq, revision) => {
+        afro();
+        const baseEditSeq = await saver.beforeSubmit(openedEditSeq);
+        try {
+          await siteCall('submitSitemap', { projectId: pid, baseEditSeq, expectRevision: revision });
+        } catch (e) {
+          if (e instanceof SitemapConflictError) saver.reset();
+          throw e;
+        }
+      },
+      withdraw: (raw) => back('withdraw', raw),
+      reopen: (raw) => back('reopen', raw),
+      approve: async (shown) => {
+        if (account.role !== 'client') throw new Error('サイトマップの承認はお客様ご本人だけが行えます');
+        await approveAs(shown, null);
+      },
+      proxyApprove: async (shown, raw) => {
+        if (account.role !== 'admin') throw new Error('代理で承認できるのは管理者だけです');
+        const note = cleanProxyNote(raw);
+        const err = validateProxyNote(note);
+        if (err) throw new Error(err);
+        await approveAs(shown, { note, requestedAt: shown.requestedAt });
+      },
+      requestDraft: async (o) => {
+        afro();
+        const out = await siteCall<{ state: string; requestId: string }>('requestSitemapDraft', sitemapDraftRequestInput(pid, crypto.randomUUID(), o));
+        // AI が internal を置き換える（discardEdits）ので、手元の基準を戻す
+        if (o.discardEdits) saver.reset();
+        return out;
       },
     };
   }, [session, projectId]);

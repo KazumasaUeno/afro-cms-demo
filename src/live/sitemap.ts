@@ -285,3 +285,89 @@ export function createSaveQueue<T>(o: {
     reset() { pending = null; seq = null; if (handle !== null) { timer.clear(handle); handle = null; } },
   };
 }
+
+/* ---------- callable の入力・保存の状態（repositories.tsx の hooks が使う。U2） ---------- */
+
+export interface SitemapDraftOptions { regenerate?: boolean; discardEdits?: boolean; confirmDiscard?: boolean }
+
+/** requestSitemapDraft の入力（S-12: 印は真偽値で、真のときだけキーを入れる） */
+export function sitemapDraftRequestInput(projectId: string, requestId: string, o: SitemapDraftOptions) {
+  return {
+    projectId, requestId,
+    ...(o.regenerate === true ? { regenerate: true } : {}), ...(o.discardEdits === true ? { discardEdits: true } : {}),
+    ...(o.confirmDiscard === true ? { confirmDiscard: true } : {}),
+  };
+}
+
+/** 保存する中身（saveSitemapEdits op:'save' の before・after・devComment） */
+export interface SitemapEdits { before: SitemapDiagram; after: SitemapDiagram; devComment?: { text: string } }
+
+/** idle: 待ち・送信中が無い（false の間、画面は手元の値を重ねて出す）。error: 最後の保存の失敗（書ければ消える） */
+export interface SitemapSaveStatus { idle: boolean; error: Error | null }
+
+/** liveScheduleUi の SCHEDULE_SAVE_FAILED_BEFORE_SUBMIT と同じ文言（import すると model.ts 経由で循環するので値で持つ） */
+export const SITEMAP_SAVE_FAILED_BEFORE_SUBMIT = '直前の保存ができませんでした。内容を確かめて保存してから依頼してください';
+
+/**
+ * 1 案件の保存のまとめ（createSaveQueue）＋状態の購読（useSyncExternalStore 向け）。
+ * 競合（SitemapConflictError）は基準を戻し、依頼は止めない（画面は最新を読み直す）。それ以外の失敗は、次に書けるまで依頼を止める（pendingSaveFailed と同じ考え）
+ */
+export function createSitemapSaver(o: { delayMs: number; write: (v: SitemapEdits, baseEditSeq: number) => Promise<number>; timer?: SaveQueueTimer }) {
+  let opened: number | null = null;
+  let saved: number | null = null;
+  let error: Error | null = null;
+  let blocking = false;
+  let snap: SitemapSaveStatus = { idle: true, error: null };
+  const listeners = new Set<() => void>();
+  const emit = () => { listeners.forEach((l) => l()); };
+  const q = createSaveQueue<SitemapEdits>({
+    delayMs: o.delayMs, timer: o.timer, base: () => opened,
+    write: async (v, base) => {
+      try {
+        const next = await o.write(v, base);
+        saved = next; error = null; blocking = false;
+        return next;
+      } catch (e) {
+        throw sitemapCallableError(e);
+      } finally {
+        setTimeout(emit, 0);
+      }
+    },
+    onError: (e) => {
+      error = e instanceof Error ? e : new Error(String(e));
+      if (e instanceof SitemapConflictError) { q.reset(); saved = null; blocking = false; } else blocking = true;
+      setTimeout(emit, 0);
+    },
+  });
+  const status = (): SitemapSaveStatus => {
+    const idle = q.idle();
+    if (snap.idle !== idle || snap.error !== error) snap = { idle, error };
+    return snap;
+  };
+  return {
+    push(v: SitemapEdits, openedEditSeq: number) { opened = openedEditSeq; q.push(v); emit(); },
+    flush: () => q.flush(),
+    status,
+    subscribe(l: () => void) { listeners.add(l); return () => { listeners.delete(l); }; },
+    /** 依頼の前: 待ちを書き切り、失敗が残っていれば止める。返り値は依頼の baseEditSeq */
+    async beforeSubmit(openedEditSeq: number): Promise<number> {
+      await q.flush();
+      emit();
+      if (blocking) throw new Error(SITEMAP_SAVE_FAILED_BEFORE_SUBMIT);
+      return Math.max(openedEditSeq, saved ?? -1);
+    },
+    /** 競合の後・依頼の後など、基準を開き直した値に戻す */
+    reset() { q.reset(); saved = null; error = null; blocking = false; emit(); },
+  };
+}
+
+/** 案件の state に入れるサイトマップ（projectView.ts。要約が無ければ null＝従来の空の値）。依頼中だけ依頼の日時 */
+export interface LiveSitemapProjectState { sitemap: SitemapState; requestedAt?: string }
+
+export function liveSitemapProjectState(summary: SitemapSummary | null, internal: SitemapInternal | null, version: SitemapVersion | null): LiveSitemapProjectState | null {
+  if (!summary) return null;
+  return {
+    sitemap: liveSitemapState(summary, internal, version),
+    ...(summary.status === 'requested' && summary.requestedAt ? { requestedAt: summary.requestedAt } : {}),
+  };
+}
