@@ -133,14 +133,14 @@ export const NotesEditCell = memo(function NotesEditCell({ chapterId, value, rea
 const COVER_KEYS: (keyof ProposalV3Doc['cover'])[] = ['client', 'vendor', 'author', 'approver'];
 
 /** 表紙の 4 欄（編集。会社名と役職まで） */
-export function CoverFields({ edit }: { edit: Omit<ReqDocEdit, 'onAskDelete'> }) {
+export function CoverFields({ edit, apply }: { edit: Omit<ReqDocEdit, 'onAskDelete'>; apply: ApplyEdit<AiEditableV3> }) {
   const c = edit.local.doc.cover;
   return (
     <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0,1fr))' } }}>
       {COVER_KEYS.map((k) => (
         <Field
           key={k} label={REQ_DOC_COPY.cover[k]} value={c[k]} max={REQ_DOC_LIMITS.coverField} multiline={false} readOnly={edit.readOnly}
-          helper={REQ_DOC_COPY.coverHelper} onChange={(v) => edit.onChange(setCover(edit.local, k, v))}
+          helper={REQ_DOC_COPY.coverHelper} onChange={(v) => apply((cur) => setCover(cur, k, v))}
         />
       ))}
     </Box>
@@ -151,7 +151,7 @@ export function CoverFields({ edit }: { edit: Omit<ReqDocEdit, 'onAskDelete'> })
  * ReqDocChapters の「編集」の描き方（行の入力・特記事項の入力・AI追加の削除の確認ダイアログ）。
  * 表示の部品（ReqDocChapters）がこのファイルを import しないよう、編集の画面（AiDraftReviewV3）がここで作って渡す
  */
-export function useReqDocChaptersEditor(edit: Omit<ReqDocEdit, 'onAskDelete'>): ReqDocChaptersEditor {
+export function useReqDocChaptersEditor(edit: Omit<ReqDocEdit, 'onAskDelete'>): ReqDocChaptersEditor & { apply: ApplyEdit<AiEditableV3> } {
   const [askDelete, setAskDelete] = useState<string | null>(null);
   // 欄の onChange は最新の文書に当てる（memo で描き直さなかった欄が古い文書で他の欄の入力を消さない。latestApply.ts）
   const latest = useRef(edit.local);
@@ -192,5 +192,7 @@ export function useReqDocChaptersEditor(edit: Omit<ReqDocEdit, 'onAskDelete'>): 
     cell,
     notes: (chapterId) => <NotesEditCell chapterId={chapterId} value={edit.local.doc.notes[chapterId] ?? ''} readOnly={edit.readOnly} apply={apply} />,
     overlay,
+    // 表紙・改善ポイントも同じ apply で当てる（描画時点の文書から作り直さない。code review 2026-11-28 Minor）
+    apply,
   };
 }

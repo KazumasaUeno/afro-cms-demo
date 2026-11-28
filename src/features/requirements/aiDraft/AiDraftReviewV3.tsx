@@ -50,7 +50,7 @@ export function AiDraftReviewV3({ ai, view, generated, role, isAssignedDeveloper
   const edit: Omit<ReqDocEdit, 'onAskDelete'> = { local, catalog, readOnly, flags, onChange: (next) => ai.update(next) };
   const chaptersEditor = useReqDocChaptersEditor(edit);
   const setPoint = (idx: number, patch: Partial<AiEditableV3['points'][number]>) =>
-    ai.update({ ...local, points: local.points.map((p, i) => (i === idx ? { ...p, ...patch } : p)) });
+    chaptersEditor.apply((cur) => ({ ...cur, points: cur.points.map((p, i) => (i === idx ? { ...p, ...patch } : p)) }));
 
   // 主操作（PageHeader の右）は高さのそろったボタンだけを 1 行に置く。押せない理由・保存の失敗はボタンの下に出さず、タブの中の状態の行へ（2026-11-26 ユーザー指摘「配置が雑」）
   // 生成中・保存中で押せないときも理由を出す（review 2026-11-26 Minor。以前は APPROVAL_BLOCK_COPY をボタンの下に出していた）
@@ -127,8 +127,8 @@ export function AiDraftReviewV3({ ai, view, generated, role, isAssignedDeveloper
           {/* 表紙: 要約と発注者等の 4 欄（ProposalView の表紙の Surface の位置） */}
           <Surface>
             <Stack spacing={2.5}>
-              <Field label="要約" value={local.summary} max={AI_DRAFT_LIMITS.summary} minRows={3} readOnly={readOnly} flags={topFlags} onChange={(v) => ai.update({ ...local, summary: v })} />
-              <CoverFields edit={edit} />
+              <Field label="要約" value={local.summary} max={AI_DRAFT_LIMITS.summary} minRows={3} readOnly={readOnly} flags={topFlags} onChange={(v) => chaptersEditor.apply((cur) => ({ ...cur, summary: v }))} />
+              <CoverFields edit={edit} apply={chaptersEditor.apply} />
             </Stack>
           </Surface>
           <Box>

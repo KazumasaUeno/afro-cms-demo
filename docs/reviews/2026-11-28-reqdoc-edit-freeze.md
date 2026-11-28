@@ -96,3 +96,16 @@
 - 本番の 30〜60 秒そのものの再現（拡張機能ありの計測をしていない）
 - 本番・お客様の PC での修正後の速さ（デプロイしていない）
 - 不具合 2 の URL と原因
+
+## コードレビュー（code-reviewer・2026-11-28）
+
+判定: コメント付き承認（Blocker 0 / Major 0）。
+
+| # | 重大度 | 指摘 | 対応 |
+|---|---|---|---|
+| 1 | Minor | 表紙（ReqDocV3Edit.tsx CoverFields）と改善ポイント（AiDraftReviewV3.tsx setPoint）が描画時点の文書から作り直している（今は memo していないので実害なしだが、apply と続くと片方が消える型） | 対応: `useReqDocChaptersEditor` が `apply` も返し、表紙・要約・改善ポイントも `apply` で当てる。ソース確認の単体テストを追加 |
+| 2 | Minor | 「1 欄の入力で他の欄が描き直されない」の描画テストが無い（RTL・jsdom 無し。配線はソースの正規表現） | 見送り: 依存を増やさない（CLAUDE.md 1.10）。計測（上の表）で補う。次に Focused E2E を作るときに入れる |
+| 3 | Minor | ReqDocV3Edit.tsx:157-160 描画中に ref へ書く・useAiDraft の latest と ref が 2 つ | 受容: transition を使っていない。1 つにまとめるのは useAiDraft の公開 I/F を変えるので今回はしない |
+| 4 | Nit | ReqDocV3Edit.tsx:62, :91 中間の `edit = {...}` | 見送り |
+
+修正後: typecheck 0 ／ test:unit 176/0/0 ／ build 成功。修正後の画面での再計測は未実施（変更は表紙・要約・改善ポイントの onChange の当て先だけで、描画の範囲は変えていない）。

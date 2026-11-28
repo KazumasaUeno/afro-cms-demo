@@ -83,3 +83,13 @@ test('ReqDocV3Edit: 行の欄（項目・AI追加・特記事項）は memo で�
   assert.doesNotMatch(src, /edit\.onChange\((setItem|setAdded|setNote|removeAdded)\(edit\.local/);
   assert.match(src, /makeLatestApply\(latest, commit\)/);
 });
+
+test('表紙・要約・改善ポイントも最新の文書に当てる（code review 2026-11-28 Minor）', () => {
+  const edit = readFileSync(new URL('../../src/features/requirements/aiDraft/ReqDocV3Edit.tsx', import.meta.url), 'utf8');
+  const review = readFileSync(new URL('../../src/features/requirements/aiDraft/AiDraftReviewV3.tsx', import.meta.url), 'utf8');
+  assert.ok(edit.includes('onChange={(v) => apply((cur) => setCover(cur, k, v))}'));
+  assert.ok(!edit.includes('setCover(edit.local'));
+  assert.equal((review.match(/chaptersEditor\.apply\(/g) ?? []).length, 2);
+  assert.ok(review.includes('<CoverFields edit={edit} apply={chaptersEditor.apply} />'));
+  assert.ok(!/ai\.update\(\{ \.\.\.local/.test(review));
+});
