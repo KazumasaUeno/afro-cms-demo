@@ -9,7 +9,10 @@ import { numbersIn } from './shared/numbersIn';
 import { tree, type SitemapSpec } from './shared/sitemapLayout';
 import { SITEMAP_LIMITS, validateLabel, validatePath } from './shared/sitemapRules';
 import type { SitemapEdge, SitemapNode } from './shared/types';
-import { beforeSpecs, KEY_RE, normalizePath, sanitizeText, type BeforeSource, type BeforeTree } from './sitemapPayload';
+import { redactText } from './shared/redact';
+import {
+  beforeSpecs, CONTROL_ALL, cutUnits, KEY_RE, normalizePath, sanitizeText, UNSAFE_LABEL_RE, type BeforeSource, type BeforeTree,
+} from './sitemapPayload';
 import type { RawSitemapOutput, SitemapOutChange } from './sitemapSchema';
 
 export interface Diagram { nodes: SitemapNode[]; edges: SitemapEdge[] }
@@ -34,8 +37,12 @@ const cutCp = (s: string, n: number) => [...s].slice(0, n).join('');
 
 interface Page { key: string; label: string; path: string; kind: SitemapNode['data']['kind']; parent: string | null; change: SitemapOutChange; from: string[]; reason: string }
 
-/** ③ ページ名: 消毒 → trim → validateLabel。長ければ 24 コードポイントで切って再判定。不正なら null */
+/**
+ * ③ ページ名: `<` `>`・`javascript:`・`data:` を含むものは捨てる（S-16。制御文字を除いてから判定＝間に挟んだ回避も捨てる）→
+ * 消毒 → trim → validateLabel。長ければ 24 コードポイントで切って再判定。不正なら null
+ */
 function cleanLabel(raw: string): string | null {
+  if (UNSAFE_LABEL_RE.test(redactText(String(raw ?? '')).replace(CONTROL_ALL, ''))) return null;
   let l = sanitizeText(raw, { singleLine: true });
   if (validateLabel(l) === '24文字以内で入力してください') l = cutCp(l, SITEMAP_LIMITS.label).trim();
   return validateLabel(l) === null ? l : null;
@@ -49,7 +56,8 @@ export function postprocessSitemap(raw: RawSitemapOutput, ctx: { before: BeforeT
   const unsupported = new Set<string>();
   // ② 文の消毒（除去・制御文字・< > ・javascript: / data:）＋ ⑪ 入力に無い数字の印
   const text = (s: string, max: number, singleLine = false) => {
-    const t = cutCp(sanitizeText(s, { singleLine }), max).trim();
+    // 長さは UTF-16（validateSitemapDoc の reason ≤ 140 と同じ数え方。絵文字で保存時の検査に落ちない）
+    const t = cutUnits(sanitizeText(s, { singleLine }), max).trim();
     for (const n of numbersIn(t)) if (!known.has(n)) unsupported.add(n);
     return t;
   };
@@ -97,13 +105,18 @@ export function postprocessSitemap(raw: RawSitemapOutput, ctx: { before: BeforeT
     if (p === home || p.parent === null) continue;
     if (p.parent === p.key || !byKey.has(p.parent)) { p.parent = null; note('parent-fixed'); }
   }
+  // 循環: たどって戻ってきたら、輪を閉じている辺（最後にたどったページの親）を外す。輪の外から輪を指すページは動かさない
   for (const p of pages) {
     const seen = new Set<string>([p.key]);
+    let last: Page = p;
     let cur = p.parent;
     while (cur !== null) {
-      if (seen.has(cur)) { p.parent = null; note('parent-fixed'); break; }
+      if (seen.has(cur)) { last.parent = null; note('parent-fixed'); break; }
       seen.add(cur);
-      cur = byKey.get(cur)?.parent ?? null;
+      const next = byKey.get(cur);
+      if (!next) break;
+      last = next;
+      cur = next.parent;
     }
   }
   const firstAncestor = (p: Page): string | null => {

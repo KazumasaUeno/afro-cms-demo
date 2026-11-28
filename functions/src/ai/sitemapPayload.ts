@@ -34,6 +34,17 @@ export const CONTROL_ALL = /[\u0000-\u001F\u007F‪-‮⁦-⁩]/g;
 /** 文の制御文字（改行は残す） */
 export const CONTROL_TEXT = /[\u0000-\u0009\u000B-\u001F\u007F‪-‮⁦-⁩]/g;
 const cutCp = (s: string, n: number) => [...s].slice(0, n).join('');
+/** UTF-16 の長さ（String.length。validateSitemapDoc の判定）で n 以内に切る。サロゲートの途中では切らない */
+export function cutUnits(s: string, n: number): string {
+  let out = '';
+  for (const c of s) {
+    if (out.length + c.length > n) break;
+    out += c;
+  }
+  return out;
+}
+/** 表示するページ名に入っていたら捨てる文字・語（S-16。除去でごまかさない） */
+export const UNSAFE_LABEL_RE = /[<>＜＞]|(?:java|vb)\s*script\s*:|data\s*:/i;
 
 /**
  * 表示する文の消毒（AI 設計 §3.2 ②・S-16）: redactText → 制御文字 → `<` `>` → `javascript:` / `data:` / `vbscript:` の除去。
