@@ -211,7 +211,7 @@ service cloud.firestore {
         // consult（相談の要約。LIVE_DASHBOARD_TASKS_CONSULT §2.2・§2.3）は任意。書けるのは consultOk の分岐だけ（下の projUpdateOk の
         // どの分岐の changed().hasOnly にも含めない）。ここで許さないと、consult を持つ案件の基本情報の編集が validProject で落ちる
         // schedule（スケジュールの要約。LIVE_SCHEDULE_WBS_DATA §2.1）も任意で、書けるのは schedule の専用分岐だけ（consult と同じ型。S-16-1）
-        // sitemap（サイトマップの要約。LIVE_SITEMAP_DATA §2.1）も同じ型。段 0（LIVE_SITEMAP_IMPL_PLAN U1-0）は許すだけで、書ける分岐は無い
+        // sitemap（サイトマップの要約。LIVE_SITEMAP_DATA §2.1）も同じ型。書けるのは siteProjOk（状態だけの遷移）と callable だけ
         && d.keys().hasOnly(['schemaVersion','clientName','siteName','siteUrl','siteUrlKey','industry','accent','launchDate',
                              'ownerUid','memberUids','requirements','archived','consult','schedule','sitemap','createdAt','createdBy','updatedAt','updatedBy'])
         && ansText(d.clientName, reClientName()) && ansText(d.siteName, reSiteName())
@@ -323,7 +323,7 @@ service cloud.firestore {
       let k = request.resource.data.get('kind', null);
       return k == 'requirements' ? reqApprCreateOk(pid, aid, a)
            : k == 'schedule' ? schedApprOk(pid, aid, a)                               // 段 1（G1 の計測の述語。拒否側の網羅は U1-3）
-           : k == 'sitemap' ? false                                                   // サイトマップ段 0（LIVE_SITEMAP_IMPL_PLAN U1-0・S-4）: 全拒否
+           : k == 'sitemap' ? siteApprOk(pid, aid, a)                                 // サイトマップ（LIVE_SITEMAP_IMPL_PLAN U1。submit は常に拒否）
            : false;
     }
     function reqApprCreateOk(pid, aid, a) {
@@ -463,7 +463,8 @@ service cloud.firestore {
       allow create: if projCreateOk(pid, roleOf(acctOrNull()));
       allow update: if (stamped() && projUpdateOk(pid, acctOrNull(), changed()))
                     || consultOk(pid, acctOrNull())                                    // 相談の要約（メッセージと同じ書き込みだけ）
-                    || (stamped() && schedProjOk(pid, acctOrNull(), changed()));       // スケジュールの要約（既存の分岐の後ろ。L-5）
+                    || (stamped() && schedProjOk(pid, acctOrNull(), changed()))        // スケジュールの要約（既存の分岐の後ろ。L-5）
+                    || (stamped() && siteProjOk(pid, acctOrNull(), changed()));        // サイトマップの要約（スケジュールの後ろ。LIVE_SITEMAP_IMPL_PLAN U1）
       allow delete: if false;
 
       // ---------- requirements/current（§28.5） ----------
@@ -516,13 +517,15 @@ service cloud.firestore {
       }
 
       // ---------- sitemap/{sid}・sitemapVersions/{vid}（サイトマップ。LIVE_SITEMAP_DATA §2.2・§2.3・§3.3） ----------
-      // 中身（作業中の版・お客様に出した版）を書くのは callable（Admin SDK）だけ（P-1・D-1）。段 0（U1-0）は読み取りも全拒否
+      // 中身（作業中の版・お客様に出した版）を書くのは callable（Admin SDK）だけ（P-1・D-1）。
+      // internal: admin・担当だけ（お客様の分岐は書かない＝S-1）。版文書: お客様は get だけ（取り下げた版も一度見ているので可）、list は admin・担当
       match /sitemap/{sid} {
-        allow read: if false;
+        allow get: if (isAdmin() || assigned(pid)) && sid == 'internal';
         allow create, update, delete: if false;                                       // 作業中の版は saveSitemapEdits・worker だけ（P-1）
       }
       match /sitemapVersions/{vid} {
-        allow read: if false;
+        allow get: if isAdmin() || assigned(pid) || clientOf(pid);
+        allow list: if isAdmin() || assigned(pid);
         allow create, update, delete: if false;                                       // 版文書は submitSitemap の create() だけ・以後不変（D-3）
       }
 
@@ -817,6 +820,83 @@ service cloud.firestore {
         && d.revision == b.revision && aid == schedApprId(b.revision, 'approve')
         && d.keys().hasOnly(schedLogBase().concat(['buildDue','deliveryDate','releaseDate','wbs','proxy','note']))
         && schedCopyOk(d, get(schedPath(pid, 'current')).data);
+    }
+
+    // ================= sitemap（サイトマップ。docs/design/LIVE_SITEMAP_DATA.md §2.1・§2.4・§3.3、LIVE_SITEMAP_IMPL_PLAN.md §3 U1・§5 G1） =================
+    // クライアントが書けるのは状態だけの 4 遷移: 取り下げ（requested → draft）・再計画（approved → draft）＝ admin・担当、
+    // 本人の承認＝お客様、代理承認＝ admin。作成・保存・submit（版文書・submit の記録・要約の revision／contentHash）は callable だけ。
+    // 承認の対象は不変の版文書 sitemapVersions/r{rev} の contentHash（D-3・P-3）。要約の contentHash・revision はクライアントのどの分岐でも変えられない（M-2 (b)）
+    // 既存の変異テストのアンカー・TEST-09 の関数名を再利用しない（site* の名前。式の並びもスケジュールと変える。LIVE_SITEMAP_IMPL_PLAN §4 U1）
+    function siteApprId(rev, act) { return 'sitemap-r' + string(rev) + '-' + act; }
+    function siteVerPath(pid, rev) { return /databases/$(db)/documents/projects/$(pid)/sitemapVersions/$('r' + string(rev)); }
+    // 書ける状態（要件定義書の承認後・アーカイブでない。事前も事後も＝S-3）
+    function siteGate(p, pa) { return pa.archived == false && p.archived == false && p.requirements.status == 'approved'; }
+    // 承認の記録の contentHash が、その版の版文書（不変）と一致（S-6）
+    function siteHashOk(pid, d, rev) { return d.contentHash == get(siteVerPath(pid, rev)).data.contentHash; }
+
+    // ---- projects/{pid}.sitemap（要約）。allow update の別の分岐（既存の分岐・評価順は変えない）
+    function siteAfroMove(pid, b, s) {
+      return s.status == 'draft' && s.diff(b).affectedKeys().hasOnly(['status'])
+        && ((b.status == 'requested' && existsAfter(apprPath(pid, siteApprId(b.revision, 'withdraw'))))
+            || (b.status == 'approved' && existsAfter(apprPath(pid, siteApprId(b.revision, 'reopen')))));
+    }
+    // 承認（本人・代理）で変わるのは 6 キーだけ（revision・contentHash・requestedAt は変えない）。本人の承認は approvedVia を持たない
+    function siteApproveMove(b, s) {
+      return b != null && s.status == 'approved' && b.status == 'requested'
+        && s.diff(b).affectedKeys().hasOnly(['status','approvalId','approvedRevision','approvedAt','approvedBy','approvedVia'])
+        && s.approvedAt == request.time && s.approvedBy == request.auth.uid && s.approvedRevision == b.revision
+        && s.approvalId == siteApprId(b.revision, 'approve');
+    }
+    function siteOwnLog(m)    { return m.side == 'client' && !m.keys().hasAny(['proxy']); }
+    function siteProxyMark(m) { return m.side == 'afro' && m.get('proxy', false) == true && m.actorUid == request.auth.uid; }
+    function siteProjOk(pid, acc, ch) {
+      let r = roleOf(acc);
+      let p = resource.data;
+      let b = p.get('sitemap', null);
+      let s = request.resource.data.sitemap;
+      return ch.hasOnly(['sitemap','updatedAt','updatedBy']) && s is map && b is map
+        && siteGate(p, request.resource.data)
+        && (((r == 'admin' || (r == 'developer' && request.auth.uid in p.memberUids)) && siteAfroMove(pid, b, s))
+            // お客様本人の承認: 同じ書き込みの承認文書が side client・proxy なし
+            || (r == 'client' && acc.projectId == pid && siteApproveMove(b, s) && !('approvedVia' in s)
+                && siteOwnLog(getAfter(apprPath(pid, siteApprId(b.revision, 'approve'))).data))
+            // 管理者の代理承認: 同じ書き込みの承認文書が proxy・side afro・本人
+            || (r == 'admin' && siteApproveMove(b, s) && s.get('approvedVia', '') == 'proxy'
+                && siteProxyMark(getAfter(apprPath(pid, siteApprId(b.revision, 'approve'))).data)));
+    }
+
+    // ---- approvals の sitemap-r{rev}-{action}（kind sitemap）。apprCreateOk が kind で振り分ける（S-4）。submit はどの分岐にも無い（callable だけ）
+    function siteApprOk(pid, aid, acc) {
+      let r = roleOf(acc);
+      let d = request.resource.data;
+      let p = proj(pid);
+      let pa = getAfter(projPath(pid)).data;
+      let b = p.sitemap;
+      let s = pa.sitemap;
+      return actorBase(d, acc) && d.kind == 'sitemap' && d.revision is int && d.revision >= 1 && d.revision <= 50
+        && (r != 'admin' ? d.get('actorRole', r) == r : d.get('actorRole', '') == 'admin')
+        && siteGate(p, pa) && d.revision == b.revision
+        && (((r == 'admin' || (r == 'developer' && request.auth.uid in p.memberUids)) && d.side == 'afro' && siteAfroLog(aid, d, b, s))
+            || (r == 'client' && acc.projectId == pid && siteClientLog(pid, aid, d, b, s))
+            || (r == 'admin' && siteProxyLog(pid, aid, d, b, s)));
+    }
+    // 取り下げ・再計画: note は必須（trim 後 1〜200 字・改行と制御文字・向きの制御は拒否。お客様にも表示される＝S-8）
+    function siteAfroLog(aid, d, b, s) {
+      return schedNoteOk(d.note) && s.status == 'draft' && aid == siteApprId(b.revision, d.action)
+        && ((d.action == 'withdraw' && b.status == 'requested') || (d.action == 'reopen' && b.status == 'approved'))
+        && d.keys().hasOnly(schedLogBase().concat(['note']));
+    }
+    function siteClientLog(pid, aid, d, b, s) {
+      return d.action == 'approve' && d.side == 'client'
+        && s.status == 'approved' && b.status == 'requested' && !('approvedVia' in s)
+        && aid == siteApprId(b.revision, 'approve')
+        && d.keys().hasOnly(schedLogBase().concat(['contentHash'])) && siteHashOk(pid, d, b.revision);
+    }
+    function siteProxyLog(pid, aid, d, b, s) {
+      return d.proxy == true && d.side == 'afro' && d.action == 'approve' && schedNoteOk(d.note)
+        && s.status == 'approved' && b.status == 'requested' && s.get('approvedVia', '') == 'proxy'
+        && aid == siteApprId(b.revision, 'approve')
+        && d.keys().hasOnly(schedLogBase().concat(['contentHash','proxy','note'])) && siteHashOk(pid, d, b.revision);
     }
 
     // ================= validProposal（§28.7・M-11・R-2） =================

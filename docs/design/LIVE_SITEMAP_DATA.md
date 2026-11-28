@@ -290,6 +290,21 @@
 | UK-4 | AI 1 回の費用（出力 30 ページの JSON。max_tokens の値） | ai-engineer が試算（要件定義書 Sonnet 5.5 で 1 回 $0.10 `AI_REQUIREMENTS.md:170` を超えない見込み [INFERENCE]）。PoC 後に請求と突合 |
 | LEGAL | AI 出力の保持日数・承認の効力 | LEGAL REVIEW REQUIRED（PLAN §12）。本設計は結論を出さない |
 
+### 12.1 G1 の計測結果（2026-11-28・U1-1。エミュレータ firebase-tools 15・`tests/rules/adminRights.test.mjs` TEST-09「G1: サイトマップの 4 経路」）
+
+方法: スケジュールの G1 と同じ（述語の return の直後に pad10 を k 個。trivial は k=19 → 1 個 ≒ 50 式。参照は存在しない文書の `exists()`、trivial 10）。payload は note 200 字・contentHash 64 字。承認は版文書 `sitemapVersions/r{rev}` の get を含む（fallback ① は使っていない）
+
+| 経路 | pad10 の残り k（projects: siteProjOk / approvals: siteApprOk） | 消費 ≒ 式 | 余裕 | exists の残り |
+|---|---|---|---|---|
+| お客様の承認 | 6 / 12 | 650 / 350 | 30% / 60% | 8 / 8 |
+| 代理承認 | **5** / 11 | 700 / 400 | **25%** / 55% | 8 / 8 |
+| 取り下げ（admin） | 7 / 13 | 600 / 300 | 35% / 65% | 8 / 9 |
+| 再計画（admin） | 6 / 13 | 650 / 300 | 30% / 65% | 8 / 9 |
+
+- 結論 [FACT: npm run test:rules 2026-11-28]: **全経路が合格線（≦ 800 式・20% 以上の余裕・参照の余裕あり）**。版文書の get をやめる fallback ①（計画 §5）は**不要**。最も重いのは代理承認の projects 側（k=5）。案件の update は既存の 3 分岐（projUpdateOk・consultOk・schedProjOk）を評価して落ちた後に siteProjOk を評価するため
+- 回帰: スケジュールの G1 14 経路は U1 の前後で同じ k（9/6/5/4/8/13/12/8/12/6/10/8/6/13）。sitemap の分岐は kind の振り分け・update の OR の後ろにあるので、既存の経路では評価されない
+- 拒否側: `tests/rules/sitemap.test.mjs`（段 0＋段 1）、OPS に 3 操作（取り下げ・代理承認・再計画）、変異 12 組（`mutation.test.mjs` SM-12。M-2 の要約 contentHash・全拒否を isAdmin に開く L-4 を含む）
+
 ## 13. 実行基盤要件（platform-engineer へ）
 
 | 項目 | 内容 |

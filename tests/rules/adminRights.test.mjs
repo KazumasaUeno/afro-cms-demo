@@ -9,6 +9,7 @@ import { createRulesEnv, readRules } from './guard.mjs';
 import {
   ANSWERS, FULL_ANSWERS, PAST, PROPOSAL, PROXY_NOTE, USERS, approvalDoc, approveBatch, dbAs, doc, proxyApproveBatch, seed, serverTimestamp, setDoc, stamp, submitBatch, updateDoc, withdrawBatch, writeBatch,
   scheduleSeed, schedApproveBatch, schedInitBatch, schedProxyBatch, schedReopenBatch, schedSaveBatch, schedSubmitBatch, schedWithdrawBatch,
+  sitemapSeed, siteApproveBatch, siteProxyBatch, siteReopenBatch, siteWithdrawBatch,
 } from './fixtures.mjs';
 import { seedAi } from './aiFixtures.mjs';
 import { MAX_EDITED_V3, MAX_GENERATED_V3, aiDraftDocV3, proposalV3 } from './aiFixturesV3.mjs';
@@ -52,8 +53,12 @@ const OPS = {
   'スケジュールの取り下げ（withdraw）': { sched: { state: 'requested' }, run: (db, uid) => schedWithdrawBatch(db, { uid: USERS[uid] ? uid : 'devA' }) },
   'スケジュールの代理承認': { sched: { state: 'requested' }, run: (db, uid) => schedProxyBatch(db, { uid: USERS[uid] ? uid : 'admin1' }) },
   'スケジュールの再計画（reopen）': { sched: { state: 'approved' }, run: (db, uid) => schedReopenBatch(db, { uid: USERS[uid] ? uid : 'devA' }) },
+  // サイトマップ（LIVE_SITEMAP_IMPL_PLAN U1。クライアントが書く状態の遷移。site は sitemapSeed の状態）
+  'サイトマップの取り下げ（withdraw）': { site: { state: 'requested' }, run: (db, uid) => siteWithdrawBatch(db, { uid: USERS[uid] ? uid : 'devA' }) },
+  'サイトマップの代理承認': { site: { state: 'requested' }, run: (db, uid) => siteProxyBatch(db, { uid: USERS[uid] ? uid : 'admin1' }) },
+  'サイトマップの再計画（reopen）': { site: { state: 'approved' }, run: (db, uid) => siteReopenBatch(db, { uid: USERS[uid] ? uid : 'devA' }) },
 };
-async function prep(op) { if (op.sched) return scheduleSeed(env, op.sched); await seed(env, { reqState: op.reqState }); if (op.task) await seedTask(); }
+async function prep(op) { if (op.site) return sitemapSeed(env, op.site); if (op.sched) return scheduleSeed(env, op.sched); await seed(env, { reqState: op.reqState }); if (op.task) await seedTask(); }
 
 describe('TEST-01: admin は担当外の案件で開発の全操作ができる', () => {
   for (const [name, op] of Object.entries(OPS)) {
@@ -358,6 +363,33 @@ describe('TEST-09: 計測（admin の最大の submit・代理承認）', () => 
     }
     // 回帰（L-23）: 合格線ちょうどの internal の同時保存（2026-11-27 計測 pad10 4 個）をこれ以上重くしない
     assert.ok(res['admin 同時保存（internal: schedIntUpdateOk）'].k >= 4, 'internal の同時保存が G1 の計測値（pad10 4 個）より重くなった');
+  });
+  // ---- G1（LIVE_SITEMAP_IMPL_PLAN §5・UK-1・SM-30）: サイトマップの状態の 4 経路。最大の payload（note 200 字・contentHash 64 字）。方法はスケジュールの G1 と同じ
+  const SITE_PATHS = {
+    'client approve（projects: siteProjOk）': { fn: 'siteProjOk', seed: (e) => sitemapSeed(e, { state: 'requested' }), run: (e) => siteApproveBatch(dbAs(e, 'client1')) },
+    'client approve（approvals: siteApprOk）': { fn: 'siteApprOk', seed: (e) => sitemapSeed(e, { state: 'requested' }), run: (e) => siteApproveBatch(dbAs(e, 'client1')) },
+    'admin 代理承認（projects: siteProjOk）': { fn: 'siteProjOk', seed: (e) => sitemapSeed(e, { state: 'requested' }), run: (e) => siteProxyBatch(dbAs(e, 'admin1')) },
+    'admin 代理承認（approvals: siteApprOk）': { fn: 'siteApprOk', seed: (e) => sitemapSeed(e, { state: 'requested' }), run: (e) => siteProxyBatch(dbAs(e, 'admin1')) },
+    'admin 取り下げ（projects: siteProjOk）': { fn: 'siteProjOk', seed: (e) => sitemapSeed(e, { state: 'requested' }), run: (e) => siteWithdrawBatch(dbAs(e, 'admin1'), { uid: 'admin1' }) },
+    'admin 取り下げ（approvals: siteApprOk）': { fn: 'siteApprOk', seed: (e) => sitemapSeed(e, { state: 'requested' }), run: (e) => siteWithdrawBatch(dbAs(e, 'admin1'), { uid: 'admin1' }) },
+    'admin 再計画（projects: siteProjOk）': { fn: 'siteProjOk', seed: (e) => sitemapSeed(e, { state: 'approved' }), run: (e) => siteReopenBatch(dbAs(e, 'admin1'), { uid: 'admin1' }) },
+    'admin 再計画（approvals: siteApprOk）': { fn: 'siteApprOk', seed: (e) => sitemapSeed(e, { state: 'approved' }), run: (e) => siteReopenBatch(dbAs(e, 'admin1'), { uid: 'admin1' }) },
+  };
+  test('G1: サイトマップの 4 経路（最大の payload）は 1000 式の上限に 20% 以上の余裕・参照の上限の内', { timeout: 900_000 }, async () => {
+    const base = await maxK(PATHS.trivial);
+    const per = 1000 / (base + 1);
+    const refBase = await maxKWith(PATHS.trivial, nopes, 20);
+    const res = {};
+    for (const [name, p] of Object.entries(SITE_PATHS)) res[name] = { k: await maxKWith(p, pads, 20), ref: await maxKWith(p, nopes, 20) };
+    console.log(`[measure] G1-site trivial: pad10 ${base} 個（1 個 ≒ ${per.toFixed(0)} 式）・exists ${refBase} 個`);
+    for (const [name, { k, ref }] of Object.entries(res)) {
+      console.log(`[measure] G1-site ${name}: pad10 ${k} 個（余裕 ≒ ${(k * per).toFixed(0)} 式・${(k * per / 10).toFixed(0)}%・消費 ≒ ${((base - k) * per).toFixed(0)} 式）／ exists の残り ${ref} 個（trivial ${refBase}）`);
+    }
+    for (const [name, { k, ref }] of Object.entries(res)) {
+      assert.ok(k >= 0, `${name} が詰め物なしで通らない`);
+      assert.ok(k * per >= 200, `${name} の式の余裕が 20% 未満（pad10 ${k} 個）`);
+      assert.ok(ref >= 1, `${name} の参照の余裕が無い（exists ${ref} 個）`);
+    }
   });
   after(async () => { const e = await createRulesEnv(); await e.cleanup(); });
 });

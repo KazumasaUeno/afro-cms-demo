@@ -17,6 +17,7 @@ import {
   ANSWERS, PROPOSAL, PROXY_NOTE, T0, USERS, approvalDoc, approveBatch, claimAccount, claimBatch, dbAs, doc, inviteDoc, proxyApproveBatch, seed, serverTimestamp, setDoc, stamp, submitBatch, updateDoc, writeBatch,
 } from './fixtures.mjs';
 import { SCHED_DATES, SCHED_NOTE, SCHED_WBS, scheduleSeed, schedLogDoc, wbsWithDone } from './fixtures.mjs';
+import { SITE_NOTE, siteHash, siteLogDoc, sitemapSeed } from './fixtures.mjs';
 
 const BASE = readRules();
 
@@ -407,4 +408,78 @@ describe('SR-18・ST-24: スケジュールの変異テスト（元＝拒否／1
       return b.commit();
     },
     () => mutate(BASE, "&& getAfter(schedPath(pid, 'current')).data.revision == d.revision)", ')'));
+});
+
+// ================= SM-12: サイトマップの変異テスト（LIVE_SITEMAP_IMPL_PLAN §7。既存のアンカー文字列は再利用しない） =================
+describe('SM-12: サイトマップの変異テスト（元＝拒否／1 条件を外した変異＝許可）', () => {
+  const pair = (name, attack, mutant) => test(name, async () => {
+    const rules = mutant();
+    assert.notEqual(rules, BASE);
+    await withRules(BASE, async (env) => { await assertFails(attack(env)); });
+    await withRules(rules, async (env) => { await assertSucceeds(attack(env)); });
+  });
+  const P1 = 'projects/p1';
+  const strip = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+  /** 取り下げ（requested → draft）。log で記録を 1 か所崩す・aid で ID を変える・summary で要約を足す */
+  const withdrawS = (env, { uid = 'devA', log = {}, aid, summary = {} } = {}) => {
+    const db = dbAs(env, uid); const b = writeBatch(db);
+    b.update(doc(db, P1), { 'sitemap.status': 'draft', ...stamp(uid), ...summary });
+    b.set(doc(db, `${P1}/approvals/${aid ?? 'sitemap-r1-withdraw'}`), strip({ ...siteLogDoc(uid, 'withdraw', 1, { note: SITE_NOTE }), ...log }));
+    return b.commit();
+  };
+  const approveS = (env, { uid = 'client1', log = {}, summary = {}, proxy = false } = {}) => {
+    const db = dbAs(env, uid); const b = writeBatch(db);
+    b.update(doc(db, P1), strip({ 'sitemap.status': 'approved', 'sitemap.approvedRevision': 1, 'sitemap.approvedAt': serverTimestamp(), 'sitemap.approvedBy': uid, 'sitemap.approvalId': 'sitemap-r1-approve', ...(proxy ? { 'sitemap.approvedVia': 'proxy' } : {}), ...stamp(uid), ...summary }));
+    b.set(doc(db, `${P1}/approvals/sitemap-r1-approve`), strip({ ...siteLogDoc(uid, 'approve', 1, { contentHash: siteHash(1), ...(proxy ? { proxy: true, note: SITE_NOTE } : {}) }), ...log }));
+    return b.commit();
+  };
+  const archive = (env) => env.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), P1), { archived: true }));
+
+  pair('① kind の無い記録 ← apprCreateOk の kind の振り分けと siteApprOk の kind == sitemap',
+    async (env) => { await sitemapSeed(env, { state: 'requested' }); return withdrawS(env, { log: { kind: undefined } }); },
+    () => mutate(mutate(BASE, ": k == 'sitemap' ? siteApprOk(pid, aid, a)", ": k == 'sitemap' || k == null ? siteApprOk(pid, aid, a)"), "&& d.kind == 'sitemap' && d.revision is int", '&& d.revision is int'));
+  pair('② sitemap の記録を schedule-r1-withdraw に書く ← siteApprId の sitemap-r 接頭辞',
+    async (env) => { await sitemapSeed(env, { state: 'requested' }); return withdrawS(env, { aid: 'schedule-r1-withdraw' }); },
+    () => mutate(BASE, "{ return 'sitemap-r' + string(rev)", "{ return 'schedule-r' + string(rev)"));
+  pair('③ 開発者が submit（draft → requested）を書く ← siteAfroMove・siteAfroLog に submit の分岐が無い',
+    async (env) => {
+      await sitemapSeed(env, { state: 'draft', rev: 1 });
+      const db = dbAs(env, 'devA'); const b = writeBatch(db);
+      b.update(doc(db, P1), { 'sitemap.status': 'requested', ...stamp('devA') });
+      b.set(doc(db, `${P1}/approvals/sitemap-r2-submit`), siteLogDoc('devA', 'submit', 1, { note: SITE_NOTE }));
+      return b.commit();
+    },
+    () => mutate(mutate(BASE, "return s.status == 'draft' && s.diff(b).affectedKeys().hasOnly(['status'])", "return true || s.status == 'draft' && s.diff(b).affectedKeys().hasOnly(['status'])"),
+      "return schedNoteOk(d.note) && s.status == 'draft' && aid", "return true || schedNoteOk(d.note) && s.status == 'draft' && aid"));
+  pair('④ お客様が版文書と違う contentHash で承認 ← siteHashOk の等式',
+    async (env) => { await sitemapSeed(env, { state: 'requested' }); return approveS(env, { log: { contentHash: 'f'.repeat(64) } }); },
+    () => mutate(BASE, '{ return d.contentHash == get(siteVerPath(pid, rev)).data.contentHash; }', '{ return d.contentHash is string; }'));
+  pair('⑤a 代理承認の記録に proxy が無い ← siteProxyLog と siteProxyMark の proxy == true',
+    async (env) => { await sitemapSeed(env, { state: 'requested' }); return approveS(env, { uid: 'admin1', proxy: true, log: { proxy: undefined } }); },
+    () => mutate(mutate(BASE, 'return d.proxy == true && d.side ==', 'return d.side =='), "&& m.get('proxy', false) == true && m.actorUid", '&& m.actorUid'));
+  pair("⑤b 開発者が記録で actorRole: 'admin' を名乗る ← siteApprOk の actorRole の強制",
+    async (env) => { await sitemapSeed(env, { state: 'requested' }); return withdrawS(env, { log: { actorRole: 'admin' } }); },
+    () => mutate(BASE, "(r != 'admin' ? d.get('actorRole', r) == r : d.get('actorRole', '') == 'admin')", 'true'));
+  pair('⑥ アーカイブ中の取り下げ ← siteGate の事前の archived',
+    async (env) => { await sitemapSeed(env, { state: 'requested' }); await archive(env); return withdrawS(env); },
+    () => mutate(BASE, "{ return pa.archived == false && p.archived == false && p.requirements.status == 'approved'; }", "{ return p.requirements.status == 'approved'; }"));
+  pair('⑦ アーカイブと取り下げを同じバッチ ← siteProjOk の差分 allowlist と siteGate の事後の archived',
+    async (env) => { await sitemapSeed(env, { state: 'requested' }); return withdrawS(env, { summary: { archived: true } }); },
+    () => mutate(mutate(BASE, "return ch.hasOnly(['sitemap','updatedAt','updatedBy']) && s is map", "return ch.hasOnly(['sitemap','archived','updatedAt','updatedBy']) && s is map"),
+      "{ return pa.archived == false && p.archived == false && p.requirements.status == 'approved'; }", "{ return p.archived == false && p.requirements.status == 'approved'; }"));
+  pair('⑧ お客様が internal を読む ← internal の get にお客様の分岐が無い（S-1）',
+    async (env) => { await sitemapSeed(env, { state: 'requested' }); return getDoc(doc(dbAs(env, 'client1'), `${P1}/sitemap/internal`)); },
+    () => mutate(BASE, "(isAdmin() || assigned(pid)) && sid == 'internal'", "(isAdmin() || assigned(pid) || clientOf(pid)) && sid == 'internal'"));
+  pair('⑨ note の無い取り下げ ← siteAfroLog の schedNoteOk（S-8）',
+    async (env) => { await sitemapSeed(env, { state: 'requested' }); return withdrawS(env, { log: { note: undefined } }); },
+    () => mutate(BASE, "return schedNoteOk(d.note) && s.status == 'draft'", "return s.status == 'draft'"));
+  pair('⑩a admin が internal を書く ← sitemap/{sid} の write は全拒否（sec L-4）',
+    async (env) => { await sitemapSeed(env, { state: 'draft' }); return updateDoc(doc(dbAs(env, 'admin1'), `${P1}/sitemap/internal`), { editSeq: 4 }); },
+    () => mutate(BASE, 'allow create, update, delete: if false;                                       // 作業中の版は', 'allow create, update, delete: if isAdmin();                                       // 作業中の版は'));
+  pair('⑩b admin が版文書を書き換える ← sitemapVersions/{vid} の write は全拒否（sec L-4）',
+    async (env) => { await sitemapSeed(env, { state: 'requested' }); return updateDoc(doc(dbAs(env, 'admin1'), `${P1}/sitemapVersions/r1`), { contentHash: 'f'.repeat(64) }); },
+    () => mutate(BASE, 'allow create, update, delete: if false;                                       // 版文書は', 'allow create, update, delete: if isAdmin();                                       // 版文書は'));
+  pair('⑪ お客様が承認と同じバッチで要約の contentHash を書き換える ← 承認の 6 キーの差分 allowlist（M-2 (b)）',
+    async (env) => { await sitemapSeed(env, { state: 'requested' }); return approveS(env, { summary: { 'sitemap.contentHash': 'f'.repeat(64) } }); },
+    () => mutate(BASE, "hasOnly(['status','approvalId','approvedRevision','approvedAt','approvedBy','approvedVia'])", "hasOnly(['status','approvalId','approvedRevision','approvedAt','approvedBy','approvedVia','contentHash','revision'])"));
 });
