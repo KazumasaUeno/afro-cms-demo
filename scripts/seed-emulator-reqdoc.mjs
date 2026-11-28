@@ -24,7 +24,9 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-if (!process.execArgv.includes('--experimental-strip-types')) {
+// 単体テスト（tests/unit/seedReqdocValid.test.mjs）が import して、入れる文書がサーバーの検査に通るかを確かめる。import のときは何も書かない
+const isMain = !!process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain && !process.execArgv.includes('--experimental-strip-types')) {
   const r = spawnSync(process.execPath, [
     '--experimental-strip-types', '--no-warnings', '--import', pathToFileURL(join(root, 'tests', 'unit', 'register.mjs')).href,
     fileURLToPath(import.meta.url), ...process.argv.slice(2),
@@ -113,7 +115,8 @@ const evidenceOf = (it, i) => (it.feeds?.length ? it.feeds.slice(0, 3) : [EVIDEN
 /**
  * 全 129 項目（カタログから）。generated＝AI の下書き、edited＝担当者が直した版。
  * - 固定: std_pending・空文（固定はこれ以外にできない）
- * - human の項目: generated は open（AI は書かない）、edited は担当者が書いた proposed
+ * - human の項目: generated は open（AI は書かない。by は human）、edited は担当者が書いた proposed
+ * - edited は generated と by・evidence が同じ（サーバーの検査 validateEditableV3。2026-11-28 まで違っていて保存が必ず拒否された）
  * - 個別・選択: proposed（文あり）。選択の一部は na（理由の文つき）、必須章以外の一部は open のまま
  */
 function itemsOf(kind) {
@@ -121,9 +124,10 @@ function itemsOf(kind) {
   return Object.fromEntries(CATALOG.items.map((it, i) => {
     if (it.kubun === 'fixed') return [it.id, { status: 'std_pending', text: '', evidence: [], by: 'server' }];
     if (it.fill === 'human') {
+      // サーバーと同じく generated の時点で by は 'human'・根拠なし（reqDocPostprocess.ts の open('human')）。edited は by・evidence を変えられない（validateEditableV3）
       return [it.id, kind === 'generated'
-        ? { status: 'open', text: '', evidence: [], by: 'ai' }
-        : { status: 'proposed', text: `${it.label}：${it.target}について、${CLIENT}のご担当者と打ち合わせで確認した内容を記載（架空）`, evidence: evidenceOf(it, i), by: 'human' }];
+        ? { status: 'open', text: '', evidence: [], by: 'human' }
+        : { status: 'proposed', text: `${it.label}：${it.target}について、${CLIENT}のご担当者と打ち合わせで確認した内容を記載（架空）`, evidence: [], by: 'human' }];
     }
     if (it.kubun === 'optional' && i % 3 === 0) {
       return [it.id, { status: 'na', text: `今回は対象外とします。理由：ヒアリングで「${it.label}」の希望がなく、公開後に必要になれば追加見積で対応します`, evidence: evidenceOf(it, i), by: 'ai' }];
@@ -143,9 +147,9 @@ function docOf(kind) {
   if (kind === 'edited') notes.c02 = '写真撮影は対象外（お客様支給）';
   const items = itemsOf(kind);
   if (kind === 'edited') {
-    // 担当者が AI の文を直した例（1 件）
+    // 担当者が AI の文を直した例（1 件。by は generated のまま＝サーバーの検査で変えられない）
     const first = CATALOG.items.find((it) => it.kubun !== 'fixed' && it.fill === 'ai' && items[it.id].status === 'proposed');
-    if (first) items[first.id] = { ...items[first.id], text: `${items[first.id].text}（担当者が追記: 打ち合わせで優先度を確認済み）`, by: 'human' };
+    if (first) items[first.id] = { ...items[first.id], text: `${items[first.id].text}（担当者が追記: 打ち合わせで優先度を確認済み）` };
   }
   return {
     items,
@@ -173,7 +177,8 @@ function generatedOf(s) {
     summary: 'スマホでの見やすさと問い合わせ導線を優先し、社内で更新できる構成に改めます。',
     points: [
       { id: 'ai1', area: 'スマホ表示', priority: 'high', title: 'スマホを主役にした設計', detail: 'viewport は設定済みだが本文の文字が小さく、表が横にはみ出す。', impact: '問い合わせの増加を狙う', evidence: ['viewport', 'q-issue'] },
-      { id: 'ai2', area: '問い合わせ導線', priority: 'high', title: '各ページから問い合わせへ', detail: '製品ページの末尾に問い合わせの導線が無い。', impact: '問い合わせまでの手間を減らす', evidence: ['q-issue', 'site_text'] },
+      // 改善ポイントの根拠は AI_EVIDENCE_KEYS だけ（'site_text' は v3 の項目の根拠にしか使えない。サーバーの検査 editable.ts point()。2026-11-28 修正）
+      { id: 'ai2', area: '問い合わせ導線', priority: 'high', title: '各ページから問い合わせへ', detail: '製品ページの末尾に問い合わせの導線が無い。', impact: '問い合わせまでの手間を減らす', evidence: ['q-issue', 'q-cv'] },
       { id: 'ai3', area: '更新のしやすさ', priority: 'medium', title: 'お知らせを社内で更新', detail: '更新を外部に頼んでいるため止まっている。', impact: '情報の鮮度を保つ', evidence: ['q-issue', 'q-purpose'] },
     ],
     doc: docOf('generated'),
@@ -262,11 +267,17 @@ async function seedSchedule(s, { uid, client }) {
   return { status: 'requested', revision: 1, requestedAt: NOW, releaseDate: dates.releaseDate };
 }
 
+/** 入れる generated と edited（単体テストがサーバーの検査 validateEditableV3 に通す） */
+export function seedDraftOf(s) {
+  const g = generatedOf(s);
+  return { g, e: { ...editedV3Of(g), doc: docOf('edited') } };
+}
+export { SITES };
+
 async function seedProject(s, { uid, state, devUid }) {
   const answers = answersOf(s);
   const answerMeta = Object.fromEntries(Object.keys(answers).map((k) => [k, { by: 'afro', at: NOW }]));
-  const g = generatedOf(s);
-  const e = { ...editedV3Of(g), doc: docOf('edited') };
+  const { g, e } = seedDraftOf(s);
   const submitReady = { requiredOk: reqDocRequiredOk(e.doc, VERSION), templateVersion: VERSION };
   const ai = {
     ...aiDraftDoc({ generated: g, edited: e, state: 'ready' }),
@@ -309,7 +320,7 @@ async function verify(pids) {
   console.log(`確認: ${pids.length * 3} 文書を読み戻しました`);
 }
 
-try {
+if (isMain) try {
   const args = process.argv.slice(2);
   const withDev = args.includes('--with-dev');
   const email = (args.find((a) => !a.startsWith('--')) ?? 'admin@example.com').trim().toLowerCase();
