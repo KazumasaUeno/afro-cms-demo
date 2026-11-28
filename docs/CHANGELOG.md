@@ -1004,3 +1004,10 @@
 - Rules: `projects/{pid}/schedule/{current,internal}` と approvals の kind `schedule`（出す順は段 0 → 段 1。`docs/operations/RUNBOOK_FIREBASE.md` §6.1）
 - seed: `node scripts/seed-emulator-reqdoc.mjs --with-schedule [--with-client]`（架空の要件承認済み案件にスケジュール第 1 版・架空のお客様）
 - live: 要件定義書（AI 下書き v3・会社標準ひな型）の「編集」で、1 文字入力するたびに全項目（約 126 の入力欄）を描き直していたのを、入力した欄だけ描き直すようにした（見た目・保存の動きは変更なし）。headless Chrome の計測で 1 文字あたり中央値 248ms → 48ms（CPU 4 倍遅延では 2,913ms → 279ms）。詳細は `docs/reviews/2026-11-28-reqdoc-edit-freeze.md`
+
+## Unreleased（0.52.0 の後の修正。`docs/reviews/2026-11-28-post-0-52-fixes.md`）
+
+- live: WBS の保存が競合したとき（ほかの人が先に保存）、文言「最新を読み込みました」のとおり画面の下書き（日付・完了印）を保存済みの最新に置き換える。以前は自分の下書きが残り、もう一度保存してもまた競合した（QA O-2）
+- live: 予定日の入力画面（納品予定日などの変更）も、保存が競合したら閉じて最新を表示する（以前は開いたままで、同じ画面から保存し直すとまた競合した）。再計画（承認済みの予定日の変更）の競合も理由の画面ごと閉じる。取り下げ・代理承認の画面は今までどおり
+- live/demo: WBS のガントの月の見出しが重ならないようにした（お客様ポータルのスマホ幅で「2026年11月」と「12月」が約 16px 重なっていた。QA O-1）。重なるときだけ先頭を「11月」に縮め（入らなければ出さない）、年を次の見出しへ移す。重ならない画面は変更なし
+- seed: `scripts/seed-emulator-reqdoc.mjs` の要件定義書 v3 の edited がサーバーの検査に通るようにした（改善ポイントの根拠 `site_text`・human の項目の by／根拠）。エミュレータで編集の保存→再読み込みを確認できる

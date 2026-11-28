@@ -2,7 +2,8 @@
 
 > 未完了の作業と、既知の制限。終わったら行を消す（経緯は `docs/CHANGELOG.md`）。
 
-- [ ] **エミュレータの seed `reqdoc-v3-draft` の edited がサーバーの検証に通らない**（2026-11-28 reqdoc 修正の確認で判明。`points[1].evidence`）: 編集の保存がエミュレータで必ず拒否されるので、保存→再読み込みの確認ができない。seed を検証に合わせて直す（qa-engineer）。あわせて「?project= の URL で白い画面」（2026-11-27 本番）は再現せず UNVERIFIED（docs/reviews/2026-11-28-reqdoc-edit-freeze.md）
+- [x] **エミュレータの seed `reqdoc-v3-draft` の edited がサーバーの検査に通らない**（2026-11-28 修正 fix/post-0-52）: 改善ポイントの根拠 `site_text` と human の項目の by／根拠を直し、単体テストで validateEditableV3 に通すことを確認。エミュレータで編集→保存→再読み込みで残ることを確認（docs/reviews/2026-11-28-post-0-52-fixes.md）
+- [ ] **「?project= の URL で白い画面」（2026-11-27 本番）は再現せず UNVERIFIED**: 管理者・開発者・未ログイン（2026-11-28 reqdoc-edit-freeze）に続き、お客様（client）でも /・/portal・/portal/schedule・/portal/approvals・/portal/requirements・/design-preview（mode=site 含む）に ?project= を付けて白くならないことを確認（docs/reviews/2026-11-28-post-0-52-fixes.md §4）。残る候補は本番 Hosting（iframe・X-Frame-Options）・拡張機能ありの Chrome・正確な URL。推測で直さない
 - [ ] **AI による改善提案＋現行サイト診断の設計案**（2026-11-20、未承認）: `docs/design/AI_REQUIREMENTS.md`。レビュー反映済み（改訂 1）→ ユーザー判断（同 §9 Q-1〜Q-7）→ 実装計画。それまで live の「サイトスコア（AI 推定）」は実測ではない（同 §0・Q-6）。`aiDrafts` の生出力を期限で消す仕組みは未実装（同 §7・Q-7。LEGAL REVIEW REQUIRED）
 - [ ] **AI 下書きの「AI 設定が変わった」注記（画面設計 `docs/design/AI_REQUIREMENTS_UI.md` §2 状態 8・Q-U1）**: クライアントが今の `configHash` を知る手段（callable の返り値・公開の設定文書・ビルド時定数）が無いため、`aiDraftState.ts` は `configChanged` を常に false にしている（DEC lead 2026-11-24）。手段を決めたら `deriveAiDraftState` の `configHashNow` を使う
 - [ ] **AI 下書きの `aiDrafts` の生出力を期限で消すバッチ**（設計 `docs/design/AI_REQUIREMENTS.md` §7・Q-7。案は承認から 90 日で `generated` を削除。**LEGAL REVIEW REQUIRED**・期間は未確定）: 定期実行の関数（Cloud Scheduler）は未実装。お客様公開（`AI_REQUIREMENTS_MODE=on`）は、これが実装済みか、ユーザーの書面での受け入れが `docs/legal/AI_REQUIREMENTS_LEGAL_CLEARANCE.md` にあるまで出さない（計画 §5 L-c）
@@ -19,8 +20,8 @@
 - [x] **スケジュールの Rules の床（段 0 のリリース ID）**: 段 0 の前の本番 = ruleset `e114b0ca-1b79-4deb-9157-78247081c4ce`（2026-11-26T08:12:52Z。main の firestore.rules と一致＝ドリフトなし、API で確認）。**床 = 段 0 ruleset `beb93e7b-0abd-4d29-9555-18bb03686c0a`（2026-11-28T07:44:31Z、eb7cbfd）**。段 1 = `d0649c16-3b5c-4791-8b31-dac2af4f25fc`（2026-11-28T08:21:50Z）。以後 Rules を beb93e7b より前へ戻さない
 - [ ] **暦に無い日（2/30 など）は画面だけで止めている**（Rules は形式と年の範囲だけ。LIVE_SCHEDULE_PLAN L-12・R-9）。直接書かれた場合は読み込み時に捨てる。Rules で止めるかは式の上限（G1）の余裕と合わせて再判断
 - [ ] **お客様のスケジュールの「全ページの構築」の行は進み具合が 0% のまま**（お客様は構築タスクを読めないため日付だけで状態を出す。src/live/schedule.ts wbsProgressLive）。demo はタスクの割合を出す。お客様に割合を見せるなら、件数だけを current に写すなどの設計が要る（ui-ux-designer・data-backend-architect）
-- [ ] **WBS の保存が競合したあと、画面の下書きが古いまま残る**（QA O-2 2026-11-28・P3・修正前から）: 文言は「最新を読み込みました」だが、未保存の変更がある間は token が追従しない（src/features/schedule/WbsSection.tsx:161）ため、もう一度保存しても競合になる。データは安全（Rules と editSeq で拒否）。抜けるには「元に戻す」。競合時に下書きを最新へ置き換えるか、文言を「元に戻してからやり直してください」にするかは ui-ux-designer・frontend-engineer
-- [ ] **スケジュールの完了印の解除の記録（Codex R002・LOW 受容 2026-11-28）**: firestore.rules markOk の undone 分岐は「更新前に完了していた」を確かめない（担当開発者・管理者が未完了の行に解除の記録を作れる。current の完了状態は変わらない）。Rules の式数に余裕ができたら、更新前の current の doneAt を確かめる（`docs/reviews/2026-11-28-live-schedule-cross-model-review.md`）。O-1: お客様の 320 幅で WBS の月ラベルが重なる（WbsSection.tsx の最初の月だけ年つき。main と同じ既存の P3。ui-ux-designer）
+- [x] **WBS の保存が競合したあと、画面の下書きが古いまま残る**（QA O-2 2026-11-28・P3・修正前から）: 文言は「最新を読み込みました」だが、未保存の変更がある間は token が追従しない（src/features/schedule/WbsSection.tsx:161）ため、もう一度保存しても競合になる。データは安全（Rules と editSeq で拒否）。抜けるには「元に戻す」。競合時に下書きを最新へ置き換えるか、文言を「元に戻してからやり直してください」にするかは ui-ux-designer・frontend-engineer → 2026-11-28 修正（fix/post-0-52）: 競合したら下書きを最新に置き換える（予定日の入力画面も閉じる）。docs/reviews/2026-11-28-post-0-52-fixes.md
+- [ ] **スケジュールの完了印の解除の記録（Codex R002・LOW 受容 2026-11-28）**: firestore.rules markOk の undone 分岐は「更新前に完了していた」を確かめない（担当開発者・管理者が未完了の行に解除の記録を作れる。current の完了状態は変わらない）。Rules の式数に余裕ができたら、更新前の current の doneAt を確かめる（`docs/reviews/2026-11-28-live-schedule-cross-model-review.md`）。（O-1 の月ラベルの重なりは 2026-11-28 修正済み: fix/post-0-52・src/features/schedule/ganttMonths.ts）
 - [ ] **完了印の全履歴は残さない**（行ごとの最後の操作だけ。L-9）・**差し戻し後の WBS はお客様が API で読める**（受容。L-15）
 
 ## 段階 C（本番の Firebase プロジェクトを作って公開する）の前に必ず行う
